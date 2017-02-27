@@ -13,7 +13,7 @@ int _crt0_startup_flags = 0
     //| _CRT0_FLAG_NULLOK
     //| _CRT0_FLAG_FILL_DEADBEEF;
 
-int main(std::deque<std::string>);
+int jwdpmi_main(std::deque<std::string>);
 
 int main(int argc, char** argv)
 {
@@ -24,7 +24,7 @@ int main(int argc, char** argv)
     for (auto i = 0; i < argc; ++i)
         args.emplace_back(argv[i]);
     
-    try { return main(args); }
+    try { return jwdpmi_main(args); }
     catch(const std::exception& e) { /* TODO */ }
     catch(...) { /* TODO */ }
 }
