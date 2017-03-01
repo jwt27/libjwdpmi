@@ -3,12 +3,11 @@
 #pragma once
 #include <function.h>
 #include <vector>
-#include <atomic>
 #include <array>
 #include <unordered_map>
-#include <map>
 #include <deque>
 #include <algorithm>
+#include <bitset>
 #include <jw/io/ioport.h>
 #include <jw/dpmi/alloc.h>
 #include <jw/dpmi/irq_check.h>
@@ -56,7 +55,7 @@
 // TODO: launch threads from interrupts
 
 
-#define INTERRUPT //[[gnu::hot, gnu::flatten, gnu::optimize("O3"), gnu::used]]
+#define INTERRUPT [[gnu::hot, gnu::optimize("O3"), gnu::used]]
 
 namespace jw
 {
@@ -64,6 +63,7 @@ namespace jw
     {
         using int_vector = std::uint32_t; // easier to use from asm
         using irq_level = std::uint8_t;
+        using ack_ptr = void(*)();
 
         // Configuration flags passed to irq_handler constructor.
         enum irq_config_flags
@@ -92,32 +92,34 @@ namespace jw
             class[[gnu::packed]] irq_wrapper
             {
             public:
-                using function_ptr = void(*)(int_vector) noexcept;
+                using entry_fptr = void(*)(int_vector) noexcept;
+                using stack_fptr = byte*(*)() noexcept;
 
             private:
-                int_vector vec;                 // [eax-0x1C]
-                selector ds;                    // [eax-0x18]
-                selector es;                    // [eax-0x16]
-                selector fs;                    // [eax-0x14]
-                selector gs;                    // [eax-0x12]
-                function_ptr entry_point;       // [eax-0x10]
-                std::array<byte, 0x40> code;    // [eax-0x0C]
+                selector ss;                    // [esi-0x22]
+                stack_fptr get_stack;           // [esi-0x20]
+                int_vector vec;                 // [esi-0x1C]
+                selector ds;                    // [esi-0x18]
+                selector es;                    // [esi-0x16]
+                selector fs;                    // [esi-0x14]
+                selector gs;                    // [esi-0x12]
+                entry_fptr entry_point;         // [esi-0x10]
+                std::array<byte, 0x50> code;    // [esi-0x0C]
 
             public:
-                irq_wrapper(int_vector _vec, function_ptr f) noexcept;
+                irq_wrapper(int_vector _vec, entry_fptr entry_f, stack_fptr stack_f) noexcept;
                 auto get_ptr(selector cs = get_cs()) const noexcept { return far_ptr32 { cs, reinterpret_cast<std::uintptr_t>(code.data()) }; }
             };
 
             class irq_handler_base
             {
-                friend class irq;
                 irq_handler_base(const irq_handler_base& c) = delete;
                 irq_handler_base() = delete;
 
             public:
                 template<typename F>
-                irq_handler_base(F func, irq_config_flags f) : handler_ptr(std::allocator_arg, locking_allocator<void> { }, std::forward<F>(func)), flags(f) { }
-                const func::function<void(void(*)())> handler_ptr;
+                irq_handler_base(F func, irq_config_flags f) : handler_ptr(std::allocator_arg, locking_allocator<> { }, std::forward<F>(func)), flags(f) { }
+                const func::function<void(ack_ptr)> handler_ptr;
                 const irq_config_flags flags;
             };
 
@@ -125,45 +127,28 @@ namespace jw
             {
                 std::deque<irq_handler_base*, locking_allocator<>> handler_chain { };
                 int_vector vec;
-                std::unique_ptr<irq_wrapper> wrapper;
+                std::shared_ptr<irq_wrapper> wrapper;
                 far_ptr32 old_handler { };
                 irq_config_flags flags { };
 
                 void add_flags() { flags = { }; for (auto* p : handler_chain) flags |= p->flags; }
 
-                //DPMI 0.9 AX=0205
                 static void set_pm_interrupt_vector(int_vector v, far_ptr32 ptr);
-
-                //DPMI 0.9 AX=0204
                 static far_ptr32 get_pm_interrupt_vector(int_vector v);
-
-                irq(const irq&) = delete;
                 
-                irq(int_vector v, irq_wrapper::function_ptr f) : vec(v), old_handler(get_pm_interrupt_vector(v))
+                INTERRUPT void operator()();
+                irq(const irq&) = delete;
+                irq(int_vector v) : vec(v), old_handler(get_pm_interrupt_vector(v))
                 {
-                    wrapper = std::make_unique<irq_wrapper>(v, f);
+                    wrapper = std::allocate_shared<irq_wrapper>(locking_allocator<> { }, v, interrupt_entry_point, get_stack_ptr);
                     set_pm_interrupt_vector(vec, wrapper->get_ptr());
-                    std::cout << "irq handler set up for int " << vec << " at "<< std::hex << (std::uintptr_t)wrapper->get_ptr().offset << std::endl;
-                }
-
-                void operator()()
-                {
-                    for (auto f : handler_chain)
-                    {
-                        if (f->flags & always_call || !is_acknowledged()) f->handler_ptr(acknowledge);
-                    }
-                    if (flags & always_chain || !is_acknowledged()) call_far_iret(old_handler);
                 }
 
             public:
-                irq(irq&& m) : handler_chain(m.handler_chain), vec(m.vec), wrapper(std::move(m.wrapper)), old_handler(m.old_handler), flags(m.flags)
-                {
-                    m.old_handler = { };
-                }
+                irq(irq&& m) : handler_chain(m.handler_chain), vec(m.vec), wrapper(std::move(m.wrapper)), old_handler(m.old_handler), flags(m.flags) { m.old_handler = { }; }
 
                 ~irq()
                 {
-                    std::cout << "restoring handler for " << vec << " = "<< old_handler.offset << std::endl;
                     if (old_handler.offset != 0) set_pm_interrupt_vector(vec, old_handler);
                 }
 
@@ -181,11 +166,17 @@ namespace jw
 
                 static irq& get(int_vector v)
                 {
-                    if (entries.count(v) == 0) entries.emplace(v, irq { v, interrupt_entry_point });
+                    if (entries.count(v) == 0) entries.emplace(v, irq { v });
                     return entries.at(v);
                 }
 
                 static irq& get_irq(irq_level i) { return get(irq_to_vec(i)); }
+
+                static void update()
+                {
+                    if (max_interrupt_count > (stacks.size() / 2))
+                        stacks.resize(stacks.size() * 2);
+                }
 
             private:
                 static int_vector irq_to_vec(irq_level i) 
@@ -206,30 +197,58 @@ namespace jw
 
                 static bool is_acknowledged() { return current_int.back() == 0; }
 
-                static void acknowledge()
+                INTERRUPT static void acknowledge()
                 {
                     if (is_acknowledged()) return;
-                    // TODO: if vec is an IRQ, send EOI to appropriate PIC. count re-entries and EOIs.
-                    // don't forget: IRQ2 must ack the second PIC too.
-                    // also check PIC's in-service register to prevent double-acknowledge, or acknowledging a spurious irq.
-                    if (is_irq(current_int[interrupt_count]))
-                    {
-                        io::out_port<byte> { 0x20 }.write(0x20); // HACK
-                        //outportb(0x20, 0x20);
-                    }
-                    current_int[interrupt_count] = 0;
+                    send_eoi();
+                    current_int.back() = 0;
                 }
 
-                INTERRUPT static byte* get_stack_ptr() { return stacks.at(++interrupt_count).data(); }
+                INTERRUPT static auto in_service()
+                {
+                    split_uint16_t r;
+                    pic0_cmd.write(0x0B);
+                    pic1_cmd.write(0x0B);
+                    r.lo = pic0_cmd.read();
+                    r.hi = pic1_cmd.read();
+                    return std::bitset<16> { r };
+                }
 
+                INTERRUPT static void send_eoi()
+                {
+                    auto v = current_int.back();
+                    if (entries.at(v).flags & always_chain) return;
+                    auto i = vec_to_irq(v);
+                    if (i >= 16) return;
+                    if (!in_service()[i]) return;
+
+                    if (i >= 8) pic1_cmd.write(0x20);
+                    pic0_cmd.write(0x20);
+                }
+
+                INTERRUPT static byte* get_stack_ptr() noexcept 
+                {
+                    auto& s = stacks.at(interrupt_count++);
+                    return s.data() + s.size() - 4; 
+                }
                 INTERRUPT static void interrupt_entry_point(int_vector vec) noexcept;
-                INTERRUPT static void interrupt_call_handler(int_vector vec) noexcept;
 
                 static locked_pool_allocator<> alloc;
                 static std::vector<int_vector, locked_pool_allocator<>> current_int; // Current interrupt vector. Set to 0 when acknowlegded.
                 //static std::vector<int_vector> current_int;
                 static std::unordered_map<int_vector, irq, std::hash<int_vector>, std::equal_to<int_vector>, locking_allocator<>> entries;
                 static std::vector<std::array<byte, config::interrupt_stack_size>, locking_allocator<>> stacks;
+                static std::uint32_t max_interrupt_count;
+                static constexpr io::io_port<byte> pic0_cmd { 0x20 };
+                static constexpr io::io_port<byte> pic1_cmd { 0xA0 };
+                                                         
+                struct initializer
+                {
+                    initializer()
+                    {
+                        stacks.resize(config::interrupt_initial_stack_pool);
+                    }
+                } static init;
             };
         }
 

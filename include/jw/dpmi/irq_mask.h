@@ -88,7 +88,7 @@ namespace jw
                 if (map[irq].count++ > 0) return;   // FIXME: race condition here
 
                 byte mask = 1 << (irq % 8);
-                io::io_port<byte> port { irq < 8 ? pic0_data_port : pic1_data_port };
+                auto port = irq < 8 ? pic0_data : pic1_data;
 
                 byte current = port.read();
                 map[irq].first = (current & mask) != 0;
@@ -102,16 +102,13 @@ namespace jw
                 if (map[irq].first) return;  // good idea...?
 
                 byte mask = 1 << (irq % 8);
-                io::io_port<byte> port { irq < 8 ? pic0_data_port : pic1_data_port };
+                auto port = irq < 8 ? pic0_data : pic1_data;
 
                 port.write(port.read() & ~mask);
             }
 
-            //const io::io_port<byte> pic0_data_port { 0x21 };
-            //const io::io_port<byte> pic1_data_port { 0xA1 };
-
-            static const io::port_num pic0_data_port { 0x21 };
-            static const io::port_num pic1_data_port { 0xA1 };
+            static constexpr io::io_port<byte> pic0_data { 0x21 };
+            static constexpr io::io_port<byte> pic1_data { 0xA1 };
 
             struct mask_counter
             {

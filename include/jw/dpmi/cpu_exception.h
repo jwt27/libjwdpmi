@@ -362,7 +362,7 @@ namespace jw
                     "mov eax, ss:[ebp+0x0C];"               // EIP
                     "mov ds:[edi], eax;"
 
-                    "mov eax, dword ptr cs:[esi-0x10];"     // function_ptr
+                    "mov eax, dword ptr cs:[esi-0x10];"     // entry_fptr
                     "mov ss:[ebp+0x0C], eax;"               // EIP
 
                     "pop ds;"

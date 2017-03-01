@@ -8,7 +8,7 @@ namespace jw
     {
         namespace detail
         {
-            extern std::atomic<std::uint32_t> interrupt_count;
+            extern volatile std::uint32_t interrupt_count;
         }
 
         inline bool in_interrupt_context() { return detail::interrupt_count > 0; };

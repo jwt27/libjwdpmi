@@ -14,18 +14,21 @@ namespace jw
 {
     namespace dpmi
     {
-        class locking_allocator_base
+        namespace detail
         {
-        protected:
-            // This is a unique_ptr to avoid issues with static initialization order.
-            static std::unique_ptr<std::unordered_map<void*, data_lock>> map;
-        };
+            class locking_allocator_base
+            {
+            protected:
+                // This is a unique_ptr to avoid issues with static initialization order.
+                static std::unique_ptr<std::unordered_map<void*, data_lock>> map;
+            };
+        }
 
         // Custom allocator which locks all memory it allocates. This makes STL containers safe to
         // access from interrupt handlers, as long as the handler itself does not allocate anything.
         // It still relies on _CRT0_FLAG_LOCK_MEMORY to lock code and static data, however.
         template <typename T = byte>
-        class locking_allocator : public locking_allocator_base
+        class locking_allocator : public detail::locking_allocator_base
         {
         public:
             using value_type = T;

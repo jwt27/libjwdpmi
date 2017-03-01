@@ -6,7 +6,7 @@ namespace jw
     template<std::size_t size>
     union [[gnu::packed]] split_uint
     {
-        struct[[gnu::packed]]
+        struct [[gnu::packed]]
         {
             split_uint<size / 2> lo;
             split_uint<size / 2> hi;
