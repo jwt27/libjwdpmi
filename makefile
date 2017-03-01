@@ -1,13 +1,12 @@
 CXXFLAGS += -masm=intel
 CXXFLAGS += -MD -MP
-CXXFLAGS += -std=gnu++14
+CXXFLAGS += -std=gnu++17
 CXXFLAGS += -Wall -Wextra
 CXXFLAGS += -gdwarf-4
 CXXFLAGS += -funwind-tables -fasynchronous-unwind-tables
 CXXFLAGS += -fnon-call-exceptions 
 CXXFLAGS += -mcld
 CXXFLAGS += -mpreferred-stack-boundary=4
-# CXXFLAGS += -save-temps
 
 INCLUDE := -Iinclude
 LIBS := 
@@ -41,7 +40,7 @@ $(OUTDIR)/$(OUTPUT): $(OBJ)
 	ranlib $@
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.cpp
-	$(CXX) $(CXXFLAGS) -o $@ -MF $(@:.o=.d) $(INCLUDE) -c $<
+	$(CXX) $(CXXFLAGS) -o $@ -MF $(@:.o=.d) $(INCLUDE) -c $< $(PIPECMD)
 
 $(OBJDIR)/gdb_stub.o: $(SRCDIR)/gdb_stub.c
 	$(CC) $(CXXFLAGS) -masm=att -o $@ -c $<
