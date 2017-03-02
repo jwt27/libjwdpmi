@@ -10,6 +10,6 @@ namespace jw
 {
     namespace dpmi
     {
-        void breakpoint() { ::breakpoint(); }
+        void breakpoint() noexcept { ::breakpoint(); }
     } 
 }

@@ -19,7 +19,7 @@ namespace jw
         class interrupt_mask
         {
         public:
-            interrupt_mask() { cli(); }
+            interrupt_mask() noexcept { cli(); }
             ~interrupt_mask() { sti(); }
 
             // Get the current interrupt flag state
@@ -79,11 +79,11 @@ namespace jw
         class irq_mask
         {
         public:
-            irq_mask(unsigned int _irq) : irq(_irq) { cli(); }
+            irq_mask(unsigned int _irq) noexcept : irq(_irq) { cli(); }
             ~irq_mask() { sti(); }
 
         private:
-            void cli()
+            void cli() noexcept
             {
                 if (map[irq].count++ > 0) return;   // FIXME: race condition here
 
@@ -95,7 +95,7 @@ namespace jw
                 port.write(current | mask);
             }
 
-            void sti()
+            void sti() noexcept
             {
                 if (map[irq].count == 0) return;
                 if (--map[irq].count > 0) return;

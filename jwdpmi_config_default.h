@@ -5,8 +5,12 @@ namespace jw
 {
     namespace config
     {
-        const std::size_t interrupt_stack_size = 16_KB;
-        const std::size_t interrupt_initial_stack_pool = 16;
+        // Additional startup flags for the djgpp runtime library.
+        // See http://www.delorie.com/djgpp/doc/libc/libc_124.html
+        const int user_crt0_startup_flags = 0;
+
+        const std::size_t interrupt_initial_stack_size = 1_MB;
+        const std::size_t interrupt_minimum_stack_size = 16_KB;
         const std::size_t interrupt_memory_pool = 1_MB;
     }
 }

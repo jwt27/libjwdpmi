@@ -40,7 +40,7 @@ namespace jw
                     bool supports_virtual_memory : 1;
                     unsigned : 13;
                 };
-                constexpr flags_t(auto v) :raw(v) { }
+                constexpr flags_t(auto v) noexcept :raw(v) { }
             private:
                 std::uint16_t raw;
             } const flags;
@@ -55,7 +55,7 @@ namespace jw
                     cpu_i586 = 5,
                     cpu_i686 = 6
                 };
-                constexpr cpu_type_t(auto v) :raw(v) { }
+                constexpr cpu_type_t(auto v) noexcept :raw(v) { }
             private:
                 std::uint8_t raw;
             } const cpu_type;
@@ -63,7 +63,7 @@ namespace jw
             const std::uint8_t major, minor;
             const std::uint8_t pic_master_base, pic_slave_base;
 
-            version() : flags(get_bx()), cpu_type(get_cl())
+            version() noexcept : flags(get_bx()), cpu_type(get_cl())
                 , major(get_ah()), minor(get_al())
                 , pic_master_base(get_dh()), pic_slave_base(get_dl()) { }
 
@@ -73,14 +73,14 @@ namespace jw
             static std::uint8_t cl;
             static bool init;
 
-            static std::uint8_t get_al() { get(); return ax.lo; }
-            static std::uint8_t get_ah() { get(); return ax.hi; }
-            static std::uint16_t get_bx() { get(); return bx; }
-            static std::uint8_t get_cl() { get(); return cl; }
-            static std::uint8_t get_dl() { get(); return dx.lo; }
-            static std::uint8_t get_dh() { get(); return dx.hi; }
+            static std::uint8_t get_al() noexcept { get(); return ax.lo; }
+            static std::uint8_t get_ah() noexcept { get(); return ax.hi; }
+            static std::uint16_t get_bx() noexcept { get(); return bx; }
+            static std::uint8_t get_cl() noexcept { get(); return cl; }
+            static std::uint8_t get_dl() noexcept { get(); return dx.lo; }
+            static std::uint8_t get_dh() noexcept { get(); return dx.hi; }
 
-            static void get()
+            static void get() noexcept
             {
                 if (init) return;
                 asm volatile(
@@ -112,7 +112,7 @@ namespace jw
                     bool write_protect_host : 1;
                     unsigned : 9;
                 };
-                constexpr flags_t(auto v) :raw(v) { }
+                constexpr flags_t(auto v) noexcept :raw(v) { }
             private:
                 std::uint16_t raw;
             } const flags;
@@ -128,12 +128,12 @@ namespace jw
                     } const version;
                     char name[126];       
                 };
-                constexpr vendor_info_t(auto v) :raw(v) { }
+                constexpr vendor_info_t(auto v) noexcept :raw(v) { }
             private:
                 std::array<byte, 128> raw;
             } const vendor_info;
 
-            capabilities()                      
+            capabilities() noexcept
                 : supported(get_supported())
                 , flags(get_flags())
                 , vendor_info(get_vendor_info()) { }
@@ -144,10 +144,10 @@ namespace jw
             static std::uint16_t raw_flags;
             static std::array<byte, 128> raw_vendor_info;
 
-            static std::uint16_t get_flags() { get(); return raw_flags; }
-            static std::array<byte, 128> get_vendor_info() { get(); return raw_vendor_info; }
-            static bool get_supported() { get(); return sup; }
-            static void get()
+            static std::uint16_t get_flags() noexcept { get(); return raw_flags; }
+            static std::array<byte, 128> get_vendor_info() noexcept { get(); return raw_vendor_info; }
+            static bool get_supported() noexcept { get(); return sup; }
+            static void get() noexcept
             {
                 if (init || !sup) return;
                 asm volatile(

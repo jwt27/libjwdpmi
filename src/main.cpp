@@ -2,8 +2,10 @@
 #include <deque>
 #include <crt0.h>
 #include <jw/dpmi/debug.h>
+#include <../jwdpmi_config.h>
 
 int _crt0_startup_flags = 0
+    | jw::config::user_crt0_startup_flags
     | _CRT0_FLAG_NMI_SIGNAL
     | _CRT0_DISABLE_SBRK_ADDRESS_WRAP
     | _CRT0_FLAG_NONMOVE_SBRK 
