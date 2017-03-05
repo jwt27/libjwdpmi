@@ -96,14 +96,12 @@ namespace jw
                 rs232_streambuf() = delete;
                 rs232_streambuf(const rs232_streambuf&) = delete;
                 rs232_streambuf(rs232_streambuf&& m) = delete;
-                //rs232_streambuf(rs232_streambuf&& m) : rs232_streambuf(m.config) { m.irq_handler.disable(); } // TODO: avoid resetting uart
+                //rs232_streambuf(rs232_streambuf&& m) : rs232_streambuf(m.config) { m.irq_handler.disable(); } // TODO: move constructor
 
             protected:
                 virtual int sync() override;
-                //virtual std::streamsize showmanyc() override;
                 virtual std::streamsize xsgetn(char_type* s, std::streamsize n) override;
                 virtual int_type underflow() override;
-                //virtual int_type pbackfail(int_type c = traits_type::eof()) override;
                 virtual std::streamsize xsputn(const char_type* s, std::streamsize n) override;
                 virtual int_type overflow(int_type c = traits_type::eof()) override;
 
@@ -174,7 +172,7 @@ namespace jw
                         case uart_irq_id_reg::transmitter_empty:
                             put(); break;
                         case uart_irq_id_reg::line_status:
-                            if (line_status.read().line_break) cts = false; break;
+                            if (line_status.read().line_break) { cts = false; break; }
                         case uart_irq_id_reg::modem_status:
                             put(); break;
                         }
@@ -207,7 +205,6 @@ namespace jw
 
                 static std::unordered_map<port_num, bool> com_port_use_map;
 
-                
                 struct irq_disable
                 {
                     irq_disable(auto* p) : owner(p), reg(p->irq_enable.read()) { owner->irq_enable.write({ }); }

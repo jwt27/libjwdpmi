@@ -60,8 +60,6 @@ namespace jw
                 irq_enable.write(irqen);
 
                 set_rts();
-
-                std::cout << "rs232_streambuf ready. rx=" << std::hex << (std::uintptr_t)rx_buf.data() << " tx=" << (std::uintptr_t)tx_buf.data() << '\n';
             }
 
             rs232_streambuf::~rs232_streambuf() 

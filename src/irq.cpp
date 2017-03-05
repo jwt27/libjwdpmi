@@ -22,8 +22,8 @@ namespace jw
                 ++interrupt_count;
                 current_int.push_back(vec);
                 byte* esp; asm("mov %0, esp;":"=rm"(esp));
-                if (static_cast<std::size_t>(esp - stack.data()) <= config::interrupt_minimum_stack_size) 
-                    std::cerr << "STACK OVERFLOW IMMINENT! "; // TODO: increase stack size
+                if (static_cast<std::size_t>(esp - stack.data()) <= config::interrupt_minimum_stack_size)
+                    std::cerr << "STACK OVERFLOW IMMINENT! "; // HACK // TODO: increase stack size
                 if (stack_use_count > 1) std::cerr << stack_use_count << ' '; // HACK
                 auto i = vec_to_irq(vec);
                 if ((i == 7 || i == 15) && !in_service()[i]) goto spurious;

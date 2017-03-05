@@ -36,7 +36,7 @@ namespace jw
                 //irq_handler_base(F func, irq_config_flags f = { }) : handler_ptr(std::allocator_arg, locking_allocator<> { }, std::forward<F>(func)), flags(f) { }
                 irq_handler_base() = delete;
 
-                //const func::function<void(ack_ptr)> handler_ptr;
+                //const func::function<void(ack_ptr)> handler_ptr; // TODO: figure out if the locking allocator is really necessary here.
                 const std::function<void(ack_ptr)> handler_ptr;
                 const irq_config_flags flags;
             };
