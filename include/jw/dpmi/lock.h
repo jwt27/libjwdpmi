@@ -11,10 +11,10 @@ namespace jw
         class memory_lock
         {
         public:
-            memory_lock(const memory_lock& c) : mem(c.mem), locked(false) { lock(); } // TODO: are copy/move semantics desirable here?
+            memory_lock(const memory_lock& c) = delete;
             memory_lock(memory_lock&& m) noexcept : mem(m.mem) { m.locked = false; }
 
-            memory_lock& operator=(const memory_lock& c) = default;
+            memory_lock& operator=(const memory_lock& c) = delete;
             memory_lock& operator=(memory_lock&&) noexcept = default;
 
             virtual ~memory_lock()

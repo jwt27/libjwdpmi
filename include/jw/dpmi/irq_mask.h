@@ -14,6 +14,7 @@ namespace jw
     namespace dpmi
     {
         //TODO: lock()/unlock() for use with std::lock_guard ?
+        using irq_level = std::uint8_t;
 
         // Disables the interrupt flag
         class interrupt_mask
@@ -79,8 +80,17 @@ namespace jw
         class irq_mask
         {
         public:
-            irq_mask(unsigned int _irq) noexcept : irq(_irq) { cli(); }
+            irq_mask(irq_level _irq) noexcept : irq(_irq) { cli(); }
             ~irq_mask() { sti(); }
+
+            static void unmask(irq_level irq) // TODO: raii unmask
+            {
+                if (map[irq].count > 0) { map[irq].first = false; return; }
+
+                byte mask = 1 << (irq % 8);
+                auto port = irq < 8 ? pic0_data : pic1_data;
+                port.write(port.read() & ~mask);
+            }
 
         private:
             void cli() noexcept
@@ -99,7 +109,7 @@ namespace jw
             {
                 if (map[irq].count == 0) return;
                 if (--map[irq].count > 0) return;
-                if (map[irq].first) return;  // good idea...?
+                if (map[irq].first) return;
 
                 byte mask = 1 << (irq % 8);
                 auto port = irq < 8 ? pic0_data : pic1_data;
@@ -113,11 +123,11 @@ namespace jw
             struct mask_counter
             {
                 volatile int count { 0 };
-                bool first;
+                bool first; // true if initially masked
             };
             static std::array<mask_counter, 16> map;
 
-            unsigned int irq;
+            irq_level irq;
         };
 
         /*

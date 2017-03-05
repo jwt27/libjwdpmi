@@ -8,9 +8,3 @@ constexpr std::uint64_t operator"" _MB(std::uint64_t n) { return n << 20; }
 constexpr std::uint64_t operator"" _GB(std::uint64_t n) { return n << 30; }
 constexpr std::uint64_t operator"" _TB(std::uint64_t n) { return n << 40; }
 
-/*
-template<typename T>
-inline constexpr T& operator |=(T& a, const T& b)
-{
-    return a = a | b;
-}*/

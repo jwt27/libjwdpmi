@@ -30,16 +30,16 @@ namespace jw
     using split_uint32_t = split_uint<32>;
     using split_uint64_t = split_uint<64>;
 
-    union [[gnu::packed]] split_uint14_t
+    union [[gnu::packed]] split_int14_t
     {                      
         struct[[gnu::packed]]
         {
             unsigned lo : 7;
             unsigned hi : 7;
         };
-        unsigned value : 14;
-        constexpr split_uint14_t() noexcept : value(0) { }
-        constexpr split_uint14_t(auto v) noexcept : value(v) { }
+        signed value : 14;
+        constexpr split_int14_t() noexcept : value(0) { }
+        constexpr split_int14_t(auto v) noexcept : value(v) { }
         constexpr operator auto() const noexcept { return value; }
     };
 }

@@ -6,7 +6,7 @@ namespace jw
     namespace dpmi
     {
         // Set a breakpoint
-        void breakpoint(); // { asm volatile ("int 3;"); }
+        void breakpoint() noexcept; // { asm volatile ("int 3;"); }
 
         // Set a watchpoint
         // Remember, only 4 watchpoints can exist simultaneously.
@@ -55,7 +55,7 @@ namespace jw
 
             // Get the current state of this watchpoint. (DPMI 0.9, AX=0B02)
             // Returns true if the watchpoint has been triggered.
-            bool get_state()
+            bool get_state() const
             {
                 bool state;
                 dpmi_error_code error;

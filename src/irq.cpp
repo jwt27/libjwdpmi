@@ -13,6 +13,8 @@ namespace jw
             std::unordered_map<int_vector, irq, std::hash<int_vector>, std::equal_to<int_vector>, locking_allocator<>> irq::entries { };
             std::vector<byte, locking_allocator<>> irq::stack { };
             std::uint32_t irq::stack_use_count { };
+            constexpr io::io_port<byte> irq::pic0_cmd;
+            constexpr io::io_port<byte> irq::pic1_cmd;
             irq::initializer irq::init { };
 
             void irq::interrupt_entry_point(int_vector vec) noexcept
@@ -22,14 +24,13 @@ namespace jw
                 byte* esp; asm("mov %0, esp;":"=rm"(esp));
                 if (static_cast<std::size_t>(esp - stack.data()) <= config::interrupt_minimum_stack_size) 
                     std::cerr << "STACK OVERFLOW IMMINENT! "; // TODO: increase stack size
-                std::cerr << stack_use_count << ' '; // HACK
+                if (stack_use_count > 1) std::cerr << stack_use_count << ' '; // HACK
                 auto i = vec_to_irq(vec);
                 if ((i == 7 || i == 15) && !in_service()[i]) goto spurious;
 
-                // TODO: save/restore FPU state?
                 try
                 {
-                    std::shared_ptr<irq_mask> mask;
+                    std::shared_ptr<irq_mask> mask; // no unique_ptr, we need a custom allocator
                     if (!(entries.at(vec).flags & no_interrupts)) asm("sti");
                     else if (entries.at(vec).flags & no_reentry) mask = std::allocate_shared<irq_mask>(alloc, i);
                     if (!(entries.at(vec).flags & no_auto_eoi)) send_eoi();
