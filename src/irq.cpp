@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <jw/dpmi/irq.h>
+#include <jw/dpmi/fpu.h>
 
 namespace jw
 {
@@ -21,6 +22,7 @@ namespace jw
             {
                 ++interrupt_count;
                 current_int.push_back(vec);
+                fpu_context_switcher.enter();
                 byte* esp; asm("mov %0, esp;":"=rm"(esp));
                 if (static_cast<std::size_t>(esp - stack.data()) <= config::interrupt_minimum_stack_size)
                     std::cerr << "STACK OVERFLOW IMMINENT! "; // HACK // TODO: increase stack size
@@ -42,6 +44,7 @@ namespace jw
                 spurious:
                 asm("cli");
                 acknowledge();
+                fpu_context_switcher.leave();
                 --interrupt_count;
                 current_int.pop_back();
             }

@@ -10,6 +10,7 @@
 #include <jw/dpmi/lock.h>
 #include <jw/dpmi/alloc.h>
 #include <jw/dpmi/irq_check.h>
+#include <jw/dpmi/fpu.h>
 #include <../jwdpmi_config.h>
 
 namespace jw
@@ -108,7 +109,7 @@ namespace jw
 
             static far_ptr32 get_rm_handler(exception_num n) { return get_rm_exception_handler(n); }
 
-            static bool set_handler(exception_num n, far_ptr32 ptr, bool pm_only = true)
+            static bool set_handler(exception_num n, far_ptr32 ptr)// , bool pm_only = true)
             {
                 static bool is_new_type { true };
 
@@ -208,6 +209,7 @@ namespace jw
             static bool call_handler(exception_handler* self, raw_exception_frame* frame) noexcept
             {
                 ++detail::exception_count;
+                if (self->exc != 0x07 && self->exc != 0x10) detail::fpu_context_switcher.enter();
                 bool ret = false;
                 try
                 {
@@ -218,6 +220,7 @@ namespace jw
                 {
                     std::cerr << "CAUGHT EXCEPTION IN CPU EXCEPTION HANDLER " << self->exc << std::endl; // HACK
                 }
+                if (self->exc != 0x07 && self->exc != 0x10) detail::fpu_context_switcher.leave();
                 --detail::exception_count;
                 return ret;
             }
