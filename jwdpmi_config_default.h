@@ -12,5 +12,8 @@ namespace jw
         const std::size_t interrupt_initial_stack_size = 1_MB;
         const std::size_t interrupt_minimum_stack_size = 16_KB;
         const std::size_t interrupt_memory_pool = 1_MB;
+        const std::size_t interrupt_fpu_context_pool = 1_MB;
+
+        const std::size_t exception_stack_size = 32_KB;
     }
 }
