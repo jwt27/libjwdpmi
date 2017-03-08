@@ -19,9 +19,8 @@ OBJDIR := obj
 SRC := $(wildcard $(SRCDIR)/*.cpp)
 OBJ := $(SRC:$(SRCDIR)/%.cpp=$(OBJDIR)/%.o)
 DEP := $(SRC:$(SRCDIR)/%.cpp=$(OBJDIR)/%.d)
-VPATH := .:$(SRCDIR)
 
-.PHONY: all clean vs
+.PHONY: all clean
 
 all: $(OBJDIR) $(OUTDIR) $(OUTDIR)/$(OUTPUT)
 
