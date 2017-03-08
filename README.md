@@ -9,6 +9,7 @@ Current features include:
 * Interrupt handling, including dynamic IRQ assignment, IRQ sharing, and nested interrupts.
 * CPU exception handling, also nested and re-entrant.
 * Cooperative multi-threading and coroutines.
+* RS-232 serial communication using `std::iostream`.
 
 ## Installing
 * Build and install DJGPP (the DOS port of gcc)  
