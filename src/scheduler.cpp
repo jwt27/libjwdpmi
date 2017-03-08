@@ -145,18 +145,18 @@ namespace jw
                         }
                         catch (const std::exception& e)
                         {
-                            if (is_thread_exception(e))
-                            {
-                                auto& exceptions = current_thread->exceptions;
-                                exceptions.erase(remove_if(exceptions.begin(), exceptions.end(), [&](const auto& i) { return i == exc; }), exceptions.end());
-                                throw;
-                            }
+                            if (!is_thread_exception(e)) continue;
+                            auto& exceptions = current_thread->exceptions;
+                            exceptions.erase(remove_if(exceptions.begin(), exceptions.end(), [&](const auto& i) { return i == exc; }), exceptions.end());
+                            throw;
                         }
                     }
                 }
+                if (current_thread != main_thread && *reinterpret_cast<std::uint32_t*>(current_thread->stack_ptr) != 0xDEADBEEF)
+                    throw std::runtime_error("Stack overflow!");
+
                 if (current_thread->state == terminating) throw abort_thread();
                 if (current_thread.unique() && !current_thread->allow_orphan) throw orphaned_thread();
-                //std::cerr << "no exceptions!\n";
             }
 
             void scheduler::catch_thread_exception() noexcept
@@ -181,15 +181,13 @@ namespace jw
                     if (current_thread->state == starting) // new task, initialize new context on stack
                     {
                         byte* esp = (current_thread->stack_ptr + current_thread->stack_size - 4) - sizeof(thread_context);
+                        *reinterpret_cast<std::uint32_t*>(current_thread->stack_ptr) = 0xDEADBEEF;  // stack overflow protection
 
-                        current_thread->context = reinterpret_cast<thread_context*>(esp);       // *context points to top of stack
+                        current_thread->context = reinterpret_cast<thread_context*>(esp);           // *context points to top of stack
                         if (current_thread->parent == nullptr) current_thread->parent = main_thread;
-                        *current_thread->context = *current_thread->parent->context;            // clone parent's context to new stack
+                        *current_thread->context = *current_thread->parent->context;                // clone parent's context to new stack
                     }
 
-                    assert(current_thread != nullptr);
-                    assert(reinterpret_cast<byte*>(current_thread->context) > current_thread->stack_ptr);   // stack overflow, probably pointless to check this here.
-                                                                                                            // maybe set a magic value at the end and see if it's overwritten
                     if (current_thread->exceptions.size() != 0) break;
                     if (current_thread->awaiting && current_thread->awaiting->exceptions.size() != 0) break;
                 } while (current_thread->state == suspended);
