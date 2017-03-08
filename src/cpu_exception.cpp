@@ -102,7 +102,7 @@ namespace jw
                 "push ss; pop es;"
                 "lea esi, [ebx-0x12];"      // previous_handler
                 "lea edi, [esp-0x06];"
-                "movsd; movsw;"             // copy previous_handler ptr to stack
+                "movsd; movsw;"             // copy previous_handler ptr above stack (is this dangerous?)
                 "popa; pop gs; pop fs; pop es; pop ds;"
                 "jmp fword ptr ss:[esp-0x2A];"
 
@@ -138,7 +138,7 @@ namespace jw
             new_type = cpu_exception::set_handler(e, get_ptr());
         }
 
-        exception_handler::~exception_handler()
+        exception_handler::~exception_handler() // TODO: find out why it's crashing here sometimes.
         {
             if (!wrapper_list[exc]) return;
             auto i = std::find(wrapper_list[exc]->begin(), wrapper_list[exc]->end(), this);
