@@ -20,7 +20,7 @@ SRC := $(wildcard $(SRCDIR)/*.cpp)
 OBJ := $(SRC:$(SRCDIR)/%.cpp=$(OBJDIR)/%.o)
 DEP := $(SRC:$(SRCDIR)/%.cpp=$(OBJDIR)/%.d)
 VPATH := .:$(SRCDIR)
-OBJ += $(OBJDIR)/gdb_stub.o
+#OBJ += $(OBJDIR)/gdb_stub.o
 
 .PHONY: all clean vs
 
