@@ -167,38 +167,33 @@ namespace jw
 
         #define CALL_INT31_GET(func_no, exc_no)                     \
                 dpmi_error_code error;                              \
+                bool c;                                             \
                 selector seg;                                       \
                 std::size_t offset;                                 \
-                asm volatile                                        \
-                    ("get_exc_handler_"#func_no"_%=:"               \
-                     "mov eax, "#func_no";"                         \
-                     "int 0x31;"                                    \
-                     "jc get_exc_handler_"#func_no"_end_%=;"        \
-                     "mov eax, 0;"                                  \
-                     "get_exc_handler_"#func_no"_end_%=:"           \
-                     : "=a" (error)                                 \
-                     , "=c" (seg)                                   \
-                     , "=d" (offset)                                \
-                     : "b" (exc_no)                                 \
-                     : "cc");                                       \
-                if (error) throw dpmi_error(error, __FUNCTION__);   \
+                asm("int 0x31;"                                     \
+                    : "=@ccc" (c)                                   \
+                    , "=a" (error)                                  \
+                    , "=c" (seg)                                    \
+                    , "=d" (offset)                                 \
+                    : "a" (func_no)                                 \
+                    , "b" (exc_no)                                  \
+                    : "cc");                                        \
+                if (c) throw dpmi_error(error, __FUNCTION__);       \
                 return far_ptr32(seg, offset);
 
         #define CALL_INT31_SET(func_no, exc_no, handler_ptr)        \
                 dpmi_error_code error;                              \
-                asm volatile                                        \
-                    ("set_exc_handler_"#func_no"_%=:"               \
-                     "mov eax, "#func_no";"                         \
-                     "int 0x31;"                                    \
-                     "jc set_exc_handler_"#func_no"_end%=;"         \
-                     "mov eax, 0;"                                  \
-                     "set_exc_handler_"#func_no"_end%=:;"           \
-                     : "=a" (error)                                 \
-                     : "b" (exc_no)                                 \
-                     , "c" (handler_ptr.segment)                    \
-                     , "d" (handler_ptr.offset)                     \
-                     : "cc");                                       \
-                if (error) throw dpmi_error(error, __FUNCTION__);
+                bool c;                                             \
+                asm volatile(                                       \
+                    "int 0x31;"                                     \
+                    : "=@ccc" (c)                                   \
+                    , "=a" (error)                                  \
+                    : "a" (func_no)                                 \
+                    , "b" (exc_no)                                  \
+                    , "c" (handler_ptr.segment)                     \
+                    , "d" (handler_ptr.offset)                      \
+                    : "cc");                                        \
+                if (c) throw dpmi_error(error, __FUNCTION__);
 
 
             static far_ptr32 get_exception_handler(exception_num n) { CALL_INT31_GET(0x0202, n); }      //DPMI 0.9 AX=0202

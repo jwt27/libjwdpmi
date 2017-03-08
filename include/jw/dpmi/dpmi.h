@@ -32,10 +32,9 @@ namespace jw
     {
         using selector = std::uint16_t;
 
-    #define GET_SEG_REG(reg)    \
-        selector s;             \
-        asm ("mov %w0, "#reg";" \
-             :"=rm" (s));       \
+    #define GET_SEG_REG(reg)                \
+        selector s;                         \
+        asm ("mov %w0, "#reg";":"=rm" (s)); \
         return s;
 
         inline selector get_cs() noexcept { GET_SEG_REG(cs); }
@@ -167,21 +166,20 @@ namespace jw
             static void get() noexcept
             {
                 if (init || !sup) return;
+                bool c;
                 asm volatile(
                     "push es;"
-                    "mov es, %w0;"
-                    "mov eax, 0x0401;"
+                    "mov es, %w2;"
                     "int 0x31;"
-                    "jnc success%=;"
-                    "mov eax, 0xDEAD;"
-                    "success%=:"
                     "pop es;"
                     : "=a" (raw_flags)
+                    , "=@ccc"(c)
                     : "r" (get_ds())
+                    , "a" (0x0401)
                     , "D" (raw_vendor_info.data())
                     : "cc", "cx", "dx");
                 init = true;
-                if (raw_flags != 0xDEAD) return;
+                if (!c) return;
                 sup = false;
                 raw_flags = 0;
                 raw_vendor_info.fill(0);
@@ -211,7 +209,8 @@ namespace jw
                 "pusha;"
                 "call fword ptr %0;"
                 "popa;"
-                :: "m" (ptr):"esp");
+                :: "m" (ptr)
+                :"esp", "memory");
         }
 
         // Call a function which returns with IRET
@@ -222,7 +221,8 @@ namespace jw
                 "pushf;"
                 "call fword ptr %0;"
                 "popa;"
-                :: "m" (ptr):"esp");
+                :: "m" (ptr)
+                :"esp", "memory");
         }
 
         struct memory_info
@@ -233,19 +233,16 @@ namespace jw
             {
                 dpmi_error_code error;
                 split_uint32_t base;
+                bool c;
 
-                asm volatile(
-                    "int 0x31;"
-                    "jc fail%=;"
-                    "mov eax, 0;"
-                    "fail%=:;"
-                    : "=a" (error)
+                asm("int 0x31;"
+                    : "=@ccc" (c)
+                    , "=a" (error)
                     , "=c" (base.hi)
                     , "=d" (base.lo)
                     : "a" (0x0006)
-                    , "b" (seg)
-                    : "cc");
-                if (error) throw dpmi_error(error, "get_selector_base_address");
+                    , "b" (seg));
+                if (c) throw dpmi_error(error, "get_selector_base_address");
 
                 return base;
             }
@@ -254,22 +251,18 @@ namespace jw
             static inline void set_selector_base_address(selector seg, std::uintptr_t linear_base)
             {
                 dpmi_error_code error;
-                split_uint32_t base;
-                base = linear_base;
+                split_uint32_t base { linear_base };
+                bool c;
 
                 asm volatile(
-                    "set_seg_base%=:"
-                    "mov eax, 0x0007;"
                     "int 0x31;"
-                    "jc set_seg_base_end%=;"
-                    "mov eax, 0;"
-                    "set_seg_base_end%=:;"
-                    : "=a" (error)
-                    : "b" (seg)
+                    : "=@ccc" (c)
+                    , "=a" (error)
+                    : "a" (0x0007)
+                    , "b" (seg)
                     , "c" (base.hi)
-                    , "d" (base.lo)
-                    : "cc");
-                if (error) throw dpmi_error(error, "set_selector_base_address");
+                    , "d" (base.lo));
+                if (c) throw dpmi_error(error, "set_selector_base_address");
             }
 
             //DPMI 0.9 AX=0604
@@ -280,20 +273,15 @@ namespace jw
 
                 dpmi_error_code error;
                 split_uint32_t size;
+                bool c;
 
-                asm volatile(
-                    "get_page_size%=:"
-                    "mov eax, 0x0604;"
-                    "int 0x31;"
-                    "jc get_page_size_end%=;"
-                    "mov eax, 0;"
-                    "get_page_size_end%=:;"
-                    : "=a" (error)
+                asm("int 0x31;"
+                    : "=@ccc" (c)
+                    , "=a" (error)
                     , "=b" (size.hi)
                     , "=c" (size.lo)
-                    :
-                    : "cc");
-                if (error) throw dpmi_error(error, "get_page_size");
+                    : "a" (0x0604));
+                if (c) throw dpmi_error(error, "get_page_size");
 
                 page_size = size;
                 return page_size;
@@ -302,11 +290,10 @@ namespace jw
             static inline std::size_t get_selector_limit(selector sel = get_ds())
             {
                 std::size_t limit;
-                asm volatile
-                    ("lsl %0, %1;"
-                     : "=r" (limit)
-                     : "rm" (sel)
-                     : "cc");
+                asm("lsl %0, %1;"
+                    : "=r" (limit)
+                    : "rm" (sel)
+                    : "cc");
                 return limit;
             }
 
@@ -315,22 +302,17 @@ namespace jw
             {
                 dpmi_error_code error;
                 split_uint32_t _limit = (limit > 1_MB) ? round_up_to_page_size(limit) - 1 : limit;
-                std::cout << "selector " << std::hex << sel << ", set limit = " << limit << " (" << _limit << ")" << std::endl;
+                bool c;
 
                 asm volatile(
-                    "set_segment_limit%=:"
-                    "mov eax, 0x0008;"
                     "int 0x31;"
-                    "jc set_segment_limit_end%=;"
-                    "mov eax, 0;"
-                    "set_segment_limit_end%=:;"
-                    : "=a" (error)
-                    : "b" (sel)
+                    : "=@ccc" (c)
+                    , "=a" (error)
+                    : "a" (0x0008)
+                    , "b" (sel)
                     , "c" (_limit.hi)
-                    , "d" (_limit.lo)
-                    : "cc");
-                if (error) throw dpmi_error(error, "set_selector_limit");
-                std::cout << "selector " << sel << ", base = " << get_selector_base_address(sel) << std::endl;
+                    , "d" (_limit.lo));
+                if (c) throw dpmi_error(error, "set_selector_limit");
             }
 
             template <typename T>
@@ -467,20 +449,18 @@ namespace jw
             {
                 dpmi_error_code error;
                 split_uint32_t _addr = addr, _size = size;
+                bool c;
 
                 asm volatile(
                     "int 0x31;"
-                    "jc fail%=;"
-                    "mov eax, 0;"
-                    "fail%=:;"
-                    : "=a" (error)
+                    : "=@ccc" (c)
+                    , "=a" (error)
                     : "a" (0x0600)
                     , "b" (_addr.hi)
                     , "c" (_addr.lo)
                     , "S" (_size.hi)
-                    , "D" (_size.lo)
-                    : "cc");
-                if (error) throw dpmi_error(error, "lock_memory");
+                    , "D" (_size.lo));
+                if (c) throw dpmi_error(error, "lock_memory");
             }
 
             //DPMI 0.9 AX=0601
@@ -488,20 +468,18 @@ namespace jw
             {
                 dpmi_error_code error;
                 split_uint32_t _addr = addr, _size = size;
+                bool c;
 
                 asm volatile(
                     "int 0x31;"
-                    "jc fail%=;"
-                    "mov eax, 0;"
-                    "fail%=:;"
-                    : "=a" (error)
+                    : "=@ccc" (c)
+                    , "=a" (error)
                     : "a" (0x0601)
                     , "b" (_addr.hi)
                     , "c" (_addr.lo)
                     , "S" (_size.hi)
-                    , "D" (_size.lo)
-                    : "cc");
-                if (error) throw dpmi_error(error, "unlock_memory");
+                    , "D" (_size.lo));
+                if (c) throw dpmi_error(error, "unlock_memory");
             }
         };
 
@@ -585,42 +563,34 @@ namespace jw
             }
         };
 
-        inline rm_registers call_rm_interrupt(std::uint8_t interrupt, rm_registers& reg)
-        {
+        inline void call_rm_interrupt(std::uint8_t interrupt, rm_registers* reg)
+        {                                  
+            selector new_reg_ds = get_ds();
             dpmi_error_code error;
-            rm_registers* new_reg;
-            selector new_reg_ds;
+            bool c;
 
             asm volatile(
-                "call_rm_int%=:"
-                "mov %1, ds;"
-                "mov es, %1;"
-                "mov eax, 0x0300;"
+                "mov es, %w2;"
                 "int 0x31;"
-                "jc call_rm_int_end%=;"
-                "mov %1, es;"
-                "mov eax, 0;"
-                "call_rm_int_end%=:;"
-                : "=a" (error)
-                , "=rm" (new_reg_ds)
-                , "=D" (new_reg)
-                : "b" (interrupt)
-                , "c" (0) //TODO: stack..?
-                , "D" (&reg)
-                : "cc");
-            if (error) throw dpmi_error(error, "call_rm_interrupt");
+                "mov %w2, es;"
+                : "=@ccc" (c)
+                , "=a" (error)
+                , "+r" (new_reg_ds)
+                , "+D" (reg)
+                : "a" (0x0300)
+                , "b" (interrupt)
+                , "c" (0)); // TODO: stack?
+            if (c) throw dpmi_error(error, "call_rm_interrupt");
 
             assert(new_reg_ds == get_ds()); //HACK
-            assert(new_reg == &reg);
 
             if (new_reg_ds != get_ds())
             {
                 std::cout << "WARNING: es returned by dpmi is not ds!" << std::endl;
                 std::cout << std::hex << "es=" << new_reg_ds << ", ds=" << get_ds() << std::endl;
-                new_reg += memory_info::get_selector_base_address(new_reg_ds);
-                new_reg -= memory_info::get_selector_base_address(get_ds());
+                reg += memory_info::get_selector_base_address(new_reg_ds);
+                reg -= memory_info::get_selector_base_address(get_ds());
             }
-            return *new_reg;
         }
 
     #ifndef __INTELLISENSE__

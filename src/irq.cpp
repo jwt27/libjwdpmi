@@ -158,36 +158,32 @@ namespace jw
             void irq_controller::set_pm_interrupt_vector(int_vector v, far_ptr32 ptr)
             {
                 dpmi_error_code error;
-                asm volatile
-                    ("int 0x31;"
-                     "jc fail%=;"
-                     "mov eax, 0;"
-                     "fail%=:;"
-                     : "=a" (error)
-                     : "a" (0x0205)
-                     , "b" (v)
-                     , "c" (ptr.segment)
-                     , "d" (ptr.offset)
-                     : "cc");
-                if (error) throw dpmi_error(error, __FUNCTION__);
+                bool c;
+                asm volatile (
+                    "int 0x31;"
+                    : "=@ccc" (c)
+                    , "=a" (error)
+                    : "a" (0x0205)
+                    , "b" (v)
+                    , "c" (ptr.segment)
+                    , "d" (ptr.offset));
+                if (c) throw dpmi_error(error, __FUNCTION__);
             }
 
             far_ptr32 irq_controller::get_pm_interrupt_vector(int_vector v)
             {
                 dpmi_error_code error;
                 far_ptr32 ptr;
-                asm volatile
-                    ("int 0x31;"
-                     "jc fail%=;"
-                     "mov eax, 0;"
-                     "fail%=:;"
-                     : "=a" (error)
-                     , "=c" (ptr.segment)
-                     , "=d" (ptr.offset)
-                     : "a" (0x0204)
-                     , "b" (v)
-                     : "cc");
-                if (error) throw dpmi_error(error, __FUNCTION__);
+                bool c;
+                asm volatile (
+                    "int 0x31;"
+                    : "=@ccc" (c)
+                    ,"=a" (error)
+                    , "=c" (ptr.segment)
+                    , "=d" (ptr.offset)
+                    : "a" (0x0204)
+                    , "b" (v));
+                if (c) throw dpmi_error(error, __FUNCTION__);
                 return ptr;
             }
         }
