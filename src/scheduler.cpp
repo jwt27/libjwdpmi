@@ -62,6 +62,7 @@ namespace jw
                     threads.erase(remove_if(threads.begin(), threads.end(), [&](const auto& i) { return i == t; }), threads.end());
                     threads.push_front(t);
                 }
+                if (dpmi::in_irq_context()) return;
                 context_switch();   // switch to a new task context
                 check_exception();  // rethrow pending exception
             }
@@ -85,8 +86,9 @@ namespace jw
 
                 while (true) try
                 {
-                    if (caught_exception) thread_switch(current_thread->parent);
-                    else yield();
+                    //if (caught_exception) thread_switch(current_thread->parent);
+                    //else yield();
+                    yield();
                 }
                 catch (const abort_thread&) { }
                 catch (...) { catch_thread_exception(); caught_exception = true; }
@@ -110,13 +112,13 @@ namespace jw
             // Throws abort_thread if task->abort() is called, or orphaned_thread if task is orphaned.
             void scheduler::check_exception()
             {
-                if (current_thread->awaiting && !current_thread->awaiting->exceptions.empty())
+                if (current_thread->awaiting && current_thread->awaiting->pending_exceptions() > 0)
                 {
                     auto exc = current_thread->awaiting->exceptions.front();
                     current_thread->awaiting->exceptions.pop_front();
                     std::rethrow_exception(exc);
                 }
-                if (!current_thread->exceptions.empty())
+                if (current_thread->pending_exceptions() > 0)
                 {
                     for (auto exc : current_thread->exceptions)
                     {
@@ -137,12 +139,13 @@ namespace jw
                 }
                 if (current_thread->state == terminating) throw abort_thread();
                 if (current_thread.unique() && !current_thread->allow_orphan) throw orphaned_thread();
+                //std::cerr << "no exceptions!\n";
             }
 
             void scheduler::catch_thread_exception() noexcept
             {
                 try             // wrap the current exception in a nested exception
-                { std::throw_with_nested(thread_exception(current_thread)); }
+                { std::throw_with_nested(thread_exception { current_thread }); }
                 catch (...)
                 { current_thread->exceptions.push_back(std::current_exception()); }
             }

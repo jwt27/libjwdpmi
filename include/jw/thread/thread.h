@@ -31,7 +31,7 @@ namespace jw
         struct thread_exception : public std::exception
         {
             virtual const char* what() const noexcept override { return "Exception thrown by task."; }
-            const detail::thread_ptr task_ptr;
+            const std::weak_ptr<detail::thread> task_ptr;
             thread_exception(const detail::thread_ptr& t) noexcept : task_ptr(t) { }
         };
 

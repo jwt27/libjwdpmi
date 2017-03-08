@@ -37,14 +37,13 @@ namespace jw
 
                 // Blocks until the coroutine yields a result, or terminates.
                 // Returns true when it is safe to call await() to obtain the result.
+                // May rethrow unhandled exceptions!
                 bool try_await()
                 {
-                    //if (!this->is_running() || this->state == terminating) return false;
+                    dpmi::throw_if_irq();
                     if (scheduler::is_current_thread(this)) return false;
-                    
-                    scheduler::get_current_thread()->awaiting = this->shared_from_this();
-                    yield_while([&]() { return this->state == running; });
-                    scheduler::get_current_thread()->awaiting.reset();
+
+                    this->try_await_while([this]() { return this->state == running; });
 
                     if (this->state != suspended) return false;
                     return true;
@@ -52,6 +51,7 @@ namespace jw
 
                 // Awaits a result from the coroutine.
                 // Throws illegal_await if the coroutine ends without yielding a result.
+                // May rethrow unhandled exceptions!
                 auto await()
                 {
                     if (!try_await()) throw illegal_await(this->shared_from_this());
@@ -68,11 +68,11 @@ namespace jw
 
                     result = std::make_unique<R>(std::move(value));
                     this->state = suspended;
-                    scheduler::yield();
+                    yield();
                     result.reset();
                 }
 
-                coroutine_impl(std::function<function_sig> f) : function(f) { this->allow_orphan = false; }
+                coroutine_impl(std::function<function_sig> f) : function(f) { }
             };
         }
 
@@ -84,6 +84,7 @@ namespace jw
         {
             using task_type = coroutine_impl<R(A...), stack_bytes>;
             std::shared_ptr<task_type> ptr;
+
         public:
             constexpr const auto get_ptr() const { return ptr; }
             constexpr auto* operator->() const { return ptr.get(); }
@@ -92,12 +93,8 @@ namespace jw
             template<typename F>
             constexpr coroutine(F f) : ptr(std::make_shared<task_type>(f)) { }
 
-            template<typename F, typename A>
-            constexpr coroutine(std::allocator_arg_t, A alloc, F f) : ptr(std::allocate_shared<task_type>(alloc, f)) { }
-
             constexpr coroutine(const coroutine&) = default;
             constexpr coroutine() = delete;
         };
-
     }
 }

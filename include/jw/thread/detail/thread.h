@@ -37,6 +37,7 @@ namespace jw
             class thread
             {
                 friend class scheduler;
+                template<std::size_t> friend class task_base;
 
                 thread_context* context; // points to esp during context switch
                 const std::size_t stack_size;
@@ -57,7 +58,7 @@ namespace jw
 
             public:
                 bool is_running() const noexcept { return (state != initialized && state != finished); }
-                bool allow_orphan { true }; // delet this
+                bool allow_orphan { false };
                 auto pending_exceptions() const noexcept { return exceptions.size(); }
                 
                 virtual ~thread()

@@ -1,4 +1,6 @@
 #pragma once
+#include <jw/thread/thread.h>
+
 namespace jw
 {
     namespace io
@@ -141,8 +143,8 @@ namespace jw
 
                 char_type get_one() noexcept
                 {
-                    retry:
-                    do { } while (!line_status.read().data_available);
+                retry:
+                    thread::yield_while([&]() { return !line_status.read().data_available; });
                     auto c = data_port.read();
                     if (config.flow_control == rs232_config::xon_xoff)
                     {
@@ -157,7 +159,7 @@ namespace jw
                 {
                     if (!line_status.read().transmitter_empty) return false;
                     if (config.flow_control == rs232_config::rts_cts && !modem_status.read().cts) return false;
-                    do { } while (!line_status.read().transmitter_empty);
+                    thread::yield_while([&]() { return !line_status.read().transmitter_empty; });
                     data_port.write(c);
                     return true;
                 }

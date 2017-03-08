@@ -2,6 +2,7 @@
 #include <jw/thread/detail/thread.h>
 #include <jw/thread/detail/scheduler.h>
 #include <jw/thread/thread.h>
+#include <../jwdpmi_config.h>
 
 namespace jw
 {
@@ -27,19 +28,38 @@ namespace jw
                 }
 
             public:
-                // Aborts the task prematurely.
+                // Aborts the task.
                 // This throws an abort_thread exception on the thread, allowing the task to clean up and return normally.
+                // May rethrow unhandled exceptions!
                 void abort(bool wait = true)
                 {
                     if (!this->is_running()) return;
 
                     this->state = terminating;
+
+                    if (dpmi::in_irq_context()) return;
                     if (wait && !scheduler::is_current_thread(this))
-                        yield_while([&]() { return this->is_running(); });
+                        try_await_while([&]() { return this->is_running(); });
+                }
+
+                template<typename F>
+                void try_await_while(F f)
+                {
+                    scheduler::get_current_thread().lock()->awaiting = this->shared_from_this();
+                    try
+                    {
+                        do { yield(); } while (f());
+                    }
+                    catch (...)
+                    {
+                        scheduler::get_current_thread().lock()->awaiting.reset();
+                        throw;
+                    }
+                    scheduler::get_current_thread().lock()->awaiting.reset();
                 }
             };
 
-            template<typename sig, std::size_t stack_bytes = default_stack_size>
+            template<typename sig, std::size_t stack_bytes>
             class task_impl;
 
             template<typename R, typename... A, std::size_t stack_bytes>
@@ -74,14 +94,13 @@ namespace jw
 
                 // Blocks until the task returns a result, or terminates.
                 // Returns true when it is safe to call await() to obtain the result.
-                // TODO: may throw unhandled exceptions
+                // May rethrow unhandled exceptions!
                 bool try_await()
                 {
+                    dpmi::throw_if_irq();
                     if (scheduler::is_current_thread(this)) return false;
 
-                    scheduler::get_current_thread()->awaiting = this->shared_from_this();
-                    yield_while([&]() { return this->is_running(); });
-                    scheduler::get_current_thread()->awaiting.reset();
+                    this->try_await_while([this]() { return this->is_running(); });
 
                     if (this->state == initialized) return false;
                     return true;
@@ -89,29 +108,30 @@ namespace jw
 
                 // Awaits a result from the task.
                 // Throws illegal_await if the task terminates without returning a result.
+                // May rethrow unhandled exceptions!
                 auto await()
                 {
                     if (!try_await()) throw illegal_await(this->shared_from_this());
 
                     this->state = initialized;
-                    return get_result(std::is_void<R>());
+                    return get_result(std::is_void<R> { });
                 }
 
                 constexpr void suspend() noexcept { if (this->state == running) this->state = suspended; }
                 constexpr void resume() noexcept { if (this->state == suspended) this->state = running; }
 
-                task_impl(std::function<R(A...)> f) : function(f) { this->allow_orphan = std::is_void<R>::value; }
+                task_impl(std::function<R(A...)> f) : function(f) { }   // TODO: allocator support!
             };
         }
 
-        template<typename sig, std::size_t stack_bytes = default_stack_size>
+        template<typename sig, std::size_t stack_bytes = config::thread_default_stack_size>
         class task;
 
         template<typename R, typename... A, std::size_t stack_bytes>
         class task<R(A...), stack_bytes>
         {
             using task_type = detail::task_impl<R(A...), stack_bytes>;
-            detail::thread_ptr ptr;
+            std::shared_ptr<task_type> ptr;
 
         public:
             constexpr const auto get_ptr() const noexcept { return ptr; }
@@ -121,11 +141,14 @@ namespace jw
             template<typename F>
             constexpr task(F f) : ptr(std::make_shared<task_type>(f)) { }
             
-            template<typename F, typename A>
-            constexpr task(std::allocator_arg_t, A alloc, F f) : ptr(std::allocate_shared<task_type>(alloc, f)) { }
+            template<typename F, typename Alloc>
+            constexpr task(std::allocator_arg_t, Alloc a, F f) : ptr(std::allocate_shared<task_type>(a, f)) { }
 
             constexpr task(const task&) = default;
             constexpr task() = delete;
         };
+
+        template<std::size_t stack_bytes, typename... T>
+        auto allocate_task(T... args) { return task<void(), stack_bytes> { args... }; }
     }
 }
