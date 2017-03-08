@@ -14,17 +14,25 @@ Current features include:
 * Build and install DJGPP (the DOS port of gcc)  
 A build script can be found here: https://github.com/andrewwutw/build-djgpp
 * Set your `PATH` and `GCC_EXEC_PREFIX` accordingly:  
+
     $ export PATH=/usr/local/djgpp/i586-pc-msdosdjgpp/bin:$PATH  
     $ export GCC_EXEC_PREFIX=/usr/local/djgpp/lib/gcc/  
+
 * Add this repository as a submodule in your own project  
+
     $ git submodule add https://github.com/jwt27/libjwdpmi.git ./lib/libjwdpmi  
     $ git submodule update --init  
+
 * In the root directory, copy the sample configuration file to `jwdpmi_config.h` and adjust options as necessary.  
+
     $ cp jwdpmi_config_default.h jwdpmi_config.h  
+
 * In your makefile, export your `CXX` and `CXXFLAGS`, and add a rule to build `libjwdpmi`:  
+
     export CXX CXXFLAGS  
     libjwdpmi:  
         $(MAKE) -C lib/libjwdpmi/  
+
 * Add the `include` directory to your global include path (`-I`) and link your program with `libjwdpmi.a`, found in the `bin/` directory.  
 
 ## Using
