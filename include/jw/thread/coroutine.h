@@ -24,7 +24,7 @@ namespace jw
     {
         namespace detail
         {
-            template<typename sig, std::size_t stack_bytes = default_stack_size>
+            template<typename sig, std::size_t stack_bytes>
             class coroutine_impl;
 
             template<typename R, typename... A, std::size_t stack_bytes>
@@ -85,7 +85,7 @@ namespace jw
 
                     result = std::make_unique<R>(std::move(value));
                     this->state = suspended;
-                    yield();
+                    ::jw::thread::yield();
                     result.reset();
                 }
 
@@ -93,13 +93,13 @@ namespace jw
             };
         }
 
-        template<typename sig, std::size_t stack_bytes = default_stack_size>
+        template<typename sig, std::size_t stack_bytes = config::thread_default_stack_size>
         class coroutine;
 
         template<typename R, typename... A, std::size_t stack_bytes>
         class coroutine<R(A...), stack_bytes>
         {
-            using task_type = coroutine_impl<R(A...), stack_bytes>;
+            using task_type = detail::coroutine_impl<R(A...), stack_bytes>;
             std::shared_ptr<task_type> ptr;
 
         public:
