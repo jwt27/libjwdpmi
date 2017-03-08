@@ -96,14 +96,13 @@ namespace jw
                 rx_ptr = rx_buf.begin() + (rx_ptr - gptr());
                 get();
                 setg(rx_buf.begin(), rx_buf.begin(), rx_ptr);
-                //setg(rx_buf.begin(), gptr(), rx_ptr);
                 set_rts();
                 if (rx_ptr == gptr()) return traits_type::eof();
                 return *gptr();
             }
 
             std::streamsize rs232_streambuf::xsputn(const char_type * s, std::streamsize n)
-            {                               
+            {
                 irq_disable no_irq { this };
                 auto max_n = std::min(tx_buf.end() - pptr(), n);
                 if (max_n < n) overflow();

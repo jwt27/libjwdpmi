@@ -1,7 +1,8 @@
 #pragma once
 #include <array>
 #include <memory>
-#include <unordered_map>
+#include <atomic>
+#include <deque>
 #include <jw/dpmi/irq_check.h>
 #include <jw/dpmi/lock.h>
 #include <jw/dpmi/alloc.h>
@@ -70,45 +71,65 @@ namespace jw
 
                 cr0_t()
                 {
-                    if (!test_cr0_access()) return;
-                    asm("mov %0, cr0;":"=r"(*this));
-                }
+                    bool cr0_access = test_cr0_access();
+                    if (!cr0_access) return;
+                    asm volatile("mov %0, cr0;":"=r"(*this):"rm"(cr0_access));  // needs the result of test_cr0_access() here
+                }                                                               // or else gcc may place the asm before the function call...
                 void set()
                 {
-                    if (!test_cr0_access()) return;
-                    asm("mov cr0, %0;"::"r"(*this));
+                    bool cr0_access = test_cr0_access();
+                    if (!cr0_access) return;
+                    asm volatile("mov cr0, %0;"::"r"(*this),"rm"(cr0_access));
                 }
             };
 
-            class fpu_context_switcher_t
+            class fpu_context_switcher_t : class_lock<fpu_context_switcher_t>
             {
                 locked_pool_allocator<> alloc { config::interrupt_fpu_context_pool };
-                std::unordered_map<std::uint32_t, fpu_context, std::hash<std::uint32_t>, std::equal_to<std::uint32_t>, locked_pool_allocator<>> contexts { alloc };
-                fpu_context irq_context;
-                bool lazy_switching { false };
-                volatile std::uint32_t count { 0 };
+                std::deque<std::shared_ptr<fpu_context>, locked_pool_allocator<>> contexts { alloc };
                 
-                void save() { contexts[static_cast<std::uint32_t>(count) - 1].save(); irq_context.restore(); }
-                void restore() { contexts[static_cast<std::uint32_t>(count)].restore(); }
+                fpu_context default_irq_context;
+                bool lazy_switching { false };
+                bool init { false };
+                std::uint32_t last_restored { 0 };
+                
+                [[gnu::optimize("no-tree-vectorize")]]  // TODO: find some way to disable x87/sse instructions altogether.
+                void switch_context()
+                {
+                    if (contexts.back() == nullptr)
+                    {
+                        if (last_restored < contexts.size() - 1)
+                        {
+                            if (contexts[last_restored] == nullptr) contexts[last_restored] = std::allocate_shared<fpu_context>(alloc); // TODO: check if this does zero-initialization (it shouldn't)
+                            contexts[last_restored]->save();
+                        }
+                        default_irq_context.restore();
+                    }
+                    else contexts.back()->restore();
+                    last_restored = contexts.size() - 1;
+                }
 
             public:
                 fpu_context_switcher_t();
+                ~fpu_context_switcher_t();
 
-                void enter()
-                {   
-                    ++count;
-                    if (!lazy_switching) save();
+                [[gnu::optimize("no-tree-vectorize")]]
+                void enter() noexcept
+                {
+                    if (!init) return;
+                    contexts.push_back(nullptr);
+                    if (!lazy_switching) switch_context();
                     cr0_t cr0 { };
                     cr0.task_switched = true;
                     cr0.set();
                 }
 
-                void leave()
+                [[gnu::optimize("no-tree-vectorize")]]
+                void leave() noexcept
                 {
-                    --count;
-                    if (!lazy_switching) restore();
-                    auto i = static_cast<std::uint32_t>(count) + 1;
-                    contexts.erase(i);
+                    if (!init) return;
+                    contexts.pop_back();
+                    if (!lazy_switching) switch_context();
                     cr0_t cr0 { };
                     cr0.task_switched = true;
                     cr0.set();

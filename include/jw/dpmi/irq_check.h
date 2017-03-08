@@ -12,10 +12,10 @@ namespace jw
             //extern auto irq::in_service();
         }
 
-        inline bool in_irq_context();   // TODO: these
+        inline bool in_irq_context() noexcept;   // TODO: these
         inline void throw_if_irq();
 
-        inline bool in_interrupt_context() { return detail::interrupt_count > 0; };
+        inline bool in_interrupt_context() noexcept { return detail::interrupt_count > 0; };
         inline void throw_if_interrupt() { if (in_interrupt_context()) throw std::runtime_error("called from interrupt"); }; // TODO: specialized exception
     }
 }

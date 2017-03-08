@@ -106,7 +106,7 @@ namespace jw
                 virtual int_type overflow(int_type c = traits_type::eof()) override;
 
             private:
-                void set_rts()
+                void set_rts() noexcept
                 {
                     if (config.force_dtr_rts_high) return;
                     auto r = modem_control.read();
@@ -120,22 +120,26 @@ namespace jw
                     }
                 }
 
-                void get(bool entire_fifo = false)
+                void get(bool entire_fifo = false) noexcept
                 {
+                    if (getting.test_and_set()) return;
                     auto end = rx_ptr + std::min(entire_fifo ? 14 : 1, rx_buf.end() - rx_ptr);
                     while (rx_ptr < end) *(rx_ptr++) = get_one();
                     setg(rx_buf.begin(), gptr(), end);
+                    getting.clear();
                 }
 
-                void put()
+                void put() noexcept
                 {
-                    if (config.flow_control == rs232_config::xon_xoff && !cts) { put_one(xon); return; };
+                    //if (config.flow_control == rs232_config::xon_xoff && !cts) { put_one(xon); return; };
+                    if (putting.test_and_set()) return;
                     auto end = tx_ptr + std::min(line_status.read().tx_fifo_empty ? 16 : 1, pptr() - tx_ptr);
                     for (; tx_ptr < end; ++tx_ptr)
-                        if (!put_one(*tx_ptr)) return;
+                        if (!put_one(*tx_ptr)) break;
+                    putting.clear();
                 }
 
-                char_type get_one()
+                char_type get_one() noexcept
                 {
                     retry:
                     do { } while (!line_status.read().data_available);
@@ -149,7 +153,7 @@ namespace jw
                     return c;
                 }
 
-                bool put_one(char_type c)
+                bool put_one(char_type c) noexcept
                 {
                     if (!line_status.read().transmitter_empty) return false;
                     if (config.flow_control == rs232_config::rts_cts && !modem_status.read().cts) return false;
@@ -160,11 +164,9 @@ namespace jw
 
                 dpmi::irq_handler irq_handler { [&](auto ack) INTERRUPT
                 {
-                    if (in_service.test_and_set()) return;
-                    try
+                    auto id = irq_id.read();
+                    if (!id.no_irq_pending)
                     {
-                        auto id = irq_id.read();
-                        if (!id.no_irq_pending) ack();
                         switch (id.id)
                         {
                         case uart_irq_id_reg::data_available:
@@ -176,10 +178,9 @@ namespace jw
                         case uart_irq_id_reg::modem_status:
                             put(); break;
                         }
-                        set_rts();
+                        ack();
                     }
-                    catch (...) { in_service.clear(); throw; }
-                    in_service.clear();
+                    set_rts();
                 } };
 
                 rs232_config config;
@@ -192,7 +193,8 @@ namespace jw
                 io_port <uart_modem_control_reg> modem_control;
                 in_port <uart_line_status_reg> line_status;
                 in_port <uart_modem_status_reg> modem_status;
-                std::atomic_flag in_service { false };
+                std::atomic_flag getting { false };
+                std::atomic_flag putting { false };
                 bool cts { false };
 
                 std::array<char_type, 1_KB> rx_buf;
@@ -205,12 +207,13 @@ namespace jw
 
                 static std::unordered_map<port_num, bool> com_port_use_map;
 
-                struct irq_disable
+                struct irq_disable  // TODO: disable get/put irqs separately
                 {
-                    irq_disable(auto* p) : owner(p), reg(p->irq_enable.read()) { owner->irq_enable.write({ }); }
+                    irq_disable(auto* p) noexcept : owner(p), reg(p->irq_enable.read()) { owner->irq_enable.write({ }); }
                     ~irq_disable() { owner->irq_enable.write(reg); }
 
-                private:                    
+                protected:
+                    irq_disable() { }
                     rs232_streambuf* owner;
                     uart_irq_enable_reg reg;
                 };

@@ -194,7 +194,7 @@ namespace jw
                 "pusha;"
                 "call fword ptr %0;"
                 "popa;"
-                :: "m" (ptr));
+                :: "m" (ptr):"esp");
         }
 
         // Call a function which returns with IRET
@@ -205,7 +205,7 @@ namespace jw
                 "pushf;"
                 "call fword ptr %0;"
                 "popa;"
-                :: "m" (ptr));
+                :: "m" (ptr):"esp");
         }
 
         struct memory_info

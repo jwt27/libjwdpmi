@@ -6,7 +6,7 @@ namespace jw
     {
         namespace detail
         {
-            std::unique_ptr<std::unordered_map<void*, data_lock>> locking_allocator_base::map;
+            std::unique_ptr<std::map<void*, data_lock>> locking_allocator_base::map;
         }
     }
 }

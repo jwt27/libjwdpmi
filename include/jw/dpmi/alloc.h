@@ -3,7 +3,7 @@
 #pragma once
 #include <memory>
 #include <vector>
-#include <unordered_map>
+#include <map>
 
 #include <jw/typedef.h>
 #include <jw/dpmi/lock.h>
@@ -20,7 +20,7 @@ namespace jw
             {
             protected:
                 // This is a unique_ptr to avoid issues with static initialization order.
-                static std::unique_ptr<std::unordered_map<void*, data_lock>> map;
+                static std::unique_ptr<std::map<void*, data_lock>> map;
             };
         }
 
@@ -53,7 +53,7 @@ namespace jw
 
             template <typename U>
             constexpr locking_allocator(const locking_allocator<U>&) noexcept { }
-            locking_allocator() { if (!map) map = std::make_unique<std::unordered_map<void*, data_lock>>(); };
+            locking_allocator() { if (!map) map = std::make_unique<std::map<void*, data_lock>>(); };
             ~locking_allocator() = default;
 
             template <typename U> constexpr friend bool operator == (const locking_allocator&, const locking_allocator<U>&) noexcept { return true; }

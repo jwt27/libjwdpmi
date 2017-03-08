@@ -17,7 +17,8 @@ namespace jw
 
         #define PORT_IN(reg)        \
             T v;                    \
-            asm("in "#reg", %w1;"   \
+            asm volatile(           \
+                "in "#reg", %w1;"   \
                 : "=a" (v)          \
                 : "Nd" (p));        \
             return v;
@@ -30,7 +31,8 @@ namespace jw
 
         #define PORT_IN_NONTRIVIAL(temp_type, reg)  \
             temp_type v;                            \
-            asm("in "#reg", %w1;"                   \
+            asm volatile(                           \
+                "in "#reg", %w1;"                   \
                 : "=a" (v)                          \
                 : "Nd" (p));                        \
             return T { v };

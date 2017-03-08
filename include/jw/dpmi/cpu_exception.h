@@ -146,7 +146,6 @@ namespace jw
                 return is_new_type;
             }
 
-
         private:
 
         #define CALL_INT31_GET(func_no, exc_no)                     \
@@ -203,27 +202,10 @@ namespace jw
 
             std::function<handler_type> handler;
             exception_num exc;
-            static std::array<std::array<byte, config::exception_stack_size>, 0x20> stacks; // TODO: allow nested exceptions
-            static std::array<std::deque<exception_handler*>, 0x20> wrapper_list;
+            static std::array<byte, config::exception_stack_size> stack; // TODO: allow nested exceptions
+            static std::array<std::unique_ptr<std::deque<exception_handler*>>, 0x20> wrapper_list;
 
-            static bool call_handler(exception_handler* self, raw_exception_frame* frame) noexcept
-            {
-                ++detail::exception_count;
-                if (self->exc != 0x07 && self->exc != 0x10) detail::fpu_context_switcher.enter();
-                bool ret = false;
-                try
-                {
-                    auto* f = self->new_type ? &frame->frame_10 : &frame->frame_09;
-                    ret = self->handler(f, self->new_type);
-                }
-                catch (...) 
-                {
-                    std::cerr << "CAUGHT EXCEPTION IN CPU EXCEPTION HANDLER " << self->exc << std::endl; // HACK
-                }
-                if (self->exc != 0x07 && self->exc != 0x10) detail::fpu_context_switcher.leave();
-                --detail::exception_count;
-                return ret;
-            }
+            static bool call_handler(exception_handler* self, raw_exception_frame* frame) noexcept;
                                                                 // sizeof   alignof     offset
             exception_handler* self { this };                   // 4        4           [eax-0x28]
             decltype(&call_handler) call_ptr { &call_handler }; // 4        4           [eax-0x24]
@@ -238,123 +220,16 @@ namespace jw
             std::array<byte, 0x100> code;                       //          1           [eax-0x0C]
 
         public:
-            template<typename F>
-            exception_handler(exception_num e, F f) : handler(f), exc(e), stack_ptr(stacks[e].data() + stacks[e].size())
-            {
-                byte* start;
-                std::size_t size;
-                asm volatile (
-                    "jmp exception_wrapper_end%=;"
-                    // --- \/\/\/\/\/\/ --- //
-                    "exception_wrapper_begin%=:;"
+            exception_handler(exception_num e, std::function<handler_type> f);
 
-                    "push ds; push es; push fs; push gs; pusha;"    // 7 bytes
-                    "call get_eip%=;"                               // 5 bytes
-                    "get_eip%=: pop eax;"       // Get EIP and use it to find our variables
-
-                    "mov ebp, esp;"
-                    "mov bx, ss;"
-                    "cmp bx, word ptr cs:[eax-0x1C];"
-                    "je keep_stack%=;"
-
-                    // Copy exception frame to the new stack
-                    "mov es, cs:[eax-0x1C];"    // note: this is DS
-                    "push ss; pop ds;"
-                    "mov ecx, 0x22;"            // exception_frame = 0x58 bytes, pushed regs = 0x30 bytes, total 0x22 dwords
-                    "mov esi, ebp;"
-                    "mov edi, cs:[eax-0x20];"   // new stack pointer
-                    "sub edi, ecx;"
-                    "and edi, -0x10;"           // align stack
-                    "mov ebp, edi;"
-                    "cld;"
-                    "rep movsd;"
-
-                    // Restore segment registers
-                    "mov ds, cs:[eax-0x1C];"
-                    "mov es, cs:[eax-0x1A];"
-                    "mov fs, cs:[eax-0x18];"
-                    "mov gs, cs:[eax-0x16];"
-
-                    // Switch to the new stack
-                    "mov ss, cs:[eax-0x1C];"
-                    "mov esp, ebp;"
-
-                    "keep_stack%=:"
-                    "sub esp, 4;"
-                    "add ebp, 0x30;"
-                    "push ebp;"                 // Pointer to raw_exception_frame
-                    "push cs:[eax-0x28];"       // Pointer to self
-                    "mov ebx, eax;"
-                    "call cs:[ebx-0x24];"       // call_handler();
-                    "add esp, 0xC;"
-                    "test al, al;"              // Check return value
-                    "jz chain%=;"               // Chain if false
-                    "mov al, cs:[ebx-0x14];"
-                    "test al, al;"              // Check which frame to return
-                    "jz old_type%=;"
-
-                    // Return with DPMI 1.0 frame
-                    "popa; pop gs; pop fs; pop es; pop ds;"
-                    "add esp, 0x20;"
-                    "retf;"
-
-                    // Return with DPMI 0.9 frame
-                    "old_type%=:;"
-                    "popa; pop gs; pop fs; pop es; pop ds;"
-                    "retf;"
-
-                    // Chain to previous handler
-                    "chain%=:"
-                    "push cs; pop ds;"
-                    "push ss; pop es;"
-                    "lea esi, [ebx-0x12];"      // previous_handler
-                    "lea edi, [esp-0x06];"
-                    "movsd; movsw;"             // copy previous_handler ptr to stack
-                    "popa; pop gs; pop fs; pop es; pop ds;"
-                    "jmp fword ptr ss:[esp-0x2A];"
-
-                    "exception_wrapper_end%=:;"
-                    // --- /\/\/\/\/\/\ --- //
-                    "mov %0, offset exception_wrapper_begin%=;"
-                    "mov %1, offset exception_wrapper_end%=;"
-                    "sub %1, %0;"
-                    : "=r,r,m" (start)
-                    , "=r,m,r" (size)
-                    ::"cc");
-                assert(size <= code.size());
-
-                auto* ptr = memory_descriptor(get_cs(), start, size).get_ptr<byte>();
-                std::copy_n(ptr, size, code.data());
-
-                asm volatile(
-                    "mov %w0, ds;"
-                    "mov %w1, es;"
-                    "mov %w2, fs;"
-                    "mov %w3, gs;"
-                    : "=m" (ds)
-                    , "=m" (es)
-                    , "=m" (fs)
-                    , "=m" (gs));
-
-                if (wrapper_list[e].empty()) previous_handler = cpu_exception::get_pm_handler(e);
-                else previous_handler = wrapper_list[e].back()->get_ptr();
-                wrapper_list[e].push_back(this);
-
-                new_type = cpu_exception::set_handler(e, get_ptr());
-            }
-
-            ~exception_handler()
-            {
-                auto i = std::find(wrapper_list[exc].begin(), wrapper_list[exc].end(), this);
-                if (i != wrapper_list[exc].end() - 1) i[+1]->previous_handler = previous_handler;
-                wrapper_list[exc].erase(i);
-                if (wrapper_list[exc].empty()) cpu_exception::set_handler(exc, previous_handler);
-            }
+            ~exception_handler();
 
             exception_handler(const exception_handler&) = delete;
-            exception_handler(exception_handler&&) = delete;
+            exception_handler(exception_handler&&) = delete;           
+            exception_handler& operator=(const exception_handler&) = delete;
+            exception_handler& operator=(exception_handler&&) = delete;
 
-            far_ptr32 get_ptr() { return far_ptr32 { get_cs(), reinterpret_cast<std::uintptr_t>(code.data()) }; }
+            far_ptr32 get_ptr() const noexcept { return far_ptr32 { get_cs(), reinterpret_cast<std::uintptr_t>(code.data()) }; }
         };
     }
 }
