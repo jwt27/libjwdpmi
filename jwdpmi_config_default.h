@@ -15,5 +15,7 @@ namespace jw
         const std::size_t interrupt_fpu_context_pool = 32_KB;
 
         const std::size_t exception_stack_size = 32_KB;
+
+        const std::size_t thread_default_stack_size = 64_KB;
     }
 }
