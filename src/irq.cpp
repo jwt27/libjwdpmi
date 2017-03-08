@@ -26,16 +26,16 @@ namespace jw
         namespace detail
         {
             volatile std::uint32_t interrupt_count { 0 };
-            locked_pool_allocator<> irq::alloc { config::interrupt_memory_pool };
-            std::vector<int_vector, locked_pool_allocator<>> irq::current_int { alloc };
-            std::unordered_map<int_vector, irq, std::hash<int_vector>, std::equal_to<int_vector>, locking_allocator<>> irq::entries { };
-            std::vector<byte, locking_allocator<>> irq::stack { };
-            std::uint32_t irq::stack_use_count { };
-            constexpr io::io_port<byte> irq::pic0_cmd;
-            constexpr io::io_port<byte> irq::pic1_cmd;
-            irq::initializer irq::init { };
+            locked_pool_allocator<> irq_controller::alloc { config::interrupt_memory_pool };
+            std::vector<int_vector, locked_pool_allocator<>> irq_controller::current_int { alloc };
+            std::unordered_map<int_vector, irq_controller, std::hash<int_vector>, std::equal_to<int_vector>, locking_allocator<>> irq_controller::entries { };
+            std::vector<byte, locking_allocator<>> irq_controller::stack { };
+            std::uint32_t irq_controller::stack_use_count { };
+            constexpr io::io_port<byte> irq_controller::pic0_cmd;
+            constexpr io::io_port<byte> irq_controller::pic1_cmd;
+            irq_controller::initializer irq_controller::init { };
 
-            void irq::interrupt_entry_point(int_vector vec) noexcept
+            void irq_controller::interrupt_entry_point(int_vector vec) noexcept
             {
                 ++interrupt_count;
                 current_int.push_back(vec);
@@ -66,7 +66,7 @@ namespace jw
                 current_int.pop_back();
             }
 
-            void irq::operator()()
+            void irq_controller::operator()()
             {
                 for (auto f : handler_chain)
                 {
@@ -150,12 +150,12 @@ namespace jw
                     , "=m" (ss));
             }
 
-            byte* irq::get_stack_ptr() noexcept
+            byte* irq_controller::get_stack_ptr() noexcept
             {
                 return stack.data() + (stack.size() >> (stack_use_count++)) - 4;
             }
 
-            void irq::set_pm_interrupt_vector(int_vector v, far_ptr32 ptr)
+            void irq_controller::set_pm_interrupt_vector(int_vector v, far_ptr32 ptr)
             {
                 dpmi_error_code error;
                 asm volatile
@@ -172,7 +172,7 @@ namespace jw
                 if (error) throw dpmi_error(error, __FUNCTION__);
             }
 
-            far_ptr32 irq::get_pm_interrupt_vector(int_vector v)
+            far_ptr32 irq_controller::get_pm_interrupt_vector(int_vector v)
             {
                 dpmi_error_code error;
                 far_ptr32 ptr;

@@ -110,8 +110,8 @@ namespace jw
             ~irq_handler() { disable(); }
 
             void set_irq(irq_level i) { disable(); irq = i; }
-            void enable() { if (!enabled) detail::irq::get_irq(irq).add(this); enabled = true; }
-            void disable() { if (enabled) detail::irq::get_irq(irq).remove(this); enabled = false; }
+            void enable() { if (!enabled) detail::irq_controller::get_irq(irq).add(this); enabled = true; }
+            void disable() { if (enabled) detail::irq_controller::get_irq(irq).remove(this); enabled = false; }
 
         private:
             irq_handler(const irq_handler&) = delete;
