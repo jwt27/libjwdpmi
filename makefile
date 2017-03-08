@@ -20,7 +20,6 @@ SRC := $(wildcard $(SRCDIR)/*.cpp)
 OBJ := $(SRC:$(SRCDIR)/%.cpp=$(OBJDIR)/%.o)
 DEP := $(SRC:$(SRCDIR)/%.cpp=$(OBJDIR)/%.d)
 VPATH := .:$(SRCDIR)
-#OBJ += $(OBJDIR)/gdb_stub.o
 
 .PHONY: all clean vs
 
@@ -41,9 +40,6 @@ $(OUTDIR)/$(OUTPUT): $(OBJ)
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.cpp
 	$(CXX) $(CXXFLAGS) -o $@ -MF $(@:.o=.d) $(INCLUDE) -c $< $(PIPECMD)
-
-$(OBJDIR)/gdb_stub.o: $(SRCDIR)/gdb_stub.c
-	$(CC) $(CXXFLAGS) -masm=att -o $@ -c $<
 
 ifneq ($(MAKECMDGOALS),clean)
   -include $(DEP)
