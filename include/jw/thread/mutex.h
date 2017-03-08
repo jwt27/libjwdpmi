@@ -14,7 +14,7 @@ namespace jw
         {
             std::atomic_flag locked { false };
         public:
-            mutex() noexcept = default;
+            constexpr mutex() noexcept = default;
             mutex(mutex&&) = delete;
             mutex(const mutex&) = delete;
 
@@ -37,7 +37,7 @@ namespace jw
             std::atomic<std::uint32_t> shared_count { 0 };
 
         public:
-            shared_mutex() noexcept = default;
+            constexpr shared_mutex() noexcept = default;
             shared_mutex(shared_mutex&&) = delete;
             shared_mutex(const shared_mutex&) = delete;
 
@@ -74,11 +74,15 @@ namespace jw
             std::weak_ptr<const detail::thread> owner;
 
         public:
-            recursive_mutex() noexcept = default;
+            constexpr recursive_mutex() noexcept = default;
             recursive_mutex(recursive_mutex&&) = delete;
             recursive_mutex(const recursive_mutex&) = delete;
 
-            void lock() { dpmi::throw_if_irq(); yield_while([&]() { return !try_lock(); }); }
+            void lock() 
+            { 
+                dpmi::throw_if_irq(); 
+                yield_while([&]() { return !try_lock(); }); 
+            }
             void unlock() noexcept
             {
                 if (detail::scheduler::is_current_thread(owner.lock().get())) --lock_count;
