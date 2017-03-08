@@ -33,7 +33,7 @@ namespace jw
                      "push es; push fs; push gs;"
                      "mov eax, esp;"
                      : "=a" (current_thread->context)
-                     :: "esp", "memory");
+                     :: "esp", "cc", "memory");
 
                 set_next_thread();    // select a new current_thread
 
@@ -51,7 +51,7 @@ namespace jw
                      :: "a" (current_thread->context)
                      , "d" (current_thread->state == starting)
                      , "i" (run_thread)
-                     : "esp", "esi", "edi", "ebx", "cc", "memory");
+                     : "esp", "cc", "memory");
             }
 
             // Switches to the specified task, or the next task in queue if argument is nullptr.

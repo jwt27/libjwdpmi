@@ -69,12 +69,13 @@ namespace jw
                 irq_handler.disable(); 
             }
 
-            int rs232_streambuf::sync() // TODO: thread::yield()
+            int rs232_streambuf::sync()
             {
                 while (tx_ptr < pptr())
                 {
                     overflow();
                     underflow();
+                    thread::yield();
                 }
                 return 0;
             }

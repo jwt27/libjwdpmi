@@ -46,7 +46,7 @@ namespace jw
         template<typename F> inline void yield_while(F condition) 
         { 
             if (dpmi::in_irq_context()) return;
-            while (condition()) yield(); 
+            while (condition()) yield();
         };
     }
 }
