@@ -80,7 +80,12 @@ namespace jw
                 
                 virtual ~thread()
                 {
-                    if (!exceptions.empty()) std::copy(exceptions.begin(), exceptions.end(), std::back_inserter(parent->exceptions));
+                    if (pending_exceptions() > 0)
+                    {
+                        std::cerr << "Destructed thread had pending exceptions!\n";
+                        std::cerr << "This should never happen. Terminating.\n";
+                        std::terminate();
+                    }
                 }
             };
 

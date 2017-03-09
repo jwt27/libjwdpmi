@@ -41,6 +41,7 @@ namespace jw
 
                     this->state = starting;
                     this->parent = scheduler::current_thread;
+                    if (dpmi::in_irq_context()) this->parent = scheduler::main_thread;
                     scheduler::thread_switch(this->shared_from_this());
                 }
 
@@ -62,17 +63,31 @@ namespace jw
                 template<typename F>
                 void try_await_while(F f)
                 {
-                    scheduler::get_current_thread().lock()->awaiting = this->shared_from_this();
+                    scheduler::current_thread->awaiting = this->shared_from_this();
                     try
                     {
                         do { yield(); } while (f());
                     }
                     catch (...)
                     {
-                        scheduler::get_current_thread().lock()->awaiting.reset();
+                        scheduler::current_thread->awaiting.reset();
                         throw;
                     }
-                    scheduler::get_current_thread().lock()->awaiting.reset();
+                    scheduler::current_thread->awaiting.reset();
+                }
+
+                virtual ~task_base()
+                {
+                    for (auto e : exceptions)
+                    {
+                        try
+                        {
+                            try { std::rethrow_exception(e); }
+                            catch (...) { std::throw_with_nested(thread_exception { nullptr }); }
+                        }
+                        catch (...) { parent->exceptions.push_back(std::current_exception()); }
+                    }
+                    exceptions.clear();
                 }
             };
 

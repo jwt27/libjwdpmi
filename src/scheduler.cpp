@@ -34,7 +34,7 @@ namespace jw
 
             scheduler::init_main::init_main()
             {
-                main_thread = std::shared_ptr<thread>(new thread(0, 0));
+                main_thread = std::shared_ptr<thread> { new thread(0, nullptr) };
                 main_thread->state = running;
                 main_thread->parent = main_thread;
                 current_thread = main_thread;
@@ -44,7 +44,7 @@ namespace jw
             // May only be called from thread_switch()!
             void scheduler::context_switch() noexcept
             {
-                asm volatile        // save the current context
+                asm volatile            // save the current context
                     ("sub esp, 4;"
                      "push ebp; push edi; push esi; push ebx;"
                      "push es; push fs; push gs;"
@@ -52,9 +52,9 @@ namespace jw
                      : "=a" (current_thread->context)
                      :: "esp", "cc", "memory");
 
-                set_next_thread();    // select a new current_thread
+                set_next_thread();      // select a new current_thread
 
-                asm volatile        // switch to the new context
+                asm volatile            // switch to the new context
                     ("mov esp, eax;"
                      "pop gs; pop fs; pop es;"
                      "pop ebx; pop esi; pop edi; pop ebp;"
@@ -89,7 +89,6 @@ namespace jw
             [[noreturn]]
             void scheduler::run_thread() noexcept
             {
-                bool caught_exception = false;
                 try
                 {
                     current_thread->state = running;
@@ -97,32 +96,13 @@ namespace jw
                     current_thread->state = finished;
                 }
                 catch (const abort_thread&) { }
-                catch (...) { catch_thread_exception(); caught_exception = true; }
+                catch (...) { current_thread->exceptions.push_back(std::current_exception()); }
 
                 if (current_thread->state != finished) current_thread->state = initialized;
 
-                while (true) try
-                {
-                    //if (caught_exception) thread_switch(current_thread->parent);
-                    //else yield();
-                    yield();
-                }
+                while (true) try { yield(); }
                 catch (const abort_thread&) { }
-                catch (...) { catch_thread_exception(); caught_exception = true; }
-            }
-
-            // Checks if the exception is a thread_exception
-            bool scheduler::is_thread_exception(const std::exception& exc) noexcept
-            {
-                try
-                {
-                    std::rethrow_if_nested(exc);
-                    throw exc;
-                }
-                catch (const thread_exception& e) { return true; }
-                catch (const std::exception& e) { return is_thread_exception(e); }
-                catch (...) { }
-                return false;
+                catch (...) { current_thread->exceptions.push_back(std::current_exception()); }
             }
 
             // Rethrows exceptions that occured on child threads.
@@ -133,7 +113,8 @@ namespace jw
                 {
                     auto exc = current_thread->awaiting->exceptions.front();
                     current_thread->awaiting->exceptions.pop_front();
-                    std::rethrow_exception(exc);
+                    try { std::rethrow_exception(exc); }
+                    catch (...) { std::throw_with_nested(thread_exception { current_thread }); }
                 }
                 if (current_thread->pending_exceptions() > 0)
                 {
@@ -143,28 +124,20 @@ namespace jw
                         {
                             std::rethrow_exception(exc);
                         }
-                        catch (const std::exception& e)
+                        catch (const thread_exception& e)
                         {
-                            if (!is_thread_exception(e)) continue;
                             auto& exceptions = current_thread->exceptions;
                             exceptions.erase(remove_if(exceptions.begin(), exceptions.end(), [&](const auto& i) { return i == exc; }), exceptions.end());
                             throw;
                         }
+                        catch (...) { }
                     }
                 }
                 if (current_thread != main_thread && *reinterpret_cast<std::uint32_t*>(current_thread->stack_ptr) != 0xDEADBEEF)
                     throw std::runtime_error("Stack overflow!");
 
                 if (current_thread->state == terminating) throw abort_thread();
-                if (current_thread.unique() && !current_thread->allow_orphan) throw orphaned_thread();
-            }
-
-            void scheduler::catch_thread_exception() noexcept
-            {
-                try             // wrap the current exception in a nested exception
-                { std::throw_with_nested(thread_exception { current_thread }); }
-                catch (...)
-                { current_thread->exceptions.push_back(std::current_exception()); }
+                if (current_thread.unique() && !current_thread->allow_orphan && current_thread->is_running()) throw orphaned_thread();
             }
 
             // Selects a new current_thread.
@@ -188,8 +161,8 @@ namespace jw
                         *current_thread->context = *current_thread->parent->context;                // clone parent's context to new stack
                     }
 
-                    if (current_thread->exceptions.size() != 0) break;
-                    if (current_thread->awaiting && current_thread->awaiting->exceptions.size() != 0) break;
+                    if (current_thread->pending_exceptions() != 0) break;
+                    if (current_thread->awaiting && current_thread->awaiting->pending_exceptions() != 0) break;
                 } while (current_thread->state == suspended);
             }
         }

@@ -55,9 +55,7 @@ namespace jw
                 [[gnu::noinline, gnu::noclone, gnu::no_stack_limit, gnu::hot]] static void context_switch() noexcept;
                 [[gnu::hot]] static void thread_switch(thread_ptr = nullptr);
                 [[gnu::noinline, hot]] static void set_next_thread() noexcept;
-                static bool is_thread_exception(const std::exception&) noexcept;
-                static void check_exception();
-                static void catch_thread_exception() noexcept;
+                [[gnu::hot]] static void check_exception();                      
 
                 [[gnu::used]] static void run_thread() noexcept;
 

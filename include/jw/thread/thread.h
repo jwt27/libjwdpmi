@@ -30,7 +30,7 @@ namespace jw
         };
 
         // Thrown when a task is still running, but no longer referenced anywhere.
-        // By default, threads may not be orphaned unless their return type is void. This behaviour can be changed with task->allow_orphan.
+        // By default, threads may not be orphaned. This behaviour can be changed with task->allow_orphan.
         struct orphaned_thread : public abort_thread
         {
             virtual const char* what() const noexcept override { return "Task orphaned, aborting."; }
@@ -47,7 +47,7 @@ namespace jw
         // Thrown on parent thread in a nested_exception when an unhandled exception occurs on a child thread.
         struct thread_exception : public std::exception
         {
-            virtual const char* what() const noexcept override { return "Exception thrown by task."; }
+            virtual const char* what() const noexcept override { return "Exception thrown from thread."; }
             const std::weak_ptr<detail::thread> task_ptr;
             thread_exception(const detail::thread_ptr& t) noexcept : task_ptr(t) { }
         };

@@ -188,7 +188,7 @@ namespace jw
 
         struct [[gnu::packed]] far_ptr16
         {
-            unsigned short offset, segment;
+            std::uint16_t offset, segment;
 
             constexpr far_ptr16(selector seg = 0, std::uint16_t off = 0) noexcept : offset(off), segment(seg) { }
             //constexpr far_ptr16(split_uint32_t far_ptr) noexcept : far_ptr16(far_ptr.hi, far_ptr.lo) { }
@@ -425,7 +425,7 @@ namespace jw
             memory_descriptor(selector seg, const void* ptr, std::size_t num_bytes)
                 : memory_descriptor(memory_info::get_linear_address(seg, ptr), num_bytes, 0) { }
 
-            constexpr memory_descriptor(std::uintptr_t address, std::size_t num_bytes, unsigned int dpmi_handle = 0)
+            constexpr memory_descriptor(std::uintptr_t address, std::size_t num_bytes, std::uint32_t dpmi_handle = 0)
                 : addr(address), size(num_bytes), handle(dpmi_handle) { }
 
             constexpr memory_descriptor(const memory_descriptor&) = default;
