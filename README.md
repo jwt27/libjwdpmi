@@ -25,10 +25,6 @@ A build script can be found here: https://github.com/andrewwutw/build-djgpp
     $ git submodule add https://github.com/jwt27/libjwdpmi.git ./lib/libjwdpmi  
     $ git submodule update --init
 ```
-* In the root directory, copy the sample configuration file to `jwdpmi_config.h` and adjust options as necessary.  
-```
-    $ cp jwdpmi_config_default.h jwdpmi_config.h  
-```
 * In your makefile, export your `CXX` and `CXXFLAGS`, and add a rule to build `libjwdpmi`:  
 ```
     export CXX CXXFLAGS  

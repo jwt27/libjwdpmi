@@ -37,8 +37,11 @@ $(OUTDIR)/$(OUTPUT): $(OBJ)
 	ar cru $@ $(OBJ) $(LIBS)
 	ranlib $@
 
-$(OBJDIR)/%.o: $(SRCDIR)/%.cpp
+$(OBJDIR)/%.o: $(SRCDIR)/%.cpp jwdpmi_config.h
 	$(CXX) $(CXXFLAGS) -o $@ -MF $(@:.o=.d) $(INCLUDE) -c $< $(PIPECMD)
+
+jwdpmi_config.h:
+	-cp -n jwdpmi_config_default.h jwdpmi_config.h
 
 ifneq ($(MAKECMDGOALS),clean)
   -include $(DEP)
