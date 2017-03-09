@@ -551,7 +551,7 @@ namespace jw
             unsigned ip : 16, cs : 16; // not used in call_rm_interrupt()
             unsigned sp : 16, ss : 16; // not required for call_rm_interrupt()
 
-            void print()
+            void print() const
             {
                 using namespace std;
                 cout << hex << setfill('0');
@@ -586,8 +586,8 @@ namespace jw
 
             if (new_reg_ds != get_ds())
             {
-                std::cout << "WARNING: es returned by dpmi is not ds!" << std::endl;
-                std::cout << std::hex << "es=" << new_reg_ds << ", ds=" << get_ds() << std::endl;
+                std::cerr << "WARNING: es returned by dpmi is not ds!" << std::endl;
+                std::cerr << std::hex << "es=" << new_reg_ds << ", ds=" << get_ds() << std::endl;
                 reg += memory_info::get_selector_base_address(new_reg_ds);
                 reg -= memory_info::get_selector_base_address(get_ds());
             }
