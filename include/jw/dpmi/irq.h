@@ -44,18 +44,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 // Also switches to the locked stack only on first interrupt, just like CWSDPMI.
 
 // --- Precautions:
-// Lock all static code and data with _CRT0_FLAG_LOCK_MEMORY.
+// Lock all static code and data with _CRT0_FLAG_LOCK_MEMORY. (main() does this for you)
 // Lock dynamically allocated memory with dpmi::class_lock or dpmi::data_lock.
-// For STL containers, use dpmi::locking_allocator or dpmi::locked_pool_allocator.
+// For STL containers, use dpmi::locking_allocator (read-only) or dpmi::locked_pool_allocator (read/write).
 
 // --- When an interrupt occurs:
-// Do not allocate any memory. May cause page faults, and malloc() is not re-entrant (or so I hear)
+// Do not allocate any memory. May cause page faults, and malloc() is not re-entrant.
 // Do not insert or remove elements in STL containers, which may cause allocation.
 // Avoid writing to cout / cerr unless a serious error occurs. INT 21 is not re-entrant.
-// Do not use floating point operations. The FPU state is undefined and hardware exceptions may occur.
-//      Problem here: there's no telling what the compiler will do.
-//      TODO: Possible workaround is to save/restore the entire FPU state and mask all exceptions when an interrupt occurs.
-//      TODO: Maybe it's possible to do this lazily by setting TS bit in CR0 and trapping CPU exception 07.
 
 // TODO: (eventually) software interrupts, real-mode callbacks
 // TODO: launch threads from interrupts
