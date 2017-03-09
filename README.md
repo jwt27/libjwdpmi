@@ -31,7 +31,14 @@ A build script can be found here: https://github.com/andrewwutw/build-djgpp
     libjwdpmi:  
         $(MAKE) -C lib/libjwdpmi/  
 ```
-* Add the `include/` directory to your global include path (`-I`) and link your program with `libjwdpmi.a`, found in the `bin/` directory.  
+* Add the `include/` directory to your global include path (`-I`) and link your program with `libjwdpmi.a`, found in the `bin/` directory.
+```
+    bin/program.exe: $(OBJ) libjwdpmi
+        $(CXX) $(CXXFLAGS) -o $@ $(OBJ) -Llib/libjwdpmi/bin -ljwdpmi
+
+    obj/%.o: src/%.cpp
+        $(CXX) $(CXXFLAGS) -o $@ -Ilib/libjwdpmi/include -c $<
+``` 
 
 ## Using
 See the [wiki page](https://github.com/jwt27/libjwdpmi/wiki), where I'm slowly adding documentation.  
