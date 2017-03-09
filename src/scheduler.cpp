@@ -119,6 +119,7 @@ namespace jw
                     try { std::rethrow_exception(exc); }
                     catch (const thread_exception& e)
                     {
+                        if (!e.task_ptr.expired()) continue; // Only rethrow if exception came from deleted/orphaned threads.
                         auto& exceptions = current_thread->exceptions;
                         exceptions.erase(remove_if(exceptions.begin(), exceptions.end(), [&](const auto& i) { return i == exc; }), exceptions.end());
                         throw;
