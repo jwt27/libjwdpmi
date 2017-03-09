@@ -63,7 +63,7 @@ namespace jw
         event& operator-=(callback_t& f)
         {                         
             auto& v = subscribers;
-            subscribers.erase(std::remove_if(v.begin(), v.end(), [](auto& i) { return i == f.get_ptr(); }), v.end());
+            subscribers.erase(std::remove_if(v.begin(), v.end(), [&f](auto& i) { return i == f.get_ptr(); }), v.end());
             return *this;
         }
 
