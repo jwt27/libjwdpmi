@@ -35,10 +35,11 @@ A build script can be found here: https://github.com/andrewwutw/build-djgpp
     libjwdpmi:  
         $(MAKE) -C lib/libjwdpmi/  
 ```
-* Add the `include` directory to your global include path (`-I`) and link your program with `libjwdpmi.a`, found in the `bin/` directory.  
+* Add the `include/` directory to your global include path (`-I`) and link your program with `libjwdpmi.a`, found in the `bin/` directory.  
 
 ## Using
-There's basically no documentation at this point. Read the header files in `include/`, there are some comments scattered around. The `detail` namespaces contain implementation details, you shouldn't need to use anything in it (file a feature request if you do).
+See the [wiki page](https://github.com/jwt27/libjwdpmi/wiki), where I'm slowly adding documentation.  
+Read the header files in `include/`, most functions should be self-explanatory (I hope :)). The `detail` namespaces contain implementation details, you shouldn't need to use anything in it (file a feature request if you do).
 
 ## License
 It's GPLv3, for now.
