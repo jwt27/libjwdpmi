@@ -15,9 +15,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
                                                                             */
 
-#include <iostream>
 #include <algorithm>
-#include <cassert>
 #include <jw/thread/detail/scheduler.h>
 #include <jw/thread/thread.h>
 
@@ -116,23 +114,18 @@ namespace jw
                     try { std::rethrow_exception(exc); }
                     catch (...) { std::throw_with_nested(thread_exception { current_thread }); }
                 }
-                if (current_thread->pending_exceptions() > 0)
+                for (auto exc : current_thread->exceptions)
                 {
-                    for (auto exc : current_thread->exceptions)
+                    try { std::rethrow_exception(exc); }
+                    catch (const thread_exception& e)
                     {
-                        try
-                        {
-                            std::rethrow_exception(exc);
-                        }
-                        catch (const thread_exception& e)
-                        {
-                            auto& exceptions = current_thread->exceptions;
-                            exceptions.erase(remove_if(exceptions.begin(), exceptions.end(), [&](const auto& i) { return i == exc; }), exceptions.end());
-                            throw;
-                        }
-                        catch (...) { }
+                        auto& exceptions = current_thread->exceptions;
+                        exceptions.erase(remove_if(exceptions.begin(), exceptions.end(), [&](const auto& i) { return i == exc; }), exceptions.end());
+                        throw;
                     }
+                    catch (...) { }
                 }
+                
                 if (current_thread != main_thread && *reinterpret_cast<std::uint32_t*>(current_thread->stack_ptr) != 0xDEADBEEF)
                     throw std::runtime_error("Stack overflow!");
 
