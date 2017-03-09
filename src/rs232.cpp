@@ -24,6 +24,8 @@ namespace jw
     {
         namespace detail
         {
+            std::unordered_map<port_num, bool> rs232_streambuf::com_port_use_map { };
+
             rs232_streambuf::rs232_streambuf(rs232_config p)
                 : config(p), 
                 rate_divisor(p.io_port), data_port(p.io_port), 
@@ -32,6 +34,9 @@ namespace jw
                 line_control(p.io_port + 3), modem_control(p.io_port + 4),
                 line_status(p.io_port + 5), modem_status(p.io_port + 6) 
             {
+                if (com_port_use_map[config.io_port]) throw std::runtime_error("COM port already in use.");
+                com_port_use_map[config.io_port] = true;
+
                 uart_irq_enable_reg irqen { };
                 irq_enable.write(irqen);
 
@@ -83,7 +88,8 @@ namespace jw
             {
                 modem_control.write({ });
                 irq_enable.write({ });
-                irq_handler.disable(); 
+                irq_handler.disable();
+                com_port_use_map[config.io_port] = false;
             }
 
             int rs232_streambuf::sync()
