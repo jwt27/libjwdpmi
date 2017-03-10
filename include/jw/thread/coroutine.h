@@ -108,7 +108,7 @@ namespace jw
             constexpr auto& operator*() const { return *ptr; }
 
             template<typename F>
-            constexpr coroutine(F f) : ptr(std::make_shared<task_type>(f)) { }
+            constexpr coroutine(F&& f) : ptr(std::make_shared<task_type>(std::forward<F>(f))) { }
 
             constexpr coroutine(const coroutine&) = default;
             constexpr coroutine() = delete;

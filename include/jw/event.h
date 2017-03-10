@@ -32,7 +32,7 @@ namespace jw
         using handler_t = std::function<R(A...)>;
 
         template<typename F>
-        callback(F f) : handler_ptr(std::make_shared<handler_t>(std::forward<F>(f))) { }
+        callback(F&& f) : handler_ptr(std::make_shared<handler_t>(std::forward<F>(f))) { }
 
         callback(const callback& c) = delete;
         callback() = delete;

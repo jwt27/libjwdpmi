@@ -171,16 +171,16 @@ namespace jw
             constexpr auto& operator*() const noexcept { return *ptr; }
 
             template<typename F>
-            constexpr task(F f) : ptr(std::make_shared<task_type>(f)) { }
+            constexpr task(F&& f) : ptr(std::make_shared<task_type>(std::forward<F>(f))) { }
             
             template<typename F, typename Alloc>
-            constexpr task(std::allocator_arg_t, Alloc a, F f) : ptr(std::allocate_shared<task_type>(a, f)) { }
+            constexpr task(std::allocator_arg_t, Alloc&& a, F&& f) : ptr(std::allocate_shared<task_type>(std::forward<Alloc>(a), std::forward<F>(f))) { }
 
             constexpr task(const task&) = default;
             constexpr task() = delete;
         };
 
         template<std::size_t stack_bytes, typename... T>
-        auto allocate_task(T... args) { return task<void(), stack_bytes> { args... }; }
+        auto allocate_task(T&&... args) { return task<void(), stack_bytes> { args... }; }
     }
 }

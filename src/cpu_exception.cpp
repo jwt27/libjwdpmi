@@ -128,8 +128,8 @@ namespace jw
                 "mov %0, offset exception_wrapper_begin%=;"
                 "mov %1, offset exception_wrapper_end%=;"
                 "sub %1, %0;"
-                : "=r,r,m" (start)
-                , "=r,m,r" (size)
+                : "=rm,r" (start)
+                , "=r,rm" (size)
                 ::"cc");
             assert(size <= code.size());
 

@@ -175,10 +175,9 @@ namespace jw
                 dpmi_error_code error;
                 far_ptr32 ptr;
                 bool c;
-                asm volatile (
-                    "int 0x31;"
+                asm("int 0x31;"
                     : "=@ccc" (c)
-                    ,"=a" (error)
+                    , "=a" (error)
                     , "=c" (ptr.segment)
                     , "=d" (ptr.offset)
                     : "a" (0x0204)
