@@ -51,8 +51,8 @@ namespace jw
                 command({ send_data, recv_ack }, { cmd });
             }
 
-            leds current_led_state;
-            virtual void set_leds(leds state) override
+            keyboard_leds current_led_state;
+            virtual void set_leds(keyboard_leds state) override
             {
                 if (state == current_led_state) return;
                 command({ send_data, recv_ack, send_data, recv_ack }, { 0xED, state });
@@ -132,21 +132,18 @@ namespace jw
             dpmi::locked_pool_allocator<> alloc { 1_KB };
             std::deque<raw_scancode, dpmi::locked_pool_allocator<>> scancode_queue { alloc };
 
-            void read_data()
-            { 
-                while (get_status().data_available)
-                {
-                    if (config.translate_scancodes) *scancode::undo_translation_inserter(scancode_queue) = data_port.read();
-                    else scancode_queue.push_back(data_port.read());
-                }
-            }
-
             dpmi::irq_handler irq_handler { [this](auto* ack) INTERRUPT
             {
                 if (get_status().data_available)
                 {
                     ack();
-                    read_data();
+                    do
+                    {
+                        auto c = data_port.read();
+                        //std::cerr << "scancode: " << std::hex << (int)c << '\n';
+                        if (config.translate_scancodes) *scancode::undo_translation_inserter(scancode_queue) = c;
+                        else scancode_queue.push_back(c);
+                    } while (get_status().data_available);
                     if (keyboard_update_thread) keyboard_update_thread->start();
                 }
                 // TODO: command / ACK handling here

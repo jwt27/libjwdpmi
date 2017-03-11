@@ -129,7 +129,6 @@ namespace jw
             auto cmd = bytes.begin();
 
             dpmi::irq_mask disable_irq { 1 }; // TODO: don't disable IRQ, let IRQ deal with response
-            read_data();
             for (auto e = sequence.begin(); e != sequence.end(); ++e)
             {
                 switch (*e)

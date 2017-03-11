@@ -25,14 +25,14 @@ namespace jw
 {
     namespace io
     {
-        enum leds : byte
+        enum keyboard_leds : byte
         {
             scroll_lock_led = 0b001,
             num_lock_led = 0b010,
             caps_lock_led = 0b100
         };
 
-        enum kb_response
+        enum keyboard_response
         {
             ACK = 0xFA,
             RESEND = 0xFE,
@@ -50,13 +50,13 @@ namespace jw
             virtual void set_typematic(byte rate, byte delay) = 0;
             virtual void enable_typematic(bool enable) = 0;
 
-            virtual void set_leds(leds state) = 0;
+            virtual void set_leds(keyboard_leds state) = 0;
             virtual void set_leds(bool num, bool caps, bool scroll)
             {
-                set_leds(static_cast<leds>(
-                    (num ? leds::num_lock_led : 0) |
-                    (caps ? leds::caps_lock_led : 0) |
-                    (scroll ? leds::scroll_lock_led : 0)));
+                set_leds(static_cast<keyboard_leds>(
+                    (num ? keyboard_leds::num_lock_led : 0) |
+                    (caps ? keyboard_leds::caps_lock_led : 0) |
+                    (scroll ? keyboard_leds::scroll_lock_led : 0)));
             }
 
             virtual void set_keyboard_update_thread(thread::task<void()>) = 0;
