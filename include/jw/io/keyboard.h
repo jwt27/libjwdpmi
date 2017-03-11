@@ -39,10 +39,16 @@ namespace jw
 
             void update();
 
-            keyboard(std::unique_ptr<keyboard_interface>&& intf);
+            void auto_update(bool enable)
+            {
+                if (enable) interface->set_keyboard_update_thread({ [this]() { update(); } });
+                else interface->set_keyboard_update_thread({ });
+            }
+
+            keyboard(std::shared_ptr<keyboard_interface> intf);
 
         private:
-            std::unique_ptr<keyboard_interface> interface;
+            std::shared_ptr<keyboard_interface> interface;
             std::unordered_map<key, key_state> keys;
             //static std::unordered_map<key, timer> key_repeat; //TODO: soft typematic repeat
         };

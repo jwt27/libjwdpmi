@@ -25,7 +25,7 @@ namespace jw
 {
     namespace io
     {
-        keyboard::keyboard(std::unique_ptr<keyboard_interface>&& intf) : interface(std::move(intf)), keys({ }) { }
+        keyboard::keyboard(std::shared_ptr<keyboard_interface> intf) : interface(intf), keys({ }) { }
 
         void keyboard::update()
         {

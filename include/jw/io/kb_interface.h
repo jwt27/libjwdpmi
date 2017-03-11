@@ -19,6 +19,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <deque>
 #include <jw/typedef.h>
 #include <jw/io/scancode.h>
+#include <jw/thread/task.h>
 
 namespace jw
 {
@@ -57,6 +58,8 @@ namespace jw
                     (caps ? leds::caps_lock_led : 0) |
                     (scroll ? leds::scroll_lock_led : 0)));
             }
+
+            virtual void set_keyboard_update_thread(thread::task<void()>) = 0;
 
             virtual ~keyboard_interface() { }
         };

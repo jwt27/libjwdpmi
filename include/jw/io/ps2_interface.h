@@ -19,14 +19,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <atomic>
 #include <jw/io/kb_interface.h>
 #include <jw/dpmi/irq.h>
+#include <jw/dpmi/lock.h>
 #include <jw/io/ioport.h>
+#include <jw/thread/task.h>
 
 namespace jw
 {
     namespace io
     {
             //TODO: mouse interface too.
-        class ps2_interface : public keyboard_interface
+        class ps2_interface : public keyboard_interface, dpmi::class_lock<ps2_interface>
         {
             static bool initialized;
 
@@ -55,6 +57,11 @@ namespace jw
                 if (state == current_led_state) return;
                 command({ send_data, recv_ack, send_data, recv_ack }, { 0xED, state });
                 current_led_state = state;
+            }
+
+            virtual void set_keyboard_update_thread(thread::task<void()> t) override
+            {
+                keyboard_update_thread = t;
             }
 
             ps2_interface();
@@ -120,6 +127,8 @@ namespace jw
             void read_config();
             void write_config();
 
+            thread::task<void()> keyboard_update_thread;
+
             dpmi::locked_pool_allocator<> alloc { 1_KB };
             std::deque<raw_scancode, dpmi::locked_pool_allocator<>> scancode_queue { alloc };
 
@@ -134,8 +143,12 @@ namespace jw
 
             dpmi::irq_handler irq_handler { [this](auto* ack) INTERRUPT
             {
-                if (get_status().data_available) ack();
-                read_data();
+                if (get_status().data_available)
+                {
+                    ack();
+                    read_data();
+                    if (keyboard_update_thread) keyboard_update_thread->start();
+                }
                 // TODO: command / ACK handling here
             } };
         };
