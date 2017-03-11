@@ -21,7 +21,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <jw/io/key.h>
 #include <jw/io/scancode.h>
-#include <jw/io/kb_interface.h>
+#include <jw/io/keyboard_interface.h>
 #include <jw/event.h>
 
 //TODO: keys_changed event with vector of all changed keys

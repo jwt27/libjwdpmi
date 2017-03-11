@@ -72,31 +72,6 @@ namespace jw
             static auto undo_translation_inserter(Container& c) { return undo_translation_iterator<Container>(std::addressof(c)); }
 
             template<typename C>
-            struct extracting_iterator
-            {
-                using value_type = scancode;
-                using pointer = void;
-                using reference = value_type;
-                using difference_type = std::ptrdiff_t;
-                using size_type = std::size_t;
-                using iterator_category = std::input_iterator_tag;
-
-                template<typename... Args>
-                extracting_iterator(Args&&... a) : i(std::forward<Args>(a)...) { }
-
-                bool operator==(const extracting_iterator& rhs) { return i == rhs.i; };
-                bool operator==(const typename C::iterator& rhs) { return i == rhs; };
-                bool operator!=(const auto& rhs) { return !(*this == rhs); };
-                auto& operator++() { ++i; return *this; }
-                auto& operator++(int) { auto tmp { *this }; ++(*this); return tmp; }
-
-                reference operator*() { return scancode { }; }
-
-            private:
-                typename C::iterator i;
-            };
-
-            template<typename C>
             struct undo_translation_iterator
             {
                 using value_type = void;

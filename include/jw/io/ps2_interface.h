@@ -17,7 +17,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
 #include <atomic>
-#include <jw/io/kb_interface.h>
+#include <jw/io/keyboard_interface.h>
 #include <jw/dpmi/irq.h>
 #include <jw/dpmi/lock.h>
 #include <jw/io/ioport.h>
