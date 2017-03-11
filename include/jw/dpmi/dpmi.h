@@ -23,6 +23,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <cassert>
 
 #include <jw/dpmi/dpmi_error.h>
+#include <jw/dpmi/irq_check.h>
 #include <jw/split_stdint.h>
 #include <jw/typedef.h>
 
@@ -221,6 +222,14 @@ namespace jw
                 "popa;"
                 :: "m" (ptr)
                 :"esp", "memory");
+        }
+
+        // Yield execution to the host (used when running in a multi-tasking OS)
+        // Don't confuse this with jw::thread::yield() !
+        inline void yield()
+        {
+            if (in_irq_context()) return;
+            asm volatile("int 0x2f;"::"a"(0x1680));
         }
 
         struct memory_info
