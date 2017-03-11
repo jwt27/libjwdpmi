@@ -22,6 +22,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <deque> 
 #include <jw/thread/detail/thread.h>
 #include <jw/dpmi/irq_check.h>
+#include <jw/dpmi/alloc.h>
 
 // TODO: only rethrow exceptions when a task is being awaited!
 // TODO: task->delayed_start(), to schedule a task without immediately starting it.
@@ -43,7 +44,8 @@ namespace jw
             {
                 template<std::size_t> friend class task_base;
                 friend void ::jw::thread::yield();
-                static std::deque<thread_ptr> threads;
+                static dpmi::locked_pool_allocator<> alloc;
+                static std::deque<thread_ptr, dpmi::locked_pool_allocator<>> threads;
                 static thread_ptr current_thread;
                 static thread_ptr main_thread;
 

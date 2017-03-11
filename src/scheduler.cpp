@@ -26,7 +26,8 @@ namespace jw
         namespace detail
         {
             scheduler::init_main scheduler::initializer;
-            std::deque<thread_ptr> scheduler::threads { };
+            dpmi::locked_pool_allocator<> scheduler::alloc { 128_KB };
+            std::deque<thread_ptr, dpmi::locked_pool_allocator<>> scheduler::threads { alloc };
             thread_ptr scheduler::current_thread;
             thread_ptr scheduler::main_thread;
 
