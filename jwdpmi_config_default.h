@@ -1,4 +1,5 @@
 #pragma once
+#include <crt0.h>
 #include <jw/typedef.h>
 
 namespace jw
@@ -11,10 +12,10 @@ namespace jw
 
         const std::size_t interrupt_initial_stack_size = 1_MB;
         const std::size_t interrupt_minimum_stack_size = 16_KB;
-        const std::size_t interrupt_memory_pool = 1_MB;
+        const std::size_t interrupt_memory_pool = 32_KB;
         const std::size_t interrupt_fpu_context_pool = 32_KB;
 
-        const std::size_t exception_stack_size = 32_KB;
+        const std::size_t exception_stack_size = 256_KB;
 
         const std::size_t thread_default_stack_size = 64_KB;
     }
