@@ -103,15 +103,16 @@ namespace jw
             std::shared_ptr<task_type> ptr;
 
         public:
-            constexpr const auto get_ptr() const { return ptr; }
+            constexpr const auto get_ptr() const noexcept { return ptr; }
             constexpr auto* operator->() const { return ptr.get(); }
             constexpr auto& operator*() const { return *ptr; }
+            constexpr operator bool() const { return ptr.operator bool(); }
 
             template<typename F>
             constexpr coroutine(F&& f) : ptr(std::make_shared<task_type>(std::forward<F>(f))) { }
 
             constexpr coroutine(const coroutine&) = default;
-            constexpr coroutine() = delete;
+            constexpr coroutine() = default;
         };
     }
 }

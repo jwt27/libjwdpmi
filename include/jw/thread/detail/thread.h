@@ -19,6 +19,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <functional>
 #include <memory>
 #include <deque>
+#include <iostream>
 #include <jw/typedef.h>
 
 namespace jw

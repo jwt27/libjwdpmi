@@ -167,8 +167,9 @@ namespace jw
 
         public:
             constexpr const auto get_ptr() const noexcept { return ptr; }
-            constexpr auto* operator->() const noexcept { return ptr.get(); }
-            constexpr auto& operator*() const noexcept { return *ptr; }
+            constexpr auto* operator->() const { return ptr.get(); }
+            constexpr auto& operator*() const { return *ptr; }
+            constexpr operator bool() const { return ptr.operator bool(); }
 
             template<typename F>
             constexpr task(F&& f) : ptr(std::make_shared<task_type>(std::forward<F>(f))) { }
@@ -177,7 +178,7 @@ namespace jw
             constexpr task(std::allocator_arg_t, Alloc&& a, F&& f) : ptr(std::allocate_shared<task_type>(std::forward<Alloc>(a), std::forward<F>(f))) { }
 
             constexpr task(const task&) = default;
-            constexpr task() = delete;
+            constexpr task() = default;
         };
 
         template<std::size_t stack_bytes, typename... T>
