@@ -99,8 +99,7 @@ namespace jw
             static void get() noexcept
             {
                 if (init) return;
-                asm volatile(
-                    "int 0x31;"
+                asm("int 0x31;"
                     : "=a" (ax)
                     , "=b" (bx)
                     , "=c" (cl)
@@ -154,7 +153,7 @@ namespace jw
                 , flags(get_flags())
                 , vendor_info(get_vendor_info()) { }
 
-        private:                                         
+        private:
             static bool init;
             static bool sup;
             static std::uint16_t raw_flags;
@@ -167,8 +166,7 @@ namespace jw
             {
                 if (init || !sup) return;
                 bool c;
-                asm volatile(
-                    "push es;"
+                asm("push es;"
                     "mov es, %w2;"
                     "int 0x31;"
                     "pop es;"
@@ -177,7 +175,7 @@ namespace jw
                     : "r" (get_ds())
                     , "a" (0x0401)
                     , "D" (raw_vendor_info.data())
-                    : "cc", "cx", "dx");
+                    : "cc", "cx", "dx", "memory");
                 init = true;
                 if (!c) return;
                 sup = false;
@@ -227,7 +225,6 @@ namespace jw
 
         struct memory_info
         {
-        public:
             //DPMI 0.9 AX=0006
             static inline std::uintptr_t get_selector_base_address(selector seg)  //TODO: cache cs/ss/ds //TODO: move to ldt_entry?
             {
@@ -579,7 +576,8 @@ namespace jw
                 , "+D" (reg)
                 : "a" (0x0300)
                 , "b" (interrupt)
-                , "c" (0)); // TODO: stack?
+                , "c" (0)   // TODO: stack?
+                : "memory");
             if (c) throw dpmi_error(error, "call_rm_interrupt");
 
             assert(new_reg_ds == get_ds()); //HACK
