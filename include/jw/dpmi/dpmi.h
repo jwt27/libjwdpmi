@@ -563,6 +563,7 @@ namespace jw
         inline void call_rm_interrupt(std::uint8_t interrupt, rm_registers* reg)
         {                                  
             selector new_reg_ds = get_ds();
+            rm_registers* new_reg;
             dpmi_error_code error;
             bool c;
 
@@ -572,23 +573,17 @@ namespace jw
                 "mov %w2, es;"
                 : "=@ccc" (c)
                 , "=a" (error)
-                , "+r" (new_reg_ds)
-                , "+D" (reg)
+                , "+rm" (new_reg_ds)
+                , "=D" (new_reg)
                 : "a" (0x0300)
                 , "b" (interrupt)
+                , "D" (reg)
                 , "c" (0)   // TODO: stack?
                 : "memory");
             if (c) throw dpmi_error(error, "call_rm_interrupt");
 
-            assert(new_reg_ds == get_ds()); //HACK
-
-            if (new_reg_ds != get_ds())
-            {
-                std::cerr << "WARNING: es returned by dpmi is not ds!" << std::endl;
-                std::cerr << std::hex << "es=" << new_reg_ds << ", ds=" << get_ds() << std::endl;
-                reg += memory_info::get_selector_base_address(new_reg_ds);
-                reg -= memory_info::get_selector_base_address(get_ds());
-            }
+            if (new_reg != reg || new_reg_ds != get_ds())   // copy back if location changed.
+                *reg = *(memory_descriptor(new_reg_ds, new_reg).get_ptr<rm_registers>());
         }
 
     #ifndef __INTELLISENSE__
