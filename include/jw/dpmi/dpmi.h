@@ -386,7 +386,7 @@ namespace jw
             template <typename T>
             static inline std::uintptr_t near_to_linear(T* address, selector sel = get_ds())
             {
-                return reinterpret_cast<std::uintptr_t>((char*)address) + memory_info::get_selector_base_address(sel);
+                return reinterpret_cast<std::uintptr_t>(address) + memory_info::get_selector_base_address(sel);
             }
         private:
             memory_info() = delete;
