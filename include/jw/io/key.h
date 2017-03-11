@@ -107,5 +107,5 @@ namespace jw
     }
 }
 
-SPECIALIZE_STD_HASH(jw::io::key);
-SPECIALIZE_STD_HASH(jw::io::key_state);
+ENUM_STRUCT_SPECIALIZE_STD_HASH(jw::io::key);
+ENUM_STRUCT_SPECIALIZE_STD_HASH(jw::io::key_state);

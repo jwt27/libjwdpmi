@@ -44,7 +44,7 @@ namespace jw
     };
 }
 
-#define SPECIALIZE_STD_HASH(T)                                                      \
+#define ENUM_STRUCT_SPECIALIZE_STD_HASH(T)                                          \
 namespace std                                                                       \
 {                                                                                   \
     template<>                                                                      \
