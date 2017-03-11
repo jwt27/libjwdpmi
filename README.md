@@ -10,6 +10,7 @@ Current features include:
 * CPU exception handling, also nested and re-entrant.
 * Cooperative multi-threading and coroutines.
 * RS-232 serial communication using `std::iostream`.
+* Event-driven keyboard interface
 
 ## Installing
 * Build and install DJGPP (the DOS port of gcc)  
