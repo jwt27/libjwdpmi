@@ -24,7 +24,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <jw/io/keyboard_interface.h>
 #include <jw/event.h>
 
-//TODO: keys_changed event with vector of all changed keys
 namespace jw
 {
     namespace io
@@ -45,11 +44,11 @@ namespace jw
                 else interface->set_keyboard_update_thread({ });
             }
 
-            keyboard(std::shared_ptr<keyboard_interface> intf);
+            keyboard(std::shared_ptr<keyboard_interface> intf) : interface(intf) { }
 
         private:
             std::shared_ptr<keyboard_interface> interface;
-            std::unordered_map<key, key_state> keys;
+            std::unordered_map<key, key_state> keys { };
             //static std::unordered_map<key, timer> key_repeat; //TODO: soft typematic repeat
         };
     }

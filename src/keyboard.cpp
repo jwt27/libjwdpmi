@@ -25,36 +25,12 @@ namespace jw
 {
     namespace io
     {
-        keyboard::keyboard(std::shared_ptr<keyboard_interface> intf) : interface(intf), keys({ }) { }
-
         void keyboard::update()
         {
             auto codes = interface->get_scancodes();
             if (codes.size() == 0) return;
 
-            std::deque<key_state_pair> key_queue;
-
-            for (auto c : codes)
-            {
-                auto k = c.decode();
-
-                key_queue.push_back(k);
-
-                static std::unordered_map<key, key> lock_key_table
-                {
-                    { key::num_lock, key::num_lock_state },
-                    { key::caps_lock, key::caps_lock_state },
-                    { key::scroll_lock, key::scroll_lock_state }
-                };
-
-                if (lock_key_table.count(k.first) && keys[k.first].is_up() && k.second.is_down())
-                {
-                    key_queue.push_back({ lock_key_table[k.first], !keys[lock_key_table[k.first]] });
-                }
-            }
-
-            // TODO: get rid of this second loop
-            for (auto k : key_queue)
+            auto handle_key = [this](key_state_pair k) 
             {
                 if (keys[k.first].is_down() && k.second.is_down()) k.second = key_state::repeat;
 
@@ -70,6 +46,22 @@ namespace jw
                                     keys[key::scroll_lock_state].is_down());
 
                 key_changed(*this, k);
+            };
+
+            for (auto c : codes)
+            {
+                auto k = c.decode();
+                handle_key(k);
+
+                static std::unordered_map<key, key> lock_key_table
+                {
+                    { key::num_lock, key::num_lock_state },
+                    { key::caps_lock, key::caps_lock_state },
+                    { key::scroll_lock, key::scroll_lock_state }
+                };
+
+                if (lock_key_table.count(k.first) && keys[k.first].is_up() && k.second.is_down())
+                    handle_key({ lock_key_table[k.first], !keys[lock_key_table[k.first]] });
             }
         }
     }
