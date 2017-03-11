@@ -31,7 +31,7 @@ namespace jw
         class keyboard final
         {
         public:
-            event<void(keyboard&, key_state_pair)> key_changed;
+            event<void(key_state_pair)> key_changed;
 
             const key_state& get(key k) { return keys[k]; }
             const key_state& operator[](key k) { return keys[k]; }

@@ -45,7 +45,7 @@ namespace jw
                                     keys[key::caps_lock_state].is_down(),
                                     keys[key::scroll_lock_state].is_down());
 
-                key_changed(*this, k);
+                key_changed(k);
             };
 
             for (auto c : codes)
