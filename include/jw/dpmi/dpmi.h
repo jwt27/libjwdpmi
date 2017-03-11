@@ -186,7 +186,7 @@ namespace jw
             }
         };
 
-        struct [[gnu::packed]] far_ptr16
+        struct alignas(2) [[gnu::packed]] far_ptr16
         {
             std::uint16_t offset, segment;
 
@@ -194,7 +194,7 @@ namespace jw
             //constexpr far_ptr16(split_uint32_t far_ptr) noexcept : far_ptr16(far_ptr.hi, far_ptr.lo) { }
         };
 
-        struct [[gnu::packed]] far_ptr32
+        struct alignas(2) [[gnu::packed]] far_ptr32
         {
             std::uintptr_t offset;
             selector segment;
