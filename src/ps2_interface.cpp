@@ -35,10 +35,10 @@ namespace jw
     {
         bool ps2_interface::initialized;
 
-        std::deque<scancode> ps2_interface::get_scancodes()
+        std::deque<detail::scancode> ps2_interface::get_scancodes()
         {
             dpmi::irq_mask disable_irq { 1 };
-            return scancode::extract(scancode_queue, get_scancode_set());
+            return detail::scancode::extract(scancode_queue, get_scancode_set());
         }
 
         void ps2_interface::set_scancode_set(byte set)
@@ -118,7 +118,7 @@ namespace jw
             thread::yield_while([&]() { return !get_status().data_available; });
             //while (!get_status().data_available) thread::yield();
             auto b = data_port.read();
-            if (config.translate_scancodes) b = scancode::undo_translation(b);
+            if (config.translate_scancodes) b = detail::scancode::undo_translation(b);
             return b;
         }
 

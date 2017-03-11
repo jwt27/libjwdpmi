@@ -36,7 +36,7 @@ namespace jw
             //static void write_ps2_command(std::deque<unsigned char> bytes);
         public:
 
-            virtual std::deque<scancode> get_scancodes() override;
+            virtual std::deque<detail::scancode> get_scancodes() override;
 
             scancode_set _scancode_set;
             virtual scancode_set get_scancode_set() override { return _scancode_set; }
@@ -130,7 +130,7 @@ namespace jw
             thread::task<void()> keyboard_update_thread;
 
             dpmi::locked_pool_allocator<> alloc { 1_KB };
-            std::deque<raw_scancode, dpmi::locked_pool_allocator<>> scancode_queue { alloc };
+            std::deque<detail::raw_scancode, dpmi::locked_pool_allocator<>> scancode_queue { alloc };
 
             dpmi::irq_handler irq_handler { [this](auto* ack) INTERRUPT
             {
@@ -141,7 +141,7 @@ namespace jw
                     {
                         auto c = data_port.read();
                         //std::cerr << "scancode: " << std::hex << (int)c << '\n';
-                        if (config.translate_scancodes) *scancode::undo_translation_inserter(scancode_queue) = c;
+                        if (config.translate_scancodes) *detail::scancode::undo_translation_inserter(scancode_queue) = c;
                         else scancode_queue.push_back(c);
                     } while (get_status().data_available);
                     if (keyboard_update_thread) keyboard_update_thread->start();

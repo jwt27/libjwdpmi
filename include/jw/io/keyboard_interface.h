@@ -18,7 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #pragma once
 #include <deque>
 #include <jw/typedef.h>
-#include <jw/io/scancode.h>
+#include <jw/io/detail/scancode.h>
 #include <jw/thread/task.h>
 
 namespace jw
@@ -42,7 +42,7 @@ namespace jw
         class keyboard_interface
         {
         public:
-            virtual std::deque<scancode> get_scancodes() = 0;
+            virtual std::deque<detail::scancode> get_scancodes() = 0;
 
             virtual scancode_set get_scancode_set() = 0;
             virtual void set_scancode_set(byte set) = 0;
