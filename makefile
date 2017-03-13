@@ -1,5 +1,4 @@
 CXXFLAGS += -masm=intel
-CXXFLAGS += -MD -MP
 CXXFLAGS += -std=gnu++17
 CXXFLAGS += -Wall -Wextra
 CXXFLAGS += -gdwarf-4
@@ -38,7 +37,7 @@ $(OUTDIR)/$(OUTPUT): $(OBJ)
 	ranlib $@
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.cpp jwdpmi_config.h
-	$(CXX) $(CXXFLAGS) -o $@ -MF $(@:.o=.d) $(INCLUDE) -c $< $(PIPECMD)
+	$(CXX) $(CXXFLAGS) -MD -MP -MF $(@:.o=.d) -o $@ $(INCLUDE) -c $< $(PIPECMD)
 
 jwdpmi_config.h:
 	-cp -n jwdpmi_config_default.h jwdpmi_config.h
