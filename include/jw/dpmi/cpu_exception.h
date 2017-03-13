@@ -23,6 +23,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <cstdint>
 #include <algorithm>
 #include <deque>
+#include <function.h>
 #include <jw/dpmi/dpmi.h>
 #include <jw/dpmi/lock.h>
 #include <jw/dpmi/alloc.h>
@@ -212,7 +213,8 @@ namespace jw
         {
             using handler_type = bool(exception_frame* frame, bool is_new_type);
 
-            std::function<handler_type> handler;
+            void init_code();
+            func::function<handler_type> handler;
             exception_num exc;
             static std::array<byte, config::exception_stack_size> stack; // TODO: allow nested exceptions
             static std::array<std::unique_ptr<std::deque<exception_handler*>>, 0x20> wrapper_list;
@@ -232,7 +234,19 @@ namespace jw
             std::array<byte, 0x100> code;                       //          1           [eax-0x0C]
 
         public:
-            exception_handler(exception_num e, std::function<handler_type> f);
+            template<typename F>
+            exception_handler(exception_num e, F&& f) : handler(std::allocator_arg, locking_allocator<> { }, std::forward<F>(f)), exc(e), stack_ptr(stack.data() + stack.size())
+            {
+                init_code();
+
+                if (!wrapper_list[e]) wrapper_list[e] = std::make_unique<std::deque<exception_handler*>>();
+
+                if (wrapper_list[e]->empty()) previous_handler = cpu_exception::get_pm_handler(e);
+                else previous_handler = wrapper_list[e]->back()->get_ptr();
+                wrapper_list[e]->push_back(this);
+
+                new_type = cpu_exception::set_handler(e, get_ptr());
+            }
 
             ~exception_handler();
 

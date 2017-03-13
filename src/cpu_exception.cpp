@@ -49,8 +49,8 @@ namespace jw
             //std::clog << "leaving exc handler " << self->exc << '\n';
             return success;
         }
-
-        exception_handler::exception_handler(exception_num e, std::function<handler_type> f) : handler(f), exc(e), stack_ptr(stack.data() + stack.size())
+        
+        void exception_handler::init_code()
         {
             byte* start;
             std::size_t size;
@@ -145,14 +145,6 @@ namespace jw
                 , "=m" (es)
                 , "=m" (fs)
                 , "=m" (gs));
-
-            if (!wrapper_list[e]) wrapper_list[e] = std::make_unique<std::deque<exception_handler*>>();
-
-            if (wrapper_list[e]->empty()) previous_handler = cpu_exception::get_pm_handler(e);
-            else previous_handler = wrapper_list[e]->back()->get_ptr();
-            wrapper_list[e]->push_back(this);
-
-            new_type = cpu_exception::set_handler(e, get_ptr());
         }
 
         exception_handler::~exception_handler() // TODO: find out why it's crashing here sometimes.
