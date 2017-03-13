@@ -25,6 +25,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <jw/typedef.h>
 #include <jw/dpmi/lock.h>
 #include <jw/dpmi/irq_mask.h>
+#include <jw/dpmi/irq_check.h>
 
 // TODO: allocator for dpmi::memory
 namespace jw
@@ -52,7 +53,8 @@ namespace jw
             using pointer = T*;
 
             auto allocate(std::size_t n)
-            {   // TODO: throw exception when called from an interrupt context?
+            {
+                throw_if_irq();
                 n *= sizeof(T);
                 auto* p = ::operator new(n);
                 map->emplace(p, data_lock { p, n });
@@ -63,6 +65,12 @@ namespace jw
             {
                 map->erase(p);
                 ::operator delete(p);
+            }
+
+            std::size_t max_size() const noexcept 
+            { 
+                if (in_irq_context()) return 0;
+                return std::allocator<T>{ }.max_size(); 
             }
 
             template <typename U> using rebind = locking_allocator<U>;
