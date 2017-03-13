@@ -34,16 +34,17 @@ namespace jw
             constexpr io::io_port<byte> irq_controller::pic0_cmd;
             constexpr io::io_port<byte> irq_controller::pic1_cmd;
             irq_controller::initializer irq_controller::init { };
+            thread::task<void()> irq_controller::increase_stack_size { []() { stack.resize(stack.size() * 2); } };
 
             void irq_controller::interrupt_entry_point(int_vector vec) noexcept
             {
                 ++interrupt_count;
                 current_int.push_back(vec);
                 fpu_context_switcher.enter();
+                
                 byte* esp; asm("mov %0, esp;":"=rm"(esp));
-                if (static_cast<std::size_t>(esp - stack.data()) <= config::interrupt_minimum_stack_size)
-                    std::cerr << "STACK OVERFLOW IMMINENT! "; // HACK // TODO: increase stack size
-                if (stack_use_count > 1) std::cerr << stack_use_count << ' '; // HACK
+                if (static_cast<std::size_t>(esp - stack.data()) <= config::interrupt_minimum_stack_size) increase_stack_size->start();
+
                 auto i = vec_to_irq(vec);
                 if ((i == 7 || i == 15) && !in_service()[i]) goto spurious;
 

@@ -15,6 +15,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
                                                                             */
 
+#include <jw/thread/task.h>
 #pragma once
 
 namespace jw
@@ -168,12 +169,14 @@ namespace jw
                 static constexpr io::io_port<byte> pic0_cmd { 0x20 };
                 static constexpr io::io_port<byte> pic1_cmd { 0xA0 };
 
+                static thread::task<void()> increase_stack_size;
+
                 struct initializer
                 {
                     initializer()
                     {
                         stack.resize(config::interrupt_initial_stack_size);
-                        pic0_cmd.write(0x68);
+                        pic0_cmd.write(0x68);   // TODO: restore to defaults
                         pic1_cmd.write(0x68);
                     }
                 } static init;
