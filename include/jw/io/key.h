@@ -71,9 +71,9 @@ namespace jw
             using E::operator=;
 
             char to_ascii(bool shift, bool caps_lock, bool num_lock) const;
-            char to_ascii(keyboard& kb) const;
+            char to_ascii(const keyboard& kb) const;
             bool is_printable(bool shift, bool caps_lock, bool num_lock) const;
-            bool is_printable(keyboard& kb) const;
+            bool is_printable(const keyboard& kb) const;
             std::string name() const;
 
         private:

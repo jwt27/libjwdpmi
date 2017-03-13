@@ -33,8 +33,8 @@ namespace jw
         public:
             event<void(key_state_pair)> key_changed;
 
-            const key_state& get(key k) { return keys[k]; }
-            const key_state& operator[](key k) { return keys[k]; }
+            const key_state& get(key k) const { return keys[k]; }
+            const key_state& operator[](key k) const { return keys[k]; }
 
             void update();
 
@@ -48,7 +48,7 @@ namespace jw
 
         private:
             std::shared_ptr<keyboard_interface> interface;
-            std::unordered_map<key, key_state> keys { };
+            mutable std::unordered_map<key, key_state> keys { };
             //static std::unordered_map<key, timer> key_repeat; //TODO: soft typematic repeat
         };
     }

@@ -37,7 +37,7 @@ namespace jw
             return std::string { to_ascii(false, true, true) };
         }
 
-        char key::to_ascii(keyboard& kb) const
+        char key::to_ascii(const keyboard& kb) const
         {
             return key::to_ascii(kb.get(any_shift),
                                  kb.get(caps_lock_state),
@@ -49,7 +49,7 @@ namespace jw
             return to_ascii(shift, capslock, numlock) != 0;
         }
 
-        bool key::is_printable(keyboard& kb) const
+        bool key::is_printable(const keyboard& kb) const
         {
             return to_ascii(kb) != 0; // can't inline this :(
         }
