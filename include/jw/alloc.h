@@ -7,7 +7,7 @@ namespace jw
     struct allocator_delete
     {
         Alloc alloc;
-        allocator_delete(const Alloc& a) : alloc(a) { }
+        allocator_delete(Alloc&& a) : alloc(a) { }
 
         void operator()(auto* p)
         {
