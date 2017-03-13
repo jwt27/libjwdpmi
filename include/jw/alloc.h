@@ -35,7 +35,8 @@ namespace jw
         }
 
         ~allocator_delete() 
-        { 
+        {
+            if (alloc == nullptr) return;
             rebind a { *alloc };
             alloc->~Alloc();
             a.deallocate(alloc, 1);
@@ -43,7 +44,7 @@ namespace jw
 
         void operator()(auto* p)
         {
-            if (p == nullptr) return;
+            if (alloc == nullptr || p == nullptr) return;
             using T = std::remove_reference_t<decltype(*p)>;
             p->~T();
             alloc->deallocate(p, 1);
