@@ -78,7 +78,11 @@ namespace jw
                     {
                         auto c = k.first.to_ascii(keyb);
                         *(ptr++) = c;
-                        if (echo) std::cout << c << std::flush;
+                        if (echo)
+                        {
+                            std::cout << c << std::flush;
+                            if (k.first == key::backspace) std::cout << ' ' << c << std::flush;
+                        }
                     }
                     setg(buffer.begin(), gptr(), ptr);
                 } };

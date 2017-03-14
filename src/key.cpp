@@ -110,7 +110,8 @@ namespace jw
             { key::dot, '.' },
             { key::slash, '/' },
             { key::space, ' ' },
-            { key::enter, '\n' }
+            { key::enter, '\n' },
+            { key::backspace, '\b' }
         };
 
         std::unordered_map<key, char> key::ascii_caps_table
