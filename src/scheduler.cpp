@@ -16,6 +16,7 @@
                                                                             */
 
 #include <algorithm>
+#include <jw/dpmi/irq_mask.h>
 #include <jw/thread/detail/scheduler.h>
 #include <jw/thread/thread.h>
 
@@ -75,6 +76,7 @@ namespace jw
             {
                 if (t)
                 {
+                    dpmi::interrupt_mask no_interrupts_please { };
                     threads.erase(remove_if(threads.begin(), threads.end(), [&](const auto& i) { return i == t; }), threads.end());
                     threads.push_front(t);
                 }
@@ -139,6 +141,7 @@ namespace jw
             // May only be called from context_switch()!
             void scheduler::set_next_thread() noexcept        // TODO: catch exceptions here (from deque, shared_ptr) and do something sensible
             {
+                dpmi::interrupt_mask no_interrupts_please { };
                 do
                 {
                     if (current_thread->is_running()) threads.push_back(current_thread);
