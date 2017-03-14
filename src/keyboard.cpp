@@ -70,6 +70,7 @@ namespace jw
         {
             int keyboard_streambuf::sync()
             {
+                if (egptr() >= buffer.begin() + buffer.size() && gptr() == buffer.begin()) gbump(1);
                 std::copy(gptr(), ptr, buffer.begin());
                 ptr = buffer.begin() + (ptr - gptr());
                 setg(buffer.begin(), buffer.begin(), ptr);
