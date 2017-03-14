@@ -16,6 +16,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include <iterator>
+#include <algorithm>
 
 #include <jw/io/keyboard.h>
 #include <jw/io/ps2_interface.h>
@@ -62,6 +63,29 @@ namespace jw
 
                 if (lock_key_table.count(k.first) && keys[k.first].is_up() && k.second.is_down())
                     handle_key({ lock_key_table[k.first], !keys[lock_key_table[k.first]] });
+            }
+        }
+
+        namespace detail
+        {
+            std::streamsize keyboard_streambuf::xsgetn(char_type * s, std::streamsize n)
+            {
+                std::lock_guard<thread::recursive_mutex> guard { mutex };
+                std::streamsize max_n = 0;
+                while (max_n < n && underflow() != traits_type::eof()) max_n = std::min(egptr() - gptr(), n);
+                std::copy_n(gptr(), max_n, s);
+                setg(buffer.begin(), gptr() + max_n, egptr());
+                return max_n;
+            }
+
+            keyboard_streambuf::int_type keyboard_streambuf::underflow()
+            {
+                std::lock_guard<thread::recursive_mutex> guard { mutex };
+                std::copy(gptr(), ptr, buffer.begin());
+                ptr = buffer.begin() + (ptr - gptr());
+                setg(buffer.begin(), buffer.begin(), ptr);
+                thread::yield_while([this] { return gptr() == egptr(); });
+                return *gptr();
             }
         }
     }

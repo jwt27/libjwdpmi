@@ -18,19 +18,20 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #pragma once
 #include <unordered_map>
 #include <memory>
+#include <istream>
 
 #include <jw/io/key.h>
 #include <jw/io/detail/scancode.h>
 #include <jw/io/keyboard_interface.h>
+#include <jw/thread/mutex.h>
 #include <jw/event.h>
 
 namespace jw
 {
     namespace io
     {
-        class keyboard final
+        struct keyboard final
         {
-        public:
             event<void(key_state_pair)> key_changed;
 
             const key_state& get(key k) const { return keys[k]; }
@@ -50,6 +51,44 @@ namespace jw
             std::shared_ptr<keyboard_interface> interface;
             mutable std::unordered_map<key, key_state> keys { };
             //static std::unordered_map<key, timer> key_repeat; //TODO: soft typematic repeat
+        };
+
+        namespace detail
+        {
+            struct keyboard_streambuf : public std::streambuf
+            {
+                keyboard_streambuf(keyboard& kb) : keyb(kb)
+                {
+                    keyb.key_changed += event_handler;
+                    setp(nullptr, nullptr);
+                    setg(buffer.data(), buffer.data(), buffer.data());
+                }
+
+            protected:
+                virtual std::streamsize xsgetn(char_type* s, std::streamsize n) override;
+                virtual int_type underflow() override;
+
+            private:
+                callback<void(key_state_pair)> event_handler { [this](auto k)
+                {
+                    std::cout << "got key!\n";
+                    if (k.second.is_down() && k.first.is_printable(keyb))
+                        *(ptr++) = k.first.to_ascii(keyb);
+                    setg(buffer.begin(), gptr(), ptr);
+                } };
+                std::array<char_type, 1_KB> buffer;
+                char_type* ptr { buffer.data() };
+                keyboard& keyb;
+                thread::recursive_mutex mutex;
+            };
+        }
+
+        struct keyboard_istream : public std::istream
+        {
+            keyboard_istream(keyboard& kb) : std::istream(&streambuf), streambuf(kb) { }
+
+        private:
+            detail::keyboard_streambuf streambuf;
         };
     }
 }
