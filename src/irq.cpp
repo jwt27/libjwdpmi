@@ -18,6 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <algorithm>
 #include <jw/dpmi/irq.h>
 #include <jw/dpmi/fpu.h>
+#include <jw/alloc.h>
 
 namespace jw
 {
@@ -50,9 +51,9 @@ namespace jw
 
                 try
                 {
-                    std::shared_ptr<irq_mask> mask; // no unique_ptr, we need a custom allocator
+                    auto mask = init_unique<irq_mask>(alloc);
                     if (!(entries.at(vec).flags & no_interrupts)) asm("sti");
-                    else if (entries.at(vec).flags & no_reentry) mask = std::allocate_shared<irq_mask>(alloc, i);
+                    else if (entries.at(vec).flags & no_reentry) mask = allocate_unique<irq_mask>(alloc, i);
                     if (!(entries.at(vec).flags & no_auto_eoi)) send_eoi();
                 
                     entries.at(vec)();

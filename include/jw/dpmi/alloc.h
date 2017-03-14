@@ -184,9 +184,10 @@ namespace jw
             locked_pool_allocator() = delete;
             locked_pool_allocator(locked_pool_allocator&&) = default;
             locked_pool_allocator(const locked_pool_allocator&) = default;
+            locked_pool_allocator& operator=(const locked_pool_allocator&) = default;
 
-            locked_pool_allocator(std::size_t size_bytes)
-                : pool(std::allocate_shared<pool_type>(locking_allocator<> { }, size_bytes, locking_allocator<> { }))
+            locked_pool_allocator(std::size_t size_bytes = { })
+                : pool(std::allocate_shared<pool_type>(locking_allocator<> { }, size_bytes + sizeof(pool_node), locking_allocator<> { }))
             {
                 new(begin()) pool_node { };
             }
@@ -218,7 +219,7 @@ namespace jw
                 return reinterpret_cast<U*>(b);
             }
 
-            const std::shared_ptr<pool_type> pool;
+            std::shared_ptr<pool_type> pool;
         };
     }
 }

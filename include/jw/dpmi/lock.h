@@ -33,7 +33,7 @@ namespace jw
                 memory_lock(const memory_lock& c) = delete;
                 memory_lock(memory_lock&& m) noexcept : mem(m.mem) { m.locked = false; }
 
-                memory_lock& operator=(const memory_lock& c) = delete;
+                memory_lock& operator=(const memory_lock& c) = default;
                 memory_lock& operator=(memory_lock&&) noexcept = default;
 
                 virtual ~memory_lock()
@@ -86,6 +86,9 @@ namespace jw
             class_lock() : memory_lock(get_ds(), this, sizeof(T)) { }
             class_lock(class_lock&&) : class_lock() { }
             class_lock(const class_lock&) : class_lock() { }
+
+            class_lock& operator=(const class_lock&) { }
+            class_lock& operator=(class_lock&&) { }
         };
     }
 }
