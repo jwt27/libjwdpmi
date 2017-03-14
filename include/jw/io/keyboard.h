@@ -73,7 +73,7 @@ namespace jw
             private:
                 callback<void(key_state_pair)> event_handler { [this](auto k)
                 {
-                    if (egptr() >= buffer.data() + buffer.size()) sync();
+                    if (egptr() >= buffer.end()) sync();
                     if (k.second.is_down() && k.first.is_printable(keyb))
                     {
                         auto c = k.first.to_ascii(keyb);
