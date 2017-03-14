@@ -33,29 +33,12 @@ namespace jw
 {
     namespace io
     {
-        bool ps2_interface::initialized;
+        bool ps2_interface::initialized { false };
 
         std::deque<detail::scancode> ps2_interface::get_scancodes()
         {
             dpmi::irq_mask disable_irq { 1 };
             return detail::scancode::extract(scancode_queue, get_scancode_set());
-        }
-
-        void ps2_interface::set_scancode_set(byte set)
-        {
-        #ifdef DOSBOX_BUG
-            command<send_data, recv_ack, send_data, recv_ack, recv_ack>({ 0xF0, set }); // Dosbox-X sends two ACKs
-        #else
-            command<send_data, recv_ack, send_data, recv_ack>({ 0xF0, set });
-        #endif
-            
-            
-            _scancode_set = static_cast<scancode_set>(
-        #ifdef DOSBOX_BUG
-                command<send_data, recv_ack, send_data, recv_data, recv_ack>({ 0xF0, 0 }));  // Dosbox-X sends ACK-data-ACK...
-        #else
-                command<send_data, recv_ack, send_data, recv_ack, recv_data>({ 0xF0, 0 }));  // Should be ACK-ACK-data.
-        #endif
         }
 
         void ps2_interface::reset()
@@ -92,6 +75,25 @@ namespace jw
             command<send_data, recv_ack, recv_discard_any>({ 0xFF });  // reset keyboard
             config = initial_config;
             write_config();                 // restore PS/2 configuration data
+            initialized = false;
+        }
+
+
+        void ps2_interface::set_scancode_set(byte set)
+        {
+        #ifdef DOSBOX_BUG
+            command<send_data, recv_ack, send_data, recv_ack, recv_ack>({ 0xF0, set }); // Dosbox-X sends two ACKs
+        #else
+            command<send_data, recv_ack, send_data, recv_ack>({ 0xF0, set });
+        #endif
+
+
+            _scancode_set = static_cast<scancode_set>(
+            #ifdef DOSBOX_BUG
+                command<send_data, recv_ack, send_data, recv_data, recv_ack>({ 0xF0, 0 }));  // Dosbox-X sends ACK-data-ACK...
+        #else
+                command<send_data, recv_ack, send_data, recv_ack, recv_data>({ 0xF0, 0 }));  // Should be ACK-ACK-data.
+        #endif
         }
     }
 }
