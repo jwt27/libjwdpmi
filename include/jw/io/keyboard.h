@@ -42,7 +42,8 @@ namespace jw
             const key_state& get(key k) const { return keys[k]; }
             const key_state& operator[](key k) const { return keys[k]; }
 
-            void redirect_cin();
+            void redirect_cin();       
+            void restore_cin();
             void update();
 
             void auto_update(bool enable)
@@ -57,10 +58,9 @@ namespace jw
         private:
             std::shared_ptr<keyboard_interface> interface;
             mutable std::unordered_map<key, key_state> keys { };
-            std::streambuf* cin;
             std::unique_ptr<std::streambuf> streambuf;
+            static std::streambuf* cin;
             static bool cin_redirected;
-            void restore_cin();
         };
     }
 }

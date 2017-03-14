@@ -27,7 +27,7 @@ namespace jw
 {
     namespace io
     {
-        bool keyboard::cin_redirected { false };
+        std::streambuf* keyboard::cin { nullptr };
 
         void keyboard::update()
         {
@@ -71,20 +71,19 @@ namespace jw
 
         void keyboard::redirect_cin()
         {
-            if (std::cin.rdbuf() == streambuf.get()) return;
-            if (cin_redirected) throw std::runtime_error("std::cin cannot be redirected twice.");
+            if (std::cin.rdbuf() == streambuf.get()) return;                  
+            if (cin == nullptr) cin = std::cin.rdbuf();
             streambuf = std::make_unique<detail::keyboard_streambuf>(*this);
-            cin = std::cin.rdbuf(streambuf.get());
-            cin_redirected = true;
+            std::cin.rdbuf(streambuf.get());
             auto_update(true);
         }
 
         void keyboard::restore_cin()
         { 
-            if (!cin_redirected || std::cin.rdbuf() != streambuf.get()) return;
+            if (cin == nullptr || std::cin.rdbuf() != streambuf.get()) return;
             std::cin.rdbuf(cin);
             streambuf.reset();
-            cin_redirected = false;
+            cin = nullptr;
         }
     }
 }
