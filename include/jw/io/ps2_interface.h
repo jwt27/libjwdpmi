@@ -24,6 +24,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <jw/thread/task.h>
 
 // TODO: clean this up
+// TODO: keyboard commands enum, instead of using raw hex values
 
 namespace jw
 {
@@ -115,7 +116,7 @@ namespace jw
                 do_ps2_command<cmd>(in, out);
 
                 if (cmd == send_cmd && next == send_data) 
-                    thread::yield_while([&]() { return !get_status().write_to_controller; });
+                    thread::yield_while([this]() { return !get_status().write_to_controller; });
                 ps2_command<next, etc...>(in, out);
             }
 

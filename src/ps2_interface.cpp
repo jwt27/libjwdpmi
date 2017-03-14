@@ -49,7 +49,7 @@ namespace jw
             config.keyboard_interrupt = true;
             write_config();
 
-            set_scancode_set(2);    // TODO: set make/break mode for all keys in set3
+            set_scancode_set(2);
             enable_typematic(true);
 
             irq_handler.enable();
@@ -83,17 +83,13 @@ namespace jw
         {
         #ifdef DOSBOX_BUG
             command<send_data, recv_ack, send_data, recv_ack, recv_ack>({ 0xF0, set }); // Dosbox-X sends two ACKs
-        #else
+            current_scancode_set = static_cast<scancode_set>(command<send_data, recv_ack, send_data, recv_data, recv_ack>({ 0xF0, 0 }));  // Dosbox-X sends ACK-data-ACK...
+        #else                                                                
             command<send_data, recv_ack, send_data, recv_ack>({ 0xF0, set });
+            current_scancode_set = static_cast<scancode_set>(command<send_data, recv_ack, send_data, recv_ack, recv_data>({ 0xF0, 0 }));  // Should be ACK-ACK-data.
         #endif
 
-
-            current_scancode_set = static_cast<scancode_set>(
-        #ifdef DOSBOX_BUG
-                command<send_data, recv_ack, send_data, recv_data, recv_ack>({ 0xF0, 0 }));  // Dosbox-X sends ACK-data-ACK...
-        #else
-                command<send_data, recv_ack, send_data, recv_ack, recv_data>({ 0xF0, 0 }));  // Should be ACK-ACK-data.
-        #endif
+            if (set == set3) command<send_data, recv_ack>({ 0xF8 });    // Enable make/break mode for all keys.
         }
     }
 }
