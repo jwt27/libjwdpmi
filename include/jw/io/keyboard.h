@@ -54,7 +54,7 @@ namespace jw
 
         namespace detail
         {
-            struct keyboard_streambuf : public std::streambuf   // TODO: echo characters
+            struct keyboard_streambuf : public std::streambuf
             {
                 keyboard_streambuf(keyboard& kb) : keyb(kb)
                 {
@@ -62,6 +62,8 @@ namespace jw
                     setp(nullptr, nullptr);
                     setg(buffer.data(), buffer.data(), buffer.data());
                 }
+
+                bool echo { true };     // TODO: set ostream to echo to.
 
             protected:
                 virtual int sync() override;
@@ -73,19 +75,25 @@ namespace jw
                 {
                     if (egptr() >= buffer.data() + buffer.size()) sync();
                     if (k.second.is_down() && k.first.is_printable(keyb))
-                        *(ptr++) = k.first.to_ascii(keyb);
+                    {
+                        auto c = k.first.to_ascii(keyb);
+                        *(ptr++) = c;
+                        if (echo) std::cout << c << std::flush;
+                    }
                     setg(buffer.begin(), gptr(), ptr);
                 } };
 
                 std::array<char_type, 1_KB> buffer;
                 char_type* ptr { buffer.data() };
-                keyboard& keyb;
+                keyboard& keyb;     // TODO: maybe use shared_ptr here.
             };
         }
 
         struct keyboard_istream : public std::istream
         {
             keyboard_istream(keyboard& kb) : std::istream(&streambuf), streambuf(kb) { }
+
+            void echo(bool enable) { streambuf.echo = enable; }
 
         private:
             detail::keyboard_streambuf streambuf;

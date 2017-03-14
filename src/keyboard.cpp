@@ -76,6 +76,7 @@ namespace jw
                 thread::yield();
                 return 0;
             }
+
             std::streamsize keyboard_streambuf::xsgetn(char_type * s, std::streamsize n)
             {
                 std::streamsize max_n = 0;
