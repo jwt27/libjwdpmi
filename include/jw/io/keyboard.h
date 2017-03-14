@@ -50,12 +50,11 @@ namespace jw
         private:
             std::shared_ptr<keyboard_interface> interface;
             mutable std::unordered_map<key, key_state> keys { };
-            //static std::unordered_map<key, timer> key_repeat; //TODO: soft typematic repeat
         };
 
         namespace detail
         {
-            struct keyboard_streambuf : public std::streambuf
+            struct keyboard_streambuf : public std::streambuf   // TODO: echo characters
             {
                 keyboard_streambuf(keyboard& kb) : keyb(kb)
                 {
@@ -72,16 +71,15 @@ namespace jw
             private:
                 callback<void(key_state_pair)> event_handler { [this](auto k)
                 {
-                    std::cout << "got key!\n";
                     if (egptr() >= buffer.data() + buffer.size()) sync();
                     if (k.second.is_down() && k.first.is_printable(keyb))
                         *(ptr++) = k.first.to_ascii(keyb);
                     setg(buffer.begin(), gptr(), ptr);
                 } };
+
                 std::array<char_type, 1_KB> buffer;
                 char_type* ptr { buffer.data() };
                 keyboard& keyb;
-                thread::recursive_mutex mutex;
             };
         }
 
