@@ -141,9 +141,9 @@ namespace jw
                 bool parity_error : 1;
             };
 
-            io::in_port<controller_status> status_port { 0x64 };
-            io::out_port<byte> command_port { 0x64 };
-            io::io_port<byte> data_port { 0x60 };
+            const in_port<controller_status> status_port { 0x64 };
+            const out_port<byte> command_port { 0x64 };
+            const io_port<byte> data_port { 0x60 };
 
             controller_status get_status() { return status_port.read(); }
 
