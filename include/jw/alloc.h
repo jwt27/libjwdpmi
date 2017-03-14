@@ -20,54 +20,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 namespace jw
 {
-    /*
     template<typename Alloc>
-    struct allocator_delete
+    struct allocator_delete : public Alloc
     {
-        using rebind = typename std::allocator_traits<Alloc>::template rebind_alloc<Alloc>;
-
-        Alloc* alloc { nullptr };
-        allocator_delete() noexcept { }
-        allocator_delete(const Alloc& a) noexcept 
-            : alloc(rebind { a }.allocate(1))
-        { 
-            alloc = new(alloc) Alloc { a }; 
-        }
-
-        ~allocator_delete() 
-        {
-            if (alloc == nullptr) return;
-            rebind a { *alloc };
-            alloc->~Alloc();
-            a.deallocate(alloc, 1);
-        }
-
-        void operator()(auto* p)
-        {
-            if (alloc == nullptr || p == nullptr) return;
-            using T = std::remove_reference_t<decltype(*p)>;
-            p->~T();
-            alloc->deallocate(p, 1);
-        }
-    };
-    */
-    template<typename Alloc>
-    struct allocator_delete
-    {
-        using rebind = typename std::allocator_traits<Alloc>::template rebind_alloc<Alloc>;
-
-        Alloc alloc { };
-        allocator_delete() noexcept { }
-        allocator_delete(const Alloc& a) noexcept : alloc(rebind { a }) { }
-
-        ~allocator_delete() { }
-
+        using Alloc::Alloc;
         void operator()(auto* p)
         {
             if (p == nullptr) return;
             using T = std::remove_reference_t<decltype(*p)>;
             p->~T();
-            alloc.deallocate(p, 1);
+            this->deallocate(p, 1);
         }
     };
 
@@ -79,11 +41,11 @@ namespace jw
         using deleter = allocator_delete<rebind>;
 
         auto d = deleter { rebind { alloc } };
-        auto* p = d.alloc.allocate(1);
+        auto* p = d.allocate(1);
         try { p = new(p) T { std::forward<Args>(args)... }; }
-        catch (...) { d.alloc.deallocate(p, 1); throw; }
+        catch (...) { d.deallocate(p, 1); throw; }
 
-        return std::unique_ptr<T, deleter> { p, d };
+        return std::unique_ptr<T, deleter> { p, std::move(d) };
     }
 
     // Initialize a non-owning std::unique_ptr with allocator_delete (saves typing)
