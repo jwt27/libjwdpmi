@@ -30,6 +30,11 @@ namespace jw
 {
     namespace io
     {
+        namespace detail
+        {
+            struct keyboard_streambuf;
+        }
+
         struct keyboard final
         {
             event<void(key_state_pair)> key_changed;
@@ -37,6 +42,7 @@ namespace jw
             const key_state& get(key k) const { return keys[k]; }
             const key_state& operator[](key k) const { return keys[k]; }
 
+            void redirect_cin();
             void update();
 
             void auto_update(bool enable)
@@ -46,74 +52,15 @@ namespace jw
             }
 
             keyboard(std::shared_ptr<keyboard_interface> intf) : interface(intf) { }
+            ~keyboard() { restore_cin(); }
 
         private:
             std::shared_ptr<keyboard_interface> interface;
             mutable std::unordered_map<key, key_state> keys { };
-        };
-
-        namespace detail
-        {
-            struct keyboard_streambuf : public std::streambuf
-            {
-                keyboard_streambuf(keyboard& kb) : keyb(kb)
-                {
-                    keyb.key_changed += event_handler;
-                    setp(nullptr, nullptr);
-                    setg(buffer.data(), buffer.data(), buffer.data());
-                }
-
-                bool echo { true };     // TODO: set ostream to echo to.
-
-            protected:
-                virtual int sync() override;
-                virtual std::streamsize xsgetn(char_type* s, std::streamsize n) override;
-                virtual int_type underflow() override;
-
-            private:
-                callback<void(key_state_pair)> event_handler { [this](auto k)
-                {
-                    if (egptr() >= buffer.end()) sync();
-                    if (k.second.is_down() && k.first.is_printable(keyb))
-                    {
-                        auto c = k.first.to_ascii(keyb);
-                        *(ptr++) = c;
-                        if (echo)
-                        {
-                            std::cout << c << std::flush;
-                            if (k.first == key::backspace) std::cout << ' ' << c << std::flush;
-                        }
-                    }
-                    setg(buffer.begin(), gptr(), ptr);
-                } };
-
-                std::array<char_type, 1_KB> buffer;
-                char_type* ptr { buffer.data() };
-                keyboard& keyb;     // TODO: maybe use shared_ptr here.
-            };
-        }
-
-        struct keyboard_cin
-        {
-            keyboard_cin(keyboard& kb) : streambuf(kb) 
-            {
-                if (cin_redirected) throw std::runtime_error("std::cin cannot be redirected twice.");
-                original_streambuf = std::cin.rdbuf(&streambuf);
-                cin_redirected = true;
-            }
-
-            ~keyboard_cin()
-            { 
-                std::cin.rdbuf(original_streambuf);
-                cin_redirected = false; 
-            }
-
-            void echo(bool enable) { streambuf.echo = enable; }
-
-        private:
-            detail::keyboard_streambuf streambuf;
-            std::streambuf* original_streambuf;
+            std::streambuf* cin;
+            std::unique_ptr<std::streambuf> streambuf;
             static bool cin_redirected;
+            void restore_cin();
         };
     }
 }
