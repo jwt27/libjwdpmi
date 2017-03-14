@@ -26,6 +26,8 @@ namespace jw
 {
     namespace io
     {
+        bool keyboard_cin::cin_redirected { false };
+
         void keyboard::update()
         {
             auto codes = interface->get_scancodes();

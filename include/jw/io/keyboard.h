@@ -93,14 +93,27 @@ namespace jw
             };
         }
 
-        struct keyboard_istream : public std::istream
+        struct keyboard_cin
         {
-            keyboard_istream(keyboard& kb) : std::istream(&streambuf), streambuf(kb) { }
+            keyboard_cin(keyboard& kb) : streambuf(kb) 
+            {
+                if (cin_redirected) throw std::runtime_error("std::cin cannot be redirected twice.");
+                original_streambuf = std::cin.rdbuf(&streambuf);
+                cin_redirected = true;
+            }
+
+            ~keyboard_cin()
+            { 
+                std::cin.rdbuf(original_streambuf);
+                cin_redirected = false; 
+            }
 
             void echo(bool enable) { streambuf.echo = enable; }
 
         private:
             detail::keyboard_streambuf streambuf;
+            std::streambuf* original_streambuf;
+            static bool cin_redirected;
         };
     }
 }
