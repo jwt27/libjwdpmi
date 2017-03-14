@@ -71,7 +71,7 @@ namespace jw
 
         void keyboard::redirect_cin()
         {
-            if (streambuf || std::cin.rdbuf() == streambuf.get()) return;
+            if (std::cin.rdbuf() == streambuf.get()) return;
             if (cin_redirected) throw std::runtime_error("std::cin cannot be redirected twice.");
             streambuf = std::make_unique<detail::keyboard_streambuf>(*this);
             cin = std::cin.rdbuf(streambuf.get());
