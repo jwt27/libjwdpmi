@@ -30,11 +30,6 @@ namespace jw
 {
     namespace io
     {
-        namespace detail
-        {
-            struct keyboard_streambuf;
-        }
-
         struct keyboard final
         {
             event<void(key_state_pair)> key_changed;

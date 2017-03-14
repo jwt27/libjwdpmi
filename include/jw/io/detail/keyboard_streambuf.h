@@ -61,7 +61,7 @@ namespace jw
 
                 std::array<char_type, 1_KB> buffer;
                 char_type* ptr { buffer.data() };
-                keyboard& keyb;     // TODO: maybe use shared_ptr here.
+                keyboard& keyb;
             };
         }
     }

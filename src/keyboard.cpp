@@ -71,7 +71,7 @@ namespace jw
 
         void keyboard::redirect_cin()
         {
-            if (std::cin.rdbuf() == streambuf.get()) return;                  
+            if (std::cin.rdbuf() == streambuf.get()) return;
             if (cin == nullptr) cin = std::cin.rdbuf();
             streambuf = std::make_unique<detail::keyboard_streambuf>(*this);
             std::cin.rdbuf(streambuf.get());
