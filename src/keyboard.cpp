@@ -68,9 +68,16 @@ namespace jw
 
         namespace detail
         {
+            int keyboard_streambuf::sync()
+            {
+                std::copy(gptr(), ptr, buffer.begin());
+                ptr = buffer.begin() + (ptr - gptr());
+                setg(buffer.begin(), buffer.begin(), ptr);
+                thread::yield();
+                return 0;
+            }
             std::streamsize keyboard_streambuf::xsgetn(char_type * s, std::streamsize n)
             {
-                std::lock_guard<thread::recursive_mutex> guard { mutex };
                 std::streamsize max_n = 0;
                 while (max_n < n && underflow() != traits_type::eof()) max_n = std::min(egptr() - gptr(), n);
                 std::copy_n(gptr(), max_n, s);
@@ -80,10 +87,6 @@ namespace jw
 
             keyboard_streambuf::int_type keyboard_streambuf::underflow()
             {
-                std::lock_guard<thread::recursive_mutex> guard { mutex };
-                std::copy(gptr(), ptr, buffer.begin());
-                ptr = buffer.begin() + (ptr - gptr());
-                setg(buffer.begin(), buffer.begin(), ptr);
                 thread::yield_while([this] { return gptr() == egptr(); });
                 return *gptr();
             }

@@ -65,6 +65,7 @@ namespace jw
                 }
 
             protected:
+                virtual int sync() override;
                 virtual std::streamsize xsgetn(char_type* s, std::streamsize n) override;
                 virtual int_type underflow() override;
 
@@ -72,6 +73,7 @@ namespace jw
                 callback<void(key_state_pair)> event_handler { [this](auto k)
                 {
                     std::cout << "got key!\n";
+                    if (egptr() >= buffer.data() + buffer.size()) sync();
                     if (k.second.is_down() && k.first.is_printable(keyb))
                         *(ptr++) = k.first.to_ascii(keyb);
                     setg(buffer.begin(), gptr(), ptr);
