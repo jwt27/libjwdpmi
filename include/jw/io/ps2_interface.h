@@ -36,8 +36,8 @@ namespace jw
         public:
             virtual std::deque<detail::scancode> get_scancodes() override;
 
-            scancode_set _scancode_set;
-            virtual scancode_set get_scancode_set() override { return _scancode_set; }
+            scancode_set current_scancode_set;
+            virtual scancode_set get_scancode_set() override { return current_scancode_set; }
             virtual void set_scancode_set(byte set) override;
 
             virtual void set_typematic(byte, byte) override { /* TODO */ }

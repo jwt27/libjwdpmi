@@ -88,8 +88,8 @@ namespace jw
         #endif
 
 
-            _scancode_set = static_cast<scancode_set>(
-            #ifdef DOSBOX_BUG
+            current_scancode_set = static_cast<scancode_set>(
+        #ifdef DOSBOX_BUG
                 command<send_data, recv_ack, send_data, recv_data, recv_ack>({ 0xF0, 0 }));  // Dosbox-X sends ACK-data-ACK...
         #else
                 command<send_data, recv_ack, send_data, recv_ack, recv_data>({ 0xF0, 0 }));  // Should be ACK-ACK-data.
