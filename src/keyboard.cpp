@@ -70,7 +70,7 @@ namespace jw
             if (std::cin.rdbuf() != streambuf.get())
             {
                 if (cin == nullptr) cin = std::cin.rdbuf();
-                streambuf = std::make_unique<detail::keyboard_streambuf>(*this);
+                if (!streambuf) streambuf = std::make_unique<detail::keyboard_streambuf>(*this);
                 std::cin.rdbuf(streambuf.get());
                 auto_update(true);
             }
@@ -83,7 +83,6 @@ namespace jw
         { 
             if (cin == nullptr || std::cin.rdbuf() != streambuf.get()) return;
             std::cin.rdbuf(cin);
-            streambuf.reset();
             cin = nullptr;
         }
     }
