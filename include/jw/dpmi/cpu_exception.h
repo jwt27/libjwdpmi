@@ -106,7 +106,7 @@ namespace jw
 
         using exception_frame = old_exception_frame; // can be static_cast to new_exception_frame type
         using exception_handler_sig = bool(cpu_registers*, exception_frame*, bool);
-        struct exception : public enum_struct<std::uint32_t>
+        struct exception_num : public enum_struct<std::uint32_t>
         {
             using E = enum_struct<std::uint32_t>;
             using T = typename E::underlying_type;
@@ -149,7 +149,7 @@ namespace jw
         {
             void init_code();
             func::function<exception_handler_sig> handler;
-            exception exc;
+            exception_num exc;
             static std::array<byte, config::exception_stack_size> stack; // TODO: allow nested exceptions
             static std::array<std::unique_ptr<std::deque<exception_handler*>>, 0x20> wrapper_list;
 
@@ -169,7 +169,7 @@ namespace jw
 
         public:
             template<typename F>
-            exception_handler(exception e, F&& f) : handler(std::allocator_arg, locking_allocator<> { }, std::forward<F>(f)), exc(e), stack_ptr(stack.data() + stack.size())
+            exception_handler(exception_num e, F&& f) : handler(std::allocator_arg, locking_allocator<> { }, std::forward<F>(f)), exc(e), stack_ptr(stack.data() + stack.size())
             {
                 init_code();
 
@@ -190,12 +190,6 @@ namespace jw
             exception_handler& operator=(exception_handler&&) = delete;
 
             far_ptr32 get_ptr() const noexcept { return far_ptr32 { get_cs(), reinterpret_cast<std::uintptr_t>(code.data()) }; }
-        };
-
-        class cpu_category : public std::error_category
-        {
-            virtual const char* name() const noexcept override { return "CPU"; }
-            virtual std::string message(int ev) const override;
         };
     }
 }
