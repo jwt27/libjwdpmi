@@ -171,8 +171,8 @@ namespace jw
             std::array<byte, 0x100> code;                       //          1           [eax-0x0C]
 
         public:
-            template<typename F>
-            exception_handler(exception_num e, F&& f) : handler(std::allocator_arg, locking_allocator<> { }, std::forward<F>(f)), exc(e), stack_ptr(stack.data() + stack.size())
+            template<typename F>    // TODO: real-mode (requires a separate wrapper list)
+            exception_handler(exception_num e, F&& f, bool real_mode = false) : handler(std::allocator_arg, locking_allocator<> { }, std::forward<F>(f)), exc(e), stack_ptr(stack.data() + stack.size())
             {
                 detail::setup_exception_throwers();
                 init_code();
@@ -183,7 +183,7 @@ namespace jw
                 else previous_handler = wrapper_list[e]->back()->get_ptr();
                 wrapper_list[e]->push_back(this);
 
-                new_type = detail::cpu_exception_handlers::set_handler(e, get_ptr());
+                new_type = detail::cpu_exception_handlers::set_pm_handler(e, get_ptr());
             }
 
             ~exception_handler();

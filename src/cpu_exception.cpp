@@ -152,7 +152,7 @@ namespace jw
         {
             if (!wrapper_list[exc]) return;
             auto i = std::find(wrapper_list[exc]->begin(), wrapper_list[exc]->end(), this);
-            if (wrapper_list[exc]->back() == this) detail::cpu_exception_handlers::set_handler(exc, previous_handler);
+            if (wrapper_list[exc]->back() == this) detail::cpu_exception_handlers::set_pm_handler(exc, previous_handler);
             else if (i[+1] != nullptr) i[+1]->previous_handler = previous_handler;
             wrapper_list[exc]->erase(i);
         }

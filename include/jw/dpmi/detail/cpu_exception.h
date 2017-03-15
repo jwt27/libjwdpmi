@@ -41,9 +41,7 @@ namespace jw
                     }
                 }
 
-                static far_ptr32 get_rm_handler(exception_num n) { return get_rm_exception_handler(n); }
-
-                static bool set_handler(exception_num n, far_ptr32 ptr, bool pm_only = true)
+                static bool set_pm_handler(exception_num n, far_ptr32 ptr)
                 {
                     static bool is_new_type { true };
 
@@ -61,24 +59,12 @@ namespace jw
                             throw;
                         }
                     }
-                    if (!pm_only && is_new_type)
-                    {
-                        try { set_rm_exception_handler(n, ptr); }     // TODO: make this work
-                        catch (dpmi_error& e)
-                        {
-                            switch (e.code().value())
-                            {
-                            case dpmi_error_code::unsupported_function:
-                            case 0x0213:
-                                // too bad.
-                                break;
-                            default:
-                                throw e;
-                            }
-                        }
-                    }
                     return is_new_type;
                 }
+
+                static far_ptr32 get_rm_handler(exception_num n) { return get_rm_exception_handler(n); }
+                
+                static void set_rm_handler(exception_num n, far_ptr32 ptr) { set_rm_exception_handler(n, ptr); }
 
             private:
             #define CALL_INT31_GET(func_no, exc_no)                 \
