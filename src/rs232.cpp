@@ -18,6 +18,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <jw/io/rs232.h>
 #include <jw/dpmi/irq_mask.h>
 
+// TODO: std::flush makes this drop characters somehow, fix it!
+
 namespace jw
 {
     namespace io

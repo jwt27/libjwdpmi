@@ -25,6 +25,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 // TODO: clean this up
 // TODO: keyboard commands enum, instead of using raw hex values
+// TODO: save and restore keyboard settings on exit!
 
 namespace jw
 {

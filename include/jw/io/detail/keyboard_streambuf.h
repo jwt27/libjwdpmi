@@ -32,7 +32,7 @@ namespace jw
                 {
                     setp(nullptr, nullptr);
                     setg(buffer.data(), buffer.data(), buffer.data());
-                }                                                       
+                }
 
                 bool echo { true };
                 std::ostream* echo_stream { &std::cout };
