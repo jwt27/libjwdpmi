@@ -15,12 +15,8 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <iterator>
-#include <algorithm>
-
 #include <jw/io/keyboard.h>
 #include <jw/io/detail/keyboard_streambuf.h>
-#include <jw/io/ps2_interface.h>
 #include <jw/dpmi/irq_mask.h>
 
 namespace jw

@@ -23,7 +23,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <jw/io/key.h>
 #include <jw/io/detail/scancode.h>
 #include <jw/io/keyboard_interface.h>
-#include <jw/thread/mutex.h>
 #include <jw/event.h>
 
 namespace jw
