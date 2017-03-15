@@ -16,6 +16,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include <jw/dpmi/cpu_exception.h>
+#include <cstring>
 
 namespace jw
 {
@@ -189,7 +190,6 @@ namespace jw
         {
         #define THROW_ATTR [[noreturn, gnu::noinline, gnu::used, gnu::optimize("no-omit-frame-pointer")]]
             THROW_ATTR void throw_cpu_exception(exception_num n) { throw cpu_exception(n); }
-
             THROW_ATTR void throw_cpu_exception_0x00() { throw_cpu_exception(0x00); }
             THROW_ATTR void throw_cpu_exception_0x01() { throw_cpu_exception(0x01); }
             THROW_ATTR void throw_cpu_exception_0x02() { throw_cpu_exception(0x02); }
@@ -215,12 +215,12 @@ namespace jw
 
             bool simulate_call(exception_frame* frame, auto* func) noexcept
             {
-                if (frame->fault_address.segment != get_cs()) return false;
-                if (frame->flags.v86mode) return false;
-                if (frame->info_bits.host_exception) return false;
-                frame->stack.offset -= 4;
-                *reinterpret_cast<std::uintptr_t*>(&frame->stack.offset) = frame->fault_address.offset;
-                frame->fault_address.offset = reinterpret_cast<std::uintptr_t>(func);
+                if (frame->fault_address.segment != get_cs()) return false;     // Only throw if exception happened in our code
+                if (frame->flags.v86mode) return false;                         // and not in real mode
+                if (frame->info_bits.host_exception) return false;              // and not in the DPMI host
+                frame->stack.offset -= 4;                                                               // "sub esp, 4"
+                *reinterpret_cast<std::uintptr_t*>(&frame->stack.offset) = frame->fault_address.offset; // "mov [esp], eip"
+                frame->fault_address.offset = reinterpret_cast<std::uintptr_t>(func);                   // "mov eip, func"
                 frame->info_bits.redirect_elsewhere = true;
                 return true;
             }
@@ -248,6 +248,10 @@ namespace jw
                 exception_throwers[0x0c] = std::make_unique<exception_handler>(0x0c, [](cpu_registers*, exception_frame* f, bool) { return simulate_call(f, throw_cpu_exception_0x0c); });
                 exception_throwers[0x0d] = std::make_unique<exception_handler>(0x0d, [](cpu_registers*, exception_frame* f, bool) { return simulate_call(f, throw_cpu_exception_0x0d); });
                 exception_throwers[0x0e] = std::make_unique<exception_handler>(0x0e, [](cpu_registers*, exception_frame* f, bool) { return simulate_call(f, throw_cpu_exception_0x0e); });
+
+                capabilities c { };
+                if (!c.supported) return;
+                if (std::strncmp(c.vendor_info.name, "HDPMI", 5) != 0) return;  // TODO: figure out if other hosts support these too
                 exception_throwers[0x10] = std::make_unique<exception_handler>(0x10, [](cpu_registers*, exception_frame* f, bool) { return simulate_call(f, throw_cpu_exception_0x10); });
                 exception_throwers[0x11] = std::make_unique<exception_handler>(0x11, [](cpu_registers*, exception_frame* f, bool) { return simulate_call(f, throw_cpu_exception_0x11); });
                 exception_throwers[0x12] = std::make_unique<exception_handler>(0x12, [](cpu_registers*, exception_frame* f, bool) { return simulate_call(f, throw_cpu_exception_0x12); });

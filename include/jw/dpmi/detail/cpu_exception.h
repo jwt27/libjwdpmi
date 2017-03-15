@@ -43,7 +43,7 @@ namespace jw
 
                 static far_ptr32 get_rm_handler(exception_num n) { return get_rm_exception_handler(n); }
 
-                static bool set_handler(exception_num n, far_ptr32 ptr, bool pm_only = false)
+                static bool set_handler(exception_num n, far_ptr32 ptr, bool pm_only = true)
                 {
                     static bool is_new_type { true };
 
@@ -63,7 +63,7 @@ namespace jw
                     }
                     if (!pm_only && is_new_type)
                     {
-                        try { set_rm_exception_handler(n, ptr); }
+                        try { set_rm_exception_handler(n, ptr); }     // TODO: make this work
                         catch (dpmi_error& e)
                         {
                             switch (e.code().value())
