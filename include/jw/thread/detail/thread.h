@@ -78,6 +78,7 @@ namespace jw
                 bool is_running() const noexcept { return (state != initialized && state != finished); }
                 bool allow_orphan { false };
                 auto pending_exceptions() const noexcept { return exceptions.size(); }
+                std::string name { "anonymous thread" };
                 
                 virtual ~thread()
                 {

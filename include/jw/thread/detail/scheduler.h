@@ -24,13 +24,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <jw/dpmi/irq_check.h>
 #include <jw/dpmi/alloc.h>
 
-// TODO: only rethrow exceptions when a task is being awaited!
 // TODO: task->delayed_start(), to schedule a task without immediately starting it.
-// TODO: make threads use custom allocator. deque threads should use locked_pool_allocator.
-// TODO: use threads.push_front() instead of next_thread.
-// TODO: don't save flags!
 // TODO: make errno thread-local? other globals?
-// TODO: name threads, to aid debugging
 
 namespace jw
 {
