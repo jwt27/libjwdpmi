@@ -104,7 +104,7 @@ namespace jw
         };
 
         using exception_frame = old_exception_frame; // can be static_cast to new_exception_frame type
-        using exception_handler_sig = bool(exception_frame*, bool, cpu_registers*);
+        using exception_handler_sig = bool(cpu_registers*, exception_frame*, bool);
         using exception_num = std::uint32_t;
 
 

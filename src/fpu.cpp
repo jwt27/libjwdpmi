@@ -30,7 +30,7 @@ namespace jw
             {
                 if (!cr0_access_known)
                 {
-                    dpmi::exception_handler exc { 0x0d, [](exception_frame* frame, bool, auto*)
+                    dpmi::exception_handler exc { 0x0d, [](auto*, exception_frame* frame, bool)
                     {
                         cr0_allowed = false;
                         frame->fault_address.offset += 3;
@@ -53,7 +53,7 @@ namespace jw
             {
                 if (!cr4_access_known)
                 {
-                    dpmi::exception_handler exc { 0x0d, [](exception_frame* frame, bool, auto*)
+                    dpmi::exception_handler exc { 0x0d, [](auto*, exception_frame* frame, bool)
                     {
                         cr4_allowed = false;
                         frame->fault_address.offset += 3;
@@ -109,7 +109,7 @@ namespace jw
                 init = true;
                 if (!test_cr0_access() || cr0.fpu_emulation) return;
                 
-                exc07_handler = std::make_unique<exception_handler>(0x07, [this](exception_frame*, bool, cpu_registers*) [[gnu::optimize("no-tree-vectorize")]]
+                exc07_handler = std::make_unique<exception_handler>(0x07, [this](cpu_registers*, exception_frame*, bool) [[gnu::optimize("no-tree-vectorize")]]
                 {
                     cr0_t cr0 { };
                     cr0.task_switched = false;
