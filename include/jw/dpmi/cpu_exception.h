@@ -128,7 +128,7 @@ namespace jw
 
             static far_ptr32 get_rm_handler(exception_num n) { return get_rm_exception_handler(n); }
 
-            static bool set_handler(exception_num n, far_ptr32 ptr)// , bool pm_only = true)
+            static bool set_handler(exception_num n, far_ptr32 ptr, bool pm_only = false)
             {
                 static bool is_new_type { true };
 
@@ -145,7 +145,7 @@ namespace jw
                     default:
                         throw;
                     }
-                }/*
+                }
                 if (!pm_only && is_new_type)
                 {
                     try { set_rm_exception_handler(n, ptr); }
@@ -161,12 +161,11 @@ namespace jw
                             throw e;
                         }
                     }
-                }*/
+                }
                 return is_new_type;
             }
 
         private:
-
         #define CALL_INT31_GET(func_no, exc_no)                     \
                 dpmi_error_code error;                              \
                 bool c;                                             \
