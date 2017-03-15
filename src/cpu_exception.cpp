@@ -155,6 +155,34 @@ namespace jw
             else if (i[+1] != nullptr) i[+1]->previous_handler = previous_handler;
             wrapper_list[exc]->erase(i);
         }
-    }
+
+        std::string cpu_category::message(int ev) const
+        {
+            switch (ev)
+            {
+            case exception_num::divide_error:             return "Divide error.";
+            case exception_num::debug:                    return "Debug exception.";
+            case exception_num::non_maskable_interrupt:   return "Non-maskable interrupt.";
+            case exception_num::breakpoint:               return "Breakpoint.";
+            case exception_num::overflow:                 return "Overflow.";
+            case exception_num::bound_range_exceeded:     return "Bound range exceeded.";
+            case exception_num::invalid_opcode:           return "Invalid opcode.";
+            case exception_num::device_not_available:     return "Device not available.";
+            case exception_num::double_fault:             return "Double fault.";
+            case exception_num::invalid_tss:              return "Invalid Task State Segment.";
+            case exception_num::segment_not_present:      return "Segment not present.";
+            case exception_num::stack_segment_fault:      return "Stack Segment fault.";
+            case exception_num::general_protection_fault: return "General Protection fault.";
+            case exception_num::page_fault:               return "Page fault.";
+            case exception_num::x87_exception:            return "x87 floating-point exception.";
+            case exception_num::alignment_check:          return "Alignment check.";
+            case exception_num::machine_check:            return "Machine check.";
+            case exception_num::sse_exception:            return "SSE floating-point exception.";
+            case exception_num::virtualization_exception: return "Virtualization exception.";
+            case exception_num::security_exception:       return "Security exception.";
+            default:std::stringstream s; s << "Unknown CPU exception 0x" << std::hex << ev << "."; return s.str();
+            }
+        }
+}
 }
 

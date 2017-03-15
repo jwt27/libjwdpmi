@@ -23,6 +23,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <cstdint>
 #include <algorithm>
 #include <deque>
+#include <stdexcept>
+#include <string>
 #include <function.h>
 #include <jw/enum_struct.h>
 #include <jw/dpmi/dpmi.h>
@@ -119,7 +121,7 @@ namespace jw
                 overflow,
                 bound_range_exceeded,
                 invalid_opcode,
-                device_not_present,
+                device_not_available,
                 double_fault,
                 invalid_tss = 0x0a,
                 segment_not_present,
@@ -190,6 +192,17 @@ namespace jw
             exception_handler& operator=(exception_handler&&) = delete;
 
             far_ptr32 get_ptr() const noexcept { return far_ptr32 { get_cs(), reinterpret_cast<std::uintptr_t>(code.data()) }; }
+        }; 
+
+        struct cpu_category : public std::error_category
+        {
+            virtual const char* name() const noexcept override { return "CPU"; }
+            virtual std::string message(int ev) const override;
+        };
+
+        struct cpu_exception : public std::system_error
+        {
+            cpu_exception(exception_num n) : system_error(n, cpu_category { }) { }
         };
     }
 }
