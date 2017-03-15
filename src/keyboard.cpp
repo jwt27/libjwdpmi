@@ -77,11 +77,14 @@ namespace jw
             auto* s = static_cast<detail::keyboard_streambuf*>(streambuf.get());
             s->echo = echo;
             s->echo_stream = &echo_stream;
+            s->enable();
         }
 
         void keyboard::restore_cin()
         { 
             if (cin == nullptr || std::cin.rdbuf() != streambuf.get()) return;
+            auto* s = static_cast<detail::keyboard_streambuf*>(streambuf.get());
+            s->disable();
             std::cin.rdbuf(cin);
             cin = nullptr;
         }

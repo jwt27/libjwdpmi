@@ -30,13 +30,14 @@ namespace jw
 
                 keyboard_streambuf(keyboard& kb) : keyb(kb)
                 {
-                    keyb.key_changed += event_handler;
                     setp(nullptr, nullptr);
                     setg(buffer.data(), buffer.data(), buffer.data());
                 }                                                       
 
                 bool echo { true };
                 std::ostream* echo_stream { &std::cout };
+                void enable() { keyb.key_changed += event_handler; }
+                void disable() { keyb.key_changed -= event_handler; }
 
             protected:
                 virtual int sync() override;
