@@ -24,6 +24,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <algorithm>
 #include <deque>
 #include <function.h>
+#include <jw/enum_struct.h>
 #include <jw/dpmi/dpmi.h>
 #include <jw/dpmi/lock.h>
 #include <jw/dpmi/alloc.h>
@@ -105,7 +106,36 @@ namespace jw
 
         using exception_frame = old_exception_frame; // can be static_cast to new_exception_frame type
         using exception_handler_sig = bool(cpu_registers*, exception_frame*, bool);
-        using exception_num = std::uint32_t;
+        struct exception : public enum_struct<std::uint32_t>
+        {
+            using E = enum_struct<std::uint32_t>;
+            using T = typename E::underlying_type;
+            enum
+            {
+                divide_error = 0,
+                debug,
+                non_maskable_interrupt,
+                breakpoint,
+                overflow,
+                bound_range_exceeded,
+                invalid_opcode,
+                device_not_present,
+                double_fault,
+                invalid_tss = 0x0a,
+                segment_not_present,
+                stack_segment_fault,
+                general_protection_fault,
+                page_fault,
+                x87_exception = 0x10,
+                alignment_check,
+                machine_check,
+                sse_exception,
+                virtualization_exception,
+                security_exception = 0x1e
+            }; 
+            using E::E;
+            using E::operator=;
+        };
     }
 }
 
@@ -115,12 +145,11 @@ namespace jw
 {
     namespace dpmi
     {
-
         class exception_handler : class_lock<exception_handler>
         {
             void init_code();
             func::function<exception_handler_sig> handler;
-            exception_num exc;
+            exception exc;
             static std::array<byte, config::exception_stack_size> stack; // TODO: allow nested exceptions
             static std::array<std::unique_ptr<std::deque<exception_handler*>>, 0x20> wrapper_list;
 
@@ -140,7 +169,7 @@ namespace jw
 
         public:
             template<typename F>
-            exception_handler(exception_num e, F&& f) : handler(std::allocator_arg, locking_allocator<> { }, std::forward<F>(f)), exc(e), stack_ptr(stack.data() + stack.size())
+            exception_handler(exception e, F&& f) : handler(std::allocator_arg, locking_allocator<> { }, std::forward<F>(f)), exc(e), stack_ptr(stack.data() + stack.size())
             {
                 init_code();
 
@@ -161,6 +190,12 @@ namespace jw
             exception_handler& operator=(exception_handler&&) = delete;
 
             far_ptr32 get_ptr() const noexcept { return far_ptr32 { get_cs(), reinterpret_cast<std::uintptr_t>(code.data()) }; }
+        };
+
+        class cpu_category : public std::error_category
+        {
+            virtual const char* name() const noexcept override { return "CPU"; }
+            virtual std::string message(int ev) const override;
         };
     }
 }
