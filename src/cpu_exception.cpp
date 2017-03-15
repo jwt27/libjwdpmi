@@ -169,20 +169,93 @@ namespace jw
             case exception_num::invalid_opcode:           return "Invalid opcode.";
             case exception_num::device_not_available:     return "Device not available.";
             case exception_num::double_fault:             return "Double fault.";
+            case exception_num::x87_segment_not_present:  return "x87 Segment overrun.";
             case exception_num::invalid_tss:              return "Invalid Task State Segment.";
             case exception_num::segment_not_present:      return "Segment not present.";
             case exception_num::stack_segment_fault:      return "Stack Segment fault.";
             case exception_num::general_protection_fault: return "General Protection fault.";
             case exception_num::page_fault:               return "Page fault.";
-            case exception_num::x87_exception:            return "x87 floating-point exception.";
+            case exception_num::x87_exception:            return "x87 Floating-point exception.";
             case exception_num::alignment_check:          return "Alignment check.";
             case exception_num::machine_check:            return "Machine check.";
-            case exception_num::sse_exception:            return "SSE floating-point exception.";
+            case exception_num::sse_exception:            return "SSE Floating-point exception.";
             case exception_num::virtualization_exception: return "Virtualization exception.";
             case exception_num::security_exception:       return "Security exception.";
             default:std::stringstream s; s << "Unknown CPU exception 0x" << std::hex << ev << "."; return s.str();
             }
         }
-}
+
+        namespace detail
+        {
+        #define THROW_ATTR [[noreturn, gnu::noinline, gnu::used, gnu::optimize("no-omit-frame-pointer")]]
+            THROW_ATTR void throw_cpu_exception(exception_num n) { throw cpu_exception(n); }
+
+            THROW_ATTR void throw_cpu_exception_0x00() { throw_cpu_exception(0x00); }
+            THROW_ATTR void throw_cpu_exception_0x01() { throw_cpu_exception(0x01); }
+            THROW_ATTR void throw_cpu_exception_0x02() { throw_cpu_exception(0x02); }
+            THROW_ATTR void throw_cpu_exception_0x03() { throw_cpu_exception(0x03); }
+            THROW_ATTR void throw_cpu_exception_0x04() { throw_cpu_exception(0x04); }
+            THROW_ATTR void throw_cpu_exception_0x05() { throw_cpu_exception(0x05); }
+            THROW_ATTR void throw_cpu_exception_0x06() { throw_cpu_exception(0x06); }
+            THROW_ATTR void throw_cpu_exception_0x07() { throw_cpu_exception(0x07); }
+            THROW_ATTR void throw_cpu_exception_0x08() { throw_cpu_exception(0x08); }
+            THROW_ATTR void throw_cpu_exception_0x09() { throw_cpu_exception(0x09); }
+            THROW_ATTR void throw_cpu_exception_0x0a() { throw_cpu_exception(0x0a); }
+            THROW_ATTR void throw_cpu_exception_0x0b() { throw_cpu_exception(0x0b); }
+            THROW_ATTR void throw_cpu_exception_0x0c() { throw_cpu_exception(0x0c); }
+            THROW_ATTR void throw_cpu_exception_0x0d() { throw_cpu_exception(0x0d); }
+            THROW_ATTR void throw_cpu_exception_0x0e() { throw_cpu_exception(0x0e); }
+            THROW_ATTR void throw_cpu_exception_0x10() { throw_cpu_exception(0x10); }
+            THROW_ATTR void throw_cpu_exception_0x11() { throw_cpu_exception(0x11); }
+            THROW_ATTR void throw_cpu_exception_0x12() { throw_cpu_exception(0x12); }
+            THROW_ATTR void throw_cpu_exception_0x13() { throw_cpu_exception(0x13); }
+            THROW_ATTR void throw_cpu_exception_0x14() { throw_cpu_exception(0x14); }
+            THROW_ATTR void throw_cpu_exception_0x1e() { throw_cpu_exception(0x1e); }
+        #undef THROW_ATTR
+
+            bool simulate_call(exception_frame* frame, auto* func) noexcept
+            {
+                if (frame->fault_address.segment != get_cs()) return false;
+                if (frame->flags.v86mode) return false;
+                if (frame->info_bits.host_exception) return false;
+                frame->stack.offset -= 4;
+                *reinterpret_cast<std::uintptr_t*>(&frame->stack.offset) = frame->fault_address.offset;
+                frame->fault_address.offset = reinterpret_cast<std::uintptr_t>(func);
+                frame->info_bits.redirect_elsewhere = true;
+                return true;
+            }
+
+            std::array<std::unique_ptr<exception_handler>, 0x20> exception_throwers;
+
+            bool exception_throwers_setup { false };
+            void setup_exception_throwers()
+            {
+                if (!config::enable_throwing_from_cpu_exceptions) return;
+                if (exception_throwers_setup) return;
+                exception_throwers_setup = true;
+                exception_throwers[0x00] = std::make_unique<exception_handler>(0x00, [](cpu_registers*, exception_frame* f, bool) { return simulate_call(f, throw_cpu_exception_0x00); });
+                exception_throwers[0x01] = std::make_unique<exception_handler>(0x01, [](cpu_registers*, exception_frame* f, bool) { return simulate_call(f, throw_cpu_exception_0x01); });
+                exception_throwers[0x02] = std::make_unique<exception_handler>(0x02, [](cpu_registers*, exception_frame* f, bool) { return simulate_call(f, throw_cpu_exception_0x02); });
+                exception_throwers[0x03] = std::make_unique<exception_handler>(0x03, [](cpu_registers*, exception_frame* f, bool) { return simulate_call(f, throw_cpu_exception_0x03); });
+                exception_throwers[0x04] = std::make_unique<exception_handler>(0x04, [](cpu_registers*, exception_frame* f, bool) { return simulate_call(f, throw_cpu_exception_0x04); });
+                exception_throwers[0x05] = std::make_unique<exception_handler>(0x05, [](cpu_registers*, exception_frame* f, bool) { return simulate_call(f, throw_cpu_exception_0x05); });
+                exception_throwers[0x06] = std::make_unique<exception_handler>(0x06, [](cpu_registers*, exception_frame* f, bool) { return simulate_call(f, throw_cpu_exception_0x06); });
+                exception_throwers[0x07] = std::make_unique<exception_handler>(0x07, [](cpu_registers*, exception_frame* f, bool) { return simulate_call(f, throw_cpu_exception_0x07); });
+                exception_throwers[0x08] = std::make_unique<exception_handler>(0x08, [](cpu_registers*, exception_frame* f, bool) { return simulate_call(f, throw_cpu_exception_0x08); });
+                exception_throwers[0x09] = std::make_unique<exception_handler>(0x09, [](cpu_registers*, exception_frame* f, bool) { return simulate_call(f, throw_cpu_exception_0x09); });
+                exception_throwers[0x0a] = std::make_unique<exception_handler>(0x0a, [](cpu_registers*, exception_frame* f, bool) { return simulate_call(f, throw_cpu_exception_0x0a); });
+                exception_throwers[0x0b] = std::make_unique<exception_handler>(0x0b, [](cpu_registers*, exception_frame* f, bool) { return simulate_call(f, throw_cpu_exception_0x0b); });
+                exception_throwers[0x0c] = std::make_unique<exception_handler>(0x0c, [](cpu_registers*, exception_frame* f, bool) { return simulate_call(f, throw_cpu_exception_0x0c); });
+                exception_throwers[0x0d] = std::make_unique<exception_handler>(0x0d, [](cpu_registers*, exception_frame* f, bool) { return simulate_call(f, throw_cpu_exception_0x0d); });
+                exception_throwers[0x0e] = std::make_unique<exception_handler>(0x0e, [](cpu_registers*, exception_frame* f, bool) { return simulate_call(f, throw_cpu_exception_0x0e); });
+                exception_throwers[0x10] = std::make_unique<exception_handler>(0x10, [](cpu_registers*, exception_frame* f, bool) { return simulate_call(f, throw_cpu_exception_0x10); });
+                exception_throwers[0x11] = std::make_unique<exception_handler>(0x11, [](cpu_registers*, exception_frame* f, bool) { return simulate_call(f, throw_cpu_exception_0x11); });
+                exception_throwers[0x12] = std::make_unique<exception_handler>(0x12, [](cpu_registers*, exception_frame* f, bool) { return simulate_call(f, throw_cpu_exception_0x12); });
+                exception_throwers[0x13] = std::make_unique<exception_handler>(0x13, [](cpu_registers*, exception_frame* f, bool) { return simulate_call(f, throw_cpu_exception_0x13); });
+                exception_throwers[0x14] = std::make_unique<exception_handler>(0x14, [](cpu_registers*, exception_frame* f, bool) { return simulate_call(f, throw_cpu_exception_0x14); });
+                exception_throwers[0x1e] = std::make_unique<exception_handler>(0x1e, [](cpu_registers*, exception_frame* f, bool) { return simulate_call(f, throw_cpu_exception_0x1e); });
+            }
+        }
+    }
 }
 

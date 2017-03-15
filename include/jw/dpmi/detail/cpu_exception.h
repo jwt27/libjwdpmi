@@ -81,7 +81,7 @@ namespace jw
                 }
 
             private:
-            #define CALL_INT31_GET(func_no, exc_no)                     \
+            #define CALL_INT31_GET(func_no, exc_no)                 \
                 dpmi_error_code error;                              \
                 bool c;                                             \
                 selector seg;                                       \
@@ -97,7 +97,7 @@ namespace jw
                 if (c) throw dpmi_error(error, __FUNCTION__);       \
                 return far_ptr32(seg, offset);
 
-            #define CALL_INT31_SET(func_no, exc_no, handler_ptr)        \
+            #define CALL_INT31_SET(func_no, exc_no, handler_ptr)    \
                 dpmi_error_code error;                              \
                 bool c;                                             \
                 asm volatile(                                       \
@@ -123,6 +123,8 @@ namespace jw
             #undef CALL_INT31_SET
             #undef CALL_INT31_GET
             };
+
+            void setup_exception_throwers();
         }
     }
 }

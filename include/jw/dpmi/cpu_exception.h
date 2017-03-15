@@ -123,7 +123,8 @@ namespace jw
                 invalid_opcode,
                 device_not_available,
                 double_fault,
-                invalid_tss = 0x0a,
+                x87_segment_not_present,
+                invalid_tss,
                 segment_not_present,
                 stack_segment_fault,
                 general_protection_fault,
@@ -173,6 +174,7 @@ namespace jw
             template<typename F>
             exception_handler(exception_num e, F&& f) : handler(std::allocator_arg, locking_allocator<> { }, std::forward<F>(f)), exc(e), stack_ptr(stack.data() + stack.size())
             {
+                detail::setup_exception_throwers();
                 init_code();
 
                 if (!wrapper_list[e]) wrapper_list[e] = std::make_unique<std::deque<exception_handler*>>();
