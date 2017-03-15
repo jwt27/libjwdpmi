@@ -489,8 +489,8 @@ namespace jw
             }
         };
 
-        // CPU register structure for DPMI real-mode functions.
-        struct [[gnu::packed]] rm_registers
+        // All general purpose registers, as pushed on the stack by the PUSHA instruction.
+        struct alignas(2) [[gnu::packed]] cpu_registers
         {
             union [[gnu::packed]]
             {
@@ -507,7 +507,7 @@ namespace jw
                 unsigned ebp : 32;
                 unsigned bp : 16;
             };
-            unsigned : 32;
+            unsigned : 32;  // esp, not used
             union [[gnu::packed]]
             {
                 unsigned ebx : 32;
@@ -525,12 +525,29 @@ namespace jw
                 unsigned ecx : 32;
                 struct [[gnu::packed]] { unsigned cx : 16; };
                 struct [[gnu::packed]] { unsigned cl : 8, ch : 8; };
-            }; union [[gnu::packed]]
+            }; 
+            union [[gnu::packed]]
             {
                 unsigned eax : 32;
                 struct [[gnu::packed]] { unsigned ax : 16; };
                 struct [[gnu::packed]] { unsigned al : 8, ah : 8; };
             };
+
+            auto& print(std::ostream& out) const
+            {
+                using namespace std;
+                out << hex << setfill('0');
+                out << "eax=" << setw(8) << eax << " ebx=" << setw(8) << ebx << " ecx=" << setw(8) << ecx << " edx=" << setw(8) << edx << "\n";
+                out << "edi=" << setw(8) << edi << " esi=" << setw(8) << esi << " ebp=" << setw(8) << ebp << "\n";
+                out << hex << setfill(' ') << setw(0) << flush;
+                return out;
+            }
+            friend auto& operator<<(std::ostream& out, const cpu_registers& in) { return in.print(out); }
+        };
+
+        // CPU register structure for DPMI real-mode functions.
+        struct alignas(2) [[gnu::packed]] rm_registers : public cpu_registers
+        {
             union [[gnu::packed]]
             {
                 unsigned flags_reg : 16;
@@ -557,16 +574,16 @@ namespace jw
             unsigned ip : 16, cs : 16; // not used in call_rm_interrupt()
             unsigned sp : 16, ss : 16; // not required for call_rm_interrupt()
 
-            void print() const
+            auto& print(std::ostream& out) const
             {
                 using namespace std;
-                cout << hex << setfill('0');
-                cout << "eax=" << setw(8) << eax << " ebx=" << setw(8) << ebx << " ecx=" << setw(8) << ecx << " edx=" << setw(8) << edx << "\n";
-                cout << "edi=" << setw(8) << edi << " esi=" << setw(8) << esi << " ebp=" << setw(8) << ebp << "\n";
-                cout << "es=" << setw(4) << es << " ds=" << setw(4) << ds << " fs=" << setw(4) << fs << " gs=" << setw(4) << gs << "\n";
-                cout << "cs=" << setw(4) << cs << " ip=" << setw(4) << ip << " ss=" << setw(4) << ss << " sp=" << setw(4) << sp << " flags=" << setw(4) << flags_reg << "\n";
-                cout << hex << setfill(' ') << setw(0) << flush;
+                out << hex << setfill('0');
+                out << "es=" << setw(4) << es << " ds=" << setw(4) << ds << " fs=" << setw(4) << fs << " gs=" << setw(4) << gs << "\n";
+                out << "cs=" << setw(4) << cs << " ip=" << setw(4) << ip << " ss=" << setw(4) << ss << " sp=" << setw(4) << sp << " flags=" << setw(4) << flags_reg << "\n";
+                out << hex << setfill(' ') << setw(0) << flush;
+                return out;
             }
+            friend auto& operator<<(std::ostream& out, const rm_registers& in) { return in.print(out); }
         };
 
         inline void call_rm_interrupt(std::uint8_t interrupt, rm_registers* reg)
@@ -595,8 +612,7 @@ namespace jw
                 *reg = *(memory_descriptor(new_reg_ds, new_reg).get_ptr<rm_registers>());
         }
 
-    #ifndef __INTELLISENSE__
-        static_assert(sizeof(rm_registers) == 0x32, "sizeof struct dpmi::rm_registers is not 0x32 bytes.");
-    #endif
+        static_assert(sizeof(cpu_registers) == 0x20, "check sizeof struct dpmi::cpu_registers");
+        static_assert(sizeof( rm_registers) == 0x32, "check sizeof struct dpmi::rm_registers");
     }
 }

@@ -38,7 +38,7 @@ namespace jw
             try
             {
                 auto* f = self->new_type ? &frame->frame_10 : &frame->frame_09;
-                success = self->handler(f, self->new_type);
+                success = self->handler(f, self->new_type, &frame->reg);
             }
             catch (...)
             {
@@ -59,7 +59,7 @@ namespace jw
                 // --- \/\/\/\/\/\/ --- //
                 "exception_wrapper_begin%=:;"
 
-                "push ds; push es; push fs; push gs; pusha;"    // 7 bytes
+                "pusha; push ds; push es; push fs; push gs;"    // 7 bytes
                 "call get_eip%=;"                               // 5 bytes
                 "get_eip%=: pop eax;"       // Get EIP and use it to find our variables
 
@@ -91,7 +91,7 @@ namespace jw
                 "mov esp, ebp;"
 
                 "sub esp, 4;"
-                "add ebp, 0x30;"
+                "add ebp, 0x20;"
                 "push ebp;"                 // Pointer to raw_exception_frame
                 "push cs:[eax-0x28];"       // Pointer to self
                 "mov ebx, eax;"
@@ -104,13 +104,13 @@ namespace jw
                 "jz old_type%=;"
 
                 // Return with DPMI 1.0 frame
-                "popa; pop gs; pop fs; pop es; pop ds;"
+                "pop gs; pop fs; pop es; pop ds; popa;"
                 "add esp, 0x20;"
                 "retf;"
 
                 // Return with DPMI 0.9 frame
                 "old_type%=:;"
-                "popa; pop gs; pop fs; pop es; pop ds;"
+                "pop gs; pop fs; pop es; pop ds; popa;"
                 "retf;"
 
                 // Chain to previous handler
@@ -120,7 +120,7 @@ namespace jw
                 "lea esi, [ebx-0x12];"      // previous_handler
                 "lea edi, [esp-0x06];"
                 "movsd; movsw;"             // copy previous_handler ptr above stack (is this dangerous?)
-                "popa; pop gs; pop fs; pop es; pop ds;"
+                "pop gs; pop fs; pop es; pop ds; popa;"
                 "jmp fword ptr ss:[esp-0x2A];"
 
                 "exception_wrapper_end%=:;"

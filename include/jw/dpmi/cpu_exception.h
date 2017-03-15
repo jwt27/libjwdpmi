@@ -98,12 +98,13 @@ namespace jw
 
         struct [[gnu::packed]] raw_exception_frame
         {
+            cpu_registers reg;
             old_exception_frame frame_09;
             new_exception_frame frame_10;
         };
 
         using exception_frame = old_exception_frame; // can be static_cast to new_exception_frame type
-        using exception_handler_sig = bool(exception_frame*, bool);
+        using exception_handler_sig = bool(exception_frame*, bool, cpu_registers*);
         using exception_num = std::uint32_t;
 
 
@@ -211,10 +212,8 @@ namespace jw
 
         class exception_handler : class_lock<exception_handler>
         {
-            using handler_type = bool(exception_frame* frame, bool is_new_type);
-
             void init_code();
-            func::function<handler_type> handler;
+            func::function<exception_handler_sig> handler;
             exception_num exc;
             static std::array<byte, config::exception_stack_size> stack; // TODO: allow nested exceptions
             static std::array<std::unique_ptr<std::deque<exception_handler*>>, 0x20> wrapper_list;
