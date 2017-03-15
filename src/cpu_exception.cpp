@@ -91,7 +91,7 @@ namespace jw
                 "mov esp, ebp;"
 
                 "sub esp, 4;"
-                "add ebp, 0x20;"
+                "add ebp, 0x10;"
                 "push ebp;"                 // Pointer to raw_exception_frame
                 "push cs:[eax-0x28];"       // Pointer to self
                 "mov ebx, eax;"
