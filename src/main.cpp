@@ -33,6 +33,14 @@ int _crt0_startup_flags = 0
 
 int jwdpmi_main(std::deque<std::string>);
 
+void print_exception(const std::exception& e, int level =  0)
+{
+    std::cerr << "Level " << level << ": " << e.what() << '\n';
+    try { std::rethrow_if_nested(e); } 
+    catch(const std::exception& e) { print_exception(e, level + 1); }
+    catch (...) { std::cerr << "Level " << (level + 1) << ": Unknown exception.\n"; }
+}
+
 int main(int argc, char** argv)
 {
     _crt0_startup_flags &= ~_CRT0_FLAG_LOCK_MEMORY;
@@ -46,6 +54,7 @@ int main(int argc, char** argv)
     {   
         return jwdpmi_main(args); 
     }
-    catch (const std::exception& e) { throw; /* TODO */ }
-    catch (...) { throw; /* TODO */ }
+    catch (const std::exception& e) { std::cerr << "Caught exception in main()!\n"; print_exception(e); }
+    catch (...) { std::cerr << "Caught unknown exception in main()!\n"; }
+    return -1;
 }
