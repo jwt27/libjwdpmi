@@ -108,6 +108,7 @@ namespace jw
 
         using exception_frame = old_exception_frame; // can be static_cast to new_exception_frame type
         using exception_handler_sig = bool(cpu_registers*, exception_frame*, bool);
+
         struct exception_num : public enum_struct<std::uint32_t>
         {
             using E = enum_struct<std::uint32_t>;
@@ -172,7 +173,9 @@ namespace jw
 
         public:
             template<typename F>    // TODO: real-mode (requires a separate wrapper list)
-            exception_handler(exception_num e, F&& f, bool real_mode = false) : handler(std::allocator_arg, locking_allocator<> { }, std::forward<F>(f)), exc(e), stack_ptr(stack.data() + stack.size())
+            exception_handler(exception_num e, F&& f, bool real_mode = false)
+                : handler(std::allocator_arg, locking_allocator<> { }, std::forward<F>(f))
+                , exc(e), stack_ptr(stack.data() + stack.size())
             {
                 detail::setup_exception_throwers();
                 init_code();
