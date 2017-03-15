@@ -33,9 +33,10 @@ namespace jw
                     keyb.key_changed += event_handler;
                     setp(nullptr, nullptr);
                     setg(buffer.data(), buffer.data(), buffer.data());
-                }
+                }                                                       
 
-                bool echo { true };     // TODO: set ostream to echo to.
+                bool echo { true };
+                std::ostream* echo_stream { &std::cout };
 
             protected:
                 virtual int sync() override;
@@ -52,8 +53,8 @@ namespace jw
                         *(ptr++) = c;
                         if (echo)
                         {
-                            std::cout << c << std::flush;
-                            if (k.first == key::backspace) std::cout << ' ' << c << std::flush;
+                            *echo_stream << c << std::flush;
+                            if (k.first == key::backspace) *echo_stream << ' ' << c << std::flush;
                         }
                     }
                     setg(buffer.begin(), gptr(), ptr);

@@ -37,7 +37,7 @@ namespace jw
             const key_state& get(key k) const { return keys[k]; }
             const key_state& operator[](key k) const { return keys[k]; }
 
-            void redirect_cin();       
+            void redirect_cin(bool echo = true, std::ostream& echo_stream = std::cout);
             void restore_cin();
             void update();
 

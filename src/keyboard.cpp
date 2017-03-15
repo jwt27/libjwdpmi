@@ -69,13 +69,18 @@ namespace jw
             }
         }
 
-        void keyboard::redirect_cin()
+        void keyboard::redirect_cin(bool echo, std::ostream& echo_stream)
         {
-            if (std::cin.rdbuf() == streambuf.get()) return;
-            if (cin == nullptr) cin = std::cin.rdbuf();
-            streambuf = std::make_unique<detail::keyboard_streambuf>(*this);
-            std::cin.rdbuf(streambuf.get());
-            auto_update(true);
+            if (std::cin.rdbuf() != streambuf.get())
+            {
+                if (cin == nullptr) cin = std::cin.rdbuf();
+                streambuf = std::make_unique<detail::keyboard_streambuf>(*this);
+                std::cin.rdbuf(streambuf.get());
+                auto_update(true);
+            }
+            auto* s = static_cast<detail::keyboard_streambuf*>(streambuf.get());
+            s->echo = echo;
+            s->echo_stream = &echo_stream;
         }
 
         void keyboard::restore_cin()
