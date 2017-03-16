@@ -27,7 +27,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <jw/dpmi/irq_mask.h>
 #include <jw/dpmi/irq_check.h>
 
-// TODO: allocator for dpmi::memory
 namespace jw
 {
     namespace dpmi

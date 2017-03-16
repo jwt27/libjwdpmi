@@ -54,8 +54,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 // Avoid writing to cout / cerr unless a serious error occurs. INT 21 is not re-entrant.
 
 // TODO: (eventually) software interrupts, real-mode callbacks
-// TODO: launch threads from interrupts
-
 
 #define INTERRUPT [[gnu::hot, gnu::optimize("O3"), gnu::used]]
 

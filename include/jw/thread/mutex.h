@@ -21,8 +21,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <shared_mutex>
 #include <jw/thread/thread.h>
 
-// TODO: make these IRQ-safe
-
 namespace jw
 {
     namespace thread
