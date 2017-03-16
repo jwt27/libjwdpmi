@@ -161,7 +161,7 @@ namespace jw
                 char_type get_one() noexcept
                 {
                 retry:
-                    thread::yield_while([&]() { return !line_status.read().data_available; });
+                    thread::yield_while([this] { return !line_status.read().data_available; });
                     auto c = data_port.read();
                     if (config.flow_control == rs232_config::xon_xoff)
                     {
@@ -176,12 +176,12 @@ namespace jw
                 {
                     if (!line_status.read().transmitter_empty) return false;
                     if (config.flow_control == rs232_config::rts_cts && !modem_status.read().cts) return false;
-                    thread::yield_while([&]() { return !line_status.read().transmitter_empty; });
+                    thread::yield_while([this] { return !line_status.read().transmitter_empty; });
                     data_port.write(c);
                     return true;
                 }
 
-                dpmi::irq_handler irq_handler { [&](auto ack) INTERRUPT
+                dpmi::irq_handler irq_handler { [this](auto ack) INTERRUPT
                 {
                     auto id = irq_id.read();
                     if (!id.no_irq_pending)
