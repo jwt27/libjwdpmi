@@ -156,36 +156,5 @@ namespace jw
 
             irq_level irq;
         };
-
-        /*
-        class nmi_mask  // lol who the hell would ever want to use this
-        {
-        public:
-             nmi_mask() { cli(); }
-            ~nmi_mask() { sti(); }
-
-        private:
-            void cli()
-            {
-                if (count++ > 0) return;
-
-                outportb(rtc_index_port, 0x80);
-                inportb(rtc_data_port);
-            }
-
-            void sti()
-            {
-                if (count == 0) return;
-                if (--count > 0) return;
-
-                outportb(rtc_index_port, 0x00);
-                inportb(rtc_data_port);
-            }
-
-            const unsigned short rtc_index_port = 0x70;
-            const unsigned short rtc_data_port = 0x71;
-
-            static int count;
-        };*/
     }
 }
