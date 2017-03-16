@@ -19,6 +19,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <deque>
 #include <crt0.h>
 #include <jw/dpmi/debug.h>
+#include <jw/dpmi/cpu_exception.h>
 #include <../jwdpmi_config.h>
 
 int _crt0_startup_flags = 0
@@ -45,13 +46,15 @@ int main(int argc, char** argv)
 {
     _crt0_startup_flags &= ~_CRT0_FLAG_LOCK_MEMORY;
     try { throw 0; } catch(...) { }     // Looks silly, but this speeds up subsequent exceptions.
-    
-    std::deque<std::string> args { };   // TODO: std::string_view when it's available
-    for (auto i = 0; i < argc; ++i)
-        args.emplace_back(argv[i]);
-    
+
     try 
     {   
+        jw::dpmi::detail::setup_exception_throwers();
+    
+        std::deque<std::string> args { };   // TODO: std::string_view when it's available
+        for (auto i = 0; i < argc; ++i)
+            args.emplace_back(argv[i]);
+    
         return jwdpmi_main(args); 
     }
     catch (const std::exception& e) { std::cerr << "Caught exception in main()!\n"; print_exception(e); }
