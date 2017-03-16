@@ -39,6 +39,11 @@ namespace jw
         public:
             interrupt_mask() noexcept { cli(); }
             ~interrupt_mask() { sti(); }
+            
+            interrupt_mask(const interrupt_mask&) = delete;
+            interrupt_mask(interrupt_mask&&) = delete;
+            interrupt_mask& operator=(const interrupt_mask&) = delete;
+            interrupt_mask& operator=(interrupt_mask&&) = delete;
 
             // Get the current interrupt flag state
             // true == interrupts enabled
@@ -99,6 +104,11 @@ namespace jw
         public:
             irq_mask(irq_level _irq) noexcept : irq(_irq) { cli(); }
             ~irq_mask() { sti(); }
+
+            irq_mask(const irq_mask&) = delete;
+            irq_mask(irq_mask&&) = delete;
+            irq_mask& operator=(const irq_mask&) = delete;
+            irq_mask& operator=(irq_mask&&) = delete;
 
             static void unmask(irq_level irq) // TODO: raii unmask
             {
