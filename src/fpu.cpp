@@ -24,8 +24,8 @@ namespace jw
     {
         namespace detail
         {
-            volatile bool cr0_allowed = true;
-            bool cr0_access_known = false;
+            volatile bool cr0_allowed { true };
+            bool cr0_access_known { false };
             bool test_cr0_access()
             {
                 if (!cr0_access_known)
@@ -47,8 +47,8 @@ namespace jw
                 return cr0_allowed;
             }
 
-            volatile bool cr4_allowed = true;
-            bool cr4_access_known = true;
+            volatile bool cr4_allowed { true };
+            bool cr4_access_known { false };
             bool test_cr4_access()
             {
                 if (!cr4_access_known)
@@ -80,13 +80,14 @@ namespace jw
                 cr0.monitor_fpu = true;
                 cr0.task_switched = false;
             #ifdef __SSE__
-                if (test_cr4_access())
-                {
-                    asm("mov eax, cr4;"
-                        "or eax, 0x600;" // enable SSE and SSE exceptions
-                        "mov cr4,eax;"
-                        :::"eax");
-                }
+                asm("test %b0, %b0;"
+                    "jz skip%=;"
+                    "mov eax, cr4;"
+                    "or eax, 0x600;" // enable SSE and SSE exceptions
+                    "mov cr4,eax;"
+                    "skip%=:"
+                    ::"q"(test_cr4_access())
+                    : "eax");
                 cr0.fpu_emulation = false;
             #endif
                 cr0.set();

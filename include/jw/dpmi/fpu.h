@@ -90,13 +90,25 @@ namespace jw
                 {
                     bool cr0_access = test_cr0_access();
                     if (!cr0_access) return;
-                    asm volatile("mov %0, cr0;":"=r"(*this):"rm"(cr0_access));  // needs the result of test_cr0_access() here
-                }                                                               // or else gcc may place the asm before the function call...
+                    asm volatile(
+                        "test %b1, %b1;"
+                        "jz skip%=;"
+                        "mov %0, cr0;"
+                        "skip%=:"
+                        : "=r" (*this)
+                        : "q" (cr0_access));
+                }
                 void set()
                 {
                     bool cr0_access = test_cr0_access();
                     if (!cr0_access) return;
-                    asm volatile("mov cr0, %0;"::"r"(*this),"rm"(cr0_access));
+                    asm volatile(
+                        "test %b1, %b1;"
+                        "jz skip%=;"
+                        "mov cr0, %0;"
+                        "skip%=:"
+                        :: "r" (*this)
+                        , "q" (cr0_access));
                 }
             };
 
