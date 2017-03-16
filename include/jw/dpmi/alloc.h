@@ -76,7 +76,7 @@ namespace jw
 
             template <typename U>
             constexpr locking_allocator(const locking_allocator<U>&) noexcept { }
-            locking_allocator() { };
+            constexpr locking_allocator() { };
             ~locking_allocator()
             {
                 if (map == nullptr) return;
