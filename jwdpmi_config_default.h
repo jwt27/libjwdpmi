@@ -19,6 +19,6 @@ namespace jw
 
         const std::size_t thread_default_stack_size = 64_KB;
 
-        const bool enable_throwing_from_cpu_exceptions = true;
+        const bool enable_throwing_from_cpu_exceptions = false;
     }
 }
