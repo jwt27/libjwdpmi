@@ -18,8 +18,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <jw/io/rs232.h>
 #include <jw/dpmi/irq_mask.h>
 
-// TODO: std::flush makes this drop characters somehow, fix it!
-
 namespace jw
 {
     namespace io
@@ -119,11 +117,14 @@ namespace jw
             {
                 irq_disable no_irq { this };
                 std::copy(gptr(), rx_ptr, rx_buf.begin());
-                rx_ptr = rx_buf.begin() + (rx_ptr - gptr());
-                get();
+                rx_ptr = rx_buf.begin() + (rx_ptr - gptr()); 
                 setg(rx_buf.begin(), rx_buf.begin(), rx_ptr);
+                do 
+                { 
+                    get(); 
+                    thread::yield();
+                } while (rx_ptr == gptr());
                 set_rts();
-                if (rx_ptr == gptr()) return traits_type::eof();
                 return *gptr();
             }
 
@@ -141,10 +142,14 @@ namespace jw
             rs232_streambuf::int_type rs232_streambuf::overflow(int_type c) 
             {
                 irq_disable no_irq { this };
-                put();
-                std::copy(tx_ptr, pptr(), tx_buf.begin());
-                setp(tx_buf.begin() + (pptr() - tx_ptr), tx_buf.end());
-                if (pptr() == epptr()) return traits_type::eof();
+                do
+                {
+                    put();
+                    std::copy(tx_ptr, pptr(), tx_buf.begin());
+                    setp(tx_buf.begin() + (pptr() - tx_ptr), tx_buf.end());
+                    tx_ptr = tx_buf.begin();
+                    thread::yield();
+                } while (pptr() == epptr());
                 if (traits_type::not_eof(c)) sputc(c);
                 return ~traits_type::eof();
             }
