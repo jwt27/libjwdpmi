@@ -161,7 +161,7 @@ namespace jw
             else                    // last in chain
             {
                 last[exc] = prev;
-                if (prev != nullptr) prev->new_type = detail::cpu_exception_handlers::set_pm_handler(exc, prev->get_ptr());
+                detail::cpu_exception_handlers::set_pm_handler(exc, chain_to);
             }
         }
 
