@@ -32,7 +32,8 @@ namespace jw
 
         bool exception_handler::call_handler(exception_handler * self, raw_exception_frame * frame) noexcept
         {
-            //std::clog << "entering exc handler " << self->exc << '\n';
+            //std::clog << "entering exc handler " << std::hex << self->exc << " eip=" << frame->frame_09.fault_address.offset << '\n';
+
             ++detail::exception_count;
             if (self->exc != 0x07 && self->exc != 0x10) detail::fpu_context_switcher.enter();
             bool success = false;
@@ -120,9 +121,10 @@ namespace jw
                 "push ss; pop es;"
                 "lea esi, [ebx-0x12];"      // previous_handler
                 "lea edi, [esp-0x06];"
+                "cld;"
                 "movsd; movsw;"             // copy previous_handler ptr above stack (is this dangerous?)
                 "pop gs; pop fs; pop es; pop ds; popa;"
-                "jmp fword ptr ss:[esp-0x2A];"
+                "jmp fword ptr ss:[esp-0x36];"
 
                 "exception_wrapper_end%=:;"
                 // --- /\/\/\/\/\/\ --- //
@@ -193,8 +195,11 @@ namespace jw
 
         #define THROW_ATTR [[noreturn, gnu::noinline, gnu::used, gnu::optimize("no-omit-frame-pointer")]]
             THROW_ATTR void throw_cpu_exception(exception_num n) 
-            { 
-                throw cpu_exception(n); 
+            {
+                std::stringstream s;
+                s << last_exception_frame;
+                s << last_exception_registers;
+                throw cpu_exception(n, s.str());
             }
             
             THROW_ATTR void throw_cpu_exception_0x00() { throw_cpu_exception(0x00); }
@@ -224,12 +229,15 @@ namespace jw
             {
                 if (frame->fault_address.segment != get_cs()) return false;     // Only throw if exception happened in our code
                 if (frame->flags.v86mode) return false;                         // and not in real mode
-                if (frame->info_bits.host_exception) return false;              // and not in the DPMI host
+                if (new_type && frame->info_bits.host_exception) return false;  // and not in the DPMI host
+
                 last_exception_frame = { };
                 if (new_type) last_exception_frame = *static_cast<new_exception_frame*>(frame);
-                else *static_cast<old_exception_frame*>(&last_exception_frame) = *frame;
+                else static_cast<old_exception_frame&>(last_exception_frame) = *frame;
                 last_exception_registers = *reg;
+
                 frame->stack.offset -= 4;                                                               // "sub esp, 4"
+                frame->stack.offset &= -0x10;                                                           // "and esp, -0x10"
                 *reinterpret_cast<std::uintptr_t*>(&frame->stack.offset) = frame->fault_address.offset; // "mov [esp], eip"
                 frame->fault_address.offset = reinterpret_cast<std::uintptr_t>(func);                   // "mov eip, func"
                 frame->info_bits.redirect_elsewhere = true;

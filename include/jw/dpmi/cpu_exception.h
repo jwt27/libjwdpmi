@@ -24,6 +24,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <algorithm>
 #include <deque>
 #include <stdexcept>
+#include <bitset>
 #include <string>
 #include <function.h>
 #include <jw/enum_struct.h>
@@ -38,65 +39,104 @@ namespace jw
 {
     namespace dpmi
     {
-        struct[[gnu::packed]] old_exception_frame
+        struct [[gnu::packed]] old_exception_frame
         {
             far_ptr32 return_address; unsigned : 16;
             std::uint32_t error_code;
             far_ptr32 fault_address;
-            struct[[gnu::packed]] // DPMI 1.0 only
+            union [[gnu::packed]]
             {
-                bool host_exception : 1;
-                bool cannot_retry : 1;
-                bool redirect_elsewhere : 1;
-                unsigned : 13;
+                struct[[gnu::packed]] // DPMI 1.0 only
+                {
+                    bool host_exception : 1;
+                    bool cannot_retry : 1;
+                    bool redirect_elsewhere : 1;
+                    unsigned : 13;
+                };
+                unsigned raw_info_bits : 16;
             } info_bits;
-            struct[[gnu::packed]]
+            union [[gnu::packed]]
             {
-                bool carry : 1;
-                unsigned : 1;
-                bool parity : 1;
-                unsigned : 1;
-                bool adjust : 1;
-                unsigned : 1;
-                bool zero : 1;
-                bool sign : 1;
-                bool trap : 1;
-                bool interrupt : 1;
-                bool direction : 1;
-                bool overflow : 1;
-                unsigned iopl : 2;
-                bool nested_task : 1;
-                unsigned : 1;
-                bool resume : 1;
-                bool v86mode : 1;
-                bool alignment_check : 1;
-                bool virtual_interrupt : 1;
-                bool virtual_interrupt_pending : 1;
-                bool cpuid_available : 1;
-                unsigned : 10;
+                struct[[gnu::packed]]
+                {
+                    bool carry : 1;
+                    unsigned : 1;
+                    bool parity : 1;
+                    unsigned : 1;
+                    bool adjust : 1;
+                    unsigned : 1;
+                    bool zero : 1;
+                    bool sign : 1;
+                    bool trap : 1;
+                    bool interrupt : 1;
+                    bool direction : 1;
+                    bool overflow : 1;
+                    unsigned iopl : 2;
+                    bool nested_task : 1;
+                    unsigned : 1;
+                    bool resume : 1;
+                    bool v86mode : 1;
+                    bool alignment_check : 1;
+                    bool virtual_interrupt : 1;
+                    bool virtual_interrupt_pending : 1;
+                    bool cpuid_available : 1;
+                    unsigned : 10;
+                };
+                unsigned raw_eflags : 32;
             } flags;
             far_ptr32 stack; unsigned : 16;
+
+            auto& print(auto& out) const
+            {
+                using namespace std;
+                out << hex << setfill('0');
+                out << "CPU exception at cs:eip=" << setw(4) << fault_address.segment << ':' << setw(8) << fault_address.offset;
+                out << ", ss:esp=" << setw(4) << stack.segment << ':' << setw(8) << stack.offset << '\n';
+                out << "Error code: " << setw(8) << error_code;
+                out << ", Info bits: " << std::bitset<3>(info_bits.raw_info_bits);
+                out << ", Flags: " << std::bitset<22>(flags.raw_eflags) << '\n';
+                out << setfill(' ') << setw(0);
+                return out;
+            }
+            friend auto& operator<<(std::ostream& out, const old_exception_frame& in) { return in.print(out); }
         };
         struct[[gnu::packed]] new_exception_frame : public old_exception_frame
         {
             selector es; unsigned : 16;
             selector ds; unsigned : 16;
             selector fs; unsigned : 16;
-            selector gs;
+            selector gs; unsigned : 16;
             std::uintptr_t linear_page_fault_address : 32;
-            struct[[gnu::packed]]
+            union
             {
-                bool present : 1;
-                bool write_access : 1;
-                bool user_access : 1;
-                bool write_through : 1;
-                bool cache_disabled : 1;
-                bool accessed : 1;
-                bool dirty : 1;
-                bool global : 1;
-                unsigned reserved : 3;
-                unsigned physical_address : 21;
+                struct[[gnu::packed]]
+                {
+                    bool present : 1;
+                    bool write_access : 1;
+                    bool user_access : 1;
+                    bool write_through : 1;
+                    bool cache_disabled : 1;
+                    bool accessed : 1;
+                    bool dirty : 1;
+                    bool global : 1;
+                    unsigned reserved : 3;
+                    unsigned physical_address : 21;
+                };
+                unsigned raw_pte : 32;
             } page_table_entry;
+
+            auto& print(auto& out) const
+            {
+                out << static_cast<old_exception_frame>(*this);
+                using namespace std;
+                out << hex << setfill('0');
+                out << "ds=" << setw(4) << ds << " es=" << setw(4) << es << " fs=" << setw(4) << fs << " gs=" << setw(4) << gs << '\n';
+                out << "(if page fault) Linear: " << setw(8) << linear_page_fault_address << ", Physical: " << setw(8) << page_table_entry.physical_address;
+                out << ", PTE: " << std::bitset<8>(page_table_entry.raw_pte) << '\n';
+                out << setfill(' ') << setw(0);
+                return out;
+            }
+            friend auto& operator<<(std::ostream& out, const new_exception_frame& in) { return in.print(out); }
         };
 
         struct[[gnu::packed]] raw_exception_frame
@@ -105,6 +145,10 @@ namespace jw
             old_exception_frame frame_09;
             new_exception_frame frame_10;
         };
+
+        static_assert(sizeof(old_exception_frame) == 0x20, "check sizeof old_exception_frame");
+        static_assert(sizeof(new_exception_frame) == 0x38, "check sizeof new_exception_frame");
+        static_assert(sizeof(raw_exception_frame) == 0x78, "check sizeof raw_exception_frame");
 
         using exception_frame = old_exception_frame; // can be static_cast to new_exception_frame type
         using exception_handler_sig = bool(cpu_registers*, exception_frame*, bool);
@@ -168,12 +212,12 @@ namespace jw
             selector gs;                                        // 2        2           [eax-0x16]
             bool new_type;                                      // 1        1           [eax-0x14]
             byte _padding;                                      // 1        1           [eax-0x13]
-            far_ptr32 previous_handler;                         // 6        1           [eax-0x12]
+            far_ptr32 previous_handler;                         // 6        2           [eax-0x12]
             std::array<byte, 0x100> code;                       //          1           [eax-0x0C]
 
         public:
             template<typename F>    // TODO: real-mode (requires a separate wrapper list)
-            exception_handler(exception_num e, F&& f, bool real_mode = false)
+            exception_handler(exception_num e, F&& f, bool = false)
                 : handler(std::allocator_arg, locking_allocator<> { }, std::forward<F>(f))
                 , exc(e), stack_ptr(stack.data() + stack.size())
             {
@@ -208,6 +252,7 @@ namespace jw
         struct cpu_exception : public std::system_error
         {
             cpu_exception(exception_num n) : system_error(n, cpu_category { }) { }
+            cpu_exception(exception_num n, const std::string& msg) : system_error(n, cpu_category { }, msg) { }
         };
     }
 }
