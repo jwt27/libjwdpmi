@@ -37,8 +37,7 @@ namespace jw
             class locking_allocator_base
             {
             protected:
-                // This is a unique_ptr to avoid issues with static initialization order.
-                static std::unique_ptr<std::map<void*, data_lock>> map;
+                static std::map<void*, data_lock>* map;
             };
         }
 
@@ -78,8 +77,14 @@ namespace jw
 
             template <typename U>
             constexpr locking_allocator(const locking_allocator<U>&) noexcept { }
-            locking_allocator() { if (!map) map = std::make_unique<std::map<void*, data_lock>>(); };
-            ~locking_allocator() = default;
+            locking_allocator() { if (map == nullptr) map = new std::map<void*, data_lock> { }; };
+            ~locking_allocator()
+            {
+                if (map == nullptr) return;
+                if (!map->empty()) return;
+                delete map;
+                map = nullptr;
+            }
 
             template <typename U> constexpr friend bool operator == (const locking_allocator&, const locking_allocator<U>&) noexcept { return true; }
             template <typename U> constexpr friend bool operator != (const locking_allocator& a, const locking_allocator<U>& b) noexcept { return !(a == b); }
