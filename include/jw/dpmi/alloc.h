@@ -53,6 +53,7 @@ namespace jw
             auto allocate(std::size_t n)
             {
                 throw_if_irq();
+                if (map == nullptr) map = new std::map<void*, data_lock> { };
                 n *= sizeof(T);
                 auto* p = ::operator new(n);
                 map->emplace(p, data_lock { p, n });
@@ -71,12 +72,11 @@ namespace jw
                 return std::allocator<T>{ }.max_size(); 
             }
 
-            template <typename U> using rebind = locking_allocator<U>;
-            using other = locking_allocator;
+            template <typename U> struct rebind { using other = locking_allocator<U>; };
 
             template <typename U>
             constexpr locking_allocator(const locking_allocator<U>&) noexcept { }
-            locking_allocator() { if (map == nullptr) map = new std::map<void*, data_lock> { }; };
+            locking_allocator() { };
             ~locking_allocator()
             {
                 if (map == nullptr) return;
