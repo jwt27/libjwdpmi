@@ -34,7 +34,12 @@ namespace jw
                 memory_lock(memory_lock&& m) noexcept : mem(m.mem) { m.locked = false; }
 
                 memory_lock& operator=(const memory_lock& c) = delete;
-                memory_lock& operator=(memory_lock&&) noexcept = default;
+                memory_lock& operator=(memory_lock&& m) noexcept
+                {
+                    std::swap(mem, m.mem);
+                    std::swap(locked, m.locked);
+                    return *this;
+                };
 
                 virtual ~memory_lock()
                 {
@@ -72,11 +77,12 @@ namespace jw
         }
 
         // Locks the memory occupied by one or more objects (in Data Segment)
-        struct data_lock final : public detail::memory_lock
+        struct data_lock final : protected detail::memory_lock
         {
             template<typename T>
             data_lock(const T* addr, std::size_t num_elements = 1) : memory_lock(get_ds(), reinterpret_cast<void*>(addr), num_elements * sizeof(T)) { }
             data_lock(const void* addr, std::size_t size_bytes) : memory_lock(get_ds(), addr, size_bytes) { }
+            using memory_lock::operator=;
         };
 
         // Locks the memory occupied by a class (in Data Segment) that derives from this.
