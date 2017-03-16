@@ -44,9 +44,8 @@ namespace jw
         // access from interrupt handlers, as long as the handler itself does not allocate anything.
         // It still relies on _CRT0_FLAG_LOCK_MEMORY to lock code and static data, however.
         template <typename T = byte>
-        class locking_allocator : public detail::locking_allocator_base
+        struct locking_allocator : public detail::locking_allocator_base
         {
-        public:
             using value_type = T;
             using pointer = T*;
 
