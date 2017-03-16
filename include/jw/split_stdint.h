@@ -21,7 +21,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 namespace jw
 {
     template<std::size_t size>
-    union [[gnu::packed]] split_uint
+    union alignas(2) [[gnu::packed]] split_uint
     {
         struct [[gnu::packed]]
         {
@@ -35,7 +35,7 @@ namespace jw
     };
 
     template<>
-    union [[gnu::packed]] split_uint<8>
+    union alignas(1) [[gnu::packed]] split_uint<8>
     {
         std::uint8_t value;
         constexpr split_uint() noexcept : value(0) { }
