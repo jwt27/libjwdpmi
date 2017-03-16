@@ -27,15 +27,15 @@ namespace jw
             volatile std::uint32_t exception_count { 0 };
         }
 
-        std::array<std::unique_ptr<std::deque<exception_handler*>>, 0x20> exception_handler::wrapper_list;
+        std::array<exception_handler*, 0x20> exception_handler::last { };
         std::array<byte, config::exception_stack_size> exception_handler::stack;
 
         bool exception_handler::call_handler(exception_handler * self, raw_exception_frame * frame) noexcept
         {
             //std::clog << "entering exc handler " << std::hex << self->exc << " eip=" << frame->frame_09.fault_address.offset << '\n';
-
             ++detail::exception_count;
             if (self->exc != 0x07 && self->exc != 0x10) detail::fpu_context_switcher.enter();
+            *reinterpret_cast<std::uint32_t*>(stack.begin()) = 0xDEADBEEF;
             bool success = false;
             try
             {
@@ -46,6 +46,7 @@ namespace jw
             {
                 std::cerr << "CAUGHT EXCEPTION IN CPU EXCEPTION HANDLER " << self->exc << std::endl; // HACK
             }                                                                                        // ... but what else can you do here?
+            if (*reinterpret_cast<std::uint32_t*>(stack.begin()) != 0xDEADBEEF) std::cerr << "STACK OVERFLOW\n"; // another HACK
             if (self->exc != 0x07 && self->exc != 0x10) detail::fpu_context_switcher.leave();
             --detail::exception_count;
             //std::clog << "leaving exc handler " << self->exc << '\n';
@@ -73,7 +74,7 @@ namespace jw
                 "mov edi, cs:[eax-0x20];"   // new stack pointer
                 "keep_stack%=:"
                 "mov ecx, 0x22;"            // exception_frame = 0x58 bytes, pushed regs = 0x30 bytes, total 0x22 dwords
-                "sub edi, ecx;"
+                "sub edi, 0x88;"
                 "and edi, -0x10;"           // align stack
                 "mov es, cs:[eax-0x1C];"    // note: this is DS
                 "push ss; pop ds;"
@@ -119,10 +120,10 @@ namespace jw
                 "chain%=:"
                 "push cs; pop ds;"
                 "push ss; pop es;"
-                "lea esi, [ebx-0x12];"      // previous_handler
+                "lea esi, [ebx-0x12];"      // chain_to
                 "lea edi, [esp-0x06];"
                 "cld;"
-                "movsd; movsw;"             // copy previous_handler ptr above stack (is this dangerous?)
+                "movsd; movsw;"             // copy chain_to ptr above stack (is this dangerous?)
                 "pop gs; pop fs; pop es; pop ds; popa;"
                 "jmp fword ptr ss:[esp-0x36];"
 
@@ -150,13 +151,18 @@ namespace jw
                 , "=m" (gs));
         }
 
-        exception_handler::~exception_handler() // TODO: find out why it's crashing here sometimes.
+        exception_handler::~exception_handler()
         {
-            if (!wrapper_list[exc]) return;
-            auto i = std::find(wrapper_list[exc]->begin(), wrapper_list[exc]->end(), this);
-            if (wrapper_list[exc]->back() == this) detail::cpu_exception_handlers::set_pm_handler(exc, previous_handler);
-            else if (i[+1] != nullptr) i[+1]->previous_handler = previous_handler;
-            wrapper_list[exc]->erase(i);
+            if (next != nullptr)    // middle of chain
+            {
+                next->prev = prev;
+                next->chain_to = chain_to;
+            }
+            else                    // last in chain
+            {
+                last[exc] = prev;
+                if (prev != nullptr) prev->new_type = detail::cpu_exception_handlers::set_pm_handler(exc, prev->get_ptr());
+            }
         }
 
         std::string cpu_category::message(int ev) const
@@ -192,6 +198,7 @@ namespace jw
         {
             new_exception_frame last_exception_frame;
             cpu_registers last_exception_registers;
+            bool throwing_exception { false };
 
         #define THROW_ATTR [[noreturn, gnu::noinline, gnu::used, gnu::optimize("no-omit-frame-pointer")]]
             THROW_ATTR void throw_cpu_exception(exception_num n) 
@@ -199,6 +206,7 @@ namespace jw
                 std::stringstream s;
                 s << last_exception_frame;
                 s << last_exception_registers;
+                throwing_exception = false;
                 throw cpu_exception(n, s.str());
             }
             
@@ -230,6 +238,8 @@ namespace jw
                 if (frame->fault_address.segment != get_cs()) return false;     // Only throw if exception happened in our code
                 if (frame->flags.v86mode) return false;                         // and not in real mode
                 if (new_type && frame->info_bits.host_exception) return false;  // and not in the DPMI host
+                if (throwing_exception) return false;                           // and we're not recursing
+                throwing_exception = true;
 
                 last_exception_frame = { };
                 if (new_type) last_exception_frame = *static_cast<new_exception_frame*>(frame);

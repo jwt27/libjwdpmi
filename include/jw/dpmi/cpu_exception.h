@@ -130,9 +130,9 @@ namespace jw
                 out << static_cast<old_exception_frame>(*this);
                 using namespace std;
                 out << hex << setfill('0');
-                out << "ds=" << setw(4) << ds << " es=" << setw(4) << es << " fs=" << setw(4) << fs << " gs=" << setw(4) << gs << '\n';
                 out << "(if page fault) Linear: " << setw(8) << linear_page_fault_address << ", Physical: " << setw(8) << page_table_entry.physical_address;
                 out << ", PTE: " << std::bitset<8>(page_table_entry.raw_pte) << '\n';
+                out << "ds=" << setw(4) << ds << " es=" << setw(4) << es << " fs=" << setw(4) << fs << " gs=" << setw(4) << gs << '\n';
                 out << setfill(' ') << setw(0);
                 return out;
             }
@@ -198,8 +198,10 @@ namespace jw
             void init_code();
             func::function<exception_handler_sig> handler;
             exception_num exc;
+            exception_handler* next { nullptr };
+            exception_handler* prev { nullptr };
+            static std::array<exception_handler*, 0x20> last;
             static std::array<byte, config::exception_stack_size> stack; // TODO: allow nested exceptions
-            static std::array<std::unique_ptr<std::deque<exception_handler*>>, 0x20> wrapper_list;
 
             static bool call_handler(exception_handler* self, raw_exception_frame* frame) noexcept;
                                                                 // sizeof   alignof     offset
@@ -212,24 +214,23 @@ namespace jw
             selector gs;                                        // 2        2           [eax-0x16]
             bool new_type;                                      // 1        1           [eax-0x14]
             byte _padding;                                      // 1        1           [eax-0x13]
-            far_ptr32 previous_handler;                         // 6        2           [eax-0x12]
+            far_ptr32 chain_to;                                 // 6        2           [eax-0x12]
             std::array<byte, 0x100> code;                       //          1           [eax-0x0C]
 
         public:
             template<typename F>    // TODO: real-mode (requires a separate wrapper list)
             exception_handler(exception_num e, F&& f, bool = false)
                 : handler(std::allocator_arg, locking_allocator<> { }, std::forward<F>(f))
-                , exc(e), stack_ptr(stack.data() + stack.size())
+                , exc(e), stack_ptr(stack.data() + stack.size() - 4)
             {
                 detail::setup_exception_throwers();
                 init_code();
 
-                if (!wrapper_list[e]) wrapper_list[e] = std::make_unique<std::deque<exception_handler*>>();
+                prev = last[e];
+                if (prev != nullptr)prev->next = this;
+                last[e] = this;
 
-                if (wrapper_list[e]->empty()) previous_handler = detail::cpu_exception_handlers::get_pm_handler(e);
-                else previous_handler = wrapper_list[e]->back()->get_ptr();
-                wrapper_list[e]->push_back(this);
-
+                chain_to = detail::cpu_exception_handlers::get_pm_handler(e);
                 new_type = detail::cpu_exception_handlers::set_pm_handler(e, get_ptr());
             }
 
