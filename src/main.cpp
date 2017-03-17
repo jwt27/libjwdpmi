@@ -15,15 +15,20 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <cstring>
 #include <string>
 #include <deque>
 #include <crt0.h>
 #include <jw/dpmi/debug.h>
 #include <jw/dpmi/cpu_exception.h>
+#include <jw/dpmi/detail/debug.h>
+#include <jw/io/rs232.h>
 #include <../jwdpmi_config.h>
 
+using namespace jw;
+
 int _crt0_startup_flags = 0
-| jw::config::user_crt0_startup_flags
+| config::user_crt0_startup_flags
 | _CRT0_FLAG_NMI_SIGNAL
 | _CRT0_DISABLE_SBRK_ADDRESS_WRAP
 | _CRT0_FLAG_NONMOVE_SBRK
@@ -49,11 +54,19 @@ int main(int argc, char** argv)
 
     try 
     {   
-        jw::dpmi::detail::setup_exception_throwers();
+        dpmi::detail::setup_exception_throwers();
     
         std::deque<std::string> args { };   // TODO: std::string_view when it's available
         for (auto i = 0; i < argc; ++i)
-            args.emplace_back(argv[i]);
+        {
+            if (stricmp(argv[i], "--debug") == 0)
+            {
+                io::rs232_config cfg;
+                cfg.set_com_port(io::com1);
+                dpmi::detail::setup_gdb_interface(cfg);
+            }
+            else args.emplace_back(argv[i]);
+        }
     
         return jwdpmi_main(args); 
     }
