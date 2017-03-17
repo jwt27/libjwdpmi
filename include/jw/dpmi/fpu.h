@@ -26,6 +26,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <jw/typedef.h>
 #include <../jwdpmi_config.h>
 
+// TODO: find some way to completely avoid generating fpu instructions
+#define NO_FPU_ATTR [[gnu::flatten, gnu::optimize("no-tree-vectorize"), gnu::target("no-mmx", "no-sse")]]
+
 namespace jw
 {
     namespace dpmi
@@ -122,8 +125,7 @@ namespace jw
                 bool init { false };
                 std::uint32_t last_restored { 0 };
                 
-                [[gnu::optimize("no-tree-vectorize")]]  // TODO: find some way to disable x87/sse instructions altogether.
-                void switch_context()
+                NO_FPU_ATTR void switch_context()
                 {
                     if (contexts.back() == nullptr)
                     {
@@ -142,8 +144,7 @@ namespace jw
                 fpu_context_switcher_t();
                 ~fpu_context_switcher_t();
 
-                [[gnu::optimize("no-tree-vectorize")]]
-                void enter() noexcept
+                NO_FPU_ATTR void enter() noexcept
                 {
                     if (!init) return;
                     contexts.push_back(nullptr);
@@ -153,8 +154,7 @@ namespace jw
                     cr0.set();
                 }
 
-                [[gnu::optimize("no-tree-vectorize")]]
-                void leave() noexcept
+                NO_FPU_ATTR void leave() noexcept
                 {
                     if (!init) return;
                     contexts.pop_back();

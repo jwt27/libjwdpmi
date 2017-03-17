@@ -203,7 +203,7 @@ namespace jw
             static std::array<exception_handler*, 0x20> last;
             static std::array<byte, config::exception_stack_size> stack; // TODO: allow nested exceptions
 
-            static bool call_handler(exception_handler* self, raw_exception_frame* frame) noexcept;
+            NO_FPU_ATTR static bool call_handler(exception_handler* self, raw_exception_frame* frame) noexcept;
                                                                 // sizeof   alignof     offset
             exception_handler* self { this };                   // 4        4           [eax-0x28]
             decltype(&call_handler) call_ptr { &call_handler }; // 4        4           [eax-0x24]
