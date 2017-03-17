@@ -24,12 +24,13 @@ namespace jw
     struct allocator_delete : public Alloc
     {
         using Alloc::Alloc;
-        void operator()(auto* p)
+        using traits = std::allocator_traits<Alloc>;
+        void operator()(auto*& p)
         {
             if (p == nullptr) return;
-            using T = std::remove_reference_t<decltype(*p)>;
-            p->~T();
-            this->deallocate(p, 1);
+            traits::destroy(*this, p);
+            traits::deallocate(*this, p, 1);
+            p = nullptr;
         }
     };
 
@@ -38,12 +39,13 @@ namespace jw
     auto allocate_unique(const Alloc& alloc, Args&&... args)
     {
         using rebind = typename std::allocator_traits<Alloc>::template rebind_alloc<T>;
+        using traits = std::allocator_traits<rebind>;
         using deleter = allocator_delete<rebind>;
 
         auto d = deleter { rebind { alloc } };
-        auto* p = d.allocate(1);
+        auto* p = traits::allocate(d, 1);
         try { p = new(p) T { std::forward<Args>(args)... }; }
-        catch (...) { d.deallocate(p, 1); throw; }
+        catch (...) { traits::deallocate(d, p, 1); throw; }
 
         return std::unique_ptr<T, deleter> { p, std::move(d) };
     }
