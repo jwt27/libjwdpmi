@@ -49,8 +49,8 @@ void print_exception(const std::exception& e, int level =  0)
 
 int main(int argc, char** argv)
 {
+    try { throw std::array<byte, 1_MB> { }; } catch (...) { }
     _crt0_startup_flags &= ~_CRT0_FLAG_LOCK_MEMORY;
-    try { throw 0; } catch(...) { }     // Looks silly, but this speeds up subsequent exceptions.
 
     try 
     {   
