@@ -22,8 +22,11 @@ namespace jw
 {
     namespace dpmi
     {
+        // Returns true if in debug mode.
+        bool debug();
+
         // Set a breakpoint
-        void breakpoint() noexcept; // { asm volatile ("int 3;"); }
+        inline void breakpoint() { if (debug()) asm("int 3"); }
 
         // Set a watchpoint
         // Remember, only 4 watchpoints can exist simultaneously.
