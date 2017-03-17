@@ -40,7 +40,7 @@ namespace jw
                 return false;
             }
 
-            void setup_gdb_interface(io::rs232_config cfg)
+            void setup_gdb_interface(const io::rs232_config& cfg)
             {
                 if (gdb_interface_setup) return;
                 gdb_interface_setup = true;
