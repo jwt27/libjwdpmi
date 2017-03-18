@@ -25,6 +25,39 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <jw/io/rs232.h>
 #include <jw/alloc.h>
 
+/* Register numbers from gdb-7.12.1/gdb/i386-tdep.h
+enum i386_regnum
+{
+    I386_EAX_REGNUM,
+    I386_ECX_REGNUM,
+    I386_EDX_REGNUM,
+    I386_EBX_REGNUM,
+    I386_ESP_REGNUM,
+    I386_EBP_REGNUM,
+    I386_ESI_REGNUM,
+    I386_EDI_REGNUM,
+    I386_EIP_REGNUM,
+    I386_EFLAGS_REGNUM,
+    I386_CS_REGNUM,
+    I386_SS_REGNUM,
+    I386_DS_REGNUM,
+    I386_ES_REGNUM,
+    I386_FS_REGNUM,
+    I386_GS_REGNUM,
+    I386_ST0_REGNUM,
+    I386_MXCSR_REGNUM = 40,
+    I386_YMM0H_REGNUM,
+    I386_YMM7H_REGNUM = I386_YMM0H_REGNUM + 7,
+    I386_BND0R_REGNUM,
+    I386_BND3R_REGNUM = I386_BND0R_REGNUM + 3,
+    I386_BNDCFGU_REGNUM,
+    I386_BNDSTATUS_REGNUM,
+    I386_K0_REGNUM,
+    I386_K7_REGNUM = I386_K0_REGNUM + 7,
+    I386_ZMM0H_REGNUM,
+    I386_ZMM7H_REGNUM = I386_ZMM0H_REGNUM + 7
+};*/
+
 namespace jw
 {
     namespace dpmi
