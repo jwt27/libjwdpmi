@@ -39,21 +39,50 @@ int _crt0_startup_flags = 0
 
 int jwdpmi_main(std::deque<std::string>);
 
+inline namespace __cxxabiv1
+{
+    extern "C" void* __cxa_allocate_exception(std::size_t thrown_size) _GLIBCXX_NOTHROW;
+}
+
 namespace jw
 {
-    void print_exception(const std::exception& e, int level = 0)
+    void print_exception(const std::exception& e, int level = 0) noexcept
     {
         std::cerr << "Level " << level << ": " << e.what() << '\n';
         try { std::rethrow_if_nested(e); }
         catch (const std::exception& e) { print_exception(e, level + 1); }
         catch (...) { std::cerr << "Level " << (level + 1) << ": Unknown exception.\n"; }
     }
+
+    extern "C" void* irq_safe_malloc(std::size_t n)
+    {
+        if (dpmi::in_irq_context()) return nullptr;
+        return std::malloc(n);
+    }
+
+    extern "C" void* init_malloc(std::size_t)
+    {
+        return nullptr;
+    }
+
+    // BLACK MAGIC HAPPENS HERE
+    template<typename T>
+    void patch__cxa_allocate_exception(T* func) noexcept
+    {
+        auto p = reinterpret_cast<byte*>(__cxxabiv1::__cxa_allocate_exception); // take the address of __cxa_allocate_exception
+        p = std::find(p, p + 0x20, 0xe8);                                       // find the first 0xe8 byte, assume this is the call to malloc.
+        auto post_call = reinterpret_cast<std::uintptr_t>(p + 5);               // e8 call instruction is 5 bytes
+        auto new_malloc = reinterpret_cast<std::ptrdiff_t>(func);               // take the address of new malloc
+        *reinterpret_cast<std::ptrdiff_t*>(p + 1) = new_malloc - post_call;     // hotpatch __cxa_alloc to call irq_safe_malloc instead.
+    }
 }
 
 int main(int argc, char** argv)
 {
     _crt0_startup_flags &= ~_CRT0_FLAG_LOCK_MEMORY;
-    try { throw 0; } catch (...) { }
+    patch__cxa_allocate_exception(init_malloc);
+    try { throw std::array<byte, 512> { }; } catch (...) { }
+    patch__cxa_allocate_exception(irq_safe_malloc);
 
     try 
     {   
@@ -90,7 +119,15 @@ void* operator new(std::size_t n)
 
 void operator delete(void* p, std::size_t n)
 {
-    if (dpmi::in_irq_context()) jw::new_alloc.deallocate(reinterpret_cast<byte*>(p), n);
+    if (dpmi::in_irq_context())
+    {
+        try
+        {
+            jw::new_alloc.deallocate(reinterpret_cast<byte*>(p), n);
+            return;
+        }
+        catch (const std::bad_alloc&) { }
+    }
     std::free(p);
 }
 
