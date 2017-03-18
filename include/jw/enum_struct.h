@@ -32,8 +32,6 @@ namespace jw
         constexpr enum_struct() : value(0) { }
 
         constexpr operator T() const { return value; }
-        constexpr bool operator==(T v) const { return value == v; }
-        constexpr bool operator==(const enum_struct<T>& v) const { return value == v.value; }
         constexpr enum_struct& operator=(T v) { value = v; return *this; }
         constexpr enum_struct& operator=(const enum_struct& v) { value = v.value; return *this; }
 
