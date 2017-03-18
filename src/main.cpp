@@ -39,12 +39,15 @@ int _crt0_startup_flags = 0
 
 int jwdpmi_main(std::deque<std::string>);
 
-void print_exception(const std::exception& e, int level =  0)
+namespace jw
 {
-    std::cerr << "Level " << level << ": " << e.what() << '\n';
-    try { std::rethrow_if_nested(e); } 
-    catch(const std::exception& e) { print_exception(e, level + 1); }
-    catch (...) { std::cerr << "Level " << (level + 1) << ": Unknown exception.\n"; }
+    void print_exception(const std::exception& e, int level = 0)
+    {
+        std::cerr << "Level " << level << ": " << e.what() << '\n';
+        try { std::rethrow_if_nested(e); }
+        catch (const std::exception& e) { print_exception(e, level + 1); }
+        catch (...) { std::cerr << "Level " << (level + 1) << ": Unknown exception.\n"; }
+    }
 }
 
 int main(int argc, char** argv)
@@ -70,7 +73,28 @@ int main(int argc, char** argv)
     
         return jwdpmi_main(args); 
     }
-    catch (const std::exception& e) { std::cerr << "Caught exception in main()!\n"; print_exception(e); }
+    catch (const std::exception& e) { std::cerr << "Caught exception in main()!\n"; jw::print_exception(e); }
     catch (...) { std::cerr << "Caught unknown exception in main()!\n"; }
     return -1;
+}
+namespace jw
+{
+    dpmi::locked_pool_allocator<> new_alloc { 1_MB };
+}
+
+void* operator new(std::size_t n)
+{
+    if (dpmi::in_irq_context()) return reinterpret_cast<void*>(jw::new_alloc.allocate(n));
+    return std::malloc(n);
+}
+
+void operator delete(void* p, std::size_t n)
+{
+    if (dpmi::in_irq_context()) jw::new_alloc.deallocate(reinterpret_cast<byte*>(p), n);
+    std::free(p);
+}
+
+void operator delete(void* p)
+{
+    ::operator delete(p, 1);
 }
