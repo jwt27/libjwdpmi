@@ -116,7 +116,7 @@ namespace jw
             rs232_streambuf::int_type rs232_streambuf::underflow()
             {
                 irq_disable no_irq { this };
-                std::copy(gptr(), rx_ptr, rx_buf.begin());
+                if (gptr() != rx_buf.begin()) std::copy(gptr(), rx_ptr, rx_buf.begin());
                 rx_ptr = rx_buf.begin() + (rx_ptr - gptr()); 
                 setg(rx_buf.begin(), rx_buf.begin(), rx_ptr);
                 do 
@@ -145,7 +145,7 @@ namespace jw
                 do
                 {
                     put();
-                    std::copy(tx_ptr, pptr(), tx_buf.begin());
+                    if (tx_ptr != tx_buf.begin()) std::copy(tx_ptr, pptr(), tx_buf.begin());
                     setp(tx_buf.begin() + (pptr() - tx_ptr), tx_buf.end());
                     tx_ptr = tx_buf.begin();
                     thread::yield();
