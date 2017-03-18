@@ -164,6 +164,7 @@ namespace jw
 
                 {
                     interrupt_mask no_interrupts_please { };
+                    pool->clear();
                     pool->resize(size_bytes);
                     new(begin()) pool_node { };
                 }
