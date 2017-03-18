@@ -66,8 +66,7 @@ namespace jw
     }
 
     // BLACK MAGIC HAPPENS HERE
-    template<typename T>
-    void patch__cxa_allocate_exception(T* func) noexcept
+    void patch__cxa_allocate_exception(auto* func) noexcept
     {
         auto p = reinterpret_cast<byte*>(__cxxabiv1::__cxa_allocate_exception); // take the address of __cxa_allocate_exception
         p = std::find(p, p + 0x20, 0xe8);                                       // find the first 0xe8 byte, assume this is the call to malloc.
@@ -107,6 +106,7 @@ int main(int argc, char** argv)
     catch (...) { std::cerr << "Caught unknown exception in main()!\n"; }
     return -1;
 }
+
 namespace jw
 {
     dpmi::locked_pool_allocator<> new_alloc { 1_MB };   // TODO: auto-resize
