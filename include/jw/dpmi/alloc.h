@@ -138,7 +138,7 @@ namespace jw
                 throw std::bad_alloc { };
             }
 
-            void deallocate(pointer p, std::size_t) noexcept
+            void deallocate(pointer p, std::size_t)
             {
                 //interrupt_mask no_interrupts_please { };
 
@@ -151,7 +151,7 @@ namespace jw
                         return;
                     }
                 }
-                //throw std::bad_alloc { }; // TODO: log error and do something sensible.
+                throw std::bad_alloc { };
             }
 
             // Resize the memory pool. Throws std::bad_alloc if the pool is still in use.
