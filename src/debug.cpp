@@ -25,39 +25,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <jw/io/rs232.h>
 #include <jw/alloc.h>
 
-/* Register numbers from gdb-7.12.1/gdb/i386-tdep.h
-enum i386_regnum
-{
-    I386_EAX_REGNUM,
-    I386_ECX_REGNUM,
-    I386_EDX_REGNUM,
-    I386_EBX_REGNUM,
-    I386_ESP_REGNUM,
-    I386_EBP_REGNUM,
-    I386_ESI_REGNUM,
-    I386_EDI_REGNUM,
-    I386_EIP_REGNUM,
-    I386_EFLAGS_REGNUM,
-    I386_CS_REGNUM,
-    I386_SS_REGNUM,
-    I386_DS_REGNUM,
-    I386_ES_REGNUM,
-    I386_FS_REGNUM,
-    I386_GS_REGNUM,
-    I386_ST0_REGNUM,
-    I386_MXCSR_REGNUM = 40,
-    I386_YMM0H_REGNUM,
-    I386_YMM7H_REGNUM = I386_YMM0H_REGNUM + 7,
-    I386_BND0R_REGNUM,
-    I386_BND3R_REGNUM = I386_BND0R_REGNUM + 3,
-    I386_BNDCFGU_REGNUM,
-    I386_BNDSTATUS_REGNUM,
-    I386_K0_REGNUM,
-    I386_K7_REGNUM = I386_K0_REGNUM + 7,
-    I386_ZMM0H_REGNUM,
-    I386_ZMM7H_REGNUM = I386_ZMM0H_REGNUM + 7
-};*/
-
 namespace jw
 {
     namespace dpmi
@@ -75,12 +42,52 @@ namespace jw
             std::array<std::unique_ptr<exception_handler>, 0x20> exception_handlers;
             auto gdb { init_unique<std::iostream>(alloc) };
 
+            enum regnum
+            {
+                eax, ecx, edx, ebx,
+                esp, ebp, esi, edi,
+                eip, eflags,
+                cs, ss, ds, es, fs, gs,
+                st0, st1, st2, st3, st4, st5, st6, st7,
+                fctrl, cstat, ftag, fiseg, fioff, foseg, fooff, fop,
+                xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7,
+                mxcsr
+            };
+
+            template<std::uint32_t exc> 
+            auto signal_number()
+            {
+                switch (exc)
+                {
+                case 0x00: return 0x08; // SIGFPE
+                case 0x01: return 0x05; // SIGTRAP
+                case 0x02: return 0x09; // SIGKILL
+                case 0x03: return 0x05; // SIGTRAP
+                case 0x04: return 0x08; // SIGFPE
+                case 0x05: return 0x0b; // SIGSEGV
+                case 0x06: return 0x04; // SIGILL
+                case 0x07: return 0x08; // SIGFPE
+                case 0x08: return 0x09; // SIGKILL
+                case 0x09: return 0x0b; // SIGSEGV
+                case 0x0a: return 0x0b; // SIGSEGV
+                case 0x0b: return 0x0b; // SIGSEGV
+                case 0x0c: return 0x0b; // SIGSEGV
+                case 0x0d: return 0x0b; // SIGSEGV
+                case 0x0e: return 0x0b; // SIGSEGV
+                case 0x10: return 0x07; // SIGEMT
+                case 0x11: return 0x0a; // SIGBUS
+                case 0x12: return 0x09; // SIGKILL
+                case 0x13: return 0x08; // SIGFPE
+                default: return 143;
+                }
+            }
+
             std::uint32_t checksum(const std::string& s)
             {
                 std::uint8_t r { };
                 for (auto c : s) r += c;
                 return r;
-            }       
+            }
             
             void send_packet(const std::string& output)
             {
@@ -97,7 +104,7 @@ namespace jw
                 case '-': send_packet(sent.front());
                 case '+': sent.pop_front(); 
                 default: goto retry;
-                case '#': break;
+                case '$': break;
                 }
                 std::string input;
                 std::getline(*gdb, input, '#');
@@ -105,11 +112,7 @@ namespace jw
                 sum += gdb->get();
                 sum += gdb->get();
                 if (std::strtoul(sum.c_str(), nullptr, 0x10) == checksum(input)) *gdb << '+';
-                else
-                {
-                    *gdb << '-';
-                    goto retry;
-                }
+                else { *gdb << '-'; goto retry; }
                 return input;
             }
 
