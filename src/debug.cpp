@@ -111,8 +111,8 @@ namespace jw
                 std::string sum;
                 sum += gdb->get();
                 sum += gdb->get();
-                if (std::strtoul(sum.c_str(), nullptr, 0x10) == checksum(input)) *gdb << '+';
-                else { *gdb << '-'; goto retry; }
+                if (std::strtoul(sum.c_str(), nullptr, 0x10) == checksum(input)) *gdb << '+' << std::flush;
+                else { *gdb << '-' << std::flush; goto retry; }
                 return input;
             }
 
