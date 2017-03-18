@@ -79,7 +79,7 @@ int main(int argc, char** argv)
 }
 namespace jw
 {
-    dpmi::locked_pool_allocator<> new_alloc { 1_MB };
+    dpmi::locked_pool_allocator<> new_alloc { 1_MB };   // TODO: auto-resize
 }
 
 void* operator new(std::size_t n)
