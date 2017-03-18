@@ -79,10 +79,11 @@ namespace jw
 
 int main(int argc, char** argv)
 {
-    _crt0_startup_flags &= ~_CRT0_FLAG_LOCK_MEMORY;
     patch__cxa_allocate_exception(init_malloc);
     try { throw std::array<byte, 512> { }; } catch (...) { }
     patch__cxa_allocate_exception(irq_safe_malloc);
+    try { throw 0; } catch (...) { }
+    _crt0_startup_flags &= ~_CRT0_FLAG_LOCK_MEMORY;
 
     try 
     {   
