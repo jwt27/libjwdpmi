@@ -36,31 +36,27 @@ namespace jw
 
         namespace gdb
         {
-            using string = std::basic_string<char, std::char_traits<char>, locked_pool_allocator<>>;
-            //using stringstream = std::basic_stringstream<char, std::char_traits<char>, locked_pool_allocator<>>;
-            //auto make_stringstream() { return stringstream { string { alloc, "" } }; }
-            
             locked_pool_allocator<> alloc { 1_MB };
-            std::deque<string, locked_pool_allocator<>> sent { alloc };
+            std::deque<std::string, locked_pool_allocator<>> sent { alloc };
 
             std::array<std::unique_ptr<exception_handler>, 0x20> exception_handlers;
             auto gdb { init_unique<std::iostream>(alloc) };
 
-            std::uint32_t checksum(const string& s)
+            std::uint32_t checksum(const std::string& s)
             {
                 std::uint8_t r { };
                 for (auto c : s) r += c;
                 return r;
             }       
             
-            void send_packet(const string& output)
-            {                               
+            void send_packet(const std::string& output)
+            {
                 const auto sum = checksum(output);
-                *gdb << '$' << output << '#' << std::setfill('0') << std::setw(2) << sum;
+                *gdb << '$' << output << '#' << std::setfill('0') << std::setw(2) << sum << std::flush;
                 sent.push_back(output);
             }
 
-            string recv_packet()
+            std::string recv_packet()
             {
             retry:
                 switch (gdb->get())
@@ -70,9 +66,9 @@ namespace jw
                 default: goto retry;
                 case '#': break;
                 }
-                string input { alloc };
+                std::string input;
                 std::getline(*gdb, input, '#');
-                string sum { alloc };
+                std::string sum;
                 sum += gdb->get();
                 sum += gdb->get();
                 if (std::strtoul(sum.c_str(), nullptr, 0x10) == checksum(input)) *gdb << '+';
@@ -84,9 +80,12 @@ namespace jw
                 return input;
             }
 
-            template<std::uint8_t exc>
+            template<std::uint32_t exc>
             bool handle_exception(auto* , auto* , bool )
             {
+                std::stringstream str { };
+                str << "S " << std::setw(2) << exc;
+                send_packet(str.str());
                 return false;
             }
 
