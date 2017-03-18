@@ -33,9 +33,6 @@ int _crt0_startup_flags = 0
 | _CRT0_DISABLE_SBRK_ADDRESS_WRAP
 | _CRT0_FLAG_NONMOVE_SBRK
 | _CRT0_FLAG_LOCK_MEMORY;
-    //| _CRT0_FLAG_NEARPTR;
-    //| _CRT0_FLAG_NULLOK
-    //| _CRT0_FLAG_FILL_DEADBEEF;
 
 int jwdpmi_main(std::deque<std::string>);
 
