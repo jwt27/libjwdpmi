@@ -32,9 +32,15 @@ namespace jw
 
         bool exception_handler::call_handler(exception_handler * self, raw_exception_frame * frame) noexcept
         {
+            auto dont_switch_fpu = [self]()
+            { 
+                return (self->exc == exception_num::device_not_available ||
+                        self->exc == exception_num::x87_exception ||
+                        self->exc == exception_num::sse_exception);
+            };
             //std::clog << "entering exc handler " << std::hex << self->exc << " eip=" << frame->frame_09.fault_address.offset << '\n';
             ++detail::exception_count;
-            if (self->exc != 0x07 && self->exc != 0x10) detail::fpu_context_switcher.enter();
+            if (!dont_switch_fpu()) detail::fpu_context_switcher.enter();
             *reinterpret_cast<std::uint32_t*>(stack.begin()) = 0xDEADBEEF;
             bool success = false;
             try
@@ -47,7 +53,7 @@ namespace jw
                 std::cerr << "CAUGHT EXCEPTION IN CPU EXCEPTION HANDLER " << self->exc << std::endl; // HACK
             }                                                                                        // ... but what else can you do here?
             if (*reinterpret_cast<std::uint32_t*>(stack.begin()) != 0xDEADBEEF) std::cerr << "STACK OVERFLOW\n"; // another HACK
-            if (self->exc != 0x07 && self->exc != 0x10) detail::fpu_context_switcher.leave();
+            if (!dont_switch_fpu()) detail::fpu_context_switcher.leave();
             --detail::exception_count;
             //std::clog << "leaving exc handler " << self->exc << '\n';
             return success;
