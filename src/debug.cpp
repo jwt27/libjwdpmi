@@ -18,6 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <array>
 #include <cstring>
 #include <sstream>
+#include <iomanip>
 #include <jw/dpmi/dpmi.h>
 #include <jw/dpmi/debug.h>
 #include <jw/dpmi/cpu_exception.h>
@@ -36,12 +37,52 @@ namespace jw
         namespace gdb
         {
             using string = std::basic_string<char, std::char_traits<char>, locked_pool_allocator<>>;
-            using stringstream = std::basic_stringstream<char, std::char_traits<char>, locked_pool_allocator<>>;
-
+            //using stringstream = std::basic_stringstream<char, std::char_traits<char>, locked_pool_allocator<>>;
+            //auto make_stringstream() { return stringstream { string { alloc, "" } }; }
+            
             locked_pool_allocator<> alloc { 1_MB };
-            std::array<std::unique_ptr<exception_handler>, 0x20> exception_handlers;
-            auto gdb = init_unique<io::rs232_stream>(alloc);
+            std::deque<string, locked_pool_allocator<>> sent { alloc };
 
+            std::array<std::unique_ptr<exception_handler>, 0x20> exception_handlers;
+            auto gdb { init_unique<std::iostream>(alloc) };
+
+            std::uint32_t checksum(const string& s)
+            {
+                std::uint8_t r { };
+                for (auto c : s) r += c;
+                return r;
+            }       
+            
+            void send_packet(const string& output)
+            {                               
+                const auto sum = checksum(output);
+                *gdb << '$' << output << '#' << std::setfill('0') << std::setw(2) << sum;
+                sent.push_back(output);
+            }
+
+            string recv_packet()
+            {
+            retry:
+                switch (gdb->get())
+                {
+                case '-': send_packet(sent.front());
+                case '+': sent.pop_front(); 
+                default: goto retry;
+                case '#': break;
+                }
+                string input { alloc };
+                std::getline(*gdb, input, '#');
+                string sum { alloc };
+                sum += gdb->get();
+                sum += gdb->get();
+                if (std::strtoul(sum.c_str(), nullptr, 0x10) == checksum(input)) *gdb << '+';
+                else
+                {
+                    *gdb << '-';
+                    goto retry;
+                }
+                return input;
+            }
 
             template<std::uint8_t exc>
             bool handle_exception(auto* , auto* , bool )
@@ -75,7 +116,7 @@ namespace jw
                 capabilities c { };
                 if (!c.supported) return;
                 if (std::strncmp(c.vendor_info.name, "HDPMI", 5) != 0) return;  // TODO: figure out if other hosts support these too
-                exception_handlers[0x10] = std::make_unique<exception_handler>(0x10, [](auto* r, auto* f, bool t) { return handle_exception<0x10>(r, f, t); });
+                //exception_handlers[0x10] = std::make_unique<exception_handler>(0x10, [](auto* r, auto* f, bool t) { return handle_exception<0x10>(r, f, t); });
                 exception_handlers[0x11] = std::make_unique<exception_handler>(0x11, [](auto* r, auto* f, bool t) { return handle_exception<0x11>(r, f, t); });
                 exception_handlers[0x12] = std::make_unique<exception_handler>(0x12, [](auto* r, auto* f, bool t) { return handle_exception<0x12>(r, f, t); });
                 exception_handlers[0x13] = std::make_unique<exception_handler>(0x13, [](auto* r, auto* f, bool t) { return handle_exception<0x13>(r, f, t); });
