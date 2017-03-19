@@ -186,6 +186,12 @@ namespace jw
                 return n < alignof(T) ? 0 : (n - alignof(T)) / sizeof(T);
             }
 
+            bool in_pool(auto* ptr)
+            {
+                auto p = reinterpret_cast<byte*>(ptr);
+                return p > pool->data() && p < (pool->data() + pool->size());
+            }
+
             locked_pool_allocator() = delete;
             locked_pool_allocator(locked_pool_allocator&&) = default;
             locked_pool_allocator(const locked_pool_allocator&) = default;
