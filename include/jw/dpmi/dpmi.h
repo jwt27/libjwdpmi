@@ -494,43 +494,43 @@ namespace jw
         {
             union [[gnu::packed]]
             {
-                unsigned edi : 32;
-                unsigned di : 16;
+                std::uint32_t edi;
+                std::uint16_t di;
+            };
+            union [[gnu::packed]]
+            {   
+                std::uint32_t esi;
+                std::uint16_t si;
             };
             union [[gnu::packed]]
             {
-                unsigned esi : 32;
-                unsigned si : 16;
-            };
-            union [[gnu::packed]]
-            {
-                unsigned ebp : 32;
-                unsigned bp : 16;
+                std::uint32_t ebp;
+                std::uint16_t bp;
             };
             unsigned : 32;  // esp, not used
             union [[gnu::packed]]
             {
-                unsigned ebx : 32;
-                struct [[gnu::packed]] { unsigned bx : 16; };
-                struct [[gnu::packed]] { unsigned bl : 8, bh : 8; };
+                std::uint32_t ebx;
+                struct[[gnu::packed]] { std::uint16_t bx; };
+                struct[[gnu::packed]] { std::uint8_t bl, bh; };
             };
             union [[gnu::packed]]
             {
-                unsigned edx : 32;
-                struct [[gnu::packed]] { unsigned dx : 16; };
-                struct [[gnu::packed]] { unsigned dl : 8, dh : 8; };
+                std::uint32_t edx;
+                struct[[gnu::packed]] { std::uint16_t dx; };
+                struct[[gnu::packed]] { std::uint8_t dl, dh; };
             };
             union [[gnu::packed]]
             {
-                unsigned ecx : 32;
-                struct [[gnu::packed]] { unsigned cx : 16; };
-                struct [[gnu::packed]] { unsigned cl : 8, ch : 8; };
+                std::uint32_t ecx;
+                struct[[gnu::packed]] { std::uint16_t cx; };
+                struct[[gnu::packed]] { std::uint8_t cl, ch; };
             }; 
             union [[gnu::packed]]
             {
-                unsigned eax : 32;
-                struct [[gnu::packed]] { unsigned ax : 16; };
-                struct [[gnu::packed]] { unsigned al : 8, ah : 8; };
+                std::uint32_t eax;
+                struct[[gnu::packed]] { std::uint16_t ax; };
+                struct[[gnu::packed]] { std::uint8_t al, ah; };
             };
 
             auto& print(std::ostream& out) const

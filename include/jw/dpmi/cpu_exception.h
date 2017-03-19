@@ -53,7 +53,7 @@ namespace jw
                     bool redirect_elsewhere : 1;
                     unsigned : 13;
                 };
-                unsigned raw_info_bits : 16;
+                std::uint16_t raw_info_bits;
             } info_bits;
             union [[gnu::packed]]
             {
@@ -82,7 +82,7 @@ namespace jw
                     bool cpuid_available : 1;
                     unsigned : 10;
                 };
-                unsigned raw_eflags : 32;
+                std::uint32_t raw_eflags;
             } flags;
             far_ptr32 stack; unsigned : 16;
 
