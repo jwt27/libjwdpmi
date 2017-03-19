@@ -55,6 +55,17 @@ namespace jw
                 xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7,
                 mxcsr
             };
+            regnum& operator++(regnum& r) { return r = static_cast<regnum>(r + 1); }
+
+            const std::array<std::size_t, 40> reglen
+            {
+                4, 4, 4, 4,
+                4, 4, 4, 4,
+                4, 4,
+                2, 2, 2, 2, 2, 2,
+                10, 10, 10, 10, 10, 10, 10, 10
+                // TODO: fpu registers
+            };
 
             inline auto signal_number(exception_num exc)
             {
@@ -119,7 +130,7 @@ namespace jw
             }
 
             auto recv_packet()
-            {                                             
+            {
             retry:
                 switch (gdb->get())
                 {
@@ -153,7 +164,6 @@ namespace jw
 
             void reg(std::ostream& out, regnum r, cpu_registers* reg, exception_frame* frame, bool new_type)
             {
-                using namespace std;
                 auto* new_frame = static_cast<new_exception_frame*>(frame);
                 switch (r)
                 {
@@ -181,6 +191,39 @@ namespace jw
                     }
                 }
             }
+
+            bool setreg(regnum r, const std::string& value, cpu_registers* reg, exception_frame* frame, bool new_type)
+            {
+                auto* new_frame = static_cast<new_exception_frame*>(frame);
+                auto len = reglen[r] * 2 <= value.size() ? reglen[r] * 2 : value.npos;
+                auto v = decode(value.substr(0, len));
+                switch (r)
+                {
+                case eax: reg->eax = v; return true;
+                case ebx: reg->ebx = v; return true;
+                case ecx: reg->ecx = v; return true;
+                case edx: reg->edx = v; return true;
+                case ebp: reg->ebp = v; return true;
+                case esi: reg->esi = v; return true;
+                case edi: reg->edi = v; return true;
+                case esp: frame->stack.offset = v; return true;
+                case eip: frame->fault_address.offset = v; return true;
+                case eflags: frame->flags.raw_eflags = v;  return true;
+                case cs: frame->fault_address.segment = v; return true;
+                case ss: frame->stack.segment = v; return true;
+                case ds: if (new_type) { new_frame->ds = v; return true; } return false;
+                case es: if (new_type) { new_frame->es = v; return true; } return false;
+                case fs: if (new_type) { new_frame->fs = v; return true; } return false;
+                case gs: if (new_type) { new_frame->gs = v; return true; } return false;
+                default: if (r > mxcsr) return false;
+                    auto fpu = detail::fpu_context_switcher.get_last_context();
+                    switch (r)
+                    {
+                    default: return false; // TODO
+                    }
+                }
+            }
+
             bool trace { false };
             std::atomic_flag reentry { false };
 
@@ -243,6 +286,11 @@ namespace jw
                         if (s.peek() != EOF) send_packet(s.str());
                         else send_packet("E00");
                     }
+                    else if (p == "P")  // write one register
+                    {
+                        if (setreg(static_cast<regnum>(decode(packet[1])), packet[2], r, f, t)) send_packet("OK");
+                        else send_packet("E00");
+                    }
                     else if (p == "g")  // read registers
                     {
                         for (int i = eax; i <= eflags; ++i)
@@ -251,7 +299,20 @@ namespace jw
                     }
                     else if (p == "G")  // write registers
                     {
-                        send_packet("");    // TODO
+                        regnum reg { };
+                        std::size_t pos { };
+                        bool fail { false };
+                        while (pos < packet[1].size())
+                        {
+                            if (fail |= setreg(reg, packet[1].substr(pos), r, f, t))
+                            {
+                                send_packet("E00");
+                                break;
+                            }
+                            pos += reglen[reg] * 2;
+                            ++reg;
+                        }
+                        if (!fail) send_packet("OK");
                     }
                     else if (p == "m")  // read memory
                     {
