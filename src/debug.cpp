@@ -104,11 +104,11 @@ namespace jw
             template <typename T>
             bool reverse_decode(const std::string& in, T* out, std::size_t len = sizeof(T))
             {
+                if (in.size() < 2 * len) return false;
                 auto ptr = reinterpret_cast<byte*>(out);
                 for (std::size_t i = 0; i < len; ++i)
                 {
                     auto l = i * 2 + 2 >= in.size() ? in.npos : 2;
-                    if (i * 2 >= in.size()) return false;
                     ptr[i] = decode(in.substr(i * 2, l));
                 }
                 return true;
@@ -120,6 +120,12 @@ namespace jw
                 auto ptr = reinterpret_cast<byte*>(in);
                 for (std::size_t i = 0; i < len; ++i) 
                     out << std::setw(2) << static_cast<std::uint32_t>(ptr[i]);
+            }
+
+            void encode_null(std::ostream& out, std::size_t len)
+            {
+                for (std::size_t i = 0; i < len; ++i) 
+                    out << "xx";
             }
 
             std::uint32_t checksum(const std::string& s)
@@ -194,10 +200,10 @@ namespace jw
                 case eflags: encode(out, &frame->flags.raw_eflags); return;
                 case cs: encode(out, &frame->fault_address.segment); return;
                 case ss: encode(out, &frame->stack.segment); return;
-                case ds: if (new_type) encode(out, &new_frame->ds); return;
-                case es: if (new_type) encode(out, &new_frame->es); return;
-                case fs: if (new_type) encode(out, &new_frame->fs); return;
-                case gs: if (new_type) encode(out, &new_frame->gs); return;
+                case ds: if (new_type) encode(out, &new_frame->ds); else encode_null(out, reglen[r]); return;
+                case es: if (new_type) encode(out, &new_frame->es); else encode_null(out, reglen[r]); return;
+                case fs: if (new_type) encode(out, &new_frame->fs); else encode_null(out, reglen[r]); return;
+                case gs: if (new_type) encode(out, &new_frame->gs); else encode_null(out, reglen[r]); return;
                 default: if (r > mxcsr) return;
                     auto fpu = detail::fpu_context_switcher.get_last_context();
                     switch (r)
@@ -296,9 +302,10 @@ namespace jw
                     }
                     else if (p == "p")  // read one register
                     {
-                        reg(s, static_cast<regnum>(decode(packet[1])), r, f, t);
-                        if (s.peek() != EOF) send_packet(s.str());
-                        else send_packet("E00");
+                        auto regn = static_cast<regnum>(decode(packet[1]));
+                        reg(s, regn, r, f, t);
+                        if (s.peek() == EOF) encode_null(s, reglen[regn]);
+                        send_packet(s.str());
                     }
                     else if (p == "P")  // write one register
                     {
@@ -373,16 +380,13 @@ namespace jw
 
             new_exception_frame last_exception_frame;
             cpu_registers last_exception_registers;
+            exception_num last_exception;
             std::atomic_flag reentry { false };
 
             bool handle_exception(exception_num exc, cpu_registers* r, exception_frame* f, bool t)
             {
-                std::clog << "entering exception 0x" << std::hex << exc << " eip=0x" << f->fault_address.offset << "\n";
-                std::clog << "frameptr=0x" << (int)f << " regptr=0x" << (int)r << "\n";
-                std::clog << "esp=0x" << (int)f->stack.offset;
-                std::uintptr_t esp { };
-                asm("mov %0, esp;":"=rm"(esp));
-                std::clog << " my esp=0x" << (int)esp << "\n";
+                if (debugmsg) std::clog << "entering exception 0x" << std::hex << exc << "\n";
+                if (debugmsg) std::clog << *static_cast<new_exception_frame*>(f) << *r;
                 switch (last_p)
                 {
                 case 'c':
@@ -397,9 +401,9 @@ namespace jw
                 }
                 if (reentry.test_and_set())
                 {
-                    if (!trace) send_packet("EFF"); // last command caused another exception
-                    last_exception_frame.info_bits.redirect_elsewhere = true;    
-                    detail::fpu_context_switcher.leave();                        
+                    if (!trace) send_packet("EEE"); // last command caused another exception
+                    last_exception_frame.info_bits.redirect_elsewhere = true;
+                    detail::fpu_context_switcher.leave();
                     --detail::exception_count;      // pretend it never happened.
                 }
                 else
@@ -408,13 +412,14 @@ namespace jw
                     if (t) last_exception_frame = *static_cast<new_exception_frame*>(f);
                     else static_cast<old_exception_frame&>(last_exception_frame) = *f;
                     last_exception_registers = *r;
+                    last_exception = exc; 
+                    send_notification("Stop");
                 }
-                send_notification("Stop");
 
                 bool result { false };
                 try
                 {
-                    result = handle_packet(exc, &last_exception_registers, &last_exception_frame, t);
+                    result = handle_packet(last_exception, &last_exception_registers, &last_exception_frame, t);
                 }
                 catch (...) { std::cerr << "Exception occured while communicating with GDB.\n"; breakpoint(); }
 
@@ -422,7 +427,7 @@ namespace jw
                 else *static_cast<old_exception_frame*>(f) = last_exception_frame;
                 *r = last_exception_registers;
 
-                std::clog << "leaving exception 0x" << std::hex << exc << "\n";
+                if (debugmsg) std::clog << "leaving exception 0x" << std::hex << exc << "\n";
                 reentry.clear();
                 return result;
             }
