@@ -16,6 +16,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include <jw/dpmi/cpu_exception.h>
+#include <jw/dpmi/debug.h>
 #include <cstring>
 
 namespace jw
@@ -91,13 +92,29 @@ namespace jw
                 "mov ss, cs:[eax-0x1C];"
                 "mov esp, ebp;"
 
-                "sub esp, 4;"
+                "push ebx;"
                 "add ebp, 0x10;"
                 "push ebp;"                 // Pointer to raw_exception_frame
                 "push cs:[eax-0x28];"       // Pointer to self
                 "mov ebx, eax;"
                 "call cs:[ebx-0x24];"       // call_handler();
-                "add esp, 0xC;"
+                "add esp, 0x8;"
+                "pop edx;"
+
+                /*
+                "mov es, dx;"
+                "mov ecx, 0x22;"
+                "mov edi, esi;"
+                "sub edi, 0x88;"
+                "mov esi, esp;"
+                "mov ebp, edi;"
+                "cld;"
+                "rep movsd;"
+
+                "mov ss, dx;"
+                "mov esp, ebp;"
+                */
+
                 "test al, al;"              // Check return value
                 "jz chain%=;"               // Chain if false
                 "mov al, cs:[ebx-0x14];"
@@ -116,14 +133,12 @@ namespace jw
 
                 // Chain to previous handler
                 "chain%=:"
-                "push cs; pop ds;"
-                "push ss; pop es;"
-                "lea esi, [ebx-0x12];"      // chain_to
-                "lea edi, [esp-0x06];"
-                "cld;"
-                "movsd; movsw;"             // copy chain_to ptr above stack (is this dangerous?)
+                "mov eax, cs:[ebx-0x12];"   // copy chain_to ptr above stack (is this dangerous?)
+                "mov ss:[esp-0x08], eax;"
+                "mov ax, cs:[ebx-0x0e];"
+                "mov ss:[esp-0x04], ax;"
                 "pop gs; pop fs; pop es; pop ds; popa;"
-                "jmp fword ptr ss:[esp-0x36];"
+                "jmp fword ptr ss:[esp-0x38];"
 
                 "exception_wrapper_end%=:;"
                 // --- /\/\/\/\/\/\ --- //
@@ -198,41 +213,49 @@ namespace jw
             cpu_registers last_exception_registers;
             bool throwing_exception { false };
 
-        #define THROW_ATTR [[noreturn, gnu::noinline, gnu::used, gnu::optimize("no-omit-frame-pointer")]]
-            THROW_ATTR void throw_cpu_exception(exception_num n) 
+            std::string create_exception_message()
             {
                 std::stringstream s;
                 s << last_exception_frame;
                 s << last_exception_registers;
+                return s.str();
+            }
+
+        #define THROW_ATTR [[noreturn, gnu::used, gnu::always_inline, gnu::optimize("omit-frame-pointer")]]
+            template<std::uint32_t n>
+            THROW_ATTR inline void throw_cpu_exception() 
+            {
+                //breakpoint();
                 throwing_exception = false;
-                throw cpu_exception(n, s.str());
+                throw cpu_exception(n, create_exception_message());
             }
             
-            THROW_ATTR void throw_cpu_exception_0x00() { throw_cpu_exception(0x00); }
-            THROW_ATTR void throw_cpu_exception_0x01() { throw_cpu_exception(0x01); }
-            THROW_ATTR void throw_cpu_exception_0x02() { throw_cpu_exception(0x02); }
-            THROW_ATTR void throw_cpu_exception_0x03() { throw_cpu_exception(0x03); }
-            THROW_ATTR void throw_cpu_exception_0x04() { throw_cpu_exception(0x04); }
-            THROW_ATTR void throw_cpu_exception_0x05() { throw_cpu_exception(0x05); }
-            THROW_ATTR void throw_cpu_exception_0x06() { throw_cpu_exception(0x06); }
-            THROW_ATTR void throw_cpu_exception_0x07() { throw_cpu_exception(0x07); }
-            THROW_ATTR void throw_cpu_exception_0x08() { throw_cpu_exception(0x08); }
-            THROW_ATTR void throw_cpu_exception_0x09() { throw_cpu_exception(0x09); }
-            THROW_ATTR void throw_cpu_exception_0x0a() { throw_cpu_exception(0x0a); }
-            THROW_ATTR void throw_cpu_exception_0x0b() { throw_cpu_exception(0x0b); }
-            THROW_ATTR void throw_cpu_exception_0x0c() { throw_cpu_exception(0x0c); }
-            THROW_ATTR void throw_cpu_exception_0x0d() { throw_cpu_exception(0x0d); }
-            THROW_ATTR void throw_cpu_exception_0x0e() { throw_cpu_exception(0x0e); }
-            THROW_ATTR void throw_cpu_exception_0x10() { throw_cpu_exception(0x10); }
-            THROW_ATTR void throw_cpu_exception_0x11() { throw_cpu_exception(0x11); }
-            THROW_ATTR void throw_cpu_exception_0x12() { throw_cpu_exception(0x12); }
-            THROW_ATTR void throw_cpu_exception_0x13() { throw_cpu_exception(0x13); }
-            THROW_ATTR void throw_cpu_exception_0x14() { throw_cpu_exception(0x14); }
-            THROW_ATTR void throw_cpu_exception_0x1e() { throw_cpu_exception(0x1e); }
+            THROW_ATTR void throw_cpu_exception_0x00() { throw_cpu_exception<0x00>(); }
+            THROW_ATTR void throw_cpu_exception_0x01() { throw_cpu_exception<0x01>(); }
+            THROW_ATTR void throw_cpu_exception_0x02() { throw_cpu_exception<0x02>(); }
+            THROW_ATTR void throw_cpu_exception_0x03() { throw_cpu_exception<0x03>(); }
+            THROW_ATTR void throw_cpu_exception_0x04() { throw_cpu_exception<0x04>(); }
+            THROW_ATTR void throw_cpu_exception_0x05() { throw_cpu_exception<0x05>(); }
+            THROW_ATTR void throw_cpu_exception_0x06() { throw_cpu_exception<0x06>(); }
+            THROW_ATTR void throw_cpu_exception_0x07() { throw_cpu_exception<0x07>(); }
+            THROW_ATTR void throw_cpu_exception_0x08() { throw_cpu_exception<0x08>(); }
+            THROW_ATTR void throw_cpu_exception_0x09() { throw_cpu_exception<0x09>(); }
+            THROW_ATTR void throw_cpu_exception_0x0a() { throw_cpu_exception<0x0a>(); }
+            THROW_ATTR void throw_cpu_exception_0x0b() { throw_cpu_exception<0x0b>(); }
+            THROW_ATTR void throw_cpu_exception_0x0c() { throw_cpu_exception<0x0c>(); }
+            THROW_ATTR void throw_cpu_exception_0x0d() { throw_cpu_exception<0x0d>(); }
+            THROW_ATTR void throw_cpu_exception_0x0e() { throw_cpu_exception<0x0e>(); }
+            THROW_ATTR void throw_cpu_exception_0x10() { throw_cpu_exception<0x10>(); }
+            THROW_ATTR void throw_cpu_exception_0x11() { throw_cpu_exception<0x11>(); }
+            THROW_ATTR void throw_cpu_exception_0x12() { throw_cpu_exception<0x12>(); }
+            THROW_ATTR void throw_cpu_exception_0x13() { throw_cpu_exception<0x13>(); }
+            THROW_ATTR void throw_cpu_exception_0x14() { throw_cpu_exception<0x14>(); }
+            THROW_ATTR void throw_cpu_exception_0x1e() { throw_cpu_exception<0x1e>(); }
         #undef THROW_ATTR
 
             bool simulate_call(cpu_registers* reg, exception_frame* frame, bool new_type, auto* func) noexcept
             {
+                //breakpoint();
                 if (frame->fault_address.segment != get_cs()) return false;     // Only throw if exception happened in our code
                 if (frame->flags.v86mode) return false;                         // and not in real mode
                 if (new_type && frame->info_bits.host_exception) return false;  // and not in the DPMI host

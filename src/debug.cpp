@@ -37,6 +37,8 @@ namespace jw
 
         namespace gdb
         {
+            const bool debugmsg = true;
+
             locked_pool_allocator<> alloc { 1_MB };
             std::deque<std::string, locked_pool_allocator<>> sent { alloc };
             std::unordered_map<std::string, std::string, std::hash<std::string>, std::equal_to<std::string>, locked_pool_allocator<>> supported { alloc };
@@ -129,14 +131,14 @@ namespace jw
 
             void send_notification(const std::string& output)
             {
-                std::clog << "send --> \"" << output << "\"\n";
+                if (debugmsg) std::clog << "send --> \"" << output << "\"\n";
                 const auto sum = checksum(output);
                 *gdb << '%' << output << '#' << std::setfill('0') << std::hex << std::setw(2) << sum << std::flush;
             }
             
             void send_packet(const std::string& output)
             {
-                std::clog << "send --> \"" << output << "\"\n";
+                if (debugmsg) std::clog << "send --> \"" << output << "\"\n";
                 const auto sum = checksum(output);
                 *gdb << '$' << output << '#' << std::setfill('0') << std::hex << std::setw(2) << sum << std::flush;
                 sent.push_back(output);
@@ -160,7 +162,7 @@ namespace jw
                 sum += gdb->get();
                 if (decode(sum) == checksum(input)) *gdb << '+' << std::flush;
                 else { *gdb << '-' << std::flush; goto retry; }
-                std::clog << "recv <-- \""<< input << "\"\n";
+                if (debugmsg) std::clog << "recv <-- \""<< input << "\"\n";
 
                 std::deque<std::string> parsed_input { };
                 std::size_t pos { 1 };
@@ -236,7 +238,7 @@ namespace jw
             }
 
             bool trace { false };
-            std::atomic_flag reentry { false };
+            char last_p;
 
             bool handle_packet(exception_num exc, cpu_registers* r, exception_frame* f, bool t)
             {
@@ -248,6 +250,7 @@ namespace jw
                     s << hex << setfill('0');
                     if (!trace) packet = recv_packet();
                     auto& p = packet.front();
+                    last_p = p[0];
                     if (p == "?")   // stop reason
                     {
                         if (exc == 1 || exc == 3)
@@ -342,28 +345,24 @@ namespace jw
                     else if (p == "c")  // continue
                     {
                         if (packet.size() > 1) f->fault_address.offset = decode(packet[1]);
-                        trace = true;
                         f->flags.trap = false;
                         return true;
                     }
                     else if (p == "s")  // step
                     {
                         if (packet.size() > 1) f->fault_address.offset = decode(packet[1]);
-                        trace = true;
                         f->flags.trap = true;
                         return true;
                     }
                     else if (p == "C")  // continue with signal
                     {
                         if (packet.size() > 2) f->fault_address.offset = decode(packet[2]);
-                        trace = true;
                         f->flags.trap = false;
                         return false;
                     }
                     else if (p == "S")  // step with signal
                     {
                         if (packet.size() > 2) f->fault_address.offset = decode(packet[2]);
-                        trace = true;
                         f->flags.trap = true;
                         return false;
                     }
@@ -372,17 +371,58 @@ namespace jw
                 }
             }
 
+            new_exception_frame last_exception_frame;
+            cpu_registers last_exception_registers;
+            std::atomic_flag reentry { false };
+
             bool handle_exception(exception_num exc, cpu_registers* r, exception_frame* f, bool t)
             {
                 std::clog << "entering exception 0x" << std::hex << exc << " eip=0x" << f->fault_address.offset << "\n";
-                if (reentry.test_and_set()) send_packet("EFF"); // last command caused another exception
+                std::clog << "frameptr=0x" << (int)f << " regptr=0x" << (int)r << "\n";
+                std::clog << "esp=0x" << (int)f->stack.offset;
+                std::uintptr_t esp { };
+                asm("mov %0, esp;":"=rm"(esp));
+                std::clog << " my esp=0x" << (int)esp << "\n";
+                switch (last_p)
+                {
+                case 'c':
+                case 's':
+                case 'C':
+                case 'S':
+                case '?':
+                    trace = true;
+                    break;
+                default:
+                    trace = false;
+                }
+                if (reentry.test_and_set())
+                {
+                    if (!trace) send_packet("EFF"); // last command caused another exception
+                    last_exception_frame.info_bits.redirect_elsewhere = true;    
+                    detail::fpu_context_switcher.leave();                        
+                    --detail::exception_count;      // pretend it never happened.
+                }
+                else
+                {
+                    last_exception_frame = { };
+                    if (t) last_exception_frame = *static_cast<new_exception_frame*>(f);
+                    else static_cast<old_exception_frame&>(last_exception_frame) = *f;
+                    last_exception_registers = *r;
+                }
                 send_notification("Stop");
+
                 bool result { false };
                 try
                 {
-                    result = handle_packet(exc, r, f, t);
+                    result = handle_packet(exc, &last_exception_registers, &last_exception_frame, t);
                 }
                 catch (...) { std::cerr << "Exception occured while communicating with GDB.\n"; breakpoint(); }
+
+                if (t) *f = static_cast<new_exception_frame&>(last_exception_frame);
+                else *static_cast<old_exception_frame*>(f) = last_exception_frame;
+                *r = last_exception_registers;
+
+                std::clog << "leaving exception 0x" << std::hex << exc << "\n";
                 reentry.clear();
                 return result;
             }
@@ -394,7 +434,7 @@ namespace jw
 
                 gdb = allocate_unique<io::rs232_stream>(alloc, cfg);
 
-                exception_handlers[0x00] = std::make_unique<exception_handler>(0x00, [](auto* r, auto* f, bool t) { return handle_exception(0x00, r, f, t); });
+                //exception_handlers[0x00] = std::make_unique<exception_handler>(0x00, [](auto* r, auto* f, bool t) { return handle_exception(0x00, r, f, t); });
                 exception_handlers[0x01] = std::make_unique<exception_handler>(0x01, [](auto* r, auto* f, bool t) { return handle_exception(0x01, r, f, t); });
                 exception_handlers[0x02] = std::make_unique<exception_handler>(0x02, [](auto* r, auto* f, bool t) { return handle_exception(0x02, r, f, t); });
                 exception_handlers[0x03] = std::make_unique<exception_handler>(0x03, [](auto* r, auto* f, bool t) { return handle_exception(0x03, r, f, t); });
