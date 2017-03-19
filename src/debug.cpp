@@ -39,7 +39,7 @@ namespace jw
             locked_pool_allocator<> alloc { 1_MB };
             std::deque<std::string, locked_pool_allocator<>> sent { alloc };
             std::unordered_map<std::string, std::string, std::hash<std::string>, std::equal_to<std::string>, locked_pool_allocator<>> supported { alloc };
-            const char* supported_response { "PacketSize=100000" };
+            const char* supported_response { "PacketSize=100000;swbreak+" };
 
             std::array<std::unique_ptr<exception_handler>, 0x20> exception_handlers;
             auto gdb { init_unique<std::iostream>(alloc) };
@@ -121,7 +121,8 @@ namespace jw
                 std::clog << "recv <-- \""<< input << "\"\n";
 
                 std::deque<std::string> parsed_input { };
-                std::size_t pos { };
+                std::size_t pos { 1 };
+                parsed_input.push_back(input.substr(0, 1));
                 while (pos < input.size())
                 {
                     auto p = std::min({ input.find(',', pos), input.find(':', pos), input.find(';', pos) });
@@ -132,16 +133,18 @@ namespace jw
                 return parsed_input;
             }
 
-            void reverse(std::ostream& out, auto* in)
+            template <typename T>
+            void reverse(std::ostream& out, T* in, std::size_t len = sizeof(T))
             {
                 auto ptr = reinterpret_cast<byte*>(in);
-                for (auto i = 0; i < sizeof(*in); ++i) 
+                for (std::size_t i = 0; i < len; ++i) 
                     out << std::setw(2) << static_cast<std::uint32_t>(ptr[i]);
             }
 
-            void reg(std::ostream& out, regnum r, cpu_registers* reg, exception_frame* frame)
+            void reg(std::ostream& out, regnum r, cpu_registers* reg, exception_frame* frame, bool new_type)
             {
                 using namespace std;
+                auto* new_frame = static_cast<new_exception_frame*>(frame);
                 switch (r)
                 {
                 case eax: reverse(out, &reg->eax); return;
@@ -154,35 +157,43 @@ namespace jw
                 case esp: reverse(out, &frame->stack.offset); return;
                 case eip: reverse(out, &frame->fault_address.offset); return;
                 case eflags: reverse(out, &frame->flags.raw_eflags); return;
-                default: return;// throw std::exception();
+                case cs: reverse(out, &frame->fault_address.segment); return;
+                case ss: reverse(out, &frame->stack.segment); return;
+                case ds: if (new_type) reverse(out, &new_frame->ds); return;
+                case es: if (new_type) reverse(out, &new_frame->es); return;
+                case fs: if (new_type) reverse(out, &new_frame->fs); return;
+                case gs: if (new_type) reverse(out, &new_frame->gs); return;
+                default: return;
                 }
             }
 
             template<std::uint32_t exc>
-            bool handle_exception(cpu_registers* r, exception_frame* f, bool )
+            bool handle_exception(cpu_registers* r, exception_frame* f, bool t)
             {
                 using namespace std;
                 try
-                {
+                {                                              
+                    std::deque<std::string> packet { "?" };
                     while (true)
                     {
                         std::stringstream s { };
                         s << hex << setfill('0');
-                        auto packet = recv_packet();
+                        if (!trace) packet = recv_packet();
                         auto& p = packet.front();
-                        if (trace || p == "?")
+                        if (p == "?")
                         {
                             if (exc == 1 || exc == 3)
                             {                             
-                                s << "T" << setw(2) << signal_number<exc>() << ';';
-                                s << eip << ':'; reg(s, eip, r, f); s << ';';
-                                s << esp << ':'; reg(s, esp, r, f); s << ';';  
-                                s << ebp << ':'; reg(s, ebp, r, f); s << ';';      
-                                s << eflags << ':'; reg(s, eflags, r, f); s << ';';
-                                s << eax << ':'; reg(s, eax, r, f); s << ';';
-                                s << ebx << ':'; reg(s, ebx, r, f); s << ';';
-                                s << ecx << ':'; reg(s, ecx, r, f); s << ';';
-                                s << edx << ':'; reg(s, edx, r, f); s << ';';
+                                s << "T" << setw(2) << signal_number<exc>();
+                                s << eip << ':'; reg(s, eip, r, f, t); s << ';';
+                                s << esp << ':'; reg(s, esp, r, f, t); s << ';';  
+                                s << ebp << ':'; reg(s, ebp, r, f, t); s << ';';      
+                                s << eflags << ':'; reg(s, eflags, r, f, t); s << ';';
+                                s << eax << ':'; reg(s, eax, r, f, t); s << ';';
+                                s << ebx << ':'; reg(s, ebx, r, f, t); s << ';';
+                                s << ecx << ':'; reg(s, ecx, r, f, t); s << ';';
+                                s << edx << ':'; reg(s, edx, r, f, t); s << ';';
+                                s << "swbreak:;";
                                 send_packet(s.str());
                             }
                             else
@@ -192,47 +203,62 @@ namespace jw
                             }
                             trace = false;
                         }
-                        else if (p == "qSupported")
+                        else if (p == "q")
                         {
-                            packet.pop_front();
-                            for (auto str : packet)
+                            auto& q = packet[1];
+                            if (q == "Supported")
                             {
-                                auto back = str.back();
-                                auto equals_sign = str.find('=', 0);
-                                if (back == '+' || back == '-')
+                                packet.pop_front();
+                                for (auto str : packet)
                                 {
-                                    str.pop_back();
-                                    supported[str] = back;
+                                    auto back = str.back();
+                                    auto equals_sign = str.find('=', 0);
+                                    if (back == '+' || back == '-')
+                                    {
+                                        str.pop_back();
+                                        supported[str] = back;
+                                    }
+                                    else if (equals_sign != str.npos)
+                                    {
+                                        supported[str.substr(0, equals_sign)] = str.substr(equals_sign + 1);
+                                    }
                                 }
-                                else if (equals_sign != str.npos)
-                                {
-                                    supported[str.substr(0, equals_sign)] = str.substr(equals_sign + 1);
-                                }
+                                send_packet(supported_response);
                             }
-                            send_packet(supported_response);
+                            else if (q == "Attached") send_packet("0");
+                            //else if (q == "Offsets") send_packet("Text=0;Data=0");
+                            else send_packet("");
                         }
-                        else if (p == "qAttached") send_packet("0");
-                        else if (p == "qOffsets") send_packet("TextSeg=0;DataSeg=0");
+                        else if (p == "p")
+                        {
+                            reg(s, static_cast<regnum>(std::stoul(packet[1], nullptr, 16)), r, f, t);
+                            if (s.peek() != EOF) send_packet(s.str());
+                            else send_packet("E00");
+                        }
                         else if (p == "g")
                         {
-                            for (int i = eax; i <= eip; ++i)
-                                reg(s, static_cast<regnum>(i), r, f);
+                            for (int i = eax; i <= eflags; ++i)
+                                reg(s, static_cast<regnum>(i), r, f, t);
                             send_packet(s.str());
                         }
                         else if (p == "G")
                         {
                             send_packet("");
                         }
-                        else if (p[0] == 'm')
+                        else if (p == "m")
                         {
-                            auto* addr = reinterpret_cast<byte*>(std::stoul(p.substr(1), nullptr, 16));
-                            std::size_t len = std::stoul(packet[1], nullptr, 16);
+                            auto* addr = reinterpret_cast<byte*>(std::stoul(packet[1], nullptr, 16));
+                            std::size_t len = std::stoul(packet[2], nullptr, 16);
                             for (auto i = addr; i < addr + len; ++i) s << setw(2) << static_cast<std::uint32_t>(*i);
                             send_packet(s.str());
                         }
-                        else if (p[0] == 'M')
+                        else if (p == "M")
                         {
-                            send_packet("");
+                            auto* addr = reinterpret_cast<byte*>(std::stoul(packet[1], nullptr, 16));
+                            std::size_t len = std::stoul(packet[2], nullptr, 16);
+                            for (std::size_t i = 0; i < len; ++i)
+                                addr[i] = std::stoul(packet[3].substr(i * 2, 2), nullptr, 16);
+                            send_packet("OK");
                         }
                         else if (p == "c")
                         {
