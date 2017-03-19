@@ -224,7 +224,6 @@ namespace jw
             [[noreturn, gnu::used, gnu::optimize("no-omit-frame-pointer")]] 
             void throw_cpu_exception(std::uint32_t n) 
             {
-                breakpoint();
                 throwing_exception = false;
                 throw cpu_exception(n, create_exception_message());
             }
@@ -259,6 +258,7 @@ namespace jw
                 if (!config::enable_throwing_from_cpu_exceptions) return;
                 if (exception_throwers_setup) return;
                 exception_throwers_setup = true;
+
                 exception_throwers[0x00] = std::make_unique<exception_handler>(0x00, [](cpu_registers* r, exception_frame* f, bool t) { return simulate_call(0x00, r, f, t, throw_cpu_exception); });
                 exception_throwers[0x01] = std::make_unique<exception_handler>(0x01, [](cpu_registers* r, exception_frame* f, bool t) { return simulate_call(0x01, r, f, t, throw_cpu_exception); });
                 exception_throwers[0x02] = std::make_unique<exception_handler>(0x02, [](cpu_registers* r, exception_frame* f, bool t) { return simulate_call(0x02, r, f, t, throw_cpu_exception); });
