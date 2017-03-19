@@ -89,6 +89,13 @@ namespace jw
                 for (auto c : s) r += c;
                 return r;
             }
+
+            void send_notification(const std::string& output)
+            {
+                std::clog << "send --> \"" << output << "\"\n";
+                const auto sum = checksum(output);
+                *gdb << '%' << output << '#' << std::setfill('0') << std::hex << std::setw(2) << sum << std::flush;
+            }
             
             void send_packet(const std::string& output)
             {
@@ -165,7 +172,7 @@ namespace jw
                     auto fpu = detail::fpu_context_switcher.get_last_context();
                     switch (r)
                     {
-                        
+                    default:; // TODO
                     }
                 }
             }
@@ -187,14 +194,9 @@ namespace jw
                         if (exc == 1 || exc == 3)
                         {
                             s << "T" << setw(2) << signal_number(exc);
+                            s << eflags << ':'; reg(s, eflags, r, f, t); s << ';';
                             s << eip << ':'; reg(s, eip, r, f, t); s << ';';
                             s << esp << ':'; reg(s, esp, r, f, t); s << ';';
-                            s << ebp << ':'; reg(s, ebp, r, f, t); s << ';';
-                            s << eflags << ':'; reg(s, eflags, r, f, t); s << ';';
-                            s << eax << ':'; reg(s, eax, r, f, t); s << ';';
-                            s << ebx << ':'; reg(s, ebx, r, f, t); s << ';';
-                            s << ecx << ':'; reg(s, ecx, r, f, t); s << ';';
-                            s << edx << ':'; reg(s, edx, r, f, t); s << ';';
                             s << "swbreak:;";
                             send_packet(s.str());
                         }
@@ -273,6 +275,18 @@ namespace jw
                         f->flags.trap = true;
                         return true;
                     }
+                    else if (p == "C")
+                    {
+                        trace = true;
+                        f->flags.trap = false;
+                        return false;
+                    }
+                    else if (p == "S")
+                    {
+                        trace = true;
+                        f->flags.trap = true;
+                        return false;
+                    }
                     else if (p == "k") return false;
                     else send_packet("");
                 }
@@ -280,7 +294,9 @@ namespace jw
 
             bool handle_exception(exception_num exc, cpu_registers* r, exception_frame* f, bool t)
             {
+                std::clog << "entering exception 0x" << std::hex << exc << " eip=0x" << f->fault_address.offset << "\n";
                 if (reentry.test_and_set()) send_packet("EFF"); // last command caused another exception
+                send_notification("Stop");
                 bool result { false };
                 try
                 {
