@@ -46,6 +46,14 @@ namespace jw
             std::array<std::unique_ptr<exception_handler>, 0x20> exception_handlers;
             auto gdb { init_unique<std::iostream>(alloc) };
 
+            std::uintptr_t last_eip { };
+            bool trace { false };
+            char last_p { '?' };
+            new_exception_frame last_exception_frame;
+            cpu_registers last_exception_registers;
+            exception_num last_exception;
+            bool reentry { false };
+
             enum regnum
             {
                 eax, ecx, edx, ebx,
@@ -196,7 +204,6 @@ namespace jw
                 case esi: encode(out, &reg->esi); return;
                 case edi: encode(out, &reg->edi); return;
                 case esp: encode(out, &frame->stack.offset); return;
-                case eip: encode(out, &frame->fault_address.offset); return;
                 case eflags: encode(out, &frame->flags.raw_eflags); return;
                 case cs: encode(out, &frame->fault_address.segment); return;
                 case ss: encode(out, &frame->stack.segment); return;
@@ -204,6 +211,14 @@ namespace jw
                 case es: if (new_type) encode(out, &new_frame->es); else encode_null(out, reglen[r]); return;
                 case fs: if (new_type) encode(out, &new_frame->fs); else encode_null(out, reglen[r]); return;
                 case gs: if (new_type) encode(out, &new_frame->gs); else encode_null(out, reglen[r]); return;
+                case eip:
+                {
+                    auto eip = frame->fault_address.offset;
+                    if (last_exception == 0x03) eip -= 1;
+                    else if (last_exception == 0x01) eip = last_eip;
+                    encode(out, &eip);
+                    return;
+                }
                 default: if (r > mxcsr) return;
                     auto fpu = detail::fpu_context_switcher.get_last_context();
                     switch (r)
@@ -242,9 +257,6 @@ namespace jw
                     }
                 }
             }
-
-            bool trace { false };
-            char last_p;
 
             bool handle_packet(exception_num exc, cpu_registers* r, exception_frame* f, bool t)
             {
@@ -304,7 +316,7 @@ namespace jw
                     {
                         auto regn = static_cast<regnum>(decode(packet[1]));
                         reg(s, regn, r, f, t);
-                        if (s.peek() == EOF) encode_null(s, reglen[regn]);
+                        if (s.str().size() == 0) encode_null(s, reglen[regn]);
                         send_packet(s.str());
                     }
                     else if (p == "P")  // write one register
@@ -378,11 +390,6 @@ namespace jw
                 }
             }
 
-            new_exception_frame last_exception_frame;
-            cpu_registers last_exception_registers;
-            exception_num last_exception;
-            std::atomic_flag reentry { false };
-
             bool handle_exception(exception_num exc, cpu_registers* r, exception_frame* f, bool t)
             {
                 if (debugmsg) std::clog << "entering exception 0x" << std::hex << exc << "\n";
@@ -399,7 +406,7 @@ namespace jw
                 default:
                     trace = false;
                 }
-                if (reentry.test_and_set())
+                if (reentry)
                 {
                     if (!trace) send_packet("EEE"); // last command caused another exception
                     last_exception_frame.info_bits.redirect_elsewhere = true;
@@ -415,6 +422,7 @@ namespace jw
                     last_exception = exc; 
                     send_notification("Stop");
                 }
+                reentry = true;
 
                 bool result { false };
                 try
@@ -422,13 +430,14 @@ namespace jw
                     result = handle_packet(last_exception, &last_exception_registers, &last_exception_frame, t);
                 }
                 catch (...) { std::cerr << "Exception occured while communicating with GDB.\n"; breakpoint(); }
+                reentry = false;
 
                 if (t) *f = static_cast<new_exception_frame&>(last_exception_frame);
                 else *static_cast<old_exception_frame*>(f) = last_exception_frame;
                 *r = last_exception_registers;
+                last_eip = last_exception_frame.fault_address.offset;
 
                 if (debugmsg) std::clog << "leaving exception 0x" << std::hex << exc << "\n";
-                reentry.clear();
                 return result;
             }
 
@@ -439,7 +448,7 @@ namespace jw
 
                 gdb = allocate_unique<io::rs232_stream>(alloc, cfg);
 
-                //exception_handlers[0x00] = std::make_unique<exception_handler>(0x00, [](auto* r, auto* f, bool t) { return handle_exception(0x00, r, f, t); });
+                exception_handlers[0x00] = std::make_unique<exception_handler>(0x00, [](auto* r, auto* f, bool t) { return handle_exception(0x00, r, f, t); });
                 exception_handlers[0x01] = std::make_unique<exception_handler>(0x01, [](auto* r, auto* f, bool t) { return handle_exception(0x01, r, f, t); });
                 exception_handlers[0x02] = std::make_unique<exception_handler>(0x02, [](auto* r, auto* f, bool t) { return handle_exception(0x02, r, f, t); });
                 exception_handlers[0x03] = std::make_unique<exception_handler>(0x03, [](auto* r, auto* f, bool t) { return handle_exception(0x03, r, f, t); });
