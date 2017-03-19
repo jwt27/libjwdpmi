@@ -83,9 +83,17 @@ namespace jw
                 }
             }
 
-            inline auto unhex(const std::string& s)
+            inline auto decode(const std::string& s)
             {
                 return std::stoul(s, nullptr, 16);
+            }
+
+            template <typename T>
+            void encode(std::ostream& out, T* in, std::size_t len = sizeof(T))
+            {
+                auto ptr = reinterpret_cast<byte*>(in);
+                for (std::size_t i = 0; i < len; ++i) 
+                    out << std::setw(2) << static_cast<std::uint32_t>(ptr[i]);
             }
 
             std::uint32_t checksum(const std::string& s)
@@ -126,7 +134,7 @@ namespace jw
                 std::string sum;
                 sum += gdb->get();
                 sum += gdb->get();
-                if (unhex(sum) == checksum(input)) *gdb << '+' << std::flush;
+                if (decode(sum) == checksum(input)) *gdb << '+' << std::flush;
                 else { *gdb << '-' << std::flush; goto retry; }
                 std::clog << "recv <-- \""<< input << "\"\n";
 
@@ -143,36 +151,28 @@ namespace jw
                 return parsed_input;
             }
 
-            template <typename T>
-            void reverse(std::ostream& out, T* in, std::size_t len = sizeof(T))
-            {
-                auto ptr = reinterpret_cast<byte*>(in);
-                for (std::size_t i = 0; i < len; ++i) 
-                    out << std::setw(2) << static_cast<std::uint32_t>(ptr[i]);
-            }
-
             void reg(std::ostream& out, regnum r, cpu_registers* reg, exception_frame* frame, bool new_type)
             {
                 using namespace std;
                 auto* new_frame = static_cast<new_exception_frame*>(frame);
                 switch (r)
                 {
-                case eax: reverse(out, &reg->eax); return;
-                case ebx: reverse(out, &reg->ebx); return;
-                case ecx: reverse(out, &reg->ecx); return;
-                case edx: reverse(out, &reg->edx); return;
-                case ebp: reverse(out, &reg->ebp); return;
-                case esi: reverse(out, &reg->esi); return;
-                case edi: reverse(out, &reg->edi); return;
-                case esp: reverse(out, &frame->stack.offset); return;
-                case eip: reverse(out, &frame->fault_address.offset); return;
-                case eflags: reverse(out, &frame->flags.raw_eflags); return;
-                case cs: reverse(out, &frame->fault_address.segment); return;
-                case ss: reverse(out, &frame->stack.segment); return;
-                case ds: if (new_type) reverse(out, &new_frame->ds); return;
-                case es: if (new_type) reverse(out, &new_frame->es); return;
-                case fs: if (new_type) reverse(out, &new_frame->fs); return;
-                case gs: if (new_type) reverse(out, &new_frame->gs); return;
+                case eax: encode(out, &reg->eax); return;
+                case ebx: encode(out, &reg->ebx); return;
+                case ecx: encode(out, &reg->ecx); return;
+                case edx: encode(out, &reg->edx); return;
+                case ebp: encode(out, &reg->ebp); return;
+                case esi: encode(out, &reg->esi); return;
+                case edi: encode(out, &reg->edi); return;
+                case esp: encode(out, &frame->stack.offset); return;
+                case eip: encode(out, &frame->fault_address.offset); return;
+                case eflags: encode(out, &frame->flags.raw_eflags); return;
+                case cs: encode(out, &frame->fault_address.segment); return;
+                case ss: encode(out, &frame->stack.segment); return;
+                case ds: if (new_type) encode(out, &new_frame->ds); return;
+                case es: if (new_type) encode(out, &new_frame->es); return;
+                case fs: if (new_type) encode(out, &new_frame->fs); return;
+                case gs: if (new_type) encode(out, &new_frame->gs); return;
                 default: if (r > mxcsr) return;
                     auto fpu = detail::fpu_context_switcher.get_last_context();
                     switch (r)
@@ -239,7 +239,7 @@ namespace jw
                     }
                     else if (p == "p")  // read one register
                     {
-                        reg(s, static_cast<regnum>(unhex(packet[1])), r, f, t);
+                        reg(s, static_cast<regnum>(decode(packet[1])), r, f, t);
                         if (s.peek() != EOF) send_packet(s.str());
                         else send_packet("E00");
                     }
@@ -255,43 +255,43 @@ namespace jw
                     }
                     else if (p == "m")  // read memory
                     {
-                        auto* addr = reinterpret_cast<byte*>(unhex(packet[1]));
-                        std::size_t len = unhex(packet[2]);
+                        auto* addr = reinterpret_cast<byte*>(decode(packet[1]));
+                        std::size_t len = decode(packet[2]);
                         for (auto i = addr; i < addr + len; ++i) s << setw(2) << static_cast<std::uint32_t>(*i);
                         send_packet(s.str());
                     }
                     else if (p == "M")  // write memory
                     {
-                        auto* addr = reinterpret_cast<byte*>(unhex(packet[1]));
-                        std::size_t len = unhex(packet[2]);
+                        auto* addr = reinterpret_cast<byte*>(decode(packet[1]));
+                        std::size_t len = decode(packet[2]);
                         for (std::size_t i = 0; i < len; ++i)
-                            addr[i] = unhex(packet[3].substr(i * 2, 2));
+                            addr[i] = decode(packet[3].substr(i * 2, 2));
                         send_packet("OK");
                     }
                     else if (p == "c")  // continue
                     {
-                        if (packet.size() > 1) f->fault_address.offset = unhex(packet[1]);
+                        if (packet.size() > 1) f->fault_address.offset = decode(packet[1]);
                         trace = true;
                         f->flags.trap = false;
                         return true;
                     }
                     else if (p == "s")  // step
                     {
-                        if (packet.size() > 1) f->fault_address.offset = unhex(packet[1]);
+                        if (packet.size() > 1) f->fault_address.offset = decode(packet[1]);
                         trace = true;
                         f->flags.trap = true;
                         return true;
                     }
                     else if (p == "C")  // continue with signal
                     {
-                        if (packet.size() > 2) f->fault_address.offset = unhex(packet[2]);
+                        if (packet.size() > 2) f->fault_address.offset = decode(packet[2]);
                         trace = true;
                         f->flags.trap = false;
                         return false;
                     }
                     else if (p == "S")  // step with signal
                     {
-                        if (packet.size() > 2) f->fault_address.offset = unhex(packet[2]);
+                        if (packet.size() > 2) f->fault_address.offset = decode(packet[2]);
                         trace = true;
                         f->flags.trap = true;
                         return false;
