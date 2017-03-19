@@ -257,7 +257,7 @@ namespace jw
                     {
                         auto* addr = reinterpret_cast<byte*>(decode(packet[1]));
                         std::size_t len = decode(packet[2]);
-                        for (auto i = addr; i < addr + len; ++i) s << setw(2) << static_cast<std::uint32_t>(*i);
+                        encode(s, addr, len);
                         send_packet(s.str());
                     }
                     else if (p == "M")  // write memory
