@@ -163,6 +163,12 @@ namespace jw
                     cr0.task_switched = true;
                     cr0.set();
                 }
+
+                std::shared_ptr<fpu_context> get_last_context()
+                {
+                    if (contexts.back() == nullptr) switch_context();
+                    return contexts[last_restored];
+                }
             } extern fpu_context_switcher;
         }
     }
