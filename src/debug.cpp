@@ -83,7 +83,7 @@ namespace jw
                 }
             }
 
-            auto unhex(const std::string& s)
+            inline auto unhex(const std::string& s)
             {
                 return std::stoul(s, nullptr, 16);
             }
@@ -126,7 +126,7 @@ namespace jw
                 std::string sum;
                 sum += gdb->get();
                 sum += gdb->get();
-                if (std::stoul(sum, nullptr, 0x10) == checksum(input)) *gdb << '+' << std::flush;
+                if (unhex(sum) == checksum(input)) *gdb << '+' << std::flush;
                 else { *gdb << '-' << std::flush; goto retry; }
                 std::clog << "recv <-- \""<< input << "\"\n";
 
@@ -239,7 +239,7 @@ namespace jw
                     }
                     else if (p == "p")  // read one register
                     {
-                        reg(s, static_cast<regnum>(std::stoul(packet[1], nullptr, 16)), r, f, t);
+                        reg(s, static_cast<regnum>(unhex(packet[1])), r, f, t);
                         if (s.peek() != EOF) send_packet(s.str());
                         else send_packet("E00");
                     }
@@ -255,17 +255,17 @@ namespace jw
                     }
                     else if (p == "m")  // read memory
                     {
-                        auto* addr = reinterpret_cast<byte*>(std::stoul(packet[1], nullptr, 16));
-                        std::size_t len = std::stoul(packet[2], nullptr, 16);
+                        auto* addr = reinterpret_cast<byte*>(unhex(packet[1]));
+                        std::size_t len = unhex(packet[2]);
                         for (auto i = addr; i < addr + len; ++i) s << setw(2) << static_cast<std::uint32_t>(*i);
                         send_packet(s.str());
                     }
                     else if (p == "M")  // write memory
                     {
-                        auto* addr = reinterpret_cast<byte*>(std::stoul(packet[1], nullptr, 16));
-                        std::size_t len = std::stoul(packet[2], nullptr, 16);
+                        auto* addr = reinterpret_cast<byte*>(unhex(packet[1]));
+                        std::size_t len = unhex(packet[2]);
                         for (std::size_t i = 0; i < len; ++i)
-                            addr[i] = std::stoul(packet[3].substr(i * 2, 2), nullptr, 16);
+                            addr[i] = unhex(packet[3].substr(i * 2, 2));
                         send_packet("OK");
                     }
                     else if (p == "c")  // continue
