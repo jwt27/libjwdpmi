@@ -83,6 +83,11 @@ namespace jw
                 }
             }
 
+            auto unhex(const std::string& s)
+            {
+                return std::stoul(s, nullptr, 16);
+            }
+
             std::uint32_t checksum(const std::string& s)
             {
                 std::uint8_t r { 0 };
@@ -189,7 +194,7 @@ namespace jw
                     s << hex << setfill('0');
                     if (!trace) packet = recv_packet();
                     auto& p = packet.front();
-                    if (p == "?")
+                    if (p == "?")   // stop reason
                     {
                         if (exc == 1 || exc == 3)
                         {
@@ -207,7 +212,7 @@ namespace jw
                         }
                         trace = false;
                     }
-                    else if (p == "q")
+                    else if (p == "q")  // query
                     {
                         auto& q = packet[1];
                         if (q == "Supported")
@@ -232,30 +237,30 @@ namespace jw
                         else if (q == "Attached") send_packet("0");
                         else send_packet("");
                     }
-                    else if (p == "p")
+                    else if (p == "p")  // read one register
                     {
                         reg(s, static_cast<regnum>(std::stoul(packet[1], nullptr, 16)), r, f, t);
                         if (s.peek() != EOF) send_packet(s.str());
                         else send_packet("E00");
                     }
-                    else if (p == "g")
+                    else if (p == "g")  // read registers
                     {
                         for (int i = eax; i <= eflags; ++i)
                             reg(s, static_cast<regnum>(i), r, f, t);
                         send_packet(s.str());
                     }
-                    else if (p == "G")
+                    else if (p == "G")  // write registers
                     {
                         send_packet("");    // TODO
                     }
-                    else if (p == "m")
+                    else if (p == "m")  // read memory
                     {
                         auto* addr = reinterpret_cast<byte*>(std::stoul(packet[1], nullptr, 16));
                         std::size_t len = std::stoul(packet[2], nullptr, 16);
                         for (auto i = addr; i < addr + len; ++i) s << setw(2) << static_cast<std::uint32_t>(*i);
                         send_packet(s.str());
                     }
-                    else if (p == "M")
+                    else if (p == "M")  // write memory
                     {
                         auto* addr = reinterpret_cast<byte*>(std::stoul(packet[1], nullptr, 16));
                         std::size_t len = std::stoul(packet[2], nullptr, 16);
@@ -263,32 +268,36 @@ namespace jw
                             addr[i] = std::stoul(packet[3].substr(i * 2, 2), nullptr, 16);
                         send_packet("OK");
                     }
-                    else if (p == "c")
+                    else if (p == "c")  // continue
                     {
+                        if (packet.size() > 1) f->fault_address.offset = unhex(packet[1]);
                         trace = true;
                         f->flags.trap = false;
                         return true;
                     }
-                    else if (p == "s")
+                    else if (p == "s")  // step
                     {
+                        if (packet.size() > 1) f->fault_address.offset = unhex(packet[1]);
                         trace = true;
                         f->flags.trap = true;
                         return true;
                     }
-                    else if (p == "C")
+                    else if (p == "C")  // continue with signal
                     {
+                        if (packet.size() > 2) f->fault_address.offset = unhex(packet[2]);
                         trace = true;
                         f->flags.trap = false;
                         return false;
                     }
-                    else if (p == "S")
+                    else if (p == "S")  // step with signal
                     {
+                        if (packet.size() > 2) f->fault_address.offset = unhex(packet[2]);
                         trace = true;
                         f->flags.trap = true;
                         return false;
                     }
-                    else if (p == "k") return false;
-                    else send_packet("");
+                    else if (p == "k") return false;    // kill
+                    else send_packet("");   // unknown packet
                 }
             }
 
