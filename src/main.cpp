@@ -96,6 +96,12 @@ int main(int argc, char** argv)
             }
             else args.emplace_back(argv[i]);
         }
+
+        if (dpmi::debug())
+        {
+            std::cout << "Debug mode activated. Connecting to GDB..." << std::endl;
+            dpmi::breakpoint();
+        }
     
         return jwdpmi_main(args); 
     }
@@ -117,14 +123,10 @@ void* operator new(std::size_t n)
 
 void operator delete(void* p, std::size_t n)
 {
-    if (dpmi::in_irq_context())
+    if (new_alloc.in_pool(p))
     {
-        try
-        {
-            jw::new_alloc.deallocate(reinterpret_cast<byte*>(p), n);
-            return;
-        }
-        catch (const std::bad_alloc&) { }
+        jw::new_alloc.deallocate(reinterpret_cast<byte*>(p), n);
+        return;
     }
     std::free(p);
 }
