@@ -100,15 +100,16 @@ namespace jw
             }
 
             template <typename T>
-            void reverse_decode(const std::string& in, T* out, std::size_t len = sizeof(T))
+            bool reverse_decode(const std::string& in, T* out, std::size_t len = sizeof(T))
             {
                 auto ptr = reinterpret_cast<byte*>(out);
                 for (std::size_t i = 0; i < len; ++i)
                 {
                     auto l = i * 2 + 2 >= in.size() ? in.npos : 2;
-                    if (i * 2 >= in.size()) return;
+                    if (i * 2 >= in.size()) return false;
                     ptr[i] = decode(in.substr(i * 2, l));
                 }
+                return true;
             }
 
             template <typename T>
@@ -209,22 +210,22 @@ namespace jw
                 auto* new_frame = static_cast<new_exception_frame*>(frame);
                 switch (r)
                 {
-                case eax: reverse_decode(value, &reg->eax, reglen[r]); return true;
-                case ebx: reverse_decode(value, &reg->ebx, reglen[r]); return true;
-                case ecx: reverse_decode(value, &reg->ecx, reglen[r]); return true;
-                case edx: reverse_decode(value, &reg->edx, reglen[r]); return true;
-                case ebp: reverse_decode(value, &reg->ebp, reglen[r]); return true;
-                case esi: reverse_decode(value, &reg->esi, reglen[r]); return true;
-                case edi: reverse_decode(value, &reg->edi, reglen[r]); return true;
-                case esp: reverse_decode(value, &frame->stack.offset, reglen[r]); return true;
-                case eip: reverse_decode(value, &frame->fault_address.offset, reglen[r]); return true;
-                case eflags: reverse_decode(value, &frame->flags.raw_eflags, reglen[r]);  return true;
-                case cs: reverse_decode(value, &frame->fault_address.segment, reglen[r]); return true;
-                case ss: reverse_decode(value, &frame->stack.segment, reglen[r]); return true;
-                case ds: if (new_type) { reverse_decode(value, &new_frame->ds, reglen[r]); return true; } return false;
-                case es: if (new_type) { reverse_decode(value, &new_frame->es, reglen[r]); return true; } return false;
-                case fs: if (new_type) { reverse_decode(value, &new_frame->fs, reglen[r]); return true; } return false;
-                case gs: if (new_type) { reverse_decode(value, &new_frame->gs, reglen[r]); return true; } return false;
+                case eax:    return reverse_decode(value, &reg->eax, reglen[r]);
+                case ebx:    return reverse_decode(value, &reg->ebx, reglen[r]);
+                case ecx:    return reverse_decode(value, &reg->ecx, reglen[r]);
+                case edx:    return reverse_decode(value, &reg->edx, reglen[r]);
+                case ebp:    return reverse_decode(value, &reg->ebp, reglen[r]);
+                case esi:    return reverse_decode(value, &reg->esi, reglen[r]);
+                case edi:    return reverse_decode(value, &reg->edi, reglen[r]);
+                case esp:    return reverse_decode(value, &frame->stack.offset, reglen[r]);
+                case eip:    return reverse_decode(value, &frame->fault_address.offset, reglen[r]);
+                case eflags: return reverse_decode(value, &frame->flags.raw_eflags, reglen[r]);
+                case cs:     return reverse_decode(value, &frame->fault_address.segment, reglen[r]);
+                case ss:     return reverse_decode(value, &frame->stack.segment, reglen[r]);
+                case ds: if (new_type) { return reverse_decode(value, &new_frame->ds, reglen[r]); } return false;
+                case es: if (new_type) { return reverse_decode(value, &new_frame->es, reglen[r]); } return false;
+                case fs: if (new_type) { return reverse_decode(value, &new_frame->fs, reglen[r]); } return false;
+                case gs: if (new_type) { return reverse_decode(value, &new_frame->gs, reglen[r]); } return false;
                 default: if (r > mxcsr) return false;
                     auto fpu = detail::fpu_context_switcher.get_last_context();
                     switch (r)
@@ -335,8 +336,8 @@ namespace jw
                     {
                         auto* addr = reinterpret_cast<byte*>(decode(packet[1]));
                         std::size_t len = decode(packet[2]);
-                        reverse_decode(packet[3], addr, len);
-                        send_packet("OK");
+                        if (reverse_decode(packet[3], addr, len)) send_packet("OK");
+                        else send_packet("E00");
                     }
                     else if (p == "c")  // continue
                     {
