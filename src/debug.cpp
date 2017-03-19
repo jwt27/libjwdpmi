@@ -39,7 +39,6 @@ namespace jw
             locked_pool_allocator<> alloc { 1_MB };
             std::deque<std::string, locked_pool_allocator<>> sent { alloc };
             std::unordered_map<std::string, std::string, std::hash<std::string>, std::equal_to<std::string>, locked_pool_allocator<>> supported { alloc };
-            const char* supported_response { "PacketSize=100000;swbreak+" };
 
             std::array<std::unique_ptr<exception_handler>, 0x20> exception_handlers;
             auto gdb { init_unique<std::iostream>(alloc) };
@@ -57,8 +56,7 @@ namespace jw
                 mxcsr
             };
 
-            template<std::uint32_t exc> 
-            inline auto signal_number()
+            inline auto signal_number(exception_num exc)
             {
                 switch (exc)
                 {
@@ -163,12 +161,16 @@ namespace jw
                 case es: if (new_type) reverse(out, &new_frame->es); return;
                 case fs: if (new_type) reverse(out, &new_frame->fs); return;
                 case gs: if (new_type) reverse(out, &new_frame->gs); return;
-                default: return;
+                default: if (r > mxcsr) return;
+                    auto fpu = detail::fpu_context_switcher.get_last_context();
+                    switch (r)
+                    {
+                        
+                    }
                 }
             }
 
-            template<std::uint32_t exc>
-            bool handle_exception(cpu_registers* r, exception_frame* f, bool t)
+            bool handle_exception(exception_num exc, cpu_registers* r, exception_frame* f, bool t)
             {
                 using namespace std;
                 try
@@ -183,11 +185,11 @@ namespace jw
                         if (p == "?")
                         {
                             if (exc == 1 || exc == 3)
-                            {                             
-                                s << "T" << setw(2) << signal_number<exc>();
+                            {
+                                s << "T" << setw(2) << signal_number(exc);
                                 s << eip << ':'; reg(s, eip, r, f, t); s << ';';
-                                s << esp << ':'; reg(s, esp, r, f, t); s << ';';  
-                                s << ebp << ':'; reg(s, ebp, r, f, t); s << ';';      
+                                s << esp << ':'; reg(s, esp, r, f, t); s << ';';
+                                s << ebp << ':'; reg(s, ebp, r, f, t); s << ';';
                                 s << eflags << ':'; reg(s, eflags, r, f, t); s << ';';
                                 s << eax << ':'; reg(s, eax, r, f, t); s << ';';
                                 s << ebx << ':'; reg(s, ebx, r, f, t); s << ';';
@@ -198,7 +200,7 @@ namespace jw
                             }
                             else
                             {
-                                s << "S" << setw(2) << signal_number<exc>();
+                                s << "S" << setw(2) << signal_number(exc);
                                 send_packet(s.str());
                             }
                             trace = false;
@@ -223,10 +225,9 @@ namespace jw
                                         supported[str.substr(0, equals_sign)] = str.substr(equals_sign + 1);
                                     }
                                 }
-                                send_packet(supported_response);
+                                send_packet("PacketSize=100000;swbreak+");
                             }
                             else if (q == "Attached") send_packet("0");
-                            //else if (q == "Offsets") send_packet("Text=0;Data=0");
                             else send_packet("");
                         }
                         else if (p == "p")
@@ -243,7 +244,7 @@ namespace jw
                         }
                         else if (p == "G")
                         {
-                            send_packet("");
+                            send_packet("");    // TODO
                         }
                         else if (p == "m")
                         {
@@ -288,31 +289,31 @@ namespace jw
 
                 gdb = allocate_unique<io::rs232_stream>(alloc, cfg);
 
-                exception_handlers[0x00] = std::make_unique<exception_handler>(0x00, [](auto* r, auto* f, bool t) { return handle_exception<0x00>(r, f, t); });
-                exception_handlers[0x01] = std::make_unique<exception_handler>(0x01, [](auto* r, auto* f, bool t) { return handle_exception<0x01>(r, f, t); });
-                exception_handlers[0x02] = std::make_unique<exception_handler>(0x02, [](auto* r, auto* f, bool t) { return handle_exception<0x02>(r, f, t); });
-                exception_handlers[0x03] = std::make_unique<exception_handler>(0x03, [](auto* r, auto* f, bool t) { return handle_exception<0x03>(r, f, t); });
-                exception_handlers[0x04] = std::make_unique<exception_handler>(0x04, [](auto* r, auto* f, bool t) { return handle_exception<0x04>(r, f, t); });
-                exception_handlers[0x05] = std::make_unique<exception_handler>(0x05, [](auto* r, auto* f, bool t) { return handle_exception<0x05>(r, f, t); });
-                exception_handlers[0x06] = std::make_unique<exception_handler>(0x06, [](auto* r, auto* f, bool t) { return handle_exception<0x06>(r, f, t); });
-                exception_handlers[0x07] = std::make_unique<exception_handler>(0x07, [](auto* r, auto* f, bool t) { return handle_exception<0x07>(r, f, t); });
-                exception_handlers[0x08] = std::make_unique<exception_handler>(0x08, [](auto* r, auto* f, bool t) { return handle_exception<0x08>(r, f, t); });
-                exception_handlers[0x09] = std::make_unique<exception_handler>(0x09, [](auto* r, auto* f, bool t) { return handle_exception<0x09>(r, f, t); });
-                exception_handlers[0x0a] = std::make_unique<exception_handler>(0x0a, [](auto* r, auto* f, bool t) { return handle_exception<0x0a>(r, f, t); });
-                exception_handlers[0x0b] = std::make_unique<exception_handler>(0x0b, [](auto* r, auto* f, bool t) { return handle_exception<0x0b>(r, f, t); });
-                exception_handlers[0x0c] = std::make_unique<exception_handler>(0x0c, [](auto* r, auto* f, bool t) { return handle_exception<0x0c>(r, f, t); });
-                exception_handlers[0x0d] = std::make_unique<exception_handler>(0x0d, [](auto* r, auto* f, bool t) { return handle_exception<0x0d>(r, f, t); });
-                exception_handlers[0x0e] = std::make_unique<exception_handler>(0x0e, [](auto* r, auto* f, bool t) { return handle_exception<0x0e>(r, f, t); });
+                exception_handlers[0x00] = std::make_unique<exception_handler>(0x00, [](auto* r, auto* f, bool t) { return handle_exception(0x00, r, f, t); });
+                exception_handlers[0x01] = std::make_unique<exception_handler>(0x01, [](auto* r, auto* f, bool t) { return handle_exception(0x01, r, f, t); });
+                exception_handlers[0x02] = std::make_unique<exception_handler>(0x02, [](auto* r, auto* f, bool t) { return handle_exception(0x02, r, f, t); });
+                exception_handlers[0x03] = std::make_unique<exception_handler>(0x03, [](auto* r, auto* f, bool t) { return handle_exception(0x03, r, f, t); });
+                exception_handlers[0x04] = std::make_unique<exception_handler>(0x04, [](auto* r, auto* f, bool t) { return handle_exception(0x04, r, f, t); });
+                exception_handlers[0x05] = std::make_unique<exception_handler>(0x05, [](auto* r, auto* f, bool t) { return handle_exception(0x05, r, f, t); });
+                exception_handlers[0x06] = std::make_unique<exception_handler>(0x06, [](auto* r, auto* f, bool t) { return handle_exception(0x06, r, f, t); });
+                exception_handlers[0x07] = std::make_unique<exception_handler>(0x07, [](auto* r, auto* f, bool t) { return handle_exception(0x07, r, f, t); });
+                exception_handlers[0x08] = std::make_unique<exception_handler>(0x08, [](auto* r, auto* f, bool t) { return handle_exception(0x08, r, f, t); });
+                exception_handlers[0x09] = std::make_unique<exception_handler>(0x09, [](auto* r, auto* f, bool t) { return handle_exception(0x09, r, f, t); });
+                exception_handlers[0x0a] = std::make_unique<exception_handler>(0x0a, [](auto* r, auto* f, bool t) { return handle_exception(0x0a, r, f, t); });
+                exception_handlers[0x0b] = std::make_unique<exception_handler>(0x0b, [](auto* r, auto* f, bool t) { return handle_exception(0x0b, r, f, t); });
+                exception_handlers[0x0c] = std::make_unique<exception_handler>(0x0c, [](auto* r, auto* f, bool t) { return handle_exception(0x0c, r, f, t); });
+                exception_handlers[0x0d] = std::make_unique<exception_handler>(0x0d, [](auto* r, auto* f, bool t) { return handle_exception(0x0d, r, f, t); });
+                exception_handlers[0x0e] = std::make_unique<exception_handler>(0x0e, [](auto* r, auto* f, bool t) { return handle_exception(0x0e, r, f, t); });
 
                 capabilities c { };
                 if (!c.supported) return;
                 if (std::strncmp(c.vendor_info.name, "HDPMI", 5) != 0) return;  // TODO: figure out if other hosts support these too
                 //exception_handlers[0x10] = std::make_unique<exception_handler>(0x10, [](auto* r, auto* f, bool t) { return handle_exception<0x10>(r, f, t); });
-                exception_handlers[0x11] = std::make_unique<exception_handler>(0x11, [](auto* r, auto* f, bool t) { return handle_exception<0x11>(r, f, t); });
-                exception_handlers[0x12] = std::make_unique<exception_handler>(0x12, [](auto* r, auto* f, bool t) { return handle_exception<0x12>(r, f, t); });
-                exception_handlers[0x13] = std::make_unique<exception_handler>(0x13, [](auto* r, auto* f, bool t) { return handle_exception<0x13>(r, f, t); });
-                exception_handlers[0x14] = std::make_unique<exception_handler>(0x14, [](auto* r, auto* f, bool t) { return handle_exception<0x14>(r, f, t); });
-                exception_handlers[0x1e] = std::make_unique<exception_handler>(0x1e, [](auto* r, auto* f, bool t) { return handle_exception<0x1e>(r, f, t); });
+                exception_handlers[0x11] = std::make_unique<exception_handler>(0x11, [](auto* r, auto* f, bool t) { return handle_exception(0x11, r, f, t); });
+                exception_handlers[0x12] = std::make_unique<exception_handler>(0x12, [](auto* r, auto* f, bool t) { return handle_exception(0x12, r, f, t); });
+                exception_handlers[0x13] = std::make_unique<exception_handler>(0x13, [](auto* r, auto* f, bool t) { return handle_exception(0x13, r, f, t); });
+                exception_handlers[0x14] = std::make_unique<exception_handler>(0x14, [](auto* r, auto* f, bool t) { return handle_exception(0x14, r, f, t); });
+                exception_handlers[0x1e] = std::make_unique<exception_handler>(0x1e, [](auto* r, auto* f, bool t) { return handle_exception(0x1e, r, f, t); });
             }
         }
 
