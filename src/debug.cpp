@@ -38,9 +38,12 @@ namespace jw
         {
             locked_pool_allocator<> alloc { 1_MB };
             std::deque<std::string, locked_pool_allocator<>> sent { alloc };
+            std::unordered_map<std::string, std::string, std::hash<std::string>, std::equal_to<std::string>, locked_pool_allocator<>> supported { alloc };
+            const char* supported_response { "PacketSize=100000" };
 
             std::array<std::unique_ptr<exception_handler>, 0x20> exception_handlers;
             auto gdb { init_unique<std::iostream>(alloc) };
+            bool trace { false };
 
             enum regnum
             {
@@ -55,7 +58,7 @@ namespace jw
             };
 
             template<std::uint32_t exc> 
-            auto signal_number()
+            inline auto signal_number()
             {
                 switch (exc)
                 {
@@ -84,44 +87,171 @@ namespace jw
 
             std::uint32_t checksum(const std::string& s)
             {
-                std::uint8_t r { };
+                std::uint8_t r { 0 };
                 for (auto c : s) r += c;
                 return r;
             }
             
             void send_packet(const std::string& output)
             {
+                std::clog << "send --> \"" << output << "\"\n";
                 const auto sum = checksum(output);
-                *gdb << '$' << output << '#' << std::setfill('0') << std::setw(2) << sum << std::flush;
+                *gdb << '$' << output << '#' << std::setfill('0') << std::hex << std::setw(2) << sum << std::flush;
                 sent.push_back(output);
             }
 
-            std::string recv_packet()
-            {
+            auto recv_packet()
+            {                                             
             retry:
                 switch (gdb->get())
                 {
                 case '-': send_packet(sent.front());
-                case '+': sent.pop_front(); 
+                case '+': if (sent.size() > 0) sent.pop_front();
                 default: goto retry;
                 case '$': break;
                 }
+
                 std::string input;
                 std::getline(*gdb, input, '#');
                 std::string sum;
                 sum += gdb->get();
                 sum += gdb->get();
-                if (std::strtoul(sum.c_str(), nullptr, 0x10) == checksum(input)) *gdb << '+' << std::flush;
+                if (std::stoul(sum, nullptr, 0x10) == checksum(input)) *gdb << '+' << std::flush;
                 else { *gdb << '-' << std::flush; goto retry; }
-                return input;
+                std::clog << "recv <-- \""<< input << "\"\n";
+
+                std::deque<std::string> parsed_input { };
+                std::size_t pos { };
+                while (pos < input.size())
+                {
+                    auto p = std::min({ input.find(',', pos), input.find(':', pos), input.find(';', pos) });
+                    if (p == input.npos) p = input.size();
+                    parsed_input.push_back(input.substr(pos, p - pos));
+                    pos += p - pos + 1;
+                }
+                return parsed_input;
+            }
+
+            void reverse(std::ostream& out, auto* in)
+            {
+                auto ptr = reinterpret_cast<byte*>(in);
+                for (auto i = 0; i < sizeof(*in); ++i) 
+                    out << std::setw(2) << static_cast<std::uint32_t>(ptr[i]);
+            }
+
+            void reg(std::ostream& out, regnum r, cpu_registers* reg, exception_frame* frame)
+            {
+                using namespace std;
+                switch (r)
+                {
+                case eax: reverse(out, &reg->eax); return;
+                case ebx: reverse(out, &reg->ebx); return;
+                case ecx: reverse(out, &reg->ecx); return;
+                case edx: reverse(out, &reg->edx); return;
+                case ebp: reverse(out, &reg->ebp); return;
+                case esi: reverse(out, &reg->esi); return;
+                case edi: reverse(out, &reg->edi); return;
+                case esp: reverse(out, &frame->stack.offset); return;
+                case eip: reverse(out, &frame->fault_address.offset); return;
+                case eflags: reverse(out, &frame->flags.raw_eflags); return;
+                default: return;// throw std::exception();
+                }
             }
 
             template<std::uint32_t exc>
-            bool handle_exception(auto* , auto* , bool )
+            bool handle_exception(cpu_registers* r, exception_frame* f, bool )
             {
-                std::stringstream str { };
-                str << "S " << std::setw(2) << exc;
-                send_packet(str.str());
+                using namespace std;
+                try
+                {
+                    while (true)
+                    {
+                        std::stringstream s { };
+                        s << hex << setfill('0');
+                        auto packet = recv_packet();
+                        auto& p = packet.front();
+                        if (trace || p == "?")
+                        {
+                            if (exc == 1 || exc == 3)
+                            {                             
+                                s << "T" << setw(2) << signal_number<exc>() << ';';
+                                s << eip << ':'; reg(s, eip, r, f); s << ';';
+                                s << esp << ':'; reg(s, esp, r, f); s << ';';  
+                                s << ebp << ':'; reg(s, ebp, r, f); s << ';';      
+                                s << eflags << ':'; reg(s, eflags, r, f); s << ';';
+                                s << eax << ':'; reg(s, eax, r, f); s << ';';
+                                s << ebx << ':'; reg(s, ebx, r, f); s << ';';
+                                s << ecx << ':'; reg(s, ecx, r, f); s << ';';
+                                s << edx << ':'; reg(s, edx, r, f); s << ';';
+                                send_packet(s.str());
+                            }
+                            else
+                            {
+                                s << "S" << setw(2) << signal_number<exc>();
+                                send_packet(s.str());
+                            }
+                            trace = false;
+                        }
+                        else if (p == "qSupported")
+                        {
+                            packet.pop_front();
+                            for (auto str : packet)
+                            {
+                                auto back = str.back();
+                                auto equals_sign = str.find('=', 0);
+                                if (back == '+' || back == '-')
+                                {
+                                    str.pop_back();
+                                    supported[str] = back;
+                                }
+                                else if (equals_sign != str.npos)
+                                {
+                                    supported[str.substr(0, equals_sign)] = str.substr(equals_sign + 1);
+                                }
+                            }
+                            send_packet(supported_response);
+                        }
+                        else if (p == "qAttached") send_packet("0");
+                        else if (p == "qOffsets") send_packet("TextSeg=0;DataSeg=0");
+                        else if (p == "g")
+                        {
+                            for (int i = eax; i <= eip; ++i)
+                                reg(s, static_cast<regnum>(i), r, f);
+                            send_packet(s.str());
+                        }
+                        else if (p == "G")
+                        {
+                            send_packet("");
+                        }
+                        else if (p[0] == 'm')
+                        {
+                            auto* addr = reinterpret_cast<byte*>(std::stoul(p.substr(1), nullptr, 16));
+                            std::size_t len = std::stoul(packet[1], nullptr, 16);
+                            for (auto i = addr; i < addr + len; ++i) s << setw(2) << static_cast<std::uint32_t>(*i);
+                            send_packet(s.str());
+                        }
+                        else if (p[0] == 'M')
+                        {
+                            send_packet("");
+                        }
+                        else if (p == "c")
+                        {
+                            trace = true;
+                            f->flags.trap = false;
+                            return true;
+                        }
+                        else if (p == "s")
+                        {
+                            trace = true;
+                            f->flags.trap = true;
+                            return true;
+                        }
+                        else if (p == "k") return false;
+                        else send_packet("");
+                    }
+                }
+                catch (...) { }
+                std::cerr << "Exception occured while communicating with GDB.\n";
                 return false;
             }
 
