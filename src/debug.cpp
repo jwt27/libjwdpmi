@@ -43,7 +43,6 @@ namespace jw
 
             std::array<std::unique_ptr<exception_handler>, 0x20> exception_handlers;
             auto gdb { init_unique<std::iostream>(alloc) };
-            bool trace { false };
 
             enum regnum
             {
@@ -170,117 +169,126 @@ namespace jw
                     }
                 }
             }
+            bool trace { false };
+            std::atomic_flag reentry { false };
+
+            bool handle_packet(exception_num exc, cpu_registers* r, exception_frame* f, bool t)
+            {
+                using namespace std;
+                std::deque<std::string> packet { "?" };
+                while (true)
+                {
+                    std::stringstream s { };
+                    s << hex << setfill('0');
+                    if (!trace) packet = recv_packet();
+                    auto& p = packet.front();
+                    if (p == "?")
+                    {
+                        if (exc == 1 || exc == 3)
+                        {
+                            s << "T" << setw(2) << signal_number(exc);
+                            s << eip << ':'; reg(s, eip, r, f, t); s << ';';
+                            s << esp << ':'; reg(s, esp, r, f, t); s << ';';
+                            s << ebp << ':'; reg(s, ebp, r, f, t); s << ';';
+                            s << eflags << ':'; reg(s, eflags, r, f, t); s << ';';
+                            s << eax << ':'; reg(s, eax, r, f, t); s << ';';
+                            s << ebx << ':'; reg(s, ebx, r, f, t); s << ';';
+                            s << ecx << ':'; reg(s, ecx, r, f, t); s << ';';
+                            s << edx << ':'; reg(s, edx, r, f, t); s << ';';
+                            s << "swbreak:;";
+                            send_packet(s.str());
+                        }
+                        else
+                        {
+                            s << "S" << setw(2) << signal_number(exc);
+                            send_packet(s.str());
+                        }
+                        trace = false;
+                    }
+                    else if (p == "q")
+                    {
+                        auto& q = packet[1];
+                        if (q == "Supported")
+                        {
+                            packet.pop_front();
+                            for (auto str : packet)
+                            {
+                                auto back = str.back();
+                                auto equals_sign = str.find('=', 0);
+                                if (back == '+' || back == '-')
+                                {
+                                    str.pop_back();
+                                    supported[str] = back;
+                                }
+                                else if (equals_sign != str.npos)
+                                {
+                                    supported[str.substr(0, equals_sign)] = str.substr(equals_sign + 1);
+                                }
+                            }
+                            send_packet("PacketSize=100000;swbreak+");
+                        }
+                        else if (q == "Attached") send_packet("0");
+                        else send_packet("");
+                    }
+                    else if (p == "p")
+                    {
+                        reg(s, static_cast<regnum>(std::stoul(packet[1], nullptr, 16)), r, f, t);
+                        if (s.peek() != EOF) send_packet(s.str());
+                        else send_packet("E00");
+                    }
+                    else if (p == "g")
+                    {
+                        for (int i = eax; i <= eflags; ++i)
+                            reg(s, static_cast<regnum>(i), r, f, t);
+                        send_packet(s.str());
+                    }
+                    else if (p == "G")
+                    {
+                        send_packet("");    // TODO
+                    }
+                    else if (p == "m")
+                    {
+                        auto* addr = reinterpret_cast<byte*>(std::stoul(packet[1], nullptr, 16));
+                        std::size_t len = std::stoul(packet[2], nullptr, 16);
+                        for (auto i = addr; i < addr + len; ++i) s << setw(2) << static_cast<std::uint32_t>(*i);
+                        send_packet(s.str());
+                    }
+                    else if (p == "M")
+                    {
+                        auto* addr = reinterpret_cast<byte*>(std::stoul(packet[1], nullptr, 16));
+                        std::size_t len = std::stoul(packet[2], nullptr, 16);
+                        for (std::size_t i = 0; i < len; ++i)
+                            addr[i] = std::stoul(packet[3].substr(i * 2, 2), nullptr, 16);
+                        send_packet("OK");
+                    }
+                    else if (p == "c")
+                    {
+                        trace = true;
+                        f->flags.trap = false;
+                        return true;
+                    }
+                    else if (p == "s")
+                    {
+                        trace = true;
+                        f->flags.trap = true;
+                        return true;
+                    }
+                    else if (p == "k") return false;
+                    else send_packet("");
+                }
+            }
 
             bool handle_exception(exception_num exc, cpu_registers* r, exception_frame* f, bool t)
             {
-                using namespace std;
+                if (reentry.test_and_set()) send_packet("EFF"); // last command caused another exception
+                bool result { false };
                 try
                 {
-                    std::deque<std::string> packet { "?" };
-                    while (true)
-                    {
-                        std::stringstream s { };
-                        s << hex << setfill('0');
-                        if (!trace) packet = recv_packet();
-                        auto& p = packet.front();
-                        if (p == "?")
-                        {
-                            if (exc == 1 || exc == 3)
-                            {
-                                s << "T" << setw(2) << signal_number(exc);
-                                s << eip << ':'; reg(s, eip, r, f, t); s << ';';
-                                s << esp << ':'; reg(s, esp, r, f, t); s << ';';
-                                s << ebp << ':'; reg(s, ebp, r, f, t); s << ';';
-                                s << eflags << ':'; reg(s, eflags, r, f, t); s << ';';
-                                s << eax << ':'; reg(s, eax, r, f, t); s << ';';
-                                s << ebx << ':'; reg(s, ebx, r, f, t); s << ';';
-                                s << ecx << ':'; reg(s, ecx, r, f, t); s << ';';
-                                s << edx << ':'; reg(s, edx, r, f, t); s << ';';
-                                s << "swbreak:;";
-                                send_packet(s.str());
-                            }
-                            else
-                            {
-                                s << "S" << setw(2) << signal_number(exc);
-                                send_packet(s.str());
-                            }
-                            trace = false;
-                        }
-                        else if (p == "q")
-                        {
-                            auto& q = packet[1];
-                            if (q == "Supported")
-                            {
-                                packet.pop_front();
-                                for (auto str : packet)
-                                {
-                                    auto back = str.back();
-                                    auto equals_sign = str.find('=', 0);
-                                    if (back == '+' || back == '-')
-                                    {
-                                        str.pop_back();
-                                        supported[str] = back;
-                                    }
-                                    else if (equals_sign != str.npos)
-                                    {
-                                        supported[str.substr(0, equals_sign)] = str.substr(equals_sign + 1);
-                                    }
-                                }
-                                send_packet("PacketSize=100000;swbreak+");
-                            }
-                            else if (q == "Attached") send_packet("0");
-                            else send_packet("");
-                        }
-                        else if (p == "p")
-                        {
-                            reg(s, static_cast<regnum>(std::stoul(packet[1], nullptr, 16)), r, f, t);
-                            if (s.peek() != EOF) send_packet(s.str());
-                            else send_packet("E00");
-                        }
-                        else if (p == "g")
-                        {
-                            for (int i = eax; i <= eflags; ++i)
-                                reg(s, static_cast<regnum>(i), r, f, t);
-                            send_packet(s.str());
-                        }
-                        else if (p == "G")
-                        {
-                            send_packet("");    // TODO
-                        }
-                        else if (p == "m")
-                        {
-                            auto* addr = reinterpret_cast<byte*>(std::stoul(packet[1], nullptr, 16));
-                            std::size_t len = std::stoul(packet[2], nullptr, 16);
-                            for (auto i = addr; i < addr + len; ++i) s << setw(2) << static_cast<std::uint32_t>(*i);
-                            send_packet(s.str());
-                        }
-                        else if (p == "M")
-                        {
-                            auto* addr = reinterpret_cast<byte*>(std::stoul(packet[1], nullptr, 16));
-                            std::size_t len = std::stoul(packet[2], nullptr, 16);
-                            for (std::size_t i = 0; i < len; ++i)
-                                addr[i] = std::stoul(packet[3].substr(i * 2, 2), nullptr, 16);
-                            send_packet("OK");
-                        }
-                        else if (p == "c")
-                        {
-                            trace = true;
-                            f->flags.trap = false;
-                            return true;
-                        }
-                        else if (p == "s")
-                        {
-                            trace = true;
-                            f->flags.trap = true;
-                            return true;
-                        }
-                        else if (p == "k") return false;
-                        else send_packet("");
-                    }
+                    result = handle_packet(exc, r, f, t);
                 }
-                catch (...) { }
-                std::cerr << "Exception occured while communicating with GDB.\n";
-                return false;
+                catch (...) { std::cerr << "Exception occured while communicating with GDB.\n"; }
+                reentry.clear();
+                return result;
             }
 
             void setup(const io::rs232_config& cfg)
