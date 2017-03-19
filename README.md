@@ -10,11 +10,12 @@ Current features include:
 * CPU exception handling, also nested and re-entrant.
 * Cooperative multi-threading and coroutines.
 * RS-232 serial communication using `std::iostream`.
-* Event-driven keyboard interface
+* Event-driven keyboard interface.
+* GDB remote debugging support.
 
 ## Installing
 * Build and install DJGPP (the DOS port of gcc)  
-A build script can be found here: https://github.com/andrewwutw/build-djgpp
+The easiest way is to use Andrew Wu's build script, found here: https://github.com/andrewwutw/build-djgpp
 
 * Set your `PATH` and `GCC_EXEC_PREFIX` accordingly:  
 ```
