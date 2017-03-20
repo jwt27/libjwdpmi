@@ -47,26 +47,26 @@ namespace jw
             watchpoint(std::uintptr_t linear_addr, std::size_t size_bytes, type t)
             {
                 dpmi_error_code error;
+                bool c;
                 split_uint32_t addr = linear_addr;
-                asm (
+                asm volatile(
                     "int 0x31;"
-                    "jnc success%=;"
-                    "mov bx, 0xDEAD;"
-                    "success%=:;"
-                    : "+b"(handle)
-                    , "+a"(error)
+                    : "=@ccc"(c)
+                    , "=a"(error)
+                    , "=b"(handle)
                     : "a"(0x0b00)
                     , "b"(addr.hi)
                     , "c"(addr.lo)
                     , "d"((t << 8) | size_bytes)
                     : "cc");
-                if (handle == 0xDEAD) throw dpmi_error(error, "set_watchpoint");
+                if (c) throw dpmi_error(error, "set_watchpoint");
             }
 
             // Remove a watchpoint (DPMI 0.9, AX=0B01)
             ~watchpoint()
             {
-                asm("int 0x31;"
+                asm volatile(
+                    "int 0x31;"
                     ::"a"(0x0b01)
                     , "b"(handle)
                     : "cc");
@@ -77,36 +77,32 @@ namespace jw
             // Returns true if the watchpoint has been triggered.
             bool get_state() const
             {
-                bool state;
+                bool c;
                 dpmi_error_code error;
-                asm (
-                    "int 0x31;"
-                    "jnc success%=;"
-                    "mov edx, eax;"
-                    "success%=:;"
-                    : "+a"(state)
-                    , "+d"(error)
+                asm("int 0x31;"
+                    : "=@ccc" (c)
+                    , "=a"(error)
                     : "a"(0x0b02)
                     , "b"(handle)
                     , "d"(0)
                     : "cc");
-                if (error) throw dpmi_error(error, "clear_watchpoint");
+                if (c) throw dpmi_error(error, "clear_watchpoint");
+                return error != 0;
             }
 
             // Reset the state of this watchpoint (DPMI 0.9, AX=0B03)
             void reset()
             {
+                bool c;
                 dpmi_error_code error;
                 asm (
                     "int 0x31;"
-                    "jc fail%=;"
-                    "mov eax, 0;"
-                    "fail%=:;"
-                    : "+a"(error)
+                    : "=@ccc" (c)
+                    , "=a"(error)
                     : "a"(0x0b03)
                     , "b"(handle)
                     : "cc");
-                if (error) throw dpmi_error(error, "reset_watchpoint");
+                if (c) throw dpmi_error(error, "reset_watchpoint");
             }
 
         private:
