@@ -196,6 +196,16 @@ namespace jw
                 return parsed_input;
             }
 
+            auto& get_threads()
+            {
+                return jw::thread::detail::scheduler::threads;
+            }
+
+            auto get_current_thread()
+            {
+                return jw::thread::detail::scheduler::get_current_thread().lock();
+            }
+
             void reg(std::ostream& out, regnum r, cpu_registers* reg, exception_frame* frame, bool new_type)
             {
                 auto* new_frame = static_cast<new_exception_frame*>(frame);
@@ -327,6 +337,20 @@ namespace jw
                             send_packet("PacketSize=100000;swbreak+");
                         }
                         else if (q == "Attached") send_packet("0");
+                        else if (q == "C")
+                        {
+                            s << "QC";
+                            encode(s, &get_current_thread()->id());
+                            send_packet(s.str());
+                        }
+                        else if (q == "fThreadInfo")
+                        {
+                            s << "m";
+                            encode(s, &get_current_thread()->id());
+                            for (auto& t : get_threads()) { s << ','; encode(s, &t->id()); }
+                            send_packet(s.str());
+                        }
+                        else if (q == "sThreadInfo") send_packet("l");
                         else send_packet("");
                     }
                     else if (p == "p")  // read one register
