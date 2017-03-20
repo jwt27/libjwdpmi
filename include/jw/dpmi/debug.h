@@ -43,6 +43,9 @@ namespace jw
             watchpoint(T* ptr, type t) : watchpoint(memory_info::near_to_linear(ptr), sizeof(T), t) 
             { static_assert(sizeof(T) == 4 || sizeof(T) == 2 || sizeof(T) == 1); }
 
+            watchpoint(auto* ptr, type t, std::size_t size) : watchpoint(memory_info::near_to_linear(ptr), size, t)
+            { }
+
             // Set a watchpoint (DPMI 0.9, AX=0B00)
             watchpoint(std::uintptr_t linear_addr, std::size_t size_bytes, type t)
             {
