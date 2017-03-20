@@ -451,7 +451,7 @@ namespace jw
                                 watchpoints.erase(addr);
                                 send_packet("OK");
                             }
-                            send_packet("E00");
+                            else send_packet("E00");
                         }
                     }
                     else if (p == "k") return false;    // kill
