@@ -119,7 +119,7 @@ namespace jw
         almost,
         yes
     } new_alloc_initialized { no };
-    dpmi::detail::new_allocator* new_alloc { };
+    dpmi::detail::new_allocator* new_alloc { nullptr };
 }
 
 void* operator new(std::size_t n)
@@ -127,11 +127,34 @@ void* operator new(std::size_t n)
     if (dpmi::in_irq_context()) return new_alloc->allocate(n);
     if (new_alloc_initialized == no)
     {
-        new_alloc_initialized = almost;
-        new_alloc = new dpmi::detail::new_allocator { };
-        new_alloc_initialized = yes;
+        try
+        {
+            new_alloc_initialized = almost;
+            if (new_alloc != nullptr) delete new_alloc;
+            new_alloc = nullptr;
+            new_alloc = new dpmi::detail::new_allocator { };
+            new_alloc_initialized = yes;
+        }
+        catch (...)
+        {
+            new_alloc_initialized = no;
+            throw;
+        }
     }
-    else if (new_alloc_initialized == yes) jw::new_alloc->resize_if_necessary();
+    else if (new_alloc_initialized == yes)
+    {
+        try
+        {
+            new_alloc_initialized = almost;
+            jw::new_alloc->resize_if_necessary();
+            new_alloc_initialized = yes;
+        }
+        catch (...)
+        {
+            new_alloc_initialized = no;
+            throw;
+        }
+    }
     return std::malloc(n);
 }
 
