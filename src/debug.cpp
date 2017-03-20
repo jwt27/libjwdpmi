@@ -37,11 +37,12 @@ namespace jw
 
         namespace gdb
         {
-            const bool debugmsg = true;
+            const bool debugmsg = false;
 
             locked_pool_allocator<> alloc { 1_MB };
             std::deque<std::string, locked_pool_allocator<>> sent { alloc };
-            std::unordered_map<std::string, std::string, std::hash<std::string>, std::equal_to<std::string>, locked_pool_allocator<>> supported { alloc };
+            //std::unordered_map<std::string, std::string, std::hash<std::string>, std::equal_to<std::string>, locked_pool_allocator<>> supported { alloc };
+            std::map<std::string, std::string, std::less<std::string>, locked_pool_allocator<>> supported { alloc };
 
             std::array<std::unique_ptr<exception_handler>, 0x20> exception_handlers;
             auto gdb { init_unique<std::iostream>(alloc) };
