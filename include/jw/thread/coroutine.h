@@ -60,9 +60,10 @@ namespace jw
                     dpmi::throw_if_irq();
                     if (scheduler::is_current_thread(this)) return false;
 
-                    this->try_await_while([this]() { return this->state == running; });
+                    this->try_await_while([this]() { return this->state == running || (this->state == suspended && !result); });
 
                     if (this->state != suspended) return false;
+                    if (!result) return false;
                     return true;
                 }
 
