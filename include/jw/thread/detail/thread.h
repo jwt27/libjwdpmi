@@ -79,10 +79,11 @@ namespace jw
 
             public:
                 bool is_running() const noexcept { return (state != initialized && state != finished); }
-                bool allow_orphan { false };
                 auto pending_exceptions() const noexcept { return exceptions.size(); }
-                std::string name { "anonymous thread" };
                 const auto& id() const noexcept { return id_num; }
+                auto get_state() const noexcept { return state; }
+                std::string name { "anonymous thread" };
+                bool allow_orphan { false };
                 
                 virtual ~thread()
                 {

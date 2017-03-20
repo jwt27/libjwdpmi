@@ -206,6 +206,13 @@ namespace jw
                 return jw::thread::detail::scheduler::get_current_thread().lock();
             }
 
+            auto get_thread(auto id)
+            {
+                auto t = std::find_if(get_threads().begin(), get_threads().end(), [id](const auto& t) { return t->id() == id; });
+                if (t == get_threads().end()) return std::weak_ptr<thread::detail::thread> { };
+                return std::weak_ptr<thread::detail::thread> { *t };
+            }
+
             void reg(std::ostream& out, regnum r, cpu_registers* reg, exception_frame* frame, bool new_type)
             {
                 auto* new_frame = static_cast<new_exception_frame*>(frame);
@@ -273,7 +280,7 @@ namespace jw
                 }
             }
 
-            bool handle_packet(exception_num exc, cpu_registers* r, exception_frame* f, bool t)
+            [[gnu::hot]] bool handle_packet(exception_num exc, cpu_registers* r, exception_frame* f, bool t)
             {
                 using namespace std;
                 std::deque<std::string> packet { "?" };
@@ -334,7 +341,7 @@ namespace jw
                                     supported[str.substr(0, equals_sign)] = str.substr(equals_sign + 1);
                                 }
                             }
-                            send_packet("PacketSize=100000;swbreak+");
+                            send_packet("PacketSize=100000;swbreak+;hwbreak+");
                         }
                         else if (q == "Attached") send_packet("0");
                         else if (q == "C")
@@ -347,11 +354,34 @@ namespace jw
                         {
                             s << "m";
                             encode(s, &get_current_thread()->id());
-                            auto& threads = get_threads();
-                            for (auto& t : threads) { s << ','; encode(s, &t->id()); }
+                            for (auto& t : get_threads()) { s << ','; encode(s, &t->id()); }
                             send_packet(s.str());
                         }
                         else if (q == "sThreadInfo") send_packet("l");
+                        else if (q == "ThreadExtraInfo")
+                        {
+                            using namespace thread::detail;
+                            std::stringstream msg { };
+                            auto id = decode(packet[2]);
+                            if (auto t = get_thread(id).lock())
+                            {
+                                msg << t->name << ": ";
+                                switch (t->get_state())
+                                {
+                                case initialized: msg << "Initialized"; break;
+                                case starting:    msg << "Starting";    break;
+                                case running:     msg << "Running";     break;
+                                case suspended:   msg << "Suspended";   break;
+                                case terminating: msg << "Terminating"; break;
+                                case finished:    msg << "Finished";    break;
+                                }
+                                if (t->pending_exceptions()) msg << ", " << t->pending_exceptions() << " pending exception(s)!";
+                                else msg << ".";
+                            }
+                            else msg << "invalid thread.";
+                            auto str = msg.str();
+                            encode(s, str.c_str(), str.size());
+                        }
                         else send_packet("");
                     }
                     else if (p == "p")  // read one register
@@ -496,7 +526,7 @@ namespace jw
                 }
             }
 
-            bool handle_exception(exception_num exc, cpu_registers* r, exception_frame* f, bool t)
+            [[gnu::hot]] bool handle_exception(exception_num exc, cpu_registers* r, exception_frame* f, bool t)
             {
                 if (debugmsg) std::clog << "entering exception 0x" << std::hex << exc << "\n";
                 if (debugmsg) std::clog << *static_cast<new_exception_frame*>(f) << *r;
