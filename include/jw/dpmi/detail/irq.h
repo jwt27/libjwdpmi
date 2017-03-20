@@ -161,8 +161,7 @@ namespace jw
                 INTERRUPT static byte* get_stack_ptr() noexcept;
                 INTERRUPT static void interrupt_entry_point(int_vector vec) noexcept;
 
-                static locked_pool_allocator<> alloc;
-                static std::vector<int_vector, locked_pool_allocator<>> current_int; // Current interrupt vector. Set to 0 when acknowlegded.
+                static std::vector<int_vector> current_int; // Current interrupt vector. Set to 0 when acknowlegded.
                 static std::unordered_map<int_vector, irq_controller, std::hash<int_vector>, std::equal_to<int_vector>, locking_allocator<>> entries;
                 static std::vector<byte, locking_allocator<>> stack;
                 static std::uint32_t stack_use_count;
