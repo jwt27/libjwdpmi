@@ -393,6 +393,8 @@ namespace jw
                     else if (p == "Z")  // set watchpoint
                     {
                         auto& z = packet[1];
+                        std::uintptr_t addr = decode(packet[2]);
+                        auto ptr = reinterpret_cast<byte*>(addr);
                         if (z == "0")   // breakpoint
                         {
                             if (packet.size() > 4)  // conditional breakpoint
@@ -400,30 +402,57 @@ namespace jw
                                 send_packet("");    // not implemented (TODO)
                                 continue;
                             }
-                            std::uintptr_t addr = decode(packet[2]);
-                            auto ptr = reinterpret_cast<byte*>(addr);
                             breakpoints.emplace(addr, *ptr);
                             *ptr = 0xcc;
                             send_packet("OK");
                         }
-                        else send_packet("");
+                        else
+                        {
+                            watchpoint::type w;
+                            if (z == "1") w = watchpoint::execute;
+                            else if (z == "2") w = watchpoint::read_write;
+                            else if (z == "3") w = watchpoint::read;
+                            else if (z == "4") w = watchpoint::read_write;
+                            else
+                            {
+                                send_packet("");
+                                continue;
+                            }
+                            try
+                            {
+                                std::size_t size = decode(packet[3]);
+                                watchpoints.emplace(addr, watchpoint { ptr, w, size });
+                                send_packet("OK");
+                            }
+                            catch (...)
+                            {
+                                send_packet("E00");
+                            }
+                        }
                     }
                     else if (p == "z")  // remove watchpoint
                     {
                         auto& z = packet[1];
+                        std::uintptr_t addr = decode(packet[2]);
+                        auto ptr = reinterpret_cast<byte*>(addr);
                         if (z == "0")   // breakpoint
                         {
-                            std::uintptr_t addr = decode(packet[2]);
-                            if (!breakpoints.count(addr))
+                            if (breakpoints.count(addr))
                             {
-                                send_packet("E00");
-                                continue;
+                                *ptr = breakpoints[addr];
+                                send_packet("OK");
                             }
-                            auto ptr = reinterpret_cast<byte*>(addr);
-                            *ptr = breakpoints[addr];
-                            send_packet("OK");
+                            else send_packet("E00");
                         }
-                        else send_packet("");
+                        else
+                        {
+                            if (watchpoints.count(addr))
+                            {
+                                watchpoints.erase(addr);
+                                send_packet("OK");
+                            }
+                            send_packet("E00");
+                        }
                     }
                     else if (p == "k") return false;    // kill
                     else send_packet("");   // unknown packet
