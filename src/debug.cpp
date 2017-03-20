@@ -109,11 +109,13 @@ namespace jw
                 }
             }
 
+            // Decode big-endian hex string
             inline auto decode(const std::string& s)
             {
                 return std::stoul(s, nullptr, 16);
             }
 
+            // Decode little-endian hex string
             template <typename T>
             bool reverse_decode(const std::string& in, T* out, std::size_t len = sizeof(T))
             {
@@ -127,12 +129,22 @@ namespace jw
                 return true;
             }
 
+            // Encode little-endian hex string
             template <typename T>
             void encode(std::ostream& out, T* in, std::size_t len = sizeof(T))
             {
                 auto ptr = reinterpret_cast<const byte*>(in);
                 for (std::size_t i = 0; i < len; ++i) 
                     out << std::setw(2) << static_cast<std::uint32_t>(ptr[i]);
+            }
+
+            // Encode big-endian hex string
+            template <typename T>
+            void reverse_encode(std::ostream& out, T* in, std::size_t len = sizeof(T))
+            {
+                auto ptr = reinterpret_cast<const byte*>(in);
+                for (std::size_t i = 0; i < len; ++i)
+                    out << std::setw(2) << static_cast<std::uint32_t>(ptr[len - i - 1]);
             }
 
             void encode_null(std::ostream& out, std::size_t len)
@@ -347,14 +359,14 @@ namespace jw
                         else if (q == "C")
                         {
                             s << "QC";
-                            encode(s, &get_current_thread()->id());
+                            reverse_encode(s, &get_current_thread()->id());
                             send_packet(s.str());
                         }
                         else if (q == "fThreadInfo")
                         {
                             s << "m";
-                            encode(s, &get_current_thread()->id());
-                            for (auto& t : get_threads()) { s << ','; encode(s, &t->id()); }
+                            reverse_encode(s, &get_current_thread()->id());
+                            for (auto& t : get_threads()) { s << ','; reverse_encode(s, &t->id()); }
                             send_packet(s.str());
                         }
                         else if (q == "sThreadInfo") send_packet("l");
