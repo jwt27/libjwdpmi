@@ -49,8 +49,8 @@ namespace jw
             // Set a watchpoint (DPMI 0.9, AX=0B00)
             watchpoint(std::uintptr_t linear_addr, std::size_t size_bytes, type t)
             {
-                dpmi_error_code error;
                 bool c;
+                dpmi_error_code error;
                 split_uint32_t addr = linear_addr;
                 asm volatile(
                     "int 0x31;"
