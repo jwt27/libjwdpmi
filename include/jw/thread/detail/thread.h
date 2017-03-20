@@ -82,7 +82,7 @@ namespace jw
                 bool allow_orphan { false };
                 auto pending_exceptions() const noexcept { return exceptions.size(); }
                 std::string name { "anonymous thread" };
-                auto id() { return id_num; }
+                const auto& id() const noexcept { return id_num; }
                 
                 virtual ~thread()
                 {
