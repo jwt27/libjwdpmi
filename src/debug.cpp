@@ -397,6 +397,16 @@ namespace jw
                         }
                         else send_packet("");
                     }
+                    else if (p == "v")
+                    {
+                        auto& v = packet[1];
+                        if (v == "Stopped")
+                        {
+                            trace = true;
+                            packet[0] = "?";
+                        }
+                        else send_packet("");
+                    }
                     else if (p == "p")  // read one register
                     {
                         auto regn = static_cast<regnum>(decode(packet[1]));
