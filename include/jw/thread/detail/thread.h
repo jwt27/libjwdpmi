@@ -57,10 +57,13 @@ namespace jw
                 friend class scheduler;
                 template<std::size_t> friend class task_base;
 
+                static std::uint32_t id_count;
+
                 thread_context* context; // points to esp during context switch
                 const std::size_t stack_size;
                 byte* const stack_ptr;
                 std::deque<std::exception_ptr> exceptions { };
+                std::uint32_t id_num;
 
             protected:
                 thread_state state { initialized };
@@ -72,13 +75,14 @@ namespace jw
                 auto& operator=(const thread&) = delete;
                 thread(const thread&) = delete;
 
-                thread(std::size_t bytes, byte* ptr) : stack_size(bytes), stack_ptr(ptr) { }
+                thread(std::size_t bytes, byte* ptr) : stack_size(bytes), stack_ptr(ptr), id_num(id_count++) { }
 
             public:
                 bool is_running() const noexcept { return (state != initialized && state != finished); }
                 bool allow_orphan { false };
                 auto pending_exceptions() const noexcept { return exceptions.size(); }
                 std::string name { "anonymous thread" };
+                auto id() { return id_num; }
                 
                 virtual ~thread()
                 {
