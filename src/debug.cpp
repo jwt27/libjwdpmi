@@ -220,9 +220,10 @@ namespace jw
 
             auto get_thread(auto id)
             {
+                if (get_current_thread()->id() == id) return get_current_thread();
                 auto t = std::find_if(get_threads().begin(), get_threads().end(), [id](const auto& t) { return t->id() == id; });
-                if (t == get_threads().end()) return std::weak_ptr<thread::detail::thread> { };
-                return std::weak_ptr<thread::detail::thread> { *t };
+                if (t != get_threads().end()) return *t;
+                return thread::detail::thread_ptr { };
             }
 
             void reg(std::ostream& out, regnum r, cpu_registers* reg, exception_frame* frame, bool new_type)
@@ -375,7 +376,7 @@ namespace jw
                             using namespace thread::detail;
                             std::stringstream msg { };
                             auto id = decode(packet[2]);
-                            if (auto t = get_thread(id).lock())
+                            if (auto t = get_thread(id))
                             {
                                 msg << t->name << ": ";
                                 switch (t->get_state())
@@ -388,11 +389,11 @@ namespace jw
                                 case finished:    msg << "Finished";    break;
                                 }
                                 if (t->pending_exceptions()) msg << ", " << t->pending_exceptions() << " pending exception(s)!";
-                                else msg << ".";
                             }
-                            else msg << "invalid thread.";
+                            else msg << "invalid thread";
                             auto str = msg.str();
                             encode(s, str.c_str(), str.size());
+                            send_packet(s.str());
                         }
                         else send_packet("");
                     }
