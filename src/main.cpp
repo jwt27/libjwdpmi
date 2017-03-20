@@ -22,6 +22,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <jw/dpmi/debug.h>
 #include <jw/dpmi/cpu_exception.h>
 #include <jw/dpmi/detail/debug.h>
+#include <jw/dpmi/detail/alloc.h>
 #include <jw/io/rs232.h>
 #include <../jwdpmi_config.h>
 
@@ -112,12 +113,12 @@ int main(int argc, char** argv)
 
 namespace jw
 {
-    dpmi::locked_pool_allocator<> new_alloc { 1_MB };   // TODO: auto-resize
+    dpmi::detail::new_allocator new_alloc { };   // TODO: auto-resize
 }
 
 void* operator new(std::size_t n)
 {
-    if (dpmi::in_irq_context()) return reinterpret_cast<void*>(jw::new_alloc.allocate(n));
+    if (dpmi::in_irq_context()) return jw::new_alloc.allocate(n);
     return std::malloc(n);
 }
 
@@ -125,7 +126,7 @@ void operator delete(void* p, std::size_t n)
 {
     if (new_alloc.in_pool(p))
     {
-        jw::new_alloc.deallocate(reinterpret_cast<byte*>(p), n);
+        jw::new_alloc.deallocate(p);
         return;
     }
     std::free(p);
