@@ -45,21 +45,6 @@ namespace jw
                     scheduler::thread_switch(this->shared_from_this());
                 }
 
-            public:
-                // Aborts the task.
-                // This throws an abort_thread exception on the thread, allowing the task to clean up and return normally.
-                // May rethrow unhandled exceptions!
-                void abort(bool wait = true)
-                {
-                    if (!this->is_running()) return;
-
-                    this->state = terminating;
-
-                    if (dpmi::in_irq_context()) return;
-                    if (wait && !scheduler::is_current_thread(this))
-                        try_await_while([&]() { return this->is_running(); });
-                }
-
                 template<typename F>
                 void try_await_while(F f)
                 {
@@ -75,6 +60,24 @@ namespace jw
                     }
                     scheduler::current_thread->awaiting.reset();
                 }
+
+            public:
+                // Aborts the task.
+                // This throws an abort_thread exception on the thread, allowing the task to clean up and return normally.
+                // May rethrow unhandled exceptions!
+                void abort(bool wait = true)
+                {
+                    if (!this->is_running()) return;
+
+                    this->state = terminating;
+
+                    if (dpmi::in_irq_context()) return;
+                    if (wait && !scheduler::is_current_thread(this))
+                        try_await_while([&]() { return this->is_running(); });
+                }
+
+                constexpr void suspend() noexcept { if (this->state == running) this->state = suspended; }
+                constexpr void resume() noexcept { if (this->state == suspended) this->state = running; }
 
                 virtual ~task_base()
                 {
@@ -148,9 +151,6 @@ namespace jw
                     this->state = initialized;
                     return get_result(std::is_void<R> { });
                 }
-
-                constexpr void suspend() noexcept { if (this->state == running) this->state = suspended; }
-                constexpr void resume() noexcept { if (this->state == suspended) this->state = running; }
 
                 task_impl(std::function<R(A...)> f) : function(f) { }   // TODO: allocator support!
             };
