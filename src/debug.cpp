@@ -390,12 +390,12 @@ namespace jw
                         f->flags.trap = true;
                         return false;
                     }
-                    else if (p == "Z")  // set watchpoint
+                    else if (p == "Z")  // set break/watchpoint
                     {
                         auto& z = packet[1];
                         std::uintptr_t addr = decode(packet[2]);
                         auto ptr = reinterpret_cast<byte*>(addr);
-                        if (z == "0")   // breakpoint
+                        if (z == "0")   // set breakpoint
                         {
                             if (packet.size() > 4)  // conditional breakpoint
                             {
@@ -406,7 +406,7 @@ namespace jw
                             *ptr = 0xcc;
                             send_packet("OK");
                         }
-                        else
+                        else            // set watchpoint
                         {
                             watchpoint::type w;
                             if (z == "1") w = watchpoint::execute;
@@ -430,12 +430,12 @@ namespace jw
                             }
                         }
                     }
-                    else if (p == "z")  // remove watchpoint
+                    else if (p == "z")  // remove break/watchpoint
                     {
                         auto& z = packet[1];
                         std::uintptr_t addr = decode(packet[2]);
                         auto ptr = reinterpret_cast<byte*>(addr);
-                        if (z == "0")   // breakpoint
+                        if (z == "0")   // remove breakpoint
                         {
                             if (breakpoints.count(addr))
                             {
@@ -444,7 +444,7 @@ namespace jw
                             }
                             else send_packet("E00");
                         }
-                        else
+                        else            // remove watchpoint
                         {
                             if (watchpoints.count(addr))
                             {
@@ -454,7 +454,7 @@ namespace jw
                             else send_packet("E00");
                         }
                     }
-                    else if (p == "k") return false;    // kill
+                    else if (p == "k") return false;    // kill (this is a stupid way to do it...)
                     else send_packet("");   // unknown packet
                 }
             }
