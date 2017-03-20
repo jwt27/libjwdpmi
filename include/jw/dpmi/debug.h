@@ -33,7 +33,7 @@ namespace jw
         // Remember, only 4 watchpoints can exist simultaneously.
         struct watchpoint
         {
-            enum type
+            enum watchpoint_type
             {
                 execute,
                 read,
@@ -41,18 +41,23 @@ namespace jw
             };
 
             template<typename T>
-            watchpoint(T* ptr, type t) : watchpoint(memory_info::near_to_linear(ptr), sizeof(T), t) 
+            watchpoint(T* ptr, watchpoint_type t) : watchpoint(memory_info::near_to_linear(ptr), sizeof(T), t) 
             { static_assert(sizeof(T) == 4 || sizeof(T) == 2 || sizeof(T) == 1); }
 
-            watchpoint(auto* ptr, type t, std::size_t size) : watchpoint(memory_info::near_to_linear(ptr), size, t) { }
+            watchpoint(auto* ptr, watchpoint_type t, std::size_t size) : watchpoint(memory_info::near_to_linear(ptr), size, t) { }
 
             watchpoint(const watchpoint&) = delete;
             watchpoint& operator=(const watchpoint&) = delete;
-            watchpoint(watchpoint&& m) : handle(m.handle) { m.handle = null_handle; }
-            watchpoint& operator=(watchpoint&& m) { std::swap(handle, m.handle); return *this; }
+            watchpoint(watchpoint&& m) : handle(m.handle), type(m.type) { m.handle = null_handle; }
+            watchpoint& operator=(watchpoint&& m) 
+            { 
+                std::swap(handle, m.handle); 
+                type = m.type; 
+                return *this; 
+            }
 
             // Set a watchpoint (DPMI 0.9, AX=0B00)
-            watchpoint(std::uintptr_t linear_addr, std::size_t size_bytes, type t)
+            watchpoint(std::uintptr_t linear_addr, std::size_t size_bytes, watchpoint_type t) : type(t)
             {
                 bool c;
                 dpmi_error_code error;
@@ -114,9 +119,12 @@ namespace jw
                 if (c) throw dpmi_error(error, "reset_watchpoint");
             }
 
+            auto get_type() { return type; }
+
         private:
             const std::uint32_t null_handle { std::numeric_limits<std::uint32_t>::max() };
             std::uint32_t handle { null_handle };
+            watchpoint_type type;
         };
     }
 }
