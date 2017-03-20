@@ -16,6 +16,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #pragma once
+#include <limits>
 #include <jw/dpmi/dpmi.h>
 
 namespace jw
@@ -43,8 +44,12 @@ namespace jw
             watchpoint(T* ptr, type t) : watchpoint(memory_info::near_to_linear(ptr), sizeof(T), t) 
             { static_assert(sizeof(T) == 4 || sizeof(T) == 2 || sizeof(T) == 1); }
 
-            watchpoint(auto* ptr, type t, std::size_t size) : watchpoint(memory_info::near_to_linear(ptr), size, t)
-            { }
+            watchpoint(auto* ptr, type t, std::size_t size) : watchpoint(memory_info::near_to_linear(ptr), size, t) { }
+
+            watchpoint(const watchpoint&) = delete;
+            watchpoint& operator=(const watchpoint&) = delete;
+            watchpoint(watchpoint&& m) : handle(m.handle) { m.handle = null_handle; }
+            watchpoint& operator=(watchpoint&& m) { std::swap(handle, m.handle); return *this; }
 
             // Set a watchpoint (DPMI 0.9, AX=0B00)
             watchpoint(std::uintptr_t linear_addr, std::size_t size_bytes, type t)
@@ -68,6 +73,7 @@ namespace jw
             // Remove a watchpoint (DPMI 0.9, AX=0B01)
             ~watchpoint()
             {
+                if (handle == null_handle) return;
                 asm volatile(
                     "int 0x31;"
                     ::"a"(0x0b01)
@@ -109,7 +115,8 @@ namespace jw
             }
 
         private:
-            std::uint16_t handle;
+            const std::uint32_t null_handle { std::numeric_limits<std::uint32_t>::max() };
+            std::uint32_t handle { null_handle };
         };
     }
 }
