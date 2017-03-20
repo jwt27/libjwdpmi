@@ -407,6 +407,12 @@ namespace jw
                         }
                         else send_packet("");
                     }
+                    else if (p == "T")
+                    {
+                        auto id = decode(packet[2]);
+                        if (find_thread(id)) send_packet("OK");
+                        else send_packet("E01");
+                    }
                     else if (p == "p")  // read one register
                     {
                         auto regn = static_cast<regnum>(decode(packet[1]));
