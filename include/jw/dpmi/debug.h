@@ -30,7 +30,7 @@ namespace jw
 
         // Set a watchpoint
         // Remember, only 4 watchpoints can exist simultaneously.
-        class watchpoint
+        struct watchpoint
         {
             enum type
             {
