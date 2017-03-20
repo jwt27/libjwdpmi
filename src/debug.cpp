@@ -378,7 +378,9 @@ namespace jw
                             auto id = decode(packet[2]);
                             if (auto t = find_thread(id))
                             {
-                                msg << t->name << ": ";
+                                msg << t->name;
+                                if (t == get_current_thread()) msg << " (current thread)";
+                                msg << ": ";
                                 switch (t->get_state())
                                 {
                                 case initialized: msg << "Initialized"; break;
