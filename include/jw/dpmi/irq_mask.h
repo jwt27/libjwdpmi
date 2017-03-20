@@ -156,5 +156,34 @@ namespace jw
 
             irq_level irq;
         };
+
+        struct trace_mask
+        {
+            trace_mask()
+            {
+                asm volatile(
+                    "pushf;"
+                    "bt dword ptr [esp], 8;"
+                    "setc %0;"
+                    "and dword ptr [esp], ~0x100;"
+                    "popf;"
+                    :"=Qq"(trace)
+                    ::"cc");
+            }
+
+            ~trace_mask()
+            {
+                asm volatile(
+                    "pushf;"
+                    "shl %k0, 8;"
+                    "or [esp], %k0;"
+                    "popf;"
+                    ::"r"(trace)
+                    :"cc");
+            }
+
+        private:
+            bool trace;
+        };
     }
 }
