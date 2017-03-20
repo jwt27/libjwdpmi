@@ -130,7 +130,7 @@ namespace jw
             template <typename T>
             void encode(std::ostream& out, T* in, std::size_t len = sizeof(T))
             {
-                auto ptr = reinterpret_cast<byte*>(in);
+                auto ptr = reinterpret_cast<const byte*>(in);
                 for (std::size_t i = 0; i < len; ++i) 
                     out << std::setw(2) << static_cast<std::uint32_t>(ptr[i]);
             }
@@ -282,7 +282,19 @@ namespace jw
                             s << eflags << ':'; reg(s, eflags, r, f, t); s << ';';
                             s << eip << ':'; reg(s, eip, r, f, t); s << ';';
                             s << esp << ':'; reg(s, esp, r, f, t); s << ';';
-                            s << "swbreak:;";
+                            std::pair<const std::uintptr_t, watchpoint>* watchpoint_hit { nullptr };
+                            for (auto& w : watchpoints) if (w.second.get_state()) watchpoint_hit = &w;
+                            if (watchpoint_hit != nullptr)
+                            {
+                                if (watchpoint_hit->second.get_type() == watchpoint::execute) s << "hwbreak:;";
+                                else
+                                {
+                                    s << "watch:"; 
+                                    encode(s, &watchpoint_hit->first); 
+                                    s << ";";
+                                }
+                            }
+                            else s << "swbreak:;";
                             send_packet(s.str());
                         }
                         else
@@ -408,7 +420,7 @@ namespace jw
                         }
                         else            // set watchpoint
                         {
-                            watchpoint::type w;
+                            watchpoint::watchpoint_type w;
                             if (z == "1") w = watchpoint::execute;
                             else if (z == "2") w = watchpoint::read_write;
                             else if (z == "3") w = watchpoint::read;
@@ -499,6 +511,7 @@ namespace jw
                 try
                 {
                     result = handle_packet(last_exception, &last_exception_registers, &last_exception_frame, t);
+                    for (auto& w : watchpoints) w.second.reset();
                 }
                 catch (...) 
                 { 
