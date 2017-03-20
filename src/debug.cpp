@@ -26,6 +26,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <jw/io/rs232.h>
 #include <jw/alloc.h>
 
+// TODO: terminate_handler and trap SIGABRT
+
 namespace jw
 {
     namespace dpmi
@@ -37,12 +39,14 @@ namespace jw
 
         namespace gdb
         {
-            const bool debugmsg = false;
+            const bool debugmsg = true;
 
             locked_pool_allocator<> alloc { 1_MB };
             std::deque<std::string, locked_pool_allocator<>> sent { alloc };
             //std::unordered_map<std::string, std::string, std::hash<std::string>, std::equal_to<std::string>, locked_pool_allocator<>> supported { alloc };
             std::map<std::string, std::string, std::less<std::string>, locked_pool_allocator<>> supported { alloc };
+            std::map<std::uintptr_t, watchpoint, std::less<std::uintptr_t>, locked_pool_allocator<>> watchpoints { alloc };
+            std::map<std::uintptr_t, byte, std::less<std::uintptr_t>, locked_pool_allocator<>> breakpoints { alloc };
 
             std::array<std::unique_ptr<exception_handler>, 0x20> exception_handlers;
             auto gdb { init_unique<std::iostream>(alloc) };
@@ -215,8 +219,8 @@ namespace jw
                 case eip:
                 {
                     auto eip = frame->fault_address.offset;
-                    if (last_exception == 0x03) eip -= 1;
-                    else if (last_exception == 0x01) eip = last_eip;
+                    if (last_exception == 0x01) eip = last_eip;
+                    //else if (last_exception == 0x03) eip -= 1;
                     encode(out, &eip);
                     return;
                 }
@@ -386,6 +390,41 @@ namespace jw
                         f->flags.trap = true;
                         return false;
                     }
+                    else if (p == "Z")  // set watchpoint
+                    {
+                        auto& z = packet[1];
+                        if (z == "0")   // breakpoint
+                        {
+                            if (packet.size() > 4)  // conditional breakpoint
+                            {
+                                send_packet("");    // not implemented (TODO)
+                                continue;
+                            }
+                            std::uintptr_t addr = decode(packet[2]);
+                            auto ptr = reinterpret_cast<byte*>(addr);
+                            breakpoints.emplace(addr, *ptr);
+                            *ptr = 0xcc;
+                            send_packet("OK");
+                        }
+                        else send_packet("");
+                    }
+                    else if (p == "z")  // remove watchpoint
+                    {
+                        auto& z = packet[1];
+                        if (z == "0")   // breakpoint
+                        {
+                            std::uintptr_t addr = decode(packet[2]);
+                            if (!breakpoints.count(addr))
+                            {
+                                send_packet("E00");
+                                continue;
+                            }
+                            auto ptr = reinterpret_cast<byte*>(addr);
+                            *ptr = breakpoints[addr];
+                            send_packet("OK");
+                        }
+                        else send_packet("");
+                    }
                     else if (p == "k") return false;    // kill
                     else send_packet("");   // unknown packet
                 }
@@ -421,6 +460,7 @@ namespace jw
                     else static_cast<old_exception_frame&>(last_exception_frame) = *f;
                     last_exception_registers = *r;
                     last_exception = exc; 
+                    if (exc == 0x03) last_exception_frame.fault_address.offset -= 1;
                     send_notification("Stop");
                 }
                 reentry = true;
@@ -430,7 +470,10 @@ namespace jw
                 {
                     result = handle_packet(last_exception, &last_exception_registers, &last_exception_frame, t);
                 }
-                catch (...) { std::cerr << "Exception occured while communicating with GDB.\n"; breakpoint(); }
+                catch (...) 
+                { 
+                    std::cerr << "Exception occured while communicating with GDB.\n"; 
+                }
                 reentry = false;
 
                 if (t) *f = static_cast<new_exception_frame&>(last_exception_frame);
