@@ -249,7 +249,7 @@ namespace jw
                 case eip:
                 {
                     auto eip = frame->fault_address.offset;
-                    if (last_exception == 0x01) eip = last_eip;
+                    //if (last_exception == 0x01) eip = last_eip;   // TODO: is this necessary?
                     //else if (last_exception == 0x03) eip -= 1;
                     encode(out, &eip);
                     return;
@@ -583,6 +583,7 @@ namespace jw
                 }
                 else
                 {
+                    if (exc == 0x01 && !f->flags.trap) return true;
                     last_exception_frame = { };
                     if (t) last_exception_frame = *static_cast<new_exception_frame*>(f);
                     else static_cast<old_exception_frame&>(last_exception_frame) = *f;
