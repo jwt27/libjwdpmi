@@ -477,6 +477,7 @@ namespace jw
                 }
                 if (reentry)
                 {
+                    if (exc == 0x01) return true;   // watchpoint trap, ignore
                     if (!trace) send_packet("EEE"); // last command caused another exception
                     last_exception_frame.info_bits.redirect_elsewhere = true;
                     detail::fpu_context_switcher.leave();
