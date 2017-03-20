@@ -76,9 +76,6 @@ namespace jw
                         try_await_while([&]() { return this->is_running(); });
                 }
 
-                constexpr void suspend() noexcept { if (this->state == running) this->state = suspended; }
-                constexpr void resume() noexcept { if (this->state == suspended) this->state = running; }
-
                 virtual ~task_base()
                 {
                     for (auto e : exceptions)

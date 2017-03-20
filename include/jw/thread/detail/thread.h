@@ -84,6 +84,9 @@ namespace jw
                 auto get_state() const noexcept { return state; }
                 std::string name { "anonymous thread" };
                 bool allow_orphan { false };
+
+                void suspend() noexcept { if (state == running) state = suspended; }
+                void resume() noexcept { if (state == suspended) state = running; }
                 
                 virtual ~thread()
                 {
