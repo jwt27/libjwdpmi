@@ -56,6 +56,7 @@ namespace jw
         inline void yield() 
         { 
             if (dpmi::in_irq_context()) return;
+            dpmi::trace_mask dont_trace_here { };
             detail::scheduler::thread_switch(); 
         }
 
@@ -63,6 +64,7 @@ namespace jw
         template<typename F> inline void yield_while(F condition) 
         { 
             if (dpmi::in_irq_context()) return;
+            dpmi::trace_mask dont_trace_here { };
             while (condition()) yield();
         };
     }

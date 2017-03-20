@@ -74,6 +74,7 @@ namespace jw
             // Switches to the specified task, or the next task in queue if argument is nullptr.
             void scheduler::thread_switch(thread_ptr t)
             {
+                dpmi::trace_mask dont_trace_here { };
                 if (t)
                 {
                     dpmi::interrupt_mask no_interrupts_please { };
