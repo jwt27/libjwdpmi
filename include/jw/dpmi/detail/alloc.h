@@ -32,6 +32,7 @@ namespace jw
                 auto allocate(std::size_t n)
                 {
                     return reinterpret_cast<void*>(base::allocate(n));
+                    minimum_chunk_size = base::max_size();
                 }
 
                 auto deallocate(void* p)
@@ -39,11 +40,12 @@ namespace jw
                     return base::deallocate(reinterpret_cast<byte*>(p), 1);
                 }
 
-                new_allocator() : base(config::interrupt_initial_memory_pool) { }
+                new_allocator() : base(config::interrupt_initial_memory_pool), minimum_chunk_size(base::max_size()) { }
 
                 void resize_if_necessary()
                 {
-
+                    if (minimum_chunk_size > (base::pool->size() >> 1)) return;
+                    base::resize(base::pool->size() << 1);
                 }
 
             private:

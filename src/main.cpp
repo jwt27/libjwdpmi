@@ -113,20 +113,33 @@ int main(int argc, char** argv)
 
 namespace jw
 {
-    dpmi::detail::new_allocator new_alloc { };   // TODO: auto-resize
+    enum new_alloc_init_state
+    {
+        no,
+        almost,
+        yes
+    } new_alloc_initialized { no };
+    dpmi::detail::new_allocator* new_alloc { };
 }
 
 void* operator new(std::size_t n)
 {
-    if (dpmi::in_irq_context()) return jw::new_alloc.allocate(n);
+    if (dpmi::in_irq_context()) return new_alloc->allocate(n);
+    if (new_alloc_initialized == no)
+    {
+        new_alloc_initialized = almost;
+        new_alloc = new dpmi::detail::new_allocator { };
+        new_alloc_initialized = yes;
+    }
+    else if (new_alloc_initialized == yes) jw::new_alloc->resize_if_necessary();
     return std::malloc(n);
 }
 
-void operator delete(void* p, std::size_t n)
+void operator delete(void* p, std::size_t)
 {
-    if (new_alloc.in_pool(p))
+    if (new_alloc_initialized == yes && new_alloc->in_pool(p))
     {
-        jw::new_alloc.deallocate(p);
+        new_alloc->deallocate(p);
         return;
     }
     std::free(p);
