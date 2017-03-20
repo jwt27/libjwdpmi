@@ -198,7 +198,7 @@ namespace jw
 
             auto& get_threads()
             {
-                return jw::thread::detail::scheduler::threads;
+                return jw::thread::detail::scheduler::get_threads();
             }
 
             auto get_current_thread()
@@ -347,7 +347,8 @@ namespace jw
                         {
                             s << "m";
                             encode(s, &get_current_thread()->id());
-                            for (auto& t : get_threads()) { s << ','; encode(s, &t->id()); }
+                            auto& threads = get_threads();
+                            for (auto& t : threads) { s << ','; encode(s, &t->id()); }
                             send_packet(s.str());
                         }
                         else if (q == "sThreadInfo") send_packet("l");

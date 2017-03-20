@@ -40,13 +40,14 @@ namespace jw
                 template<std::size_t> friend class task_base;
                 friend void ::jw::thread::yield();
                 static dpmi::locked_pool_allocator<> alloc;
+                static std::deque<thread_ptr, dpmi::locked_pool_allocator<>> threads;
                 static thread_ptr current_thread;
                 static thread_ptr main_thread;
 
             public:
-                static std::deque<thread_ptr, dpmi::locked_pool_allocator<>> threads; // HACK // should be private
                 static bool is_current_thread(const thread* t) noexcept { return current_thread.get() == t; }
                 static std::weak_ptr<thread> get_current_thread() noexcept { return current_thread; }
+                static const auto& get_threads() { return threads; }
 
             private:
                 [[gnu::noinline, gnu::noclone, gnu::no_stack_limit, gnu::hot]] static void context_switch() noexcept;
@@ -56,7 +57,7 @@ namespace jw
 
                 [[gnu::used]] static void run_thread() noexcept;
 
-                class init_main { public: init_main(); } static initializer;
+                struct init_main { init_main(); } static initializer;
             };
         }
     }
