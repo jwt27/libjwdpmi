@@ -35,7 +35,7 @@ namespace jw
         {
             ++detail::exception_count;
             if (self->exc != exception_num::device_not_available) detail::fpu_context_switcher.enter();
-            *reinterpret_cast<std::uint32_t*>(stack.begin()) = 0xDEADBEEF;
+            *reinterpret_cast<volatile std::uint32_t*>(stack.begin()) = 0xDEADBEEF;
             bool success = false;
             try
             {
@@ -46,7 +46,7 @@ namespace jw
             {
                 std::cerr << "CAUGHT EXCEPTION IN CPU EXCEPTION HANDLER " << self->exc << std::endl; // HACK
             }                                                                                        // ... but what else can you do here?
-            if (*reinterpret_cast<std::uint32_t*>(stack.begin()) != 0xDEADBEEF) std::cerr << "STACK OVERFLOW\n"; // another HACK
+            if (*reinterpret_cast<volatile std::uint32_t*>(stack.begin()) != 0xDEADBEEF) std::cerr << "STACK OVERFLOW\n"; // another HACK
             if (self->exc != exception_num::device_not_available) detail::fpu_context_switcher.leave();
             --detail::exception_count;
             return success;
