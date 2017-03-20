@@ -75,7 +75,7 @@ namespace jw
                 auto& operator=(const thread&) = delete;
                 thread(const thread&) = delete;
 
-                thread(std::size_t bytes, byte* ptr) : stack_size(bytes), stack_ptr(ptr), id_num(id_count++) { }
+                thread(std::size_t bytes, byte* ptr) : stack_size(bytes), stack_ptr(ptr), id_num(++id_count) { }
 
             public:
                 bool is_running() const noexcept { return (state != initialized && state != finished); }
