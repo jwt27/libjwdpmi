@@ -113,7 +113,7 @@ int main(int argc, char** argv)
 
 namespace jw
 {
-    enum new_alloc_init_state
+    enum
     {
         no,
         almost,
