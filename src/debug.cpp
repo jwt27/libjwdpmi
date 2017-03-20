@@ -218,7 +218,7 @@ namespace jw
                 return jw::thread::detail::scheduler::get_current_thread().lock();
             }
 
-            auto get_thread(auto id)
+            auto find_thread(auto id)
             {
                 if (get_current_thread()->id() == id) return get_current_thread();
                 auto t = std::find_if(get_threads().begin(), get_threads().end(), [id](const auto& t) { return t->id() == id; });
@@ -376,7 +376,7 @@ namespace jw
                             using namespace thread::detail;
                             std::stringstream msg { };
                             auto id = decode(packet[2]);
-                            if (auto t = get_thread(id))
+                            if (auto t = find_thread(id))
                             {
                                 msg << t->name << ": ";
                                 switch (t->get_state())
