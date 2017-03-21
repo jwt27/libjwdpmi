@@ -163,22 +163,21 @@ namespace jw
             {
                 asm volatile(
                     "pushf;"
-                    "bt dword ptr [esp], 8;"
+                    "btr dword ptr [esp], 8;"
                     "setc %0;"
-                    "and dword ptr [esp], ~0x100;"
                     "popf;"
-                    :"=Qq"(trace)
-                    ::"cc");
+                    :"=Qqm"(trace));
             }
 
             ~trace_mask()
             {
                 asm volatile(
                     "pushf;"
-                    "shl %k0, 8;"
+                    "movzx %k0, %b0;"
+                    "xchg %h0, %b0;"
                     "or [esp], %k0;"
                     "popf;"
-                    ::"r"(trace)
+                    ::"q"(trace)
                     :"cc");
             }
 
