@@ -19,6 +19,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <cstring>
 #include <sstream>
 #include <iomanip>
+#include <memory>
 #include <jw/dpmi/fpu.h>
 #include <jw/dpmi/dpmi.h>
 #include <jw/dpmi/debug.h>
@@ -59,6 +60,47 @@ namespace jw
             exception_num last_exception;
             bool reentry { false };
             bool trap_masked { false };
+
+            struct thread_info
+            {
+                std::weak_ptr<thread::detail::thread> thread;
+                std::uintptr_t last_eip { };
+                char last_p { '?' };
+                new_exception_frame last_exception_frame;
+                cpu_registers last_exception_registers;
+                exception_num last_exception;
+                bool trap_masked { false };
+            };
+            
+            std::map<std::uint32_t, thread_info, std::less<std::uint32_t>, locked_pool_allocator<>> threads { alloc };
+
+            auto& get_threads()
+            {
+                return jw::thread::detail::scheduler::get_threads();
+            }
+
+            auto get_current_thread()
+            {
+                return jw::thread::detail::scheduler::get_current_thread().lock();
+            }
+
+            auto find_thread(auto id)
+            {
+                if (get_current_thread()->id() == id) return get_current_thread();
+                auto t = std::find_if(get_threads().begin(), get_threads().end(), [id](const auto& t) { return t->id() == id; });
+                if (t != get_threads().end()) return *t;
+                return thread::detail::thread_ptr { };
+            }
+
+            void populate_thread_list()
+            {
+                for (auto i = threads.begin(); i != threads.end();)
+                {
+                    if (!i->second.thread.lock()) i = threads.erase(i);
+                    else ++i;
+                }
+                for (auto& t : get_threads()) threads[t->id()].thread = t;
+            }
 
             enum regnum
             {
@@ -207,24 +249,6 @@ namespace jw
                     pos += p - pos + 1;
                 }
                 return parsed_input;
-            }
-
-            auto& get_threads()
-            {
-                return jw::thread::detail::scheduler::get_threads();
-            }
-
-            auto get_current_thread()
-            {
-                return jw::thread::detail::scheduler::get_current_thread().lock();
-            }
-
-            auto find_thread(auto id)
-            {
-                if (get_current_thread()->id() == id) return get_current_thread();
-                auto t = std::find_if(get_threads().begin(), get_threads().end(), [id](const auto& t) { return t->id() == id; });
-                if (t != get_threads().end()) return *t;
-                return thread::detail::thread_ptr { };
             }
 
             void reg(std::ostream& out, regnum r, cpu_registers* reg, exception_frame* frame, bool new_type)
