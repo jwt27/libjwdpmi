@@ -44,7 +44,6 @@ namespace jw
 
             locked_pool_allocator<> alloc { 1_MB };
             std::deque<std::string, locked_pool_allocator<>> sent { alloc };
-            //std::unordered_map<std::string, std::string, std::hash<std::string>, std::equal_to<std::string>, locked_pool_allocator<>> supported { alloc };
             std::map<std::string, std::string, std::less<std::string>, locked_pool_allocator<>> supported { alloc };
             std::map<std::uintptr_t, watchpoint, std::less<std::uintptr_t>, locked_pool_allocator<>> watchpoints { alloc };
             std::map<std::uintptr_t, byte, std::less<std::uintptr_t>, locked_pool_allocator<>> breakpoints { alloc };
@@ -62,23 +61,30 @@ namespace jw
                 cpu_registers last_exception_registers;
                 exception_num last_exception;
                 std::uint32_t trap_masked { 0 };
+                bool trap_was_masked { false };
                 bool trace { false };
                 char last_p { '?' };
             };
             
             std::map<std::uint32_t, thread_info, std::less<std::uint32_t>, locked_pool_allocator<>> threads { alloc };
             std::uint32_t current_thread_id;
-            thread_info* current_thread;
+            thread_info* current_thread { nullptr };
 
             void populate_thread_list()
             {
                 for (auto i = threads.begin(); i != threads.end();)
                 {
+                    std::clog << "current thread list i=" << (int)i->second.thread.lock().get() << "\n";
                     if (!i->second.thread.lock()) i = threads.erase(i);
                     else ++i;
                 }
-                for (auto& t : jw::thread::detail::scheduler::get_threads()) threads[t->id()].thread = t;
-                current_thread_id = jw::thread::detail::scheduler::get_current_thread().lock()->id();
+                for (auto& t : jw::thread::detail::scheduler::get_threads())
+                {
+                    std::clog << "populating thread list t=" << (int)t.get() << " id=" << (int)t->id() << "\n";
+                    threads[t->id()].thread = t;
+                }
+                current_thread_id = jw::thread::detail::scheduler::get_current_thread_id();
+                threads[current_thread_id].thread = jw::thread::detail::scheduler::get_current_thread().lock();
                 current_thread = &threads[current_thread_id];
             }
 
@@ -314,7 +320,11 @@ namespace jw
                         if (exc == 1 || exc == 3)
                         {
                             s << "T" << setw(2);
-                            if (current_thread->trap_masked == 1) s << 0x13; // SIGCONT
+                            if (current_thread->trap_was_masked)
+                            {
+                                s << 0x13; // SIGCONT
+                                current_thread->trap_was_masked = false;
+                            }
                             else s << signal_number(exc);
                             s << eflags << ':'; reg(s, eflags, r, f, t); s << ';';
                             s << eip << ':'; reg(s, eip, r, f, t); s << ';';
@@ -326,7 +336,7 @@ namespace jw
                                 if (watchpoint_hit->second.get_type() == watchpoint::execute) s << "hwbreak:;";
                                 else
                                 {
-                                    s << "watch:"; 
+                                    s << "watch:";
                                     encode(s, &watchpoint_hit->first); 
                                     s << ";";
                                 }
@@ -339,7 +349,6 @@ namespace jw
                             s << "S" << setw(2) << signal_number(exc);
                             send_packet(s.str());
                         }
-                        --current_thread->trap_masked;
                         current_thread->trace = false;
                     }
                     else if (p == "q")  // query
@@ -374,8 +383,11 @@ namespace jw
                         else if (q == "fThreadInfo")
                         {
                             s << "m";
-                            reverse_encode(s, &current_thread_id);
-                            for (auto& t : threads) { s << ','; reverse_encode(s, &t.second.thread.lock()->id()); }
+                            for (auto& t : threads) 
+                            {
+                                if (s.peek() != 'm') s << ',';
+                                reverse_encode(s, &t.first);
+                            }
                             send_packet(s.str());
                         }
                         else if (q == "sThreadInfo") send_packet("l");
@@ -571,20 +583,21 @@ namespace jw
             [[gnu::hot]] bool handle_exception(exception_num exc, cpu_registers* r, exception_frame* f, bool t)
             {
                 if (debugmsg) std::clog << "entering exception 0x" << std::hex << exc << "\n";
-                if (debugmsg) std::clog << *static_cast<new_exception_frame*>(f) << *r;
 
-                populate_thread_list();
-                switch (current_thread->last_p)
+                if (current_thread != nullptr)
                 {
-                case 'c':
-                case 's':
-                case 'C':
-                case 'S':
-                case '?':
-                    current_thread->trace = true;
-                    break;
-                default:
-                    current_thread->trace = false;
+                    switch (current_thread->last_p)
+                    {
+                    case 'c':
+                    case 's':
+                    case 'C':
+                    case 'S':
+                    case '?':
+                        current_thread->trace = true;
+                        break;
+                    default:
+                        current_thread->trace = false;
+                    }
                 }
                 if (reentry)
                 {
@@ -596,9 +609,14 @@ namespace jw
                 }
                 else
                 {
-                    if (exc == 0x01 && !f->flags.trap)
+                    reentry = true;
+                    if (debugmsg) std::clog << *static_cast<new_exception_frame*>(f) << *r;
+                    populate_thread_list();
+                    if ((exc == 0x01 || exc == 0x03) && current_thread->trap_masked > 0)
                     {
-                        ++current_thread->trap_masked;
+                        current_thread->trap_was_masked = true;
+                        f->flags.trap = false;
+                        reentry = false;
                         return true;
                     }
                     current_thread->last_exception_frame = { };
@@ -609,7 +627,6 @@ namespace jw
                     if (exc == 0x03) current_thread->last_exception_frame.fault_address.offset -= 1;
                     send_notification("Stop");
                 }
-                reentry = true;
 
                 bool result { false };
                 try
@@ -619,7 +636,8 @@ namespace jw
                 }
                 catch (...) 
                 { 
-                    std::cerr << "Exception occured while communicating with GDB.\n"; 
+                    std::cerr << "Exception occured while communicating with GDB.\n";
+                    asm("int 3");
                 }
                 reentry = false;
 
@@ -678,34 +696,22 @@ namespace jw
         trap_mask::trap_mask()
         {
             if (!debug()) return;
-            auto id = jw::thread::detail::scheduler::get_current_thread().lock()->id();
-            bool trap;
+            if (gdb::reentry) return;
             asm volatile(
                 "pushf;"
-                "btr dword ptr [esp], 8;"
+                "bt dword ptr [esp], 8;"
                 "popf;"
-                :"=@ccc"(trap));
-            if (trap) ++gdb::threads[id].trap_masked;
+                : "=@ccc" (trap));
+            auto id = jw::thread::detail::scheduler::get_current_thread_id();
+            ++gdb::threads[id].trap_masked;
         }
 
         trap_mask::~trap_mask()
-        {   /*
-            asm volatile(
-            "pushf;"
-            "movzx %k0, %b0;"
-            "xchg %h0, %b0;"
-            "or [esp], %k0;"
-            "popf;"
-            ::"q"(trace)
-            :"cc"); *//* 
-            asm volatile(
-            "test %0, %0;"
-            "jz no_trace%=;"
-            "int 3;"
-            "no_trace%=:"
-            ::"qQ"(trace)
-            :"cc");*/
-            asm("int 1");
+        {
+            if (!debug()) return;
+            if (gdb::reentry) return;
+            auto id = jw::thread::detail::scheduler::get_current_thread_id();
+            if (--gdb::threads[id].trap_masked == 0 && trap) asm("int 3");
         }
     }
 }

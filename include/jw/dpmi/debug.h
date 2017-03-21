@@ -33,6 +33,8 @@ namespace jw
         {
             trap_mask();
             ~trap_mask();
+        private:
+            bool trap;
         };
 
         // Set a watchpoint

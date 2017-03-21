@@ -47,6 +47,7 @@ namespace jw
             public:
                 static bool is_current_thread(const thread* t) noexcept { return current_thread.get() == t; }
                 static std::weak_ptr<thread> get_current_thread() noexcept { return current_thread; }
+                static auto& get_current_thread_id() noexcept { return current_thread->id(); }
                 static const auto& get_threads() { return threads; }
 
             private:
