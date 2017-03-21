@@ -29,6 +29,41 @@ namespace jw
         // Set a breakpoint
         inline void breakpoint() { if (debug()) asm("int 3"); }
 
+        struct trap_mask
+        {
+            trap_mask()
+            {
+                asm volatile(
+                    "pushf;"
+                    "btr dword ptr [esp], 8;"
+                    "setc %0;"
+                    "popf;"
+                    :"=Qqm"(trace));
+            }
+
+            ~trap_mask()
+            {   /*
+                asm volatile(
+                "pushf;"
+                "movzx %k0, %b0;"
+                "xchg %h0, %b0;"
+                "or [esp], %k0;"
+                "popf;"
+                ::"q"(trace)
+                :"cc");*/ 
+                asm volatile(
+                    "test %0, %0;"
+                    "jz no_trace%=;"
+                    "int 3;"
+                    "no_trace%=:"
+                    ::"qQ"(trace)
+                    :"cc");
+            }
+
+        private:
+            bool trace;
+        };
+
         // Set a watchpoint
         // Remember, only 4 watchpoints can exist simultaneously.
         struct watchpoint
