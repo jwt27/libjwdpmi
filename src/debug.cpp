@@ -403,6 +403,7 @@ namespace jw
                     s << eflags << ':'; reg(s, eflags, r, f, t); s << ';';
                     s << eip << ':'; reg(s, eip, r, f, t); s << ';';
                     s << esp << ':'; reg(s, esp, r, f, t); s << ';';
+                    s << "thread:"; reverse_encode(s, &current_thread_id); s << ';';
                     std::pair<const std::uintptr_t, watchpoint>* watchpoint_hit { nullptr };
                     for (auto& w : watchpoints) if (w.second.get_state()) watchpoint_hit = &w;
                     if (watchpoint_hit != nullptr)
