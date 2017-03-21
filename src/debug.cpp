@@ -72,12 +72,13 @@ namespace jw
                 std::uint32_t trap_masked { 0 };
                 bool trap_was_masked { false };
                 bool trap { false };
-                std::uintptr_t range_step_begin { 0 };
-                std::uintptr_t range_step_end { 0 };
+                std::uintptr_t step_range_begin { 0 };
+                std::uintptr_t step_range_end { 0 };
                 
                 enum
                 {
                     none,
+                    stop,
                     cont,
                     step,
                     cont_sig,
@@ -114,14 +115,14 @@ namespace jw
                     else if (a[0] == 'r')   // step with range
                     {
                         frame.flags.trap = true;
-                        range_step_begin = rbegin;
-                        range_step_begin = rend;
+                        step_range_begin = rbegin;
+                        step_range_begin = rend;
                         action = step_range;
                     }
                     else if (a[0] == 't')   // stop
                     {
                         thread.lock()->suspend();
-                        action = none;
+                        action = stop;
                     }
                 }
 
@@ -535,7 +536,7 @@ namespace jw
                                     if (packet.size() >= i && packet[i + 1].delim == ':')
                                     {
                                         auto id = decode(packet[i + 1]);
-                                        threads[id].set_action(packet[i], 0, begin, end);
+                                        threads[id].set_action(packet[i - 1], 0, begin, end);
                                         ++i;
                                     }
                                     else send_packet("E00");
@@ -712,8 +713,6 @@ namespace jw
                     populate_thread_list();
                     if (exc == 0x01 || exc == 0x03)
                     {
-                        auto eip = f->fault_address.offset;
-                        if (exc == 0x03) eip -= 1;
                         if (current_thread->trap_masked > 0)
                         {
                             std::clog << "trap masked!\n";
@@ -721,22 +720,22 @@ namespace jw
                             current_thread->trap = true;
                             f->flags.trap = false;
                             reentry = false;
-                            current_thread->last_eip = eip;
+                            current_thread->last_eip = f->fault_address.offset;
                             return true;
                         }
-                        else if (current_thread->action == thread_info::step_range &&
-                                 f->fault_address.offset > current_thread->range_step_begin &&
-                                 f->fault_address.offset < current_thread->range_step_end)
+                        if (current_thread->action == thread_info::step_range &&
+                            f->fault_address.offset > current_thread->step_range_begin &&
+                            f->fault_address.offset < current_thread->step_range_end)
                         {
                             std::clog << "range step!\n";
                             reentry = false;               
-                            current_thread->last_eip = eip;
+                            current_thread->last_eip = f->fault_address.offset;
                             return true;
                         }
                     }
                     current_thread->trap = false;
-                    current_thread->range_step_begin = 0;
-                    current_thread->range_step_end = 0;
+                    current_thread->step_range_begin = 0;
+                    current_thread->step_range_end = 0;
                     if (t) current_thread->frame = *static_cast<new_exception_frame*>(f);
                     else static_cast<old_exception_frame&>(current_thread->frame) = *f;
                     current_thread->reg = *r;
@@ -744,6 +743,7 @@ namespace jw
                     if (exc == 0x03) current_thread->frame.fault_address.offset -= 1;
                     send_notification("Stop");
                 }
+                current_thread->action = thread_info::step;
 
                 bool result { false };
                 try
@@ -816,6 +816,7 @@ namespace jw
             if (gdb::reentry) return;
             auto id = jw::thread::detail::scheduler::get_current_thread_id();
             ++gdb::threads[id].trap_masked;
+            gdb::threads[id].trap_was_masked = true;
         }
 
         trap_mask::~trap_mask()
