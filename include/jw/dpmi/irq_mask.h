@@ -157,9 +157,9 @@ namespace jw
             irq_level irq;
         };
 
-        struct trace_mask
+        struct trap_mask
         {
-            trace_mask()
+            trap_mask()
             {
                 asm volatile(
                     "pushf;"
@@ -169,7 +169,7 @@ namespace jw
                     :"=Qqm"(trace));
             }
 
-            ~trace_mask()
+            ~trap_mask()
             {   /*
                 asm volatile(
                     "pushf;"
