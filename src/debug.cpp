@@ -70,7 +70,6 @@ namespace jw
                 cpu_registers reg;
                 exception_num last_exception;
                 std::uint32_t trap_masked { 0 };
-                std::uint32_t breakpoints_while_masked { 0 };
                 bool trap_was_masked { false };
                 bool trap { false };
                 std::uintptr_t range_step_begin { 0 };
@@ -92,32 +91,32 @@ namespace jw
                     thread.lock()->resume();
                     if (a[0] == 'c')  // continue
                     {
-                        set_trap(false);
+                        frame.flags.trap = false;
                         action = cont;
                     }
                     else if (a[0] == 's')  // step
                     {
-                        set_trap(true);
+                        frame.flags.trap = true;
                         action = step;
                     }
                     else if (a[0] == 'C')  // continue with signal
                     {
-                        set_trap(false);
+                        frame.flags.trap = false;
                         if (a.substr(1) == "13") action = cont; // SIGCONT
                         else action = cont_sig;
                     }
                     else if (a[0] == 'S')  // step with signal
                     {
-                        set_trap(true);
+                        frame.flags.trap = true;
                         if (a.substr(1) == "13") action = step; // SIGCONT
                         else action = step_sig;
                     }
-                    else if (a[0] == 'r')
+                    else if (a[0] == 'r')   // step with range
                     {
-                        set_trap(true);
+                        frame.flags.trap = true;
                         action = step_range;
                     }
-                    else if (a[0] == 't')
+                    else if (a[0] == 't')   // stop
                     {
                         thread.lock()->suspend();
                         action = none;
@@ -139,11 +138,12 @@ namespace jw
                     }
                 }
 
+                /*
                 void set_trap(bool enable)
                 {
                     frame.flags.trap = enable;
                     trap = enable;  // used by trap_mask
-                }
+                }*/
             };
             
             std::map<std::uint32_t, thread_info, std::less<std::uint32_t>, locked_pool_allocator<>> threads { alloc };
@@ -688,19 +688,9 @@ namespace jw
                     {
                         auto eip = f->fault_address.offset;
                         if (exc == 0x03) eip -= 1;
-                        if (current_thread->trap_masked > 0 && exc == 0x01)
+                        if (current_thread->trap_masked > 0)
                         {
                             std::clog << "trap masked!\n";
-                            current_thread->trap_was_masked = true;
-                            f->flags.trap = false;
-                            reentry = false;
-                            current_thread->last_eip = eip;
-                            return true;
-                        }
-                        else if (current_thread->trap_masked > 0 && exc == 0x03)
-                        {
-                            std::clog << "int3 while trap masked!\n";
-                            ++current_thread->breakpoints_while_masked;
                             current_thread->trap_was_masked = true;
                             current_thread->trap = true;
                             f->flags.trap = false;
@@ -718,6 +708,7 @@ namespace jw
                             return true;
                         }
                     }
+                    current_thread->trap = false;
                     current_thread->range_step_begin = 0;
                     current_thread->range_step_end = 0;
                     current_thread->frame = { };
@@ -807,9 +798,8 @@ namespace jw
             if (!debug()) return;
             if (gdb::reentry) return;
             auto id = jw::thread::detail::scheduler::get_current_thread_id();
-            if (--gdb::threads[id].trap_masked == 0 && (gdb::threads[id].trap || gdb::threads[id].breakpoints_while_masked > 0))
+            if (--gdb::threads[id].trap_masked == 0 && gdb::threads[id].trap)
             {
-                gdb::threads[id].breakpoints_while_masked = 0;
                 asm("int 3");
             }
         }
