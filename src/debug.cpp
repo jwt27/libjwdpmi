@@ -114,6 +114,8 @@ namespace jw
                     else if (a[0] == 'r')   // step with range
                     {
                         frame.flags.trap = true;
+                        range_step_begin = rbegin;
+                        range_step_begin = rend;
                         action = step_range;
                     }
                     else if (a[0] == 't')   // stop
@@ -519,15 +521,39 @@ namespace jw
                         }
                         else if (v == "Cont?")
                         {
-                            send_packet(""); continue;
                             send_packet("vCont;s;S;c;C;t;r");
                         }
                         else if (v == "Cont")
                         {
-                            send_packet(""); continue;
-                            for (std::size_t i = 2; i < packet.size();)
+                            for (std::size_t i = 2; i < packet.size(); ++i)
                             {
-                                
+                                if (packet[i][0] == 'r')
+                                {
+                                    auto begin = decode(packet[i].substr(1));
+                                    ++i;
+                                    auto end = decode(packet[i]);
+                                    if (packet.size() >= i && packet[i + 1].delim == ':')
+                                    {
+                                        auto id = decode(packet[i + 1]);
+                                        threads[id].set_action(packet[i], 0, begin, end);
+                                        ++i;
+                                    }
+                                    else send_packet("E00");
+                                }
+                                else if (packet.size() >= i && packet[i + 1].delim == ':')
+                                {
+                                    auto id = decode(packet[i + 1]);
+                                    threads[id].set_action(packet[i]);
+                                    ++i;
+                                }
+                                else
+                                {                                                         
+                                    for (auto& t : threads)
+                                    {
+                                        if (t.second.action == thread_info::none)
+                                            t.second.set_action(packet[i]);
+                                    }
+                                }
                             }
                         }
                         else send_packet("");
