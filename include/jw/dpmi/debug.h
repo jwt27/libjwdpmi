@@ -29,12 +29,11 @@ namespace jw
         // Set a breakpoint
         inline void breakpoint() { if (debug()) asm("int 3"); }
 
+        // Disable the trap flag
         struct trap_mask
         {
             trap_mask();
             ~trap_mask();
-        private:
-            bool trap;
         };
 
         // Set a watchpoint

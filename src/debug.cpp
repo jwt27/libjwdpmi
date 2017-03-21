@@ -62,8 +62,11 @@ namespace jw
                 exception_num last_exception;
                 std::uint32_t trap_masked { 0 };
                 bool trap_was_masked { false };
-                bool trace { false };
+                bool trap { false };
+                bool stop_reply { false };
                 char last_p { '?' };
+                std::uintptr_t range_step_begin { 0 };
+                std::uintptr_t range_step_end { 0 };
             };
             
             std::map<std::uint32_t, thread_info, std::less<std::uint32_t>, locked_pool_allocator<>> threads { alloc };
@@ -109,6 +112,14 @@ namespace jw
                 2, 2, 2, 2, 2, 2,
                 10, 10, 10, 10, 10, 10, 10, 10
                 // TODO: fpu registers
+            };
+
+            struct packet_string : public std::string
+            {
+                char delim;
+                template <typename T>
+                packet_string(T&& str, char delimiter): std::string(std::forward<T>(str)), delim(delimiter) { }
+                using std::string::operator=;
             };
 
             inline auto signal_number(exception_num exc)
@@ -224,14 +235,14 @@ namespace jw
                 else { *gdb << '-' << std::flush; goto retry; }
                 if (debugmsg) std::clog << "recv <-- \""<< input << "\"\n";
 
-                std::deque<std::string> parsed_input { };
+                std::deque<packet_string> parsed_input { };
                 std::size_t pos { 1 };
-                parsed_input.push_back(input.substr(0, 1));
+                parsed_input.emplace_back(input.substr(0, 1), 0);
                 while (pos < input.size())
                 {
                     auto p = std::min({ input.find(',', pos), input.find(':', pos), input.find(';', pos), input.find('=', pos) });
                     if (p == input.npos) p = input.size();
-                    parsed_input.push_back(input.substr(pos, p - pos));
+                    parsed_input.emplace_back(input.substr(pos, p - pos), input[pos - 1]);
                     pos += p - pos + 1;
                 }
                 return parsed_input;
@@ -307,12 +318,12 @@ namespace jw
             [[gnu::hot]] bool handle_packet(exception_num exc, cpu_registers* r, exception_frame* f, bool t)
             {
                 using namespace std;
-                std::deque<std::string> packet { "?" };
+                std::deque<packet_string> packet { packet_string { "?", 0 } };
                 while (true)
                 {
                     std::stringstream s { };
                     s << hex << setfill('0');
-                    if (!current_thread->trace) packet = recv_packet();
+                    if (!current_thread->stop_reply) packet = recv_packet();
                     auto& p = packet.front();
                     current_thread->last_p = p[0];
                     if (p == "?")   // stop reason
@@ -349,7 +360,7 @@ namespace jw
                             s << "S" << setw(2) << signal_number(exc);
                             send_packet(s.str());
                         }
-                        current_thread->trace = false;
+                        current_thread->stop_reply = false;
                     }
                     else if (p == "q")  // query
                     {
@@ -425,8 +436,17 @@ namespace jw
                         auto& v = packet[1];
                         if (v == "Stopped")
                         {
-                            current_thread->trace = true;
+                            current_thread->stop_reply = true;
                             packet[0] = "?";
+                        }
+                        else if (v == "Cont?")
+                        {
+                            send_packet(""); continue;
+                            send_packet("vCont;s;S;c;C;t;r");
+                        }
+                        else if (v == "Cont")
+                        {
+                            send_packet(""); continue;
                         }
                         else send_packet("");
                     }
@@ -593,16 +613,17 @@ namespace jw
                     case 'C':
                     case 'S':
                     case '?':
-                        current_thread->trace = true;
+                    case 'r':
+                        current_thread->stop_reply = true;
                         break;
                     default:
-                        current_thread->trace = false;
+                        current_thread->stop_reply = false;
                     }
                 }
                 if (reentry)
                 {
                     if (exc == 0x01) return true;   // watchpoint trap, ignore
-                    if (!current_thread->trace) send_packet("EEE"); // last command caused another exception
+                    if (!current_thread->stop_reply) send_packet("EEE"); // last command caused another exception
                     current_thread->last_exception_frame.info_bits.redirect_elsewhere = true;
                     detail::fpu_context_switcher.leave();
                     --detail::exception_count;      // pretend it never happened.
@@ -697,13 +718,14 @@ namespace jw
         {
             if (!debug()) return;
             if (gdb::reentry) return;
+            bool trap;
             asm volatile(
                 "pushf;"
                 "bt dword ptr [esp], 8;"
                 "popf;"
                 : "=@ccc" (trap));
             auto id = jw::thread::detail::scheduler::get_current_thread_id();
-            ++gdb::threads[id].trap_masked;
+            if (gdb::threads[id].trap_masked++ == 0) gdb::threads[id].trap = trap;
         }
 
         trap_mask::~trap_mask()
@@ -711,7 +733,7 @@ namespace jw
             if (!debug()) return;
             if (gdb::reentry) return;
             auto id = jw::thread::detail::scheduler::get_current_thread_id();
-            if (--gdb::threads[id].trap_masked == 0 && trap) asm("int 3");
+            if (--gdb::threads[id].trap_masked == 0 && gdb::threads[id].trap) asm("int 3");
         }
     }
 }
