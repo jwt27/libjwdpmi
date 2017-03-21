@@ -70,6 +70,7 @@ namespace jw
                 cpu_registers reg;
                 exception_num last_exception;
                 std::uint32_t trap_masked { 0 };
+                std::uint32_t breakpoints_while_masked { 0 };
                 bool trap_was_masked { false };
                 bool trap { false };
                 std::uintptr_t range_step_begin { 0 };
@@ -153,13 +154,11 @@ namespace jw
             {
                 for (auto i = threads.begin(); i != threads.end();)
                 {
-                    std::clog << "current thread list i=" << (int)i->second.thread.lock().get() << "\n";
                     if (!i->second.thread.lock()) i = threads.erase(i);
                     else ++i;
                 }
                 for (auto& t : jw::thread::detail::scheduler::get_threads())
                 {
-                    std::clog << "populating thread list t=" << (int)t.get() << " id=" << (int)t->id() << "\n";
                     threads[t->id()].thread = t;
                 }
                 current_thread_id = jw::thread::detail::scheduler::get_current_thread_id();
@@ -689,7 +688,7 @@ namespace jw
                     {
                         auto eip = f->fault_address.offset;
                         if (exc == 0x03) eip -= 1;
-                        if (current_thread->trap_masked > 0 && !current_thread->trap_was_masked)
+                        if (current_thread->trap_masked > 0 && exc == 0x01)
                         {
                             std::clog << "trap masked!\n";
                             current_thread->trap_was_masked = true;
@@ -698,9 +697,10 @@ namespace jw
                             current_thread->last_eip = eip;
                             return true;
                         }
-                        else if (current_thread->trap_masked > 0 && !current_thread->trap)
+                        else if (current_thread->trap_masked > 0 && exc == 0x03)
                         {
                             std::clog << "int3 while trap masked!\n";
+                            ++current_thread->breakpoints_while_masked;
                             current_thread->trap_was_masked = true;
                             current_thread->trap = true;
                             f->flags.trap = false;
@@ -807,7 +807,11 @@ namespace jw
             if (!debug()) return;
             if (gdb::reentry) return;
             auto id = jw::thread::detail::scheduler::get_current_thread_id();
-            if (--gdb::threads[id].trap_masked == 0 && gdb::threads[id].trap) asm("int 3");
+            if (--gdb::threads[id].trap_masked == 0 && (gdb::threads[id].trap || gdb::threads[id].breakpoints_while_masked > 0))
+            {
+                gdb::threads[id].breakpoints_while_masked = 0;
+                asm("int 3");
+            }
         }
     }
 }
