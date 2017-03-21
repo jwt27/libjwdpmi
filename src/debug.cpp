@@ -737,7 +737,6 @@ namespace jw
                     current_thread->trap = false;
                     current_thread->range_step_begin = 0;
                     current_thread->range_step_end = 0;
-                    current_thread->frame = { };
                     if (t) current_thread->frame = *static_cast<new_exception_frame*>(f);
                     else static_cast<old_exception_frame&>(current_thread->frame) = *f;
                     current_thread->reg = *r;
