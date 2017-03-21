@@ -53,20 +53,96 @@ namespace jw
 
             bool reentry { false };
 
+            struct packet_string : public std::string
+            {
+                char delim;
+                template <typename T>
+                packet_string(T&& str, char delimiter): std::string(std::forward<T>(str)), delim(delimiter) { }
+                using std::string::operator=;
+                using std::string::basic_string;
+            };
+
             struct thread_info
             {
                 std::weak_ptr<thread::detail::thread> thread;
                 std::uintptr_t last_eip { };
-                new_exception_frame last_exception_frame;
-                cpu_registers last_exception_registers;
+                new_exception_frame frame;
+                cpu_registers reg;
                 exception_num last_exception;
                 std::uint32_t trap_masked { 0 };
                 bool trap_was_masked { false };
                 bool trap { false };
-                bool stop_reply { false };
-                char last_p { '?' };
                 std::uintptr_t range_step_begin { 0 };
                 std::uintptr_t range_step_end { 0 };
+                
+                enum
+                {
+                    none,
+                    cont,
+                    step,
+                    cont_sig,
+                    step_sig,
+                    step_range
+                } action;
+
+                void set_action(const auto& a, std::uintptr_t resume_at = 0, std::uintptr_t rbegin = 0, std::uintptr_t rend = 0)
+                {
+                    if (resume_at != 0) frame.fault_address.offset = resume_at;
+                    thread.lock()->resume();
+                    if (a[0] == 'c')  // continue
+                    {
+                        set_trap(false);
+                        action = cont;
+                    }
+                    else if (a[0] == 's')  // step
+                    {
+                        set_trap(true);
+                        action = step;
+                    }
+                    else if (a[0] == 'C')  // continue with signal
+                    {
+                        set_trap(false);
+                        if (a.substr(1) == "13") action = cont; // SIGCONT
+                        else action = cont_sig;
+                    }
+                    else if (a[0] == 'S')  // step with signal
+                    {
+                        set_trap(true);
+                        if (a.substr(1) == "13") action = step; // SIGCONT
+                        else action = step_sig;
+                    }
+                    else if (a[0] == 'r')
+                    {
+                        set_trap(true);
+                        action = step_range;
+                    }
+                    else if (a[0] == 't')
+                    {
+                        thread.lock()->suspend();
+                        action = none;
+                    }
+                }
+
+                bool do_action()
+                {
+                    switch (action)
+                    {
+                    case step_sig:
+                    case cont_sig:
+                        return false;
+                    case step:
+                    case cont:
+                    case step_range:
+                        return true;
+                    default: throw std::exception();
+                    }
+                }
+
+                void set_trap(bool enable)
+                {
+                    frame.flags.trap = enable;
+                    trap = enable;  // used by trap_mask
+                }
             };
             
             std::map<std::uint32_t, thread_info, std::less<std::uint32_t>, locked_pool_allocator<>> threads { alloc };
@@ -112,14 +188,6 @@ namespace jw
                 2, 2, 2, 2, 2, 2,
                 10, 10, 10, 10, 10, 10, 10, 10
                 // TODO: fpu registers
-            };
-
-            struct packet_string : public std::string
-            {
-                char delim;
-                template <typename T>
-                packet_string(T&& str, char delimiter): std::string(std::forward<T>(str)), delim(delimiter) { }
-                using std::string::operator=;
             };
 
             inline auto signal_number(exception_num exc)
@@ -271,8 +339,8 @@ namespace jw
                 case eip:
                 {
                     auto eip = frame->fault_address.offset;
-                    //if (last_exception == 0x01) eip = last_eip;   // TODO: is this necessary?
-                    //else if (last_exception == 0x03) eip -= 1;
+                    if (current_thread->last_exception == 0x01) eip = current_thread->last_eip;   // TODO: is this necessary?
+                    //else if (current_thread->last_exception == 0x03) eip -= 1;
                     encode(out, &eip);
                     return;
                 }
@@ -315,52 +383,63 @@ namespace jw
                 }
             }
 
-            [[gnu::hot]] bool handle_packet(exception_num exc, cpu_registers* r, exception_frame* f, bool t)
+            void stop_reply()
+            {
+                auto* r = &current_thread->reg;
+                auto* f = &current_thread->frame;
+                bool t = false;
+                auto exc = current_thread->last_exception;
+                std::stringstream s { };
+                s << std::hex << std::setfill('0');
+                if (exc == 1 || exc == 3)
+                {
+                    s << "T" << std::setw(2);
+                    if (current_thread->trap_was_masked)
+                    {
+                        s << 0x13; // SIGCONT
+                        current_thread->trap_was_masked = false;
+                    }
+                    else s << signal_number(exc);
+                    s << eflags << ':'; reg(s, eflags, r, f, t); s << ';';
+                    s << eip << ':'; reg(s, eip, r, f, t); s << ';';
+                    s << esp << ':'; reg(s, esp, r, f, t); s << ';';
+                    std::pair<const std::uintptr_t, watchpoint>* watchpoint_hit { nullptr };
+                    for (auto& w : watchpoints) if (w.second.get_state()) watchpoint_hit = &w;
+                    if (watchpoint_hit != nullptr)
+                    {
+                        if (watchpoint_hit->second.get_type() == watchpoint::execute) s << "hwbreak:;";
+                        else
+                        {
+                            s << "watch:";
+                            encode(s, &watchpoint_hit->first);
+                            s << ";";
+                        }
+                    }
+                    else s << "swbreak:;";
+                    send_packet(s.str());
+                }
+                else
+                {
+                    s << "S" << std::setw(2) << signal_number(exc);
+                    send_packet(s.str());
+                }
+                current_thread->action = thread_info::none;
+            }
+
+            [[gnu::hot]] bool handle_packet(exception_num, cpu_registers* r, exception_frame* f, bool t)
             {
                 using namespace std;
-                std::deque<packet_string> packet { packet_string { "?", 0 } };
+                std::deque<packet_string> packet { };
                 while (true)
                 {
                     std::stringstream s { };
                     s << hex << setfill('0');
-                    if (!current_thread->stop_reply) packet = recv_packet();
+                    if (current_thread->action != thread_info::none) stop_reply();
+                    packet = recv_packet();
                     auto& p = packet.front();
-                    current_thread->last_p = p[0];
                     if (p == "?")   // stop reason
                     {
-                        if (exc == 1 || exc == 3)
-                        {
-                            s << "T" << setw(2);
-                            if (current_thread->trap_was_masked)
-                            {
-                                s << 0x13; // SIGCONT
-                                current_thread->trap_was_masked = false;
-                            }
-                            else s << signal_number(exc);
-                            s << eflags << ':'; reg(s, eflags, r, f, t); s << ';';
-                            s << eip << ':'; reg(s, eip, r, f, t); s << ';';
-                            s << esp << ':'; reg(s, esp, r, f, t); s << ';';
-                            std::pair<const std::uintptr_t, watchpoint>* watchpoint_hit { nullptr };
-                            for (auto& w : watchpoints) if (w.second.get_state()) watchpoint_hit = &w;
-                            if (watchpoint_hit != nullptr)
-                            {
-                                if (watchpoint_hit->second.get_type() == watchpoint::execute) s << "hwbreak:;";
-                                else
-                                {
-                                    s << "watch:";
-                                    encode(s, &watchpoint_hit->first); 
-                                    s << ";";
-                                }
-                            }
-                            else s << "swbreak:;";
-                            send_packet(s.str());
-                        }
-                        else
-                        {
-                            s << "S" << setw(2) << signal_number(exc);
-                            send_packet(s.str());
-                        }
-                        current_thread->stop_reply = false;
+                        stop_reply();
                     }
                     else if (p == "q")  // query
                     {
@@ -436,8 +515,7 @@ namespace jw
                         auto& v = packet[1];
                         if (v == "Stopped")
                         {
-                            current_thread->stop_reply = true;
-                            packet[0] = "?";
+                            stop_reply();
                         }
                         else if (v == "Cont?")
                         {
@@ -447,6 +525,10 @@ namespace jw
                         else if (v == "Cont")
                         {
                             send_packet(""); continue;
+                            for (std::size_t i = 2; i < packet.size();)
+                            {
+                                
+                            }
                         }
                         else send_packet("");
                     }
@@ -505,31 +587,15 @@ namespace jw
                         if (reverse_decode(packet[3], addr, len)) send_packet("OK");
                         else send_packet("E00");
                     }
-                    else if (p == "c")  // continue
+                    else if (p == "c" || p == "s")  // step/continue
                     {
                         if (packet.size() > 1) f->fault_address.offset = decode(packet[1]);
-                        f->flags.trap = false;
-                        return true;
+                        current_thread->set_action(packet[0]);
                     }
-                    else if (p == "s")  // step
-                    {
-                        if (packet.size() > 1) f->fault_address.offset = decode(packet[1]);
-                        f->flags.trap = true;
-                        return true;
-                    }
-                    else if (p == "C")  // continue with signal
+                    else if (p == "C" || p == "S")  // step/continue with signal
                     {
                         if (packet.size() > 2) f->fault_address.offset = decode(packet[2]);
-                        f->flags.trap = false;
-                        if (packet[1] == "13") return true; // SIGCONT
-                        return false;
-                    }
-                    else if (p == "S")  // step with signal
-                    {
-                        if (packet.size() > 2) f->fault_address.offset = decode(packet[2]);
-                        f->flags.trap = true;
-                        if (packet[1] == "13") return true; // SIGCONT
-                        return false;
+                        current_thread->set_action(packet[0] + packet[1]);
                     }
                     else if (p == "Z")  // set break/watchpoint
                     {
@@ -597,6 +663,7 @@ namespace jw
                     }
                     else if (p == "k") return false;    // kill (this is a stupid way to do it...)
                     else send_packet("");   // unknown packet
+                    if (current_thread->action != thread_info::none) return current_thread->do_action();
                 }
             }
 
@@ -604,27 +671,11 @@ namespace jw
             {
                 if (debugmsg) std::clog << "entering exception 0x" << std::hex << exc << "\n";
 
-                if (current_thread != nullptr)
-                {
-                    switch (current_thread->last_p)
-                    {
-                    case 'c':
-                    case 's':
-                    case 'C':
-                    case 'S':
-                    case '?':
-                    case 'r':
-                        current_thread->stop_reply = true;
-                        break;
-                    default:
-                        current_thread->stop_reply = false;
-                    }
-                }
                 if (reentry)
                 {
                     if (exc == 0x01) return true;   // watchpoint trap, ignore
-                    if (!current_thread->stop_reply) send_packet("EEE"); // last command caused another exception
-                    current_thread->last_exception_frame.info_bits.redirect_elsewhere = true;
+                    if (current_thread->action == thread_info::none) send_packet("EEE"); // last command caused another exception
+                    current_thread->frame.info_bits.redirect_elsewhere = true;
                     detail::fpu_context_switcher.leave();
                     --detail::exception_count;      // pretend it never happened.
                 }
@@ -633,39 +684,62 @@ namespace jw
                     reentry = true;
                     if (debugmsg) std::clog << *static_cast<new_exception_frame*>(f) << *r;
                     populate_thread_list();
-                    if ((exc == 0x01 || exc == 0x03) && current_thread->trap_masked > 0)
+                    if (exc == 0x01 || exc == 0x03)
                     {
-                        current_thread->trap_was_masked = true;
-                        f->flags.trap = false;
-                        reentry = false;
-                        return true;
+                        if (current_thread->trap_masked > 0 && !current_thread->trap_was_masked)
+                        {
+                            std::clog << "trap masked!\n";
+                            current_thread->trap_was_masked = true;
+                            f->flags.trap = false;
+                            reentry = false;
+                            return true;
+                        }
+                        else if (current_thread->trap_masked > 0 && !current_thread->trap)
+                        {
+                            std::clog << "int3 while trap masked!\n";
+                            current_thread->trap_was_masked = true;
+                            current_thread->trap = true;
+                            f->flags.trap = false;
+                            reentry = false;
+                            return true;
+                        }
+                        else if (current_thread->action == thread_info::step_range &&
+                                 f->fault_address.offset > current_thread->range_step_begin &&
+                                 f->fault_address.offset < current_thread->range_step_end)
+                        {
+                            std::clog << "range step!\n";
+                            reentry = false;
+                            return true;
+                        }
                     }
-                    current_thread->last_exception_frame = { };
-                    if (t) current_thread->last_exception_frame = *static_cast<new_exception_frame*>(f);
-                    else static_cast<old_exception_frame&>(current_thread->last_exception_frame) = *f;
-                    current_thread->last_exception_registers = *r;
+                    current_thread->range_step_begin = 0;
+                    current_thread->range_step_end = 0;
+                    current_thread->frame = { };
+                    if (t) current_thread->frame = *static_cast<new_exception_frame*>(f);
+                    else static_cast<old_exception_frame&>(current_thread->frame) = *f;
+                    current_thread->reg = *r;
                     current_thread->last_exception = exc; 
-                    if (exc == 0x03) current_thread->last_exception_frame.fault_address.offset -= 1;
+                    if (exc == 0x03) current_thread->frame.fault_address.offset -= 1;
                     send_notification("Stop");
                 }
 
                 bool result { false };
                 try
                 {
-                    result = handle_packet(current_thread->last_exception, &current_thread->last_exception_registers, &current_thread->last_exception_frame, t);
+                    result = handle_packet(current_thread->last_exception, &current_thread->reg, &current_thread->frame, t);
                     for (auto& w : watchpoints) w.second.reset();
                 }
                 catch (...) 
                 { 
                     std::cerr << "Exception occured while communicating with GDB.\n";
-                    asm("int 3");
+                    //asm("int 3");
                 }
                 reentry = false;
 
-                if (t) *f = static_cast<new_exception_frame&>(current_thread->last_exception_frame);
-                else *static_cast<old_exception_frame*>(f) = current_thread->last_exception_frame;
-                *r = current_thread->last_exception_registers;
-                current_thread->last_eip = current_thread->last_exception_frame.fault_address.offset;
+                if (t) *f = static_cast<new_exception_frame&>(current_thread->frame);
+                else *static_cast<old_exception_frame*>(f) = current_thread->frame;
+                *r = current_thread->reg;
+                current_thread->last_eip = current_thread->frame.fault_address.offset;
 
                 if (debugmsg) std::clog << "leaving exception 0x" << std::hex << exc << "\n";
                 return result;
@@ -726,6 +800,7 @@ namespace jw
                 : "=@ccc" (trap));
             auto id = jw::thread::detail::scheduler::get_current_thread_id();
             if (gdb::threads[id].trap_masked++ == 0) gdb::threads[id].trap = trap;
+            gdb::threads[id].trap_was_masked = true;
         }
 
         trap_mask::~trap_mask()
