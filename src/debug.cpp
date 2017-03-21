@@ -58,6 +58,7 @@ namespace jw
             cpu_registers last_exception_registers;
             exception_num last_exception;
             bool reentry { false };
+            bool trap_masked { false };
 
             enum regnum
             {
@@ -308,7 +309,9 @@ namespace jw
                     {
                         if (exc == 1 || exc == 3)
                         {
-                            s << "T" << setw(2) << signal_number(exc);
+                            s << "T" << setw(2);
+                            if (trap_masked) s << 0x13; // SIGCONT
+                            else s << signal_number(exc);
                             s << eflags << ':'; reg(s, eflags, r, f, t); s << ';';
                             s << eip << ':'; reg(s, eip, r, f, t); s << ';';
                             s << esp << ':'; reg(s, esp, r, f, t); s << ';';
@@ -332,6 +335,7 @@ namespace jw
                             s << "S" << setw(2) << signal_number(exc);
                             send_packet(s.str());
                         }
+                        trap_masked = false;
                         trace = false;
                     }
                     else if (p == "q")  // query
@@ -480,12 +484,14 @@ namespace jw
                     {
                         if (packet.size() > 2) f->fault_address.offset = decode(packet[2]);
                         f->flags.trap = false;
+                        if (packet[1] == "13") return true; // SIGCONT
                         return false;
                     }
                     else if (p == "S")  // step with signal
                     {
                         if (packet.size() > 2) f->fault_address.offset = decode(packet[2]);
                         f->flags.trap = true;
+                        if (packet[1] == "13") return true; // SIGCONT
                         return false;
                     }
                     else if (p == "Z")  // set break/watchpoint
@@ -583,7 +589,11 @@ namespace jw
                 }
                 else
                 {
-                    if (exc == 0x01 && !f->flags.trap) return true;
+                    if (exc == 0x01 && !f->flags.trap)
+                    {
+                        trap_masked = true;
+                        return true;
+                    }
                     last_exception_frame = { };
                     if (t) last_exception_frame = *static_cast<new_exception_frame*>(f);
                     else static_cast<old_exception_frame&>(last_exception_frame) = *f;

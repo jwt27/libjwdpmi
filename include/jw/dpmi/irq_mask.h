@@ -170,7 +170,7 @@ namespace jw
             }
 
             ~trace_mask()
-            {
+            {   /*
                 asm volatile(
                     "pushf;"
                     "movzx %k0, %b0;"
@@ -178,6 +178,13 @@ namespace jw
                     "or [esp], %k0;"
                     "popf;"
                     ::"q"(trace)
+                    :"cc");*/ 
+                asm volatile(
+                    "test %0, %0;"
+                    "jz no_trace%=;"
+                    "int 3;"
+                    "no_trace%=:"
+                    ::"qQ"(trace)
                     :"cc");
             }
 
