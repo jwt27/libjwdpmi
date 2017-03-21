@@ -16,7 +16,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #pragma once
-#include <jw/io/rs232.h>
+#include <jw/alloc.h>
 
 namespace jw
 {
@@ -24,7 +24,7 @@ namespace jw
     {
         namespace detail
         {
-            void setup_gdb_interface(const io::rs232_config&);
+            void setup_gdb_interface(std::unique_ptr<std::iostream, allocator_delete<jw::dpmi::locking_allocator<std::iostream>>>&&);
         }
     }
 }

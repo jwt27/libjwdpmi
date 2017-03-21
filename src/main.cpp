@@ -93,7 +93,8 @@ int main(int argc, char** argv)
             {
                 io::rs232_config cfg;
                 cfg.set_com_port(io::com1);
-                dpmi::detail::setup_gdb_interface(cfg);
+                dpmi::locking_allocator<> alloc;
+                dpmi::detail::setup_gdb_interface(allocate_unique<io::rs232_stream>(alloc, cfg));
             }
             else args.emplace_back(argv[i]);
         }

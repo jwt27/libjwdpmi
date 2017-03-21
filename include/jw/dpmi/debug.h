@@ -31,37 +31,8 @@ namespace jw
 
         struct trap_mask
         {
-            trap_mask()
-            {
-                asm volatile(
-                    "pushf;"
-                    "btr dword ptr [esp], 8;"
-                    "setc %0;"
-                    "popf;"
-                    :"=Qqm"(trace));
-            }
-
-            ~trap_mask()
-            {   /*
-                asm volatile(
-                "pushf;"
-                "movzx %k0, %b0;"
-                "xchg %h0, %b0;"
-                "or [esp], %k0;"
-                "popf;"
-                ::"q"(trace)
-                :"cc");*/ 
-                asm volatile(
-                    "test %0, %0;"
-                    "jz no_trace%=;"
-                    "int 3;"
-                    "no_trace%=:"
-                    ::"qQ"(trace)
-                    :"cc");
-            }
-
-        private:
-            bool trace;
+            trap_mask();
+            ~trap_mask();
         };
 
         // Set a watchpoint
