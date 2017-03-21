@@ -686,12 +686,15 @@ namespace jw
                     populate_thread_list();
                     if (exc == 0x01 || exc == 0x03)
                     {
+                        auto eip = f->fault_address.offset;
+                        if (exc == 0x03) eip -= 1;
                         if (current_thread->trap_masked > 0 && !current_thread->trap_was_masked)
                         {
                             std::clog << "trap masked!\n";
                             current_thread->trap_was_masked = true;
                             f->flags.trap = false;
                             reentry = false;
+                            current_thread->last_eip = eip;
                             return true;
                         }
                         else if (current_thread->trap_masked > 0 && !current_thread->trap)
@@ -701,6 +704,7 @@ namespace jw
                             current_thread->trap = true;
                             f->flags.trap = false;
                             reentry = false;
+                            current_thread->last_eip = eip;
                             return true;
                         }
                         else if (current_thread->action == thread_info::step_range &&
@@ -708,7 +712,8 @@ namespace jw
                                  f->fault_address.offset < current_thread->range_step_end)
                         {
                             std::clog << "range step!\n";
-                            reentry = false;
+                            reentry = false;               
+                            current_thread->last_eip = eip;
                             return true;
                         }
                     }
@@ -792,15 +797,8 @@ namespace jw
         {
             if (!debug()) return;
             if (gdb::reentry) return;
-            bool trap;
-            asm volatile(
-                "pushf;"
-                "bt dword ptr [esp], 8;"
-                "popf;"
-                : "=@ccc" (trap));
             auto id = jw::thread::detail::scheduler::get_current_thread_id();
-            if (gdb::threads[id].trap_masked++ == 0) gdb::threads[id].trap = trap;
-            gdb::threads[id].trap_was_masked = true;
+            ++gdb::threads[id].trap_masked;
         }
 
         trap_mask::~trap_mask()
