@@ -478,8 +478,7 @@ namespace jw
                             s << "m";
                             for (auto& t : threads) 
                             {
-                                if (s.peek() != 'm') s << ',';
-                                reverse_encode(s, &t.first);
+                                reverse_encode(s, &t.first); s << ',';
                             }
                             send_packet(s.str());
                         }
@@ -816,7 +815,7 @@ namespace jw
             if (gdb::reentry) return;
             auto id = jw::thread::detail::scheduler::get_current_thread_id();
             ++gdb::threads[id].trap_masked;
-            gdb::threads[id].trap_was_masked = true;
+            //gdb::threads[id].trap_was_masked = true;
         }
 
         trap_mask::~trap_mask()
