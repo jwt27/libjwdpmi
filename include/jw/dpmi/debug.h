@@ -34,6 +34,11 @@ namespace jw
         {
             trap_mask();
             ~trap_mask();
+
+            trap_mask(const trap_mask&) = delete;
+            trap_mask(trap_mask&&) = delete;
+            trap_mask& operator=(const trap_mask&) = delete;
+            trap_mask& operator=(trap_mask&&) = delete;
         };
 
         // Set a watchpoint
