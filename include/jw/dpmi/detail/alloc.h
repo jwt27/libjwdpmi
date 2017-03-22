@@ -31,12 +31,14 @@ namespace jw
 
                 auto allocate(std::size_t n)
                 {
+                    dpmi::trap_mask dont_trap_here { };
                     return reinterpret_cast<void*>(base::allocate(n));
                     minimum_chunk_size = base::max_size();
                 }
 
                 auto deallocate(void* p)
                 {
+                    dpmi::trap_mask dont_trap_here { };
                     return base::deallocate(reinterpret_cast<byte*>(p), 1);
                 }
 
@@ -44,8 +46,11 @@ namespace jw
 
                 void resize_if_necessary()
                 {
-                    if (minimum_chunk_size > (base::pool->size() >> 1)) return;
-                    base::resize(base::pool->size() << 1);
+                    if (minimum_chunk_size <= (base::pool->size() >> 1))
+                    {
+                        dpmi::trap_mask dont_trap_here { };
+                        base::resize(base::pool->size() << 1);
+                    }
                 }
 
             private:
