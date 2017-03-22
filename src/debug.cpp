@@ -93,7 +93,8 @@ namespace jw
                 void set_action(const auto& a, std::uintptr_t resume_at = 0, std::uintptr_t rbegin = 0, std::uintptr_t rend = 0)
                 {
                     if (resume_at != 0) frame.fault_address.offset = resume_at;
-                    thread.lock()->resume();
+                    auto t = thread.lock();
+                    t->resume();
                     if (a[0] == 'c')  // continue
                     {
                         frame.flags.trap = false;
@@ -129,9 +130,10 @@ namespace jw
                     }
                     else if (a[0] == 't')   // stop
                     {
-                        thread.lock()->suspend();
+                        t->suspend();
                         action = stop;
                     }
+                    if (trap > 0 && t->id() != current_thread_id) trap_was_masked = true;
                 }
 
                 bool do_action()
@@ -196,14 +198,14 @@ namespace jw
             {
                 switch (exc)
                 {                                 
-                case 0x01: return 0x05; // SIGTRAP
-                case 0x03: return 0x05; // SIGTRAP
-                    if (current_thread->trap_was_masked)
+                case 0x01:
+                case 0x03:
+                    if (threads[operating_thread_id].trap_was_masked)
                     {
-                        current_thread->trap_was_masked = false;
-                        return 0x13; // SIGCONT
+                        threads[operating_thread_id].trap_was_masked = false;
+                        return 0x13;    // SIGCONT
                     }
-                    else return 0x05;
+                    else return 0x05;   // SIGTRAP
                 case 0x00: return 0x08; // SIGFPE
                 case 0x02: return 0x09; // SIGKILL
                 case 0x04: return 0x08; // SIGFPE
