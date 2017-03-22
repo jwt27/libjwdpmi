@@ -42,8 +42,6 @@ namespace jw
                 // esp is the pointer to this struct.
             };
 
-            const thread_context* get_thread_context(auto t) { return t->context; }
-
             enum thread_state
             {
                 initialized,
@@ -54,11 +52,12 @@ namespace jw
                 finished
             };
 
+            // Base class for all threads.
             class thread
             {
                 friend class scheduler;
                 template<std::size_t> friend class task_base;
-                friend const thread_context* get_thread_context(auto t);
+                friend class thread_details;
 
                 static std::uint32_t id_count;
 
@@ -67,6 +66,8 @@ namespace jw
                 byte* const stack_ptr;
                 std::deque<std::exception_ptr> exceptions { };
                 std::uint32_t id_num;
+                std::uint32_t trap_masked { 0 };
+                bool trap { false };
 
             protected:
                 thread_state state { initialized };
@@ -100,6 +101,19 @@ namespace jw
                         std::terminate();
                     }
                 }
+            };
+
+            // Proxy class to access implementation details of threads. Used by gdb interface.
+            // This exists so these functions aren't exposed through task/coroutine objects.
+            struct thread_details
+            {
+                static const thread_context* get_context(auto t) { return t->context; }
+                static void trap_mask(auto t) { ++t->trap_masked; }
+                static bool trap_unmask(auto t) { return (--t->trap_masked) == 0; }
+                static bool trap_is_masked(auto t) { return t->trap_masked > 0; }
+                static bool trap_state(auto t) { return t->trap; }
+                static bool set_trap(auto t) { return t->trap = true; }
+                static bool clear_trap(auto t) { return t->trap = false; }
             };
 
             using thread_ptr = std::shared_ptr<thread>;

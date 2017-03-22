@@ -74,9 +74,7 @@ namespace jw
                 new_exception_frame frame;
                 cpu_registers reg;
                 exception_num last_exception;
-                std::uint32_t trap_masked { 0 };
                 bool use_sigcont { false };
-                std::uint32_t trap { 0 };
                 std::uintptr_t step_range_begin { 0 };
                 std::uintptr_t step_range_end { 0 };
                 
@@ -104,7 +102,7 @@ namespace jw
                     else if (a[0] == 's')  // step
                     {
                         frame.flags.trap = true;
-                        trap = 1;
+                        thread::detail::thread_details::set_trap(t);
                         action = step;
                     }
                     else if (a[0] == 'C')  // continue with signal
@@ -116,14 +114,14 @@ namespace jw
                     else if (a[0] == 'S')  // step with signal
                     {
                         frame.flags.trap = true;
-                        trap = 1;
+                        thread::detail::thread_details::set_trap(t);
                         if (a.substr(1) == "13") action = step; // SIGCONT
                         else action = step_sig;
                     }
                     else if (a[0] == 'r')   // step with range
                     {
                         frame.flags.trap = true;
-                        trap = 1;
+                        thread::detail::thread_details::set_trap(t);
                         step_range_begin = rbegin;
                         step_range_end = rend;
                         action = step_range;
@@ -133,7 +131,7 @@ namespace jw
                         t->suspend();
                         action = stop;
                     }
-                    if (trap > 0 && t->id() != current_thread_id) use_sigcont = true;
+                    if (thread::detail::thread_details::trap_state(t) && t->id() != current_thread_id) use_sigcont = true;
                 }
 
                 bool do_action()
@@ -334,7 +332,7 @@ namespace jw
                     encode_null(out, reglen[r]);
                     return;
                 }
-                auto* reg = thread::detail::get_thread_context(t);
+                auto* reg = thread::detail::thread_details::get_context(t);
                 auto r_eip = reinterpret_cast<std::uintptr_t>(thread::yield);
                 switch (r)
                 {
@@ -789,10 +787,10 @@ namespace jw
                     populate_thread_list();
                     if (exc == 0x01 || exc == 0x03)
                     {
-                        if (current_thread->trap_masked > 0)
+                        if (thread::detail::thread_details::trap_is_masked(current_thread->thread.lock()))
                         {
                             current_thread->use_sigcont = true;
-                            ++current_thread->trap;
+                            thread::detail::thread_details::set_trap(current_thread->thread.lock());
                             f->flags.trap = false;
                             reentry = false;
                             current_thread->last_eip = f->fault_address.offset;
@@ -806,7 +804,7 @@ namespace jw
                             current_thread->last_eip = f->fault_address.offset;
                             return true;
                         }
-                        current_thread->trap = 0;
+                        thread::detail::thread_details::clear_trap(current_thread->thread.lock());
                     }
                     if (t) current_thread->frame = *static_cast<new_exception_frame*>(f);
                     else static_cast<old_exception_frame&>(current_thread->frame) = *f;
@@ -887,12 +885,9 @@ namespace jw
         {
             if (!debug()) return;
             if (gdb::reentry) return;
-            try
-            {
-                auto id = jw::thread::detail::scheduler::get_current_thread_id();
-                ++gdb::threads.at(id).trap_masked;
-            }
-            catch (...) { fail = true; }
+            auto t = jw::thread::detail::scheduler::get_current_thread().lock();
+            if (t) thread::detail::thread_details::trap_mask(t);
+            else fail = true;
         }
 
         trap_mask::~trap_mask() noexcept
@@ -902,9 +897,8 @@ namespace jw
             if (gdb::reentry) return;
             try
             {
-                auto id = jw::thread::detail::scheduler::get_current_thread_id();
-                gdb::threads.at(id).use_sigcont = true;
-                if (--gdb::threads.at(id).trap_masked == 0 && gdb::threads.at(id).trap > 0) asm("int 3");
+                auto t = jw::thread::detail::scheduler::get_current_thread().lock();
+                if (thread::detail::thread_details::trap_unmask(t) && thread::detail::thread_details::trap_state(t)) asm("int 3");
             }
             catch (...) { asm("int 3"); }
         }
