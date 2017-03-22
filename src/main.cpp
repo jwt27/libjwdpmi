@@ -121,21 +121,19 @@ namespace jw
         yes
     } new_alloc_initialized { no };
     dpmi::detail::new_allocator* new_alloc { nullptr };
+    std::atomic_flag new_alloc_resize_reentry { false };
 }
 
-[[gnu::no_reorder, gnu::noclone]]
-void operator_new_delete_begin() { }
-
-[[gnu::no_reorder, gnu::noclone]]
 void* operator new(std::size_t n)
 {
     if (dpmi::in_irq_context())
     {
         if (new_alloc_initialized == yes) return new_alloc->allocate(n);
-        else throw std::bad_alloc { }; 
+        else throw std::bad_alloc { };
     }
     if (new_alloc_initialized == no)
     {
+        dpmi::interrupt_mask no_interrupts_here { };
         try
         {
             new_alloc_initialized = almost;
@@ -153,28 +151,28 @@ void* operator new(std::size_t n)
             throw;
         }
     }
-    else if (new_alloc_initialized == yes)
+    else if (new_alloc_initialized == yes && !new_alloc_resize_reentry.test_and_set())
     {
+        dpmi::interrupt_mask no_interrupts_here { };
+        dpmi::trap_mask dont_trap_here { };
         try
         {
             new_alloc_initialized = almost;
-            {
-                dpmi::trap_mask dont_trap_here { };
-                jw::new_alloc->resize_if_necessary();
-                new_alloc_initialized = yes;
-            }
+            jw::new_alloc->resize_if_necessary();
+            new_alloc_initialized = yes;
         }
         catch (...)
         {
             new_alloc_initialized = no;
+            new_alloc_resize_reentry.clear();
             throw;
         }
+        new_alloc_resize_reentry.clear();
     }
     
     return std::malloc(n);
 }
 
-[[gnu::no_reorder, gnu::noclone]]
 void operator delete(void* p, std::size_t)
 {
     if (new_alloc_initialized == yes && new_alloc->in_pool(p))
@@ -185,11 +183,7 @@ void operator delete(void* p, std::size_t)
     std::free(p);
 }
 
-[[gnu::no_reorder, gnu::noclone]]
 void operator delete(void* p)
 {
     ::operator delete(p, 1);
 }
-
-[[gnu::no_reorder, gnu::noclone]]
-void operator_new_delete_end() { }
