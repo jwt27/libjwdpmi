@@ -147,9 +147,9 @@ namespace jw
             };
             
             std::map<std::uint32_t, thread_info, std::less<std::uint32_t>, locked_pool_allocator<>> threads { alloc };
-            std::uint32_t current_thread_id;
+            std::uint32_t current_thread_id { 1 };
             thread_info* current_thread { nullptr };
-            std::uint32_t operating_thread_id;
+            std::uint32_t operating_thread_id { 1 };
 
             void populate_thread_list()
             {
@@ -316,8 +316,41 @@ namespace jw
                 return parsed_input;
             }
 
+            void thread_reg(std::ostream& out, regnum r)
+            {
+                auto t = threads[operating_thread_id].thread.lock();
+                if (!t)
+                {
+                    encode_null(out, reglen[r]);
+                    return;
+                }
+                auto* reg = t->get_context();
+                auto r_eip = reinterpret_cast<std::uintptr_t>(thread::yield);
+                switch (r)
+                {
+                case ebx: encode(out, &reg->ebx); return;
+                case ebp: encode(out, &reg->ebp); return;
+                case esi: encode(out, &reg->esi); return;
+                case edi: encode(out, &reg->edi); return;
+                //case esp: encode(out, reg); return;
+                case cs: encode(out, &current_thread->frame.fault_address.segment); return;
+                case ss: encode(out, &current_thread->frame.stack.segment); return;
+                case ds: encode(out, &current_thread->frame.stack.segment); return;
+                case es: encode(out, &reg->es); return; 
+                case fs: encode(out, &reg->fs); return;
+                case gs: encode(out, &reg->gs); return;
+                case eip: encode(out, &r_eip); return;
+                default: encode_null(out, reglen[r]);
+                }
+            }
+
             void reg(std::ostream& out, regnum r, cpu_registers* reg, exception_frame* frame, bool new_type)
             {
+                if (operating_thread_id != current_thread_id)
+                {
+                    thread_reg(out, r);
+                    return;
+                }
                 auto* new_frame = static_cast<new_exception_frame*>(frame);
                 switch (r)
                 {
@@ -344,7 +377,10 @@ namespace jw
                     encode(out, &eip);
                     return;
                 }
-                default: if (r > mxcsr) return;
+                default: 
+                    encode_null(out, reglen[r]);
+                    return;
+                    if (r > mxcsr) return;
                     auto fpu = detail::fpu_context_switcher.get_last_context();
                     switch (r)
                     {
@@ -355,6 +391,7 @@ namespace jw
 
             bool setreg(regnum r, const std::string& value, cpu_registers* reg, exception_frame* frame, bool new_type)
             {
+                if (operating_thread_id != current_thread_id) return false;
                 auto* new_frame = static_cast<new_exception_frame*>(frame);
                 switch (r)
                 {
@@ -385,6 +422,11 @@ namespace jw
 
             void stop_reply()
             {
+                if (operating_thread_id != current_thread_id)
+                {
+                    send_packet("S00");
+                    return;
+                }
                 auto* r = &current_thread->reg;
                 auto* f = &current_thread->frame;
                 bool t = false;
@@ -558,17 +600,17 @@ namespace jw
                     }
                     else if (p == "H")  // set current thread
                     {
-                        send_packet("E00"); // TODO
-                        if (packet[1][0] == 'g')
+                        auto id = decode(packet[1].substr(1));
+                        if (packet[1][0] == 'g' && threads.count(id))
                         {
-                            operating_thread_id = decode(packet[1].substr(1));
+                            operating_thread_id = id;
+                            send_packet("OK");
                         }
                         else send_packet("E00");
-
                     }
                     else if (p == "T")  // is thread alive?
                     {
-                        auto id = decode(packet[2]);
+                        auto id = decode(packet[1]);
                         if (threads.count(id)) send_packet("OK");
                         else send_packet("E01");
                     }
@@ -576,7 +618,6 @@ namespace jw
                     {
                         auto regn = static_cast<regnum>(decode(packet[1]));
                         reg(s, regn, r, f, t);
-                        if (s.str().size() == 0) encode_null(s, reglen[regn]);
                         send_packet(s.str());
                     }
                     else if (p == "P")  // write one register
@@ -709,6 +750,7 @@ namespace jw
                 {
                     if (exc == 0x01) return true;   // watchpoint trap, ignore
                     if (current_thread->action == thread_info::none) send_packet("EEE"); // last command caused another exception
+                    if (debugmsg) std::clog << *static_cast<new_exception_frame*>(f) << *r;
                     current_thread->frame.info_bits.redirect_elsewhere = true;
                     detail::fpu_context_switcher.leave();
                     --detail::exception_count;      // pretend it never happened.

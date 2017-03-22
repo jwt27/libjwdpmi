@@ -78,6 +78,7 @@ namespace jw
                 thread(std::size_t bytes, byte* ptr) : stack_size(bytes), stack_ptr(ptr), id_num(++id_count) { }
 
             public:
+                const auto* get_context() { return context; }
                 bool is_running() const noexcept { return (state != initialized && state != finished); }
                 auto pending_exceptions() const noexcept { return exceptions.size(); }
                 const auto& id() const noexcept { return id_num; }
