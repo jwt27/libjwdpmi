@@ -63,6 +63,9 @@ namespace jw
                 using std::string::basic_string;
             };
 
+            std::uint32_t current_thread_id { 1 };  
+            std::uint32_t operating_thread_id { 1 };
+
             struct thread_info
             {
                 std::weak_ptr<thread::detail::thread> thread;
@@ -148,9 +151,7 @@ namespace jw
             };
             
             std::map<std::uint32_t, thread_info, std::less<std::uint32_t>, locked_pool_allocator<>> threads { alloc };
-            std::uint32_t current_thread_id { 1 };
             thread_info* current_thread { nullptr };
-            std::uint32_t operating_thread_id { 1 };
 
             void populate_thread_list()
             {
@@ -194,11 +195,17 @@ namespace jw
             inline auto signal_number(exception_num exc)
             {
                 switch (exc)
-                {
-                case 0x00: return 0x08; // SIGFPE
+                {                                 
                 case 0x01: return 0x05; // SIGTRAP
-                case 0x02: return 0x09; // SIGKILL
                 case 0x03: return 0x05; // SIGTRAP
+                    if (current_thread->trap_was_masked)
+                    {
+                        current_thread->trap_was_masked = false;
+                        return 0x13; // SIGCONT
+                    }
+                    else return 0x05;
+                case 0x00: return 0x08; // SIGFPE
+                case 0x02: return 0x09; // SIGKILL
                 case 0x04: return 0x08; // SIGFPE
                 case 0x05: return 0x0b; // SIGSEGV
                 case 0x06: return 0x04; // SIGILL
@@ -421,9 +428,9 @@ namespace jw
                 }
             }
 
-            void stop_reply()
+            void stop_reply(bool async = false)
             {
-                if (operating_thread_id != current_thread_id)
+                if (!async && operating_thread_id != current_thread_id)
                 {
                     send_packet("S00");
                     return;
@@ -434,15 +441,10 @@ namespace jw
                 auto exc = current_thread->last_exception;
                 std::stringstream s { };
                 s << std::hex << std::setfill('0');
+                if (async) s << "Stop:";
                 if (exc == 0x01 || exc == 0x03)
                 {
-                    s << "T" << std::setw(2);
-                    if (current_thread->trap_was_masked)
-                    {
-                        s << 0x13; // SIGCONT
-                        current_thread->trap_was_masked = false;
-                    }
-                    else s << signal_number(exc);
+                    s << "T" << std::setw(2) << signal_number(exc);
                     s << eflags << ':'; reg(s, eflags, r, f, t); s << ';';
                     s << eip << ':'; reg(s, eip, r, f, t); s << ';';
                     s << esp << ':'; reg(s, esp, r, f, t); s << ';';
@@ -460,12 +462,18 @@ namespace jw
                         }
                     }
                     else s << "swbreak:;";
-                    send_packet(s.str());
+                    if (async) send_notification(s.str());
+                    else send_packet(s.str());
                 }
                 else
                 {
                     s << "S" << std::setw(2) << signal_number(exc);
-                    send_packet(s.str());
+                    if (async)
+                    {
+                        s << ';';
+                        send_notification(s.str());
+                    }
+                    else send_packet(s.str());
                 }
             }
 
@@ -795,7 +803,7 @@ namespace jw
                     current_thread->last_exception = exc; 
                     if (exc == 0x03) current_thread->frame.fault_address.offset -= 1;
                     operating_thread_id = current_thread_id;
-                    send_notification("Stop");
+                    //stop_reply(true);
                     if (current_thread->action == thread_info::none) current_thread->action = thread_info::cont;
                 }
 
