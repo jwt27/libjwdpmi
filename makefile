@@ -24,7 +24,7 @@ DEP := $(SRC:$(SRCDIR)/%.cpp=$(OBJDIR)/%.d)
 all: $(OBJDIR) $(OUTDIR) $(OUTDIR)/$(OUTPUT)
 
 clean:
-	-rm -rf obj/* bin/*
+	-rm -f $(OBJ) $(DEP) $(OUTDIR)/$(OUTPUT)
 
 $(OUTDIR): 
 	-mkdir $(OUTDIR)
