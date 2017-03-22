@@ -64,7 +64,7 @@ namespace jw
             };
 
             std::uint32_t current_thread_id { 1 };  
-            std::uint32_t operating_thread_id { 1 };
+            std::uint32_t selected_thread_id { 1 };
 
             struct thread_info
             {
@@ -200,9 +200,9 @@ namespace jw
                 {                                 
                 case 0x01:
                 case 0x03:
-                    if (threads[operating_thread_id].use_sigcont)
+                    if (threads[selected_thread_id].use_sigcont)
                     {
-                        threads[operating_thread_id].use_sigcont = false;
+                        threads[selected_thread_id].use_sigcont = false;
                         return 0x13;    // SIGCONT
                     }
                     else return 0x05;   // SIGTRAP
@@ -328,7 +328,7 @@ namespace jw
 
             void thread_reg(std::ostream& out, regnum r)
             {
-                auto t = threads[operating_thread_id].thread.lock();
+                auto t = threads[selected_thread_id].thread.lock();
                 if (!t)
                 {
                     encode_null(out, reglen[r]);
@@ -356,7 +356,7 @@ namespace jw
 
             void reg(std::ostream& out, regnum r, cpu_registers* reg, exception_frame* frame, bool new_type)
             {
-                if (operating_thread_id != current_thread_id)
+                if (selected_thread_id != current_thread_id)
                 {
                     thread_reg(out, r);
                     return;
@@ -401,7 +401,7 @@ namespace jw
 
             bool setreg(regnum r, const std::string& value, cpu_registers* reg, exception_frame* frame, bool new_type)
             {
-                if (operating_thread_id != current_thread_id) return false;
+                if (selected_thread_id != current_thread_id) return false;
                 auto* new_frame = static_cast<new_exception_frame*>(frame);
                 switch (r)
                 {
@@ -432,7 +432,7 @@ namespace jw
 
             void stop_reply(bool async = false)
             {
-                if (!async && operating_thread_id != current_thread_id)
+                if (!async && selected_thread_id != current_thread_id)
                 {
                     send_packet("S00");
                     return;
@@ -617,7 +617,7 @@ namespace jw
                         auto id = decode(packet[1].substr(1));
                         if (packet[1][0] == 'g' && threads.count(id))
                         {
-                            operating_thread_id = id;
+                            selected_thread_id = id;
                             send_packet("OK");
                         }
                         else send_packet("E00");
@@ -804,7 +804,7 @@ namespace jw
                     current_thread->reg = *r;
                     current_thread->last_exception = exc; 
                     if (exc == 0x03) current_thread->frame.fault_address.offset -= 1;
-                    operating_thread_id = current_thread_id;
+                    selected_thread_id = current_thread_id;
                     //stop_reply(true);
                     if (current_thread->action == thread_info::none) current_thread->action = thread_info::cont;
                 }
