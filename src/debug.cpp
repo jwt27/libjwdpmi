@@ -483,12 +483,12 @@ namespace jw
                         current_thread->action = thread_info::none;
                     }
                     packet = recv_packet();
-                    auto& p = packet.front();
-                    if (p == "?")   // stop reason
+                    auto& p = packet.front()[0];
+                    if (p == '?')   // stop reason
                     {
                         stop_reply();
                     }
-                    else if (p == "q")  // query
+                    else if (p == 'q')  // query
                     {
                         auto& q = packet[1];
                         if (q == "Supported")
@@ -556,7 +556,7 @@ namespace jw
                         }
                         else send_packet("");
                     }
-                    else if (p == "v")
+                    else if (p == 'v')
                     {
                         auto& v = packet[1];
                         if (v == "Stopped")
@@ -602,7 +602,7 @@ namespace jw
                         }
                         else send_packet("");
                     }
-                    else if (p == "H")  // set current thread
+                    else if (p == 'H')  // set current thread
                     {
                         auto id = decode(packet[1].substr(1));
                         if (packet[1][0] == 'g' && threads.count(id))
@@ -612,30 +612,30 @@ namespace jw
                         }
                         else send_packet("E00");
                     }
-                    else if (p == "T")  // is thread alive?
+                    else if (p == 'T')  // is thread alive?
                     {
                         auto id = decode(packet[1]);
                         if (threads.count(id)) send_packet("OK");
                         else send_packet("E01");
                     }
-                    else if (p == "p")  // read one register
+                    else if (p == 'p')  // read one register
                     {
                         auto regn = static_cast<regnum>(decode(packet[1]));
                         reg(s, regn, r, f, t);
                         send_packet(s.str());
                     }
-                    else if (p == "P")  // write one register
+                    else if (p == 'P')  // write one register
                     {
                         if (setreg(static_cast<regnum>(decode(packet[1])), packet[2], r, f, t)) send_packet("OK");
                         else send_packet("E00");
                     }
-                    else if (p == "g")  // read registers
+                    else if (p == 'g')  // read registers
                     {
                         for (int i = eax; i <= eflags; ++i)
                             reg(s, static_cast<regnum>(i), r, f, t);
                         send_packet(s.str());
                     }
-                    else if (p == "G")  // write registers
+                    else if (p == 'G')  // write registers
                     {
                         regnum reg { };
                         std::size_t pos { };
@@ -652,36 +652,36 @@ namespace jw
                         }
                         if (!fail) send_packet("OK");
                     }
-                    else if (p == "m")  // read memory
+                    else if (p == 'm')  // read memory
                     {
                         auto* addr = reinterpret_cast<byte*>(decode(packet[1]));
                         std::size_t len = decode(packet[2]);
                         encode(s, addr, len);
                         send_packet(s.str());
                     }
-                    else if (p == "M")  // write memory
+                    else if (p == 'M')  // write memory
                     {
                         auto* addr = reinterpret_cast<byte*>(decode(packet[1]));
                         std::size_t len = decode(packet[2]);
                         if (reverse_decode(packet[3], addr, len)) send_packet("OK");
                         else send_packet("E00");
                     }
-                    else if (p == "c" || p == "s")  // step/continue
+                    else if (p == 'c' || p == 's')  // step/continue
                     {
                         if (packet.size() > 1) f->fault_address.offset = decode(packet[1]);
                         current_thread->set_action(packet[0]);
                     }
-                    else if (p == "C" || p == "S")  // step/continue with signal
+                    else if (p == 'C' || p == 'S')  // step/continue with signal
                     {
                         if (packet.size() > 2) f->fault_address.offset = decode(packet[2]);
                         current_thread->set_action(packet[0] + packet[1]);
                     }
-                    else if (p == "Z")  // set break/watchpoint
+                    else if (p == 'Z')  // set break/watchpoint
                     {
-                        auto& z = packet[1];
+                        auto& z = packet[1][0];
                         std::uintptr_t addr = decode(packet[2]);
                         auto ptr = reinterpret_cast<byte*>(addr);
-                        if (z == "0")   // set breakpoint
+                        if (z == '0')   // set breakpoint
                         {
                             if (packet.size() > 4)  // conditional breakpoint
                             {
@@ -695,10 +695,10 @@ namespace jw
                         else            // set watchpoint
                         {
                             watchpoint::watchpoint_type w;
-                            if (z == "1") w = watchpoint::execute;
-                            else if (z == "2") w = watchpoint::read_write;
-                            else if (z == "3") w = watchpoint::read;
-                            else if (z == "4") w = watchpoint::read_write;
+                            if (z == '1') w = watchpoint::execute;
+                            else if (z == '2') w = watchpoint::read_write;
+                            else if (z == '3') w = watchpoint::read;
+                            else if (z == '4') w = watchpoint::read_write;
                             else
                             {
                                 send_packet("");
@@ -716,12 +716,12 @@ namespace jw
                             }
                         }
                     }
-                    else if (p == "z")  // remove break/watchpoint
+                    else if (p == 'z')  // remove break/watchpoint
                     {
-                        auto& z = packet[1];
+                        auto& z = packet[1][0];
                         std::uintptr_t addr = decode(packet[2]);
                         auto ptr = reinterpret_cast<byte*>(addr);
-                        if (z == "0")   // remove breakpoint
+                        if (z == '0')   // remove breakpoint
                         {
                             if (breakpoints.count(addr))
                             {
@@ -740,7 +740,7 @@ namespace jw
                             else send_packet("E00");
                         }
                     }
-                    else if (p == "k") return false;    // kill (this is a stupid way to do it...)
+                    else if (p == 'k') return false;    // kill (this is a stupid way to do it...)
                     else send_packet("");   // unknown packet
                     if (current_thread->action != thread_info::none) return current_thread->do_action();
                 }
