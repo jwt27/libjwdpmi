@@ -124,8 +124,7 @@ namespace jw
                         frame.flags.trap = true;
                         trap = 1;
                         step_range_begin = rbegin;
-                        step_range_begin = rend;
-                        std::clog << "range stepping from " << rbegin << " to " << rend << ", now at " << frame.fault_address.offset;
+                        step_range_end = rend;
                         action = step_range;
                     }
                     else if (a[0] == 't')   // stop
@@ -786,17 +785,14 @@ namespace jw
                             return true;
                         }
                         if (current_thread->action == thread_info::step_range &&
-                            f->fault_address.offset > current_thread->step_range_begin &&
-                            f->fault_address.offset < current_thread->step_range_end)
+                            f->fault_address.offset >= current_thread->step_range_begin &&
+                            f->fault_address.offset <= current_thread->step_range_end)
                         {
-                            std::clog << "range step!\n";   // this never works somehow
-                            reentry = false;               
+                            reentry = false;
                             current_thread->last_eip = f->fault_address.offset;
                             return true;
                         }
-                        current_thread->trap = 0;      
-                        current_thread->step_range_begin = 0;
-                        current_thread->step_range_end = 0;
+                        current_thread->trap = 0;
                     }
                     if (t) current_thread->frame = *static_cast<new_exception_frame*>(f);
                     else static_cast<old_exception_frame&>(current_thread->frame) = *f;
