@@ -30,11 +30,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 // TODO: terminate_handler and trap SIGABRT
 
-
 namespace jw
 {
     namespace dpmi
     {
+    #ifdef _DEBUG
         namespace detail
         {
             bool gdb_interface_setup { false };
@@ -902,5 +902,6 @@ namespace jw
             }
             catch (...) { asm("int 3"); }
         }
+    #endif
     }
 }

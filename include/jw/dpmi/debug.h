@@ -24,7 +24,11 @@ namespace jw
     namespace dpmi
     {
         // Returns true if in debug mode.
+    #ifdef _DEBUG
         bool debug();
+    #else
+        constexpr bool debug() { return false; }
+    #endif
 
         // Set a breakpoint
         inline void breakpoint() { if (debug()) asm("int 3"); }
@@ -32,6 +36,7 @@ namespace jw
         // Disable the trap flag
         struct trap_mask
         {
+        #ifdef _DEBUG
             trap_mask() noexcept;
             ~trap_mask() noexcept;
 
@@ -39,9 +44,11 @@ namespace jw
             trap_mask(trap_mask&&) = delete;
             trap_mask& operator=(const trap_mask&) = delete;
             trap_mask& operator=(trap_mask&&) = delete;
-
         private:
             bool fail { false };
+        #else
+            constexpr trap_mask() noexcept { }
+        #endif
         };
 
         // Set a watchpoint
@@ -61,6 +68,7 @@ namespace jw
 
             watchpoint(auto* ptr, watchpoint_type t, std::size_t size) : watchpoint(memory_info::near_to_linear(ptr), size, t) { }
 
+        #ifdef _DEBUG
             watchpoint(const watchpoint&) = delete;
             watchpoint& operator=(const watchpoint&) = delete;
             watchpoint(watchpoint&& m) : handle(m.handle), type(m.type) { m.handle = null_handle; }
@@ -101,11 +109,15 @@ namespace jw
                     : "cc");
                 // disregard errors here. the only possible failure is invalid handle, which "should never happen"
             }
+        #else
+            constexpr watchpoint(std::uintptr_t, std::size_t, watchpoint_type t) : type(t) { }
+        #endif
 
             // Get the current state of this watchpoint. (DPMI 0.9, AX=0B02)
             // Returns true if the watchpoint has been triggered.
             bool get_state() const
             {
+            #ifdef _DEBUG
                 bool c;
                 dpmi_error_code error;
                 asm("int 0x31;"
@@ -117,11 +129,15 @@ namespace jw
                     : "cc");
                 if (c) throw dpmi_error(error, "clear_watchpoint");
                 return error != 0;
+            #else
+                return false;
+            #endif
             }
 
             // Reset the state of this watchpoint (DPMI 0.9, AX=0B03)
             void reset()
             {
+            #ifdef _DEBUG
                 bool c;
                 dpmi_error_code error;
                 asm (
@@ -132,13 +148,16 @@ namespace jw
                     , "b"(handle)
                     : "cc");
                 if (c) throw dpmi_error(error, "reset_watchpoint");
+            #endif
             }
 
             auto get_type() { return type; }
 
         private:
+        #ifdef _DEBUG
             const std::uint32_t null_handle { std::numeric_limits<std::uint32_t>::max() };
             std::uint32_t handle { null_handle };
+        #endif
             watchpoint_type type;
         };
     }

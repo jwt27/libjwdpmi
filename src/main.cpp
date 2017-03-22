@@ -89,6 +89,7 @@ int main(int argc, char** argv)
         std::deque<std::string> args { };   // TODO: std::string_view when it's available
         for (auto i = 0; i < argc; ++i)
         {
+        #ifdef _DEBUG
             if (stricmp(argv[i], "--debug") == 0)
             {
                 io::rs232_config cfg;
@@ -96,7 +97,10 @@ int main(int argc, char** argv)
                 dpmi::locking_allocator<> alloc;
                 dpmi::detail::setup_gdb_interface(allocate_unique<io::rs232_stream>(alloc, cfg));
             }
-            else args.emplace_back(argv[i]);
+            else
+        #else
+            args.emplace_back(argv[i]);
+        #endif
         }
 
         if (dpmi::debug())
