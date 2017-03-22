@@ -699,8 +699,11 @@ namespace jw
                                 send_packet("");    // not implemented (TODO)
                                 continue;
                             }
-                            breakpoints.emplace(addr, *ptr);
-                            *ptr = 0xcc;
+                            if (*ptr != 0xcc)
+                            {
+                                breakpoints.emplace(addr, *ptr);
+                                *ptr = 0xcc;
+                            }
                             send_packet("OK");
                         }
                         else            // set watchpoint
