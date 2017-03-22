@@ -333,7 +333,7 @@ namespace jw
                     encode_null(out, reglen[r]);
                     return;
                 }
-                auto* reg = t->get_context();
+                auto* reg = thread::detail::get_thread_context(t);
                 auto r_eip = reinterpret_cast<std::uintptr_t>(thread::yield);
                 switch (r)
                 {

@@ -42,6 +42,8 @@ namespace jw
                 // esp is the pointer to this struct.
             };
 
+            const thread_context* get_thread_context(auto t) { return t->context; }
+
             enum thread_state
             {
                 initialized,
@@ -56,6 +58,7 @@ namespace jw
             {
                 friend class scheduler;
                 template<std::size_t> friend class task_base;
+                friend const thread_context* get_thread_context(auto t);
 
                 static std::uint32_t id_count;
 
@@ -78,7 +81,6 @@ namespace jw
                 thread(std::size_t bytes, byte* ptr) : stack_size(bytes), stack_ptr(ptr), id_num(++id_count) { }
 
             public:
-                const auto* get_context() { return context; }
                 bool is_running() const noexcept { return (state != initialized && state != finished); }
                 auto pending_exceptions() const noexcept { return exceptions.size(); }
                 const auto& id() const noexcept { return id_num; }
