@@ -125,6 +125,7 @@ namespace jw
 
 void* operator new(std::size_t n)
 {
+    dpmi::trap_mask dont_trap_here { };
     if (dpmi::in_irq_context()) return new_alloc->allocate(n);
     if (new_alloc_initialized == no)
     {
@@ -161,6 +162,7 @@ void* operator new(std::size_t n)
 
 void operator delete(void* p, std::size_t)
 {
+    dpmi::trap_mask dont_trap_here { };
     if (new_alloc_initialized == yes && new_alloc->in_pool(p))
     {
         new_alloc->deallocate(p);
