@@ -613,7 +613,7 @@ namespace jw
                     else if (p == 'H')  // set current thread
                     {
                         auto id = decode(packet[1].substr(1));
-                        if (packet[1][0] == 'g' && threads.count(id))
+                        if (threads.count(id))
                         {
                             selected_thread_id = id;
                             send_packet("OK");
@@ -676,13 +676,15 @@ namespace jw
                     }
                     else if (p == 'c' || p == 's')  // step/continue
                     {
-                        if (packet.size() > 1) f->fault_address.offset = decode(packet[1]);
-                        current_thread->set_action(packet[0]);
+                        auto& t = threads[selected_thread_id];
+                        if (packet.size() > 1) t.frame.fault_address.offset = decode(packet[1]);
+                        t.set_action(packet[0]);
                     }
                     else if (p == 'C' || p == 'S')  // step/continue with signal
                     {
-                        if (packet.size() > 2) f->fault_address.offset = decode(packet[2]);
-                        current_thread->set_action(packet[0] + packet[1]);
+                        auto& t = threads[selected_thread_id];
+                        if (packet.size() > 2) t.frame.fault_address.offset = decode(packet[2]);
+                        t.set_action(packet[0] + packet[1]);
                     }
                     else if (p == 'Z')  // set break/watchpoint
                     {
