@@ -1,9 +1,8 @@
 CXXFLAGS += -masm=intel
 CXXFLAGS += -std=gnu++17
 CXXFLAGS += -Wall -Wextra
-CXXFLAGS += -gdwarf-4
-CXXFLAGS += -funwind-tables -fasynchronous-unwind-tables
-CXXFLAGS += -fnon-call-exceptions 
+CXXFLAGS += -fasynchronous-unwind-tables
+CXXFLAGS += -fnon-call-exceptions
 CXXFLAGS += -mcld
 CXXFLAGS += -mpreferred-stack-boundary=4
 
