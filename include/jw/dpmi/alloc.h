@@ -115,7 +115,6 @@ namespace jw
             auto allocate(std::size_t num_elements)
             {
                 interrupt_mask no_interrupts_please { };
-                trap_mask dont_trace_here { };
 
                 auto n = num_elements * sizeof(T) + alignof(T);
                 for (auto* i = begin(); i != nullptr; i = i->next)
