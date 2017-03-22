@@ -533,7 +533,6 @@ namespace jw
                             {
                                 s << t.first << ',';
                             }
-                            s << 'l';
                             send_packet(s.str());
                         }
                         else if (q == "sThreadInfo") send_packet("l");
@@ -601,7 +600,7 @@ namespace jw
                                     ++i;
                                 }
                                 else
-                                {                                                         
+                                {
                                     for (auto& t : threads)
                                     {
                                         if (t.second.action == thread_info::none)
