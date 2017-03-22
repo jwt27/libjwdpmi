@@ -197,7 +197,7 @@ namespace jw
             inline auto signal_number(exception_num exc)
             {
                 switch (exc)
-                {                                 
+                {
                 case 0x01:
                 case 0x03:
                     if (threads[selected_thread_id].use_sigcont)
@@ -342,7 +342,7 @@ namespace jw
                 case ebp: encode(out, &reg->ebp); return;
                 case esi: encode(out, &reg->esi); return;
                 case edi: encode(out, &reg->edi); return;
-                //case esp: encode(out, reg); return;
+                case esp: encode(out, &reg); return;
                 case cs: encode(out, &current_thread->frame.fault_address.segment); return;
                 case ss: encode(out, &current_thread->frame.stack.segment); return;
                 case ds: encode(out, &current_thread->frame.stack.segment); return;
