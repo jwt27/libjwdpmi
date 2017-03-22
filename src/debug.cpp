@@ -382,7 +382,7 @@ namespace jw
                 case eip:
                 {
                     auto eip = frame->fault_address.offset;
-                    if (current_thread->last_exception == 0x01) eip = current_thread->last_eip;   // TODO: is this necessary?
+                    //if (current_thread->last_exception == 0x01) eip = current_thread->last_eip;   // TODO: is this necessary?
                     //else if (current_thread->last_exception == 0x03) eip -= 1;
                     encode(out, &eip);
                     return;
