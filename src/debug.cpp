@@ -876,7 +876,7 @@ namespace jw
             if (!debug()) return;
             if (gdb::reentry) return;
             auto id = jw::thread::detail::scheduler::get_current_thread_id();
-            ++gdb::threads[id].trap_masked;
+            ++gdb::threads.at(id).trap_masked;
         }
 
         trap_mask::~trap_mask()
@@ -884,7 +884,7 @@ namespace jw
             if (!debug()) return;
             if (gdb::reentry) return;
             auto id = jw::thread::detail::scheduler::get_current_thread_id();
-            if (--gdb::threads[id].trap_masked == 0 && gdb::threads[id].trap > 0) asm("int 3");
+            if (--gdb::threads.at(id).trap_masked == 0 && gdb::threads.at(id).trap > 0) asm("int 3");
         }
     }
 }
