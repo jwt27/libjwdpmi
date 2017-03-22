@@ -342,7 +342,7 @@ namespace jw
                 case ebp: encode(out, &reg->ebp); return;
                 case esi: encode(out, &reg->esi); return;
                 case edi: encode(out, &reg->edi); return;
-                case esp: encode(out, &reg); return;
+                //case esp: encode(out, &reg); return;
                 case cs: encode(out, &current_thread->frame.fault_address.segment); return;
                 case ss: encode(out, &current_thread->frame.stack.segment); return;
                 case ds: encode(out, &current_thread->frame.stack.segment); return;
