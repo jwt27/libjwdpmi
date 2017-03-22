@@ -123,18 +123,29 @@ namespace jw
     dpmi::detail::new_allocator* new_alloc { nullptr };
 }
 
+[[gnu::no_reorder, gnu::noclone]]
+void operator_new_delete_begin() { }
+
+[[gnu::no_reorder, gnu::noclone]]
 void* operator new(std::size_t n)
 {
-    if (dpmi::in_irq_context()) return new_alloc->allocate(n);
+    if (dpmi::in_irq_context())
+    {
+        if (new_alloc_initialized == yes) return new_alloc->allocate(n);
+        else throw std::bad_alloc { }; 
+    }
     if (new_alloc_initialized == no)
     {
         try
         {
             new_alloc_initialized = almost;
-            if (new_alloc != nullptr) delete new_alloc;
-            new_alloc = nullptr;
-            new_alloc = new dpmi::detail::new_allocator { };
-            new_alloc_initialized = yes;
+            {
+                dpmi::trap_mask dont_trap_here { };
+                if (new_alloc != nullptr) delete new_alloc;
+                new_alloc = nullptr;
+                new_alloc = new dpmi::detail::new_allocator { };
+                new_alloc_initialized = yes;
+            }
         }
         catch (...)
         {
@@ -147,8 +158,11 @@ void* operator new(std::size_t n)
         try
         {
             new_alloc_initialized = almost;
-            jw::new_alloc->resize_if_necessary();
-            new_alloc_initialized = yes;
+            {
+                dpmi::trap_mask dont_trap_here { };
+                jw::new_alloc->resize_if_necessary();
+                new_alloc_initialized = yes;
+            }
         }
         catch (...)
         {
@@ -156,9 +170,11 @@ void* operator new(std::size_t n)
             throw;
         }
     }
+    
     return std::malloc(n);
 }
 
+[[gnu::no_reorder, gnu::noclone]]
 void operator delete(void* p, std::size_t)
 {
     if (new_alloc_initialized == yes && new_alloc->in_pool(p))
@@ -169,7 +185,11 @@ void operator delete(void* p, std::size_t)
     std::free(p);
 }
 
+[[gnu::no_reorder, gnu::noclone]]
 void operator delete(void* p)
 {
     ::operator delete(p, 1);
 }
+
+[[gnu::no_reorder, gnu::noclone]]
+void operator_new_delete_end() { }

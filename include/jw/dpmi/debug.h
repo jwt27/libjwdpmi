@@ -32,13 +32,16 @@ namespace jw
         // Disable the trap flag
         struct trap_mask
         {
-            trap_mask();
-            ~trap_mask();
+            trap_mask() noexcept;
+            ~trap_mask() noexcept;
 
             trap_mask(const trap_mask&) = delete;
             trap_mask(trap_mask&&) = delete;
             trap_mask& operator=(const trap_mask&) = delete;
             trap_mask& operator=(trap_mask&&) = delete;
+
+        private:
+            bool fail { false };
         };
 
         // Set a watchpoint

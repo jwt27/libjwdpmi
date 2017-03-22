@@ -30,6 +30,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 // TODO: terminate_handler and trap SIGABRT
 
+void operator_new_delete_begin();
+void operator_new_delete_end();
+
 namespace jw
 {
     namespace dpmi
@@ -323,6 +326,14 @@ namespace jw
                     pos += p - pos + 1;
                 }
                 return parsed_input;
+            }
+
+            bool forbidden_zone(auto addr)
+            {
+                auto a = reinterpret_cast<std::uintptr_t>(addr);
+                if (a >= reinterpret_cast<std::uintptr_t>(operator_new_delete_begin) &&
+                    a <= reinterpret_cast<std::uintptr_t>(operator_new_delete_end)) return true;
+                return false;
             }
 
             void thread_reg(std::ostream& out, regnum r)
@@ -670,6 +681,11 @@ namespace jw
                     else if (p == 'M')  // write memory
                     {
                         auto* addr = reinterpret_cast<byte*>(decode(packet[0]));
+                        if (forbidden_zone(addr))
+                        {
+                            send_packet("E00");
+                            continue;
+                        }
                         std::size_t len = decode(packet[1]);
                         if (reverse_decode(packet[2], addr, len)) send_packet("OK");
                         else send_packet("E00");
@@ -690,6 +706,11 @@ namespace jw
                     {
                         auto& z = packet[0][0];
                         std::uintptr_t addr = decode(packet[1]);
+                        if (forbidden_zone(addr))
+                        {
+                            send_packet("OK");  // don't actually do it
+                            continue;
+                        }
                         auto ptr = reinterpret_cast<byte*>(addr);
                         if (z == '0')   // set breakpoint
                         {
@@ -736,9 +757,8 @@ namespace jw
                             if (breakpoints.count(addr))
                             {
                                 *ptr = breakpoints[addr];
-                                send_packet("OK");
                             }
-                            else send_packet("E00");
+                            send_packet("OK");
                         }
                         else            // remove watchpoint
                         {
@@ -870,20 +890,30 @@ namespace jw
 
         bool debug() { return detail::gdb_interface_setup; }
 
-        trap_mask::trap_mask()
+        trap_mask::trap_mask() noexcept
         {
             if (!debug()) return;
             if (gdb::reentry) return;
-            auto id = jw::thread::detail::scheduler::get_current_thread_id();
-            ++gdb::threads.at(id).trap_masked;
+            try
+            {
+                auto id = jw::thread::detail::scheduler::get_current_thread_id();
+                ++gdb::threads.at(id).trap_masked;
+            }
+            catch (...) { fail = true; }
         }
 
-        trap_mask::~trap_mask()
+        trap_mask::~trap_mask() noexcept
         {
+            if (fail) return;
             if (!debug()) return;
             if (gdb::reentry) return;
-            auto id = jw::thread::detail::scheduler::get_current_thread_id();
-            if (--gdb::threads.at(id).trap_masked == 0 && gdb::threads.at(id).trap > 0) asm("int 3");
+            try
+            {
+                auto id = jw::thread::detail::scheduler::get_current_thread_id();
+                gdb::threads.at(id).use_sigcont = true;
+                if (--gdb::threads.at(id).trap_masked == 0 && gdb::threads.at(id).trap > 0) asm("int 3");
+            }
+            catch (...) { asm("int 3"); }
         }
     }
 }
