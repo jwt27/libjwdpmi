@@ -778,7 +778,6 @@ namespace jw
                     {
                         if (current_thread->trap_masked > 0)
                         {
-                            std::clog << "trap masked!\n";
                             current_thread->use_sigcont = true;
                             ++current_thread->trap;
                             f->flags.trap = false;
