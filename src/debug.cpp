@@ -71,7 +71,7 @@ namespace jw
                 exception_num last_exception;
                 std::uint32_t trap_masked { 0 };
                 bool trap_was_masked { false };
-                bool trap { false };
+                std::uint32_t trap { 0 };
                 std::uintptr_t step_range_begin { 0 };
                 std::uintptr_t step_range_end { 0 };
                 
@@ -98,6 +98,7 @@ namespace jw
                     else if (a[0] == 's')  // step
                     {
                         frame.flags.trap = true;
+                        trap = 1;
                         action = step;
                     }
                     else if (a[0] == 'C')  // continue with signal
@@ -109,14 +110,17 @@ namespace jw
                     else if (a[0] == 'S')  // step with signal
                     {
                         frame.flags.trap = true;
+                        trap = 1;
                         if (a.substr(1) == "13") action = step; // SIGCONT
                         else action = step_sig;
                     }
                     else if (a[0] == 'r')   // step with range
                     {
                         frame.flags.trap = true;
+                        trap = 1;
                         step_range_begin = rbegin;
                         step_range_begin = rend;
+                        std::clog << "range stepping from " << rbegin << " to " << rend << ", now at " << frame.fault_address.offset;
                         action = step_range;
                     }
                     else if (a[0] == 't')   // stop
@@ -140,13 +144,6 @@ namespace jw
                     default: throw std::exception();
                     }
                 }
-
-                /*
-                void set_trap(bool enable)
-                {
-                    frame.flags.trap = enable;
-                    trap = enable;  // used by trap_mask
-                }*/
             };
             
             std::map<std::uint32_t, thread_info, std::less<std::uint32_t>, locked_pool_allocator<>> threads { alloc };
@@ -393,7 +390,7 @@ namespace jw
                 auto exc = current_thread->last_exception;
                 std::stringstream s { };
                 s << std::hex << std::setfill('0');
-                if (exc == 1 || exc == 3)
+                if (exc == 0x01 || exc == 0x03)
                 {
                     s << "T" << std::setw(2);
                     if (current_thread->trap_was_masked)
@@ -558,7 +555,11 @@ namespace jw
                         }
                         else send_packet("");
                     }
-                    else if (p == "T")
+                    else if (p == "H")  // set current thread
+                    {
+                        send_packet("E00");
+                    }
+                    else if (p == "T")  // is thread alive?
                     {
                         auto id = decode(packet[2]);
                         if (threads.count(id)) send_packet("OK");
@@ -715,8 +716,8 @@ namespace jw
                         if (current_thread->trap_masked > 0)
                         {
                             std::clog << "trap masked!\n";
-                            current_thread->trap_was_masked = true;
-                            current_thread->trap = true;
+                            if (exc == 0x01) current_thread->trap_was_masked = true;
+                            ++current_thread->trap;
                             f->flags.trap = false;
                             reentry = false;
                             current_thread->last_eip = f->fault_address.offset;
@@ -726,23 +727,23 @@ namespace jw
                             f->fault_address.offset > current_thread->step_range_begin &&
                             f->fault_address.offset < current_thread->step_range_end)
                         {
-                            std::clog << "range step!\n";
+                            std::clog << "range step!\n";   // this never works somehow
                             reentry = false;               
                             current_thread->last_eip = f->fault_address.offset;
                             return true;
-                        }
+                        }                    
+                        current_thread->trap = 0;      
+                        current_thread->step_range_begin = 0;
+                        current_thread->step_range_end = 0;
                     }
-                    current_thread->trap = false;
-                    current_thread->step_range_begin = 0;
-                    current_thread->step_range_end = 0;
                     if (t) current_thread->frame = *static_cast<new_exception_frame*>(f);
                     else static_cast<old_exception_frame&>(current_thread->frame) = *f;
                     current_thread->reg = *r;
                     current_thread->last_exception = exc; 
                     if (exc == 0x03) current_thread->frame.fault_address.offset -= 1;
                     send_notification("Stop");
+                    if (current_thread->action == thread_info::none) current_thread->action = thread_info::cont;
                 }
-                current_thread->action = thread_info::step;
 
                 bool result { false };
                 try
@@ -815,7 +816,6 @@ namespace jw
             if (gdb::reentry) return;
             auto id = jw::thread::detail::scheduler::get_current_thread_id();
             ++gdb::threads[id].trap_masked;
-            //gdb::threads[id].trap_was_masked = true;
         }
 
         trap_mask::~trap_mask()
@@ -823,10 +823,7 @@ namespace jw
             if (!debug()) return;
             if (gdb::reentry) return;
             auto id = jw::thread::detail::scheduler::get_current_thread_id();
-            if (--gdb::threads[id].trap_masked == 0 && gdb::threads[id].trap)
-            {
-                asm("int 3");
-            }
+            if (--gdb::threads[id].trap_masked == 0 && gdb::threads[id].trap > 0) asm("int 3");
         }
     }
 }
