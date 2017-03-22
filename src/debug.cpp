@@ -167,7 +167,7 @@ namespace jw
                     threads[t->id()].thread = t;
                 }
                 current_thread_id = jw::thread::detail::scheduler::get_current_thread_id();
-                threads[current_thread_id].thread = jw::thread::detail::scheduler::get_current_thread().lock();
+                threads[current_thread_id].thread = jw::thread::detail::scheduler::get_current_thread();
                 current_thread = &threads[current_thread_id];
             }
 
