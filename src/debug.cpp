@@ -30,8 +30,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 // TODO: terminate_handler and trap SIGABRT
 
-void operator_new_delete_begin();
-void operator_new_delete_end();
 
 namespace jw
 {
@@ -326,14 +324,6 @@ namespace jw
                     pos += p - pos + 1;
                 }
                 return parsed_input;
-            }
-
-            bool forbidden_zone(auto addr)
-            {
-                auto a = reinterpret_cast<std::uintptr_t>(addr);
-                if (a >= reinterpret_cast<std::uintptr_t>(operator_new_delete_begin) &&
-                    a <= reinterpret_cast<std::uintptr_t>(operator_new_delete_end)) return true;
-                return false;
             }
 
             void thread_reg(std::ostream& out, regnum r)
@@ -681,11 +671,6 @@ namespace jw
                     else if (p == 'M')  // write memory
                     {
                         auto* addr = reinterpret_cast<byte*>(decode(packet[0]));
-                        if (forbidden_zone(addr))
-                        {
-                            send_packet("E00");
-                            continue;
-                        }
                         std::size_t len = decode(packet[1]);
                         if (reverse_decode(packet[2], addr, len)) send_packet("OK");
                         else send_packet("E00");
@@ -706,11 +691,6 @@ namespace jw
                     {
                         auto& z = packet[0][0];
                         std::uintptr_t addr = decode(packet[1]);
-                        if (forbidden_zone(addr))
-                        {
-                            send_packet("OK");  // don't actually do it
-                            continue;
-                        }
                         auto ptr = reinterpret_cast<byte*>(addr);
                         if (z == '0')   // set breakpoint
                         {
@@ -757,8 +737,9 @@ namespace jw
                             if (breakpoints.count(addr))
                             {
                                 *ptr = breakpoints[addr];
+                                send_packet("OK");
                             }
-                            send_packet("OK");
+                            else send_packet("E00");
                         }
                         else            // remove watchpoint
                         {
@@ -783,6 +764,15 @@ namespace jw
                 if (reentry)
                 {
                     if (exc == 0x01) return true;   // watchpoint trap, ignore
+                    if (exc == 0x03)                // breakpoint in debugger code, remove and ignore
+                    {
+                        if (breakpoints.count(f->fault_address.offset - 1))
+                        {
+                            f->fault_address.offset -= 1;
+                            *reinterpret_cast<byte*>(f->fault_address.offset) = breakpoints[f->fault_address.offset];
+                        }
+                        return true;
+                    }
                     if (current_thread->action == thread_info::none) send_packet("EEE"); // last command caused another exception
                     if (debugmsg) std::clog << *static_cast<new_exception_frame*>(f) << *r;
                     current_thread->frame.info_bits.redirect_elsewhere = true;
