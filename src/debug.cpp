@@ -149,6 +149,7 @@ namespace jw
             std::map<std::uint32_t, thread_info, std::less<std::uint32_t>, locked_pool_allocator<>> threads { alloc };
             std::uint32_t current_thread_id;
             thread_info* current_thread { nullptr };
+            std::uint32_t operating_thread_id;
 
             void populate_thread_list()
             {
@@ -557,7 +558,13 @@ namespace jw
                     }
                     else if (p == "H")  // set current thread
                     {
-                        send_packet("E00");
+                        send_packet("E00"); // TODO
+                        if (packet[1][0] == 'g')
+                        {
+                            operating_thread_id = decode(packet[1].substr(1));
+                        }
+                        else send_packet("E00");
+
                     }
                     else if (p == "T")  // is thread alive?
                     {
@@ -741,6 +748,7 @@ namespace jw
                     current_thread->reg = *r;
                     current_thread->last_exception = exc; 
                     if (exc == 0x03) current_thread->frame.fault_address.offset -= 1;
+                    operating_thread_id = current_thread_id;
                     send_notification("Stop");
                     if (current_thread->action == thread_info::none) current_thread->action = thread_info::cont;
                 }
