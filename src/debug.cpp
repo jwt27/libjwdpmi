@@ -450,7 +450,7 @@ namespace jw
                     s << eflags << ':'; reg(s, eflags, r, f, t); s << ';';
                     s << eip << ':'; reg(s, eip, r, f, t); s << ';';
                     s << esp << ':'; reg(s, esp, r, f, t); s << ';';
-                    s << "thread:"; reverse_encode(s, &current_thread_id); s << ';';
+                    s << "thread:" << current_thread_id << ';';
                     std::pair<const std::uintptr_t, watchpoint>* watchpoint_hit { nullptr };
                     for (auto& w : watchpoints) if (w.second.get_state()) watchpoint_hit = &w;
                     if (watchpoint_hit != nullptr)
@@ -523,8 +523,7 @@ namespace jw
                         else if (q == "Attached") send_packet("0");
                         else if (q == "C")
                         {
-                            s << "QC";
-                            reverse_encode(s, &current_thread_id);
+                            s << "QC" << current_thread_id;
                             send_packet(s.str());
                         }
                         else if (q == "fThreadInfo")
@@ -532,8 +531,9 @@ namespace jw
                             s << "m";
                             for (auto& t : threads) 
                             {
-                                reverse_encode(s, &t.first); s << ',';
+                                s << t.first << ',';
                             }
+                            s << 'l';
                             send_packet(s.str());
                         }
                         else if (q == "sThreadInfo") send_packet("l");
