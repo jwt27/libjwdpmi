@@ -74,7 +74,7 @@ namespace jw
                 cpu_registers reg;
                 exception_num last_exception;
                 std::uint32_t trap_masked { 0 };
-                bool trap_was_masked { false };
+                bool use_sigcont { false };
                 std::uint32_t trap { 0 };
                 std::uintptr_t step_range_begin { 0 };
                 std::uintptr_t step_range_end { 0 };
@@ -133,7 +133,7 @@ namespace jw
                         t->suspend();
                         action = stop;
                     }
-                    if (trap > 0 && t->id() != current_thread_id) trap_was_masked = true;
+                    if (trap > 0 && t->id() != current_thread_id) use_sigcont = true;
                 }
 
                 bool do_action()
@@ -200,9 +200,9 @@ namespace jw
                 {                                 
                 case 0x01:
                 case 0x03:
-                    if (threads[operating_thread_id].trap_was_masked)
+                    if (threads[operating_thread_id].use_sigcont)
                     {
-                        threads[operating_thread_id].trap_was_masked = false;
+                        threads[operating_thread_id].use_sigcont = false;
                         return 0x13;    // SIGCONT
                     }
                     else return 0x05;   // SIGTRAP
@@ -779,7 +779,7 @@ namespace jw
                         if (current_thread->trap_masked > 0)
                         {
                             std::clog << "trap masked!\n";
-                            if (exc == 0x01) current_thread->trap_was_masked = true;
+                            current_thread->use_sigcont = true;
                             ++current_thread->trap;
                             f->flags.trap = false;
                             reentry = false;
@@ -794,7 +794,7 @@ namespace jw
                             reentry = false;               
                             current_thread->last_eip = f->fault_address.offset;
                             return true;
-                        }                    
+                        }
                         current_thread->trap = 0;      
                         current_thread->step_range_begin = 0;
                         current_thread->step_range_end = 0;
