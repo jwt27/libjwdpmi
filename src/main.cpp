@@ -98,9 +98,10 @@ int main(int argc, char** argv)
                 dpmi::detail::setup_gdb_interface(allocate_unique<io::rs232_stream>(alloc, cfg));
             }
             else
-        #else
-            args.emplace_back(argv[i]);
         #endif
+            {
+                args.emplace_back(argv[i]);
+            }
         }
 
         if (dpmi::debug())
