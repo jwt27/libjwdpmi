@@ -467,7 +467,6 @@ namespace jw
                     s << "S" << std::setw(2) << signal_number(exc);
                     send_packet(s.str());
                 }
-                current_thread->action = thread_info::none;
             }
 
             [[gnu::hot]] bool handle_packet(exception_num, cpu_registers* r, exception_frame* f, bool t)
@@ -478,7 +477,11 @@ namespace jw
                 {
                     std::stringstream s { };
                     s << hex << setfill('0');
-                    if (current_thread->action != thread_info::none) stop_reply();
+                    if (current_thread->action != thread_info::none)
+                    {
+                        stop_reply();
+                        current_thread->action = thread_info::none;
+                    }
                     packet = recv_packet();
                     auto& p = packet.front();
                     if (p == "?")   // stop reason
