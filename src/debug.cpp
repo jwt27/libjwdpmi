@@ -314,7 +314,7 @@ namespace jw
 
                 std::deque<packet_string> parsed_input { };
                 std::size_t pos { 1 };
-                parsed_input.emplace_back(input.substr(0, 1), 0);
+                if (input.size() == 1) parsed_input.emplace_back("", input[0]);
                 while (pos < input.size())
                 {
                     auto p = std::min({ input.find(',', pos), input.find(':', pos), input.find(';', pos), input.find('=', pos) });
@@ -492,14 +492,14 @@ namespace jw
                         current_thread->action = thread_info::none;
                     }
                     packet = recv_packet();
-                    auto& p = packet.front()[0];
+                    auto& p = packet.front().delim;
                     if (p == '?')   // stop reason
                     {
                         stop_reply();
                     }
                     else if (p == 'q')  // query
                     {
-                        auto& q = packet[1];
+                        auto& q = packet[0];
                         if (q == "Supported")
                         {
                             packet.pop_front();
@@ -539,7 +539,7 @@ namespace jw
                         {
                             using namespace thread::detail;
                             std::stringstream msg { };
-                            auto id = decode(packet[2]);
+                            auto id = decode(packet[1]);
                             if (threads.count(id))
                             {
                                 auto t = threads[id].thread.lock();
@@ -566,7 +566,7 @@ namespace jw
                     }
                     else if (p == 'v')
                     {
-                        auto& v = packet[1];
+                        auto& v = packet[0];
                         if (v == "Stopped")
                         {
                             stop_reply();
@@ -577,7 +577,7 @@ namespace jw
                         }
                         else if (v == "Cont")
                         {
-                            for (std::size_t i = 2; i < packet.size(); ++i)
+                            for (std::size_t i = 1; i < packet.size(); ++i)
                             {
                                 if (packet[i][0] == 'r')
                                 {
@@ -612,7 +612,7 @@ namespace jw
                     }
                     else if (p == 'H')  // set current thread
                     {
-                        auto id = decode(packet[1].substr(1));
+                        auto id = decode(packet[0].substr(1));
                         if (threads.count(id))
                         {
                             selected_thread_id = id;
@@ -622,19 +622,19 @@ namespace jw
                     }
                     else if (p == 'T')  // is thread alive?
                     {
-                        auto id = decode(packet[1]);
+                        auto id = decode(packet[0]);
                         if (threads.count(id)) send_packet("OK");
                         else send_packet("E01");
                     }
                     else if (p == 'p')  // read one register
                     {
-                        auto regn = static_cast<regnum>(decode(packet[1]));
+                        auto regn = static_cast<regnum>(decode(packet[0]));
                         reg(s, regn, r, f, t);
                         send_packet(s.str());
                     }
                     else if (p == 'P')  // write one register
                     {
-                        if (setreg(static_cast<regnum>(decode(packet[1])), packet[2], r, f, t)) send_packet("OK");
+                        if (setreg(static_cast<regnum>(decode(packet[0])), packet[1], r, f, t)) send_packet("OK");
                         else send_packet("E00");
                     }
                     else if (p == 'g')  // read registers
@@ -648,9 +648,9 @@ namespace jw
                         regnum reg { };
                         std::size_t pos { };
                         bool fail { false };
-                        while (pos < packet[1].size())
+                        while (pos < packet[0].size())
                         {
-                            if (fail |= setreg(reg, packet[1].substr(pos), r, f, t))
+                            if (fail |= setreg(reg, packet[0].substr(pos), r, f, t))
                             {
                                 send_packet("E00");
                                 break;
@@ -662,38 +662,38 @@ namespace jw
                     }
                     else if (p == 'm')  // read memory
                     {
-                        auto* addr = reinterpret_cast<byte*>(decode(packet[1]));
-                        std::size_t len = decode(packet[2]);
+                        auto* addr = reinterpret_cast<byte*>(decode(packet[0]));
+                        std::size_t len = decode(packet[1]);
                         encode(s, addr, len);
                         send_packet(s.str());
                     }
                     else if (p == 'M')  // write memory
                     {
-                        auto* addr = reinterpret_cast<byte*>(decode(packet[1]));
-                        std::size_t len = decode(packet[2]);
-                        if (reverse_decode(packet[3], addr, len)) send_packet("OK");
+                        auto* addr = reinterpret_cast<byte*>(decode(packet[0]));
+                        std::size_t len = decode(packet[1]);
+                        if (reverse_decode(packet[2], addr, len)) send_packet("OK");
                         else send_packet("E00");
                     }
                     else if (p == 'c' || p == 's')  // step/continue
                     {
                         auto& t = threads[selected_thread_id];
-                        if (packet.size() > 1) t.frame.fault_address.offset = decode(packet[1]);
-                        t.set_action(packet[0]);
+                        if (packet.size() > 0) t.frame.fault_address.offset = decode(packet[0]);
+                        t.set_action(packet[0].delim + std::string { });
                     }
                     else if (p == 'C' || p == 'S')  // step/continue with signal
                     {
                         auto& t = threads[selected_thread_id];
-                        if (packet.size() > 2) t.frame.fault_address.offset = decode(packet[2]);
-                        t.set_action(packet[0] + packet[1]);
+                        if (packet.size() > 1) t.frame.fault_address.offset = decode(packet[1]);
+                        t.set_action(packet[0].delim + packet[0]);
                     }
                     else if (p == 'Z')  // set break/watchpoint
                     {
-                        auto& z = packet[1][0];
-                        std::uintptr_t addr = decode(packet[2]);
+                        auto& z = packet[0][0];
+                        std::uintptr_t addr = decode(packet[1]);
                         auto ptr = reinterpret_cast<byte*>(addr);
                         if (z == '0')   // set breakpoint
                         {
-                            if (packet.size() > 4)  // conditional breakpoint
+                            if (packet.size() > 3)  // conditional breakpoint
                             {
                                 send_packet("");    // not implemented (TODO)
                                 continue;
@@ -716,7 +716,7 @@ namespace jw
                             }
                             try
                             {
-                                std::size_t size = decode(packet[3]);
+                                std::size_t size = decode(packet[2]);
                                 watchpoints.emplace(addr, watchpoint { ptr, w, size });
                                 send_packet("OK");
                             }
@@ -728,8 +728,8 @@ namespace jw
                     }
                     else if (p == 'z')  // remove break/watchpoint
                     {
-                        auto& z = packet[1][0];
-                        std::uintptr_t addr = decode(packet[2]);
+                        auto& z = packet[0][0];
+                        std::uintptr_t addr = decode(packet[1]);
                         auto ptr = reinterpret_cast<byte*>(addr);
                         if (z == '0')   // remove breakpoint
                         {
