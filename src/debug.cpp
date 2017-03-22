@@ -26,6 +26,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <jw/dpmi/cpu_exception.h>
 #include <jw/io/rs232.h>
 #include <jw/alloc.h>
+#include <../jwdpmi_config.h>
 
 // TODO: terminate_handler and trap SIGABRT
 
@@ -40,7 +41,7 @@ namespace jw
 
         namespace gdb
         {
-            const bool debugmsg = true;
+            const bool debugmsg = config::enable_gdb_debug_messages;
 
             locked_pool_allocator<> alloc { 1_MB };
             std::deque<std::string, locked_pool_allocator<>> sent { alloc };

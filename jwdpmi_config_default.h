@@ -30,5 +30,8 @@ namespace jw
 
         // Set up cpu exception handlers to throw C++ exceptions instead.
         const bool enable_throwing_from_cpu_exceptions = true;
+
+        // Enable debug messages from the gdb interface
+        const bool enable_gdb_debug_messages = false;
     }
 }
