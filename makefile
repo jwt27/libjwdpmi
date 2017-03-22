@@ -23,13 +23,13 @@ DEP := $(SRC:$(SRCDIR)/%.cpp=$(OBJDIR)/%.d)
 all: $(OBJDIR) $(OUTDIR) $(OUTDIR)/$(OUTPUT)
 
 clean:
-	-rm -f $(OBJ) $(DEP) $(OUTDIR)/$(OUTPUT)
+	rm -f $(OBJ) $(DEP) $(OUTDIR)/$(OUTPUT)
 
 $(OUTDIR): 
-	-mkdir $(OUTDIR)
+	mkdir -p $(OUTDIR)
 
 $(OBJDIR):
-	-mkdir $(OBJDIR)
+	mkdir -p $(OBJDIR)
 
 $(OUTDIR)/$(OUTPUT): $(OBJ)
 	ar cru $@ $(OBJ) $(LIBS)
@@ -39,7 +39,7 @@ $(OBJDIR)/%.o: $(SRCDIR)/%.cpp jwdpmi_config.h
 	$(CXX) $(CXXFLAGS) -MD -MP -MF $(@:.o=.d) -o $@ $(INCLUDE) -c $< $(PIPECMD)
 
 jwdpmi_config.h:
-	-cp -n jwdpmi_config_default.h jwdpmi_config.h
+	cp -n jwdpmi_config_default.h jwdpmi_config.h
 
 ifneq ($(MAKECMDGOALS),clean)
   -include $(DEP)
