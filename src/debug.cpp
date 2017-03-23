@@ -332,22 +332,22 @@ namespace jw
                     encode_null(out, reglen[r]);
                     return;
                 }
-                auto* reg = thread::detail::thread_details::get_context(t);
-                auto r_eip = reinterpret_cast<std::uintptr_t>(thread::yield);
+                auto* reg = thread::detail::thread_details::get_context(t);   
+                auto r_esp = reinterpret_cast<const std::uintptr_t*>(reg) - 1;
                 switch (r)
                 {
                 case ebx: encode(out, &reg->ebx); return;
                 case ebp: encode(out, &reg->ebp); return;
                 case esi: encode(out, &reg->esi); return;
                 case edi: encode(out, &reg->edi); return;
-                //case esp: encode(out, &reg); return;
+                case esp: encode(out, &r_esp); return;
                 case cs: encode(out, &current_thread->frame.fault_address.segment); return;
                 case ss: encode(out, &current_thread->frame.stack.segment); return;
                 case ds: encode(out, &current_thread->frame.stack.segment); return;
                 case es: encode(out, &reg->es); return; 
                 case fs: encode(out, &reg->fs); return;
                 case gs: encode(out, &reg->gs); return;
-                case eip: encode(out, &r_eip); return;
+                case eip: encode(out, r_esp); return;
                 default: encode_null(out, reglen[r]);
                 }
             }
