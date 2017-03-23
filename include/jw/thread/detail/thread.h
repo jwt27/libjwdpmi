@@ -65,7 +65,7 @@ namespace jw
                 const std::size_t stack_size;
                 byte* const stack_ptr;
                 std::deque<std::exception_ptr> exceptions { };
-                std::uint32_t id_num;
+                const std::uint32_t id_num;
                 std::uint32_t trap_masked { 0 };
                 bool trap { false };
 
