@@ -71,7 +71,7 @@ namespace jw
                     locked = false;
                 }
 
-                memory_descriptor mem;
+                memory mem;
                 bool locked { false };
             };
         }

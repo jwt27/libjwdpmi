@@ -136,7 +136,7 @@ namespace jw
                     ::"cc");
                 assert(size <= code.size());
 
-                auto* ptr = memory_descriptor(get_cs(), start, size).get_ptr<byte>();
+                auto* ptr = memory(get_cs(), start, size).get_ptr<byte>();
                 std::copy_n(ptr, size, code.data());
 
                 asm volatile (

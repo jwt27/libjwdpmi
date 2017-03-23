@@ -398,57 +398,12 @@ namespace jw
             memory_info() = delete;
         };
 
-        class memory_descriptor
+        class memory
         {
         protected:
             std::uintptr_t addr;
             std::size_t size;
             std::uint32_t handle;
-
-        public:
-            constexpr std::uintptr_t get_address() const { return addr; }
-            constexpr std::size_t get_size() const { return size; }
-            constexpr std::uint32_t get_handle() const { return handle; }
-
-            template <typename T>
-            T* get_ptr(selector sel = get_ds()) const
-            {
-                std::uintptr_t start = addr - memory_info::get_selector_base_address(sel);
-                //std::cout << "get_ptr:" << std::hex << addr << "(near) = " << start << "(linear)" << std::endl;
-                //std::cout << reinterpret_cast<T* const>(start) << std::endl;
-                return reinterpret_cast<T* const>(start);
-            }
-
-            constexpr memory_descriptor() : memory_descriptor(0, 0) { }
-
-            template<typename T>
-            memory_descriptor(selector seg, T* ptr, std::size_t num_elements = 1)
-                : memory_descriptor(memory_info::get_linear_address(seg, ptr), num_elements * sizeof(T), 0) { }
-
-            //memory_descriptor(selector seg, void(*ptr)(), std::size_t num_bytes)
-            //    : memory_descriptor(seg, reinterpret_cast<const void*>(ptr), num_bytes) { }
-
-            memory_descriptor(selector seg, const void* ptr, std::size_t num_bytes)
-                : memory_descriptor(memory_info::get_linear_address(seg, ptr), num_bytes, 0) { }
-
-            constexpr memory_descriptor(std::uintptr_t address, std::size_t num_bytes, std::uint32_t dpmi_handle = 0)
-                : addr(address), size(num_bytes), handle(dpmi_handle) { }
-
-            constexpr memory_descriptor(const memory_descriptor&) = default;
-            memory_descriptor& operator=(const memory_descriptor&) = default;
-            memory_descriptor(memory_descriptor&& m)
-                : addr(m.addr), size(m.size), handle(m.handle) { m.handle = 0; }
-            memory_descriptor& operator=(memory_descriptor&& m)
-            {
-                if (this != &m)
-                {
-                    addr = m.addr;
-                    size = m.size;
-                    handle = m.handle;
-                    m.handle = 0;
-                }
-                return *this;
-            }
 
             //DPMI 0.9 AX=0600
             void lock_memory() const
@@ -486,6 +441,51 @@ namespace jw
                     , "S" (_size.hi)
                     , "D" (_size.lo));
                 if (c) throw dpmi_error(error, "unlock_memory");
+            }
+
+        public:
+            constexpr std::uintptr_t get_address() const { return addr; }
+            constexpr std::size_t get_size() const { return size; }
+            constexpr std::uint32_t get_handle() const { return handle; }
+
+            template <typename T>
+            T* get_ptr(selector sel = get_ds()) const
+            {
+                std::uintptr_t start = addr - memory_info::get_selector_base_address(sel);
+                //std::cout << "get_ptr:" << std::hex << addr << "(near) = " << start << "(linear)" << std::endl;
+                //std::cout << reinterpret_cast<T* const>(start) << std::endl;
+                return reinterpret_cast<T* const>(start);
+            }
+
+            constexpr memory() : memory(0, 0) { }
+
+            template<typename T>
+            memory(selector seg, T* ptr, std::size_t num_elements = 1)
+                : memory(memory_info::get_linear_address(seg, ptr), num_elements * sizeof(T), 0) { }
+
+            //memory(selector seg, void(*ptr)(), std::size_t num_bytes)
+            //    : memory(seg, reinterpret_cast<const void*>(ptr), num_bytes) { }
+
+            memory(selector seg, const void* ptr, std::size_t num_bytes)
+                : memory(memory_info::get_linear_address(seg, ptr), num_bytes, 0) { }
+
+            constexpr memory(std::uintptr_t address, std::size_t num_bytes, std::uint32_t dpmi_handle = 0)
+                : addr(address), size(num_bytes), handle(dpmi_handle) { }
+
+            constexpr memory(const memory&) = default;
+            memory& operator=(const memory&) = default;
+            memory(memory&& m)
+                : addr(m.addr), size(m.size), handle(m.handle) { m.handle = 0; }
+            memory& operator=(memory&& m)
+            {
+                if (this != &m)
+                {
+                    addr = m.addr;
+                    size = m.size;
+                    handle = m.handle;
+                    m.handle = 0;
+                }
+                return *this;
             }
         };
 
@@ -609,7 +609,7 @@ namespace jw
             if (c) throw dpmi_error(error, "call_rm_interrupt");
 
             if (new_reg != reg || new_reg_ds != get_ds())   // copy back if location changed.
-                *reg = *(memory_descriptor(new_reg_ds, new_reg).get_ptr<rm_registers>());
+                *reg = *(memory(new_reg_ds, new_reg).get_ptr<rm_registers>());
         }
 
         static_assert(sizeof(cpu_registers) == 0x20, "check sizeof struct dpmi::cpu_registers");
