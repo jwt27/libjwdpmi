@@ -107,6 +107,7 @@ namespace jw
             // This exists so these functions aren't exposed through task/coroutine objects.
             struct thread_details
             {
+            #ifdef _DEBUG
                 static const thread_context* get_context(auto t) noexcept { return t->context; }
                 static void trap_mask(auto t) noexcept { ++t->trap_masked; }
                 static bool trap_unmask(auto t) noexcept { return (--t->trap_masked) == 0; }
@@ -114,6 +115,7 @@ namespace jw
                 static bool trap_state(auto t) noexcept { return t->trap; }
                 static void set_trap(auto t) noexcept { t->trap = true; }
                 static void clear_trap(auto t) noexcept { t->trap = false; }
+            #endif
             };
 
             using thread_ptr = std::shared_ptr<thread>;
