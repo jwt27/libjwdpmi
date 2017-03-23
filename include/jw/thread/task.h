@@ -65,11 +65,9 @@ namespace jw
                 // Aborts the task.
                 // This throws an abort_thread exception on the thread, allowing the task to clean up and return normally.
                 // May rethrow unhandled exceptions!
-                void abort(bool wait = true)
+                virtual void abort(bool wait = true) override
                 {
-                    if (!this->is_running()) return;
-
-                    this->state = terminating;
+                    detail::thread::abort();
 
                     if (dpmi::in_irq_context()) return;
                     if (wait && !scheduler::is_current_thread(this))
