@@ -881,7 +881,7 @@ namespace jw
             void setup_gdb_interface(std::unique_ptr<std::iostream, allocator_delete<jw::dpmi::locking_allocator<std::iostream>>>&& s) { jw::dpmi::gdb::setup(s); }
         }
 
-        bool debug() { return detail::gdb_interface_setup; }
+        bool debug() noexcept { return detail::gdb_interface_setup; }
 
         trap_mask::trap_mask() noexcept // TODO: ideally this should treat interrupts as separate 'threads'
         {
