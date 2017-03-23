@@ -235,7 +235,7 @@ namespace jw
         struct memory
         {
             //DPMI 0.9 AX=0006
-            static inline std::uintptr_t get_selector_base_address(selector seg)  //TODO: cache cs/ss/ds //TODO: move to ldt_entry?
+            static std::uintptr_t get_selector_base_address(selector seg)  //TODO: cache cs/ss/ds //TODO: move to ldt_entry?
             {
                 dpmi_error_code error;
                 split_uint32_t base;
@@ -254,7 +254,7 @@ namespace jw
             }
 
             //DPMI 0.9 AX=0007
-            static inline void set_selector_base_address(selector seg, std::uintptr_t linear_base)
+            static void set_selector_base_address(selector seg, std::uintptr_t linear_base)
             {
                 dpmi_error_code error;
                 split_uint32_t base { linear_base };
@@ -272,7 +272,7 @@ namespace jw
             }
 
             //DPMI 0.9 AX=0604
-            static inline std::size_t get_page_size()
+            static std::size_t get_page_size()
             {
                 static std::size_t page_size = 0;
                 if (page_size > 0) return page_size;
@@ -293,7 +293,7 @@ namespace jw
                 return page_size;
             }
 
-            static inline std::size_t get_selector_limit(selector sel = get_ds())
+            static std::size_t get_selector_limit(selector sel = get_ds())
             {
                 std::size_t limit;
                 asm("lsl %0, %1;"
@@ -304,7 +304,7 @@ namespace jw
             }
 
             //DPMI 0.9 AX=0008
-            static inline void set_selector_limit(selector sel, std::size_t limit)
+            static void set_selector_limit(selector sel, std::size_t limit)
             {
                 dpmi_error_code error;
                 split_uint32_t _limit = (limit > 1_MB) ? round_up_to_page_size(limit) - 1 : limit;
@@ -322,75 +322,75 @@ namespace jw
             }
 
             template <typename T>
-            static inline std::uintptr_t get_linear_address(selector seg, const T* ptr)
+            static std::uintptr_t get_linear_address(selector seg, const T* ptr)
             {
                 return get_selector_base_address(seg) + reinterpret_cast<std::uintptr_t>(ptr);
             }
 
-            static inline std::size_t round_up_to_page_size(std::size_t num_bytes)
+            static std::size_t round_up_to_page_size(std::size_t num_bytes)
             {
                 std::size_t page = get_page_size();
                 return (num_bytes / page) * page + page;
             }
-            static inline std::size_t round_down_to_page_size(std::size_t num_bytes)
+            static std::size_t round_down_to_page_size(std::size_t num_bytes)
             {
                 std::size_t page = get_page_size();
                 return (num_bytes / page) * page;
             }
 
-            static constexpr inline std::uintptr_t conventional_to_linear(std::uint16_t segment, std::uint16_t offset)
+            static constexpr std::uintptr_t conventional_to_linear(std::uint16_t segment, std::uint16_t offset)
             {
                 return segment * 0x10 + offset;
             }
 
-            static constexpr inline std::uintptr_t conventional_to_linear(far_ptr16 addr)
+            static constexpr std::uintptr_t conventional_to_linear(far_ptr16 addr)
             {
                 return conventional_to_linear(addr.segment, addr.offset);
             }
 
-            static constexpr inline far_ptr16 linear_to_conventional(std::uintptr_t address)
+            static constexpr far_ptr16 linear_to_conventional(std::uintptr_t address)
             {
                 return far_ptr16(address / 0x10, address % 0x10); //TODO: round?
             }
 
-            static constexpr inline std::size_t bytes_to_paragraphs(std::size_t num_bytes)
+            static constexpr std::size_t bytes_to_paragraphs(std::size_t num_bytes)
             {
                 return num_bytes / 0x10 + (num_bytes % 0x10 > 0) ? 1 : 0;
             }
 
-            static constexpr inline std::size_t paragraphs_to_bytes(std::size_t num_paragraphs)
+            static constexpr std::size_t paragraphs_to_bytes(std::size_t num_paragraphs)
             {
                 return num_paragraphs * 0x10;
             }
 
-            static constexpr inline std::size_t round_up_to_paragraph_size(std::size_t num_bytes)
+            static constexpr std::size_t round_up_to_paragraph_size(std::size_t num_bytes)
             {
                 return (num_bytes / 0x10) * 0x10 + 0x10;
             }
 
-            static constexpr inline std::size_t round_down_to_paragraph_size(std::size_t num_bytes)
+            static constexpr std::size_t round_down_to_paragraph_size(std::size_t num_bytes)
             {
                 return (num_bytes / 0x10) * 0x10;
             }
 
-            static inline std::uintptr_t linear_to_near(std::uintptr_t address, selector sel = get_ds())
+            static std::uintptr_t linear_to_near(std::uintptr_t address, selector sel = get_ds())
             {
                 return address - memory::get_selector_base_address(sel);
             }
 
             template <typename T>
-            static inline T* linear_to_near(std::uintptr_t address, selector sel = get_ds())
+            static T* linear_to_near(std::uintptr_t address, selector sel = get_ds())
             {
                 return static_cast<T*>(address + memory::get_selector_base_address(sel));
             }
 
-            static inline std::uintptr_t near_to_linear(std::uintptr_t address, selector sel = get_ds())
+            static std::uintptr_t near_to_linear(std::uintptr_t address, selector sel = get_ds())
             {
                 return address + memory::get_selector_base_address(sel);
             }
 
             template <typename T>
-            static inline std::uintptr_t near_to_linear(T* address, selector sel = get_ds())
+            static std::uintptr_t near_to_linear(T* address, selector sel = get_ds())
             {
                 return reinterpret_cast<std::uintptr_t>(address) + memory::get_selector_base_address(sel);
             }
@@ -426,8 +426,7 @@ namespace jw
 
             constexpr memory(const memory&) = default;
             memory& operator=(const memory&) = default;
-            memory(memory&& m)
-                : addr(m.addr), size(m.size), handle(m.handle) { m.handle = 0; }
+            memory(memory&& m) : addr(m.addr), size(m.size), handle(m.handle) { m.handle = 0; }
             memory& operator=(memory&& m)
             {
                 if (this != &m)
@@ -582,7 +581,7 @@ namespace jw
         };
 
         inline void call_rm_interrupt(std::uint8_t interrupt, rm_registers* reg)
-        {                                  
+        {
             selector new_reg_ds = get_ds();
             rm_registers* new_reg;
             dpmi_error_code error;
