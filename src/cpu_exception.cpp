@@ -98,6 +98,7 @@ namespace jw
                 "push cs:[eax-0x28];"       // Pointer to self
                 "mov ebx, eax;"
                 "call cs:[ebx-0x24];"       // call_handler();
+                "cli;"
                 "add esp, 0x8;"
                 "pop edx;"
 
