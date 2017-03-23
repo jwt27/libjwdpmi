@@ -20,7 +20,7 @@ DEP := $(SRC:$(SRCDIR)/%.cpp=$(OBJDIR)/%.d)
 
 .PHONY: all clean
 
-all: $(OBJDIR) $(OUTDIR) $(OUTDIR)/$(OUTPUT)
+all: $(OUTDIR)/$(OUTPUT)
 
 clean:
 	rm -f $(OBJ) $(DEP) $(OUTDIR)/$(OUTPUT)
@@ -31,11 +31,11 @@ $(OUTDIR):
 $(OBJDIR):
 	mkdir -p $(OBJDIR)
 
-$(OUTDIR)/$(OUTPUT): $(OBJ)
+$(OUTDIR)/$(OUTPUT): $(OBJ) | $(OUTDIR)
 	ar cru $@ $(OBJ) $(LIBS)
 	ranlib $@
 
-$(OBJDIR)/%.o: $(SRCDIR)/%.cpp jwdpmi_config.h
+$(OBJDIR)/%.o: $(SRCDIR)/%.cpp jwdpmi_config.h | $(OBJDIR)
 	$(CXX) $(CXXFLAGS) -MD -MP -MF $(@:.o=.d) -o $@ $(INCLUDE) -c $< $(PIPECMD)
 
 jwdpmi_config.h:
