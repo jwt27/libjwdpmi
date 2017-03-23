@@ -913,12 +913,8 @@ namespace jw
             if (fail) return;
             if (!debug()) return;
             if (gdb::reentry) return;
-            try
-            {
-                auto t = jw::thread::detail::scheduler::get_current_thread().lock();
-                if (thread::detail::thread_details::trap_unmask(t) && thread::detail::thread_details::trap_state(t)) asm("int 3");
-            }
-            catch (...) { asm("int 3"); }
+            auto t = jw::thread::detail::scheduler::get_current_thread().lock();
+            if (thread::detail::thread_details::trap_unmask(t) && thread::detail::thread_details::trap_state(t)) asm("int 3");
         }
     #endif
     }
