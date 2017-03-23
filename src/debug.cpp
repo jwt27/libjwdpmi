@@ -816,6 +816,7 @@ namespace jw
                     if (current_thread->action == thread_info::none) current_thread->action = thread_info::cont;
                 }
 
+                if (config::enable_gdb_interrupts) asm("sti");
                 bool result { false };
                 try
                 {
@@ -827,12 +828,13 @@ namespace jw
                     std::cerr << "Exception occured while communicating with GDB.\n";
                     //asm("int 3");
                 }
-                reentry = false;
+                asm("cli");
 
                 if (t) *f = static_cast<new_exception_frame&>(current_thread->frame);
                 else *static_cast<old_exception_frame*>(f) = current_thread->frame;
                 *r = current_thread->reg;
                 current_thread->last_eip = current_thread->frame.fault_address.offset;
+                reentry = false;
 
                 if (debugmsg) std::clog << "leaving exception 0x" << std::hex << exc << "\n";
                 return result;
@@ -881,7 +883,7 @@ namespace jw
 
         bool debug() { return detail::gdb_interface_setup; }
 
-        trap_mask::trap_mask() noexcept
+        trap_mask::trap_mask() noexcept // TODO: ideally this should treat interrupts as separate 'threads'
         {
             if (!debug()) return;
             if (gdb::reentry) return;
