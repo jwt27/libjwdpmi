@@ -421,13 +421,13 @@ namespace jw
             memory(selector seg, const void* ptr, std::size_t num_bytes)
                 : memory(get_linear_address(seg, ptr), num_bytes, 0) { }
 
-            constexpr memory(std::uintptr_t address, std::size_t num_bytes, std::uint32_t dpmi_handle = 0)
+            constexpr memory(std::uintptr_t address, std::size_t num_bytes, std::uint32_t dpmi_handle = 0) noexcept
                 : addr(address), size(num_bytes), handle(dpmi_handle) { }
 
             constexpr memory(const memory&) = delete;
             memory& operator=(const memory&) = delete;
-            memory(memory&& m) : addr(m.addr), size(m.size), handle(m.handle) { m.handle = 0; }
-            memory& operator=(memory&& m)
+            memory(memory&& m) noexcept : addr(m.addr), size(m.size), handle(m.handle) { m.handle = 0; }
+            memory& operator=(memory&& m) noexcept
             {
                 if (this != &m)
                 {
