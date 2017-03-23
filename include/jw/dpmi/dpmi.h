@@ -404,8 +404,6 @@ namespace jw
             T* get_ptr(selector sel = get_ds()) const
             {
                 std::uintptr_t start = addr - get_selector_base_address(sel);
-                //std::cout << "get_ptr:" << std::hex << addr << "(near) = " << start << "(linear)" << std::endl;
-                //std::cout << reinterpret_cast<T* const>(start) << std::endl;
                 return reinterpret_cast<T* const>(start);
             }
 
@@ -415,19 +413,16 @@ namespace jw
             memory(selector seg, T* ptr, std::size_t num_elements = 1)
                 : memory(get_linear_address(seg, ptr), num_elements * sizeof(T), 0) { }
 
-            //memory(selector seg, void(*ptr)(), std::size_t num_bytes)
-            //    : memory(seg, reinterpret_cast<const void*>(ptr), num_bytes) { }
-
             memory(selector seg, const void* ptr, std::size_t num_bytes)
                 : memory(get_linear_address(seg, ptr), num_bytes, 0) { }
 
             constexpr memory(std::uintptr_t address, std::size_t num_bytes, std::uint32_t dpmi_handle = 0) noexcept
                 : addr(address), size(num_bytes), handle(dpmi_handle) { }
 
-            constexpr memory(const memory&) = delete;
+            memory(const memory&) = delete;
             memory& operator=(const memory&) = delete;
-            memory(memory&& m) noexcept : addr(m.addr), size(m.size), handle(m.handle) { m.handle = 0; }
-            memory& operator=(memory&& m) noexcept
+            constexpr memory(memory&& m) noexcept : addr(m.addr), size(m.size), handle(m.handle) { m.handle = 0; }
+            constexpr memory& operator=(memory&& m) noexcept
             {
                 if (this != &m)
                 {
