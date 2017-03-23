@@ -66,6 +66,7 @@ namespace jw
                      "jz context_switch_end;"
                      "and esp, -0x10;"          // align stack to 0x10 bytes
                      "mov ebp, esp;"
+                     "mov [esp], esp;"
                      "jmp %2;"                  // jump to run_thread()
                      "context_switch_end:"
                      :: "a" (current_thread->context)
