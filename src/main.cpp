@@ -89,7 +89,7 @@ int main(int argc, char** argv)
         std::deque<std::string> args { };   // TODO: std::string_view when it's available
         for (auto i = 0; i < argc; ++i)
         {
-        #ifdef _DEBUG
+        #ifndef NDEBUG
             if (stricmp(argv[i], "--debug") == 0)
             {
                 io::rs232_config cfg;

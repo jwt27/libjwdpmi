@@ -107,7 +107,7 @@ namespace jw
             // This exists so these functions aren't exposed through task/coroutine objects.
             struct thread_details
             {
-            #ifdef _DEBUG
+            #ifndef NDEBUG
                 static const thread_context* get_context(auto t) noexcept { return t->context; }
                 static void trap_mask(auto t) noexcept { ++t->trap_masked; }
                 static bool trap_unmask(auto t) noexcept { return (--t->trap_masked) == 0; }

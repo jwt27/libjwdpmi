@@ -34,7 +34,7 @@ namespace jw
 {
     namespace dpmi
     {
-    #ifdef _DEBUG
+    #ifndef NDEBUG
         namespace detail
         {
             bool gdb_interface_setup { false };

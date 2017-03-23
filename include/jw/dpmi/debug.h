@@ -24,7 +24,7 @@ namespace jw
     namespace dpmi
     {
         // Returns true if in debug mode.
-    #ifdef _DEBUG
+    #ifndef NDEBUG
         bool debug() noexcept;
     #else
         constexpr bool debug() noexcept { return false; }
@@ -36,7 +36,7 @@ namespace jw
         // Disable the trap flag
         struct trap_mask
         {
-        #ifdef _DEBUG
+        #ifndef NDEBUG
             trap_mask() noexcept;
             [[gnu::optimize("no-omit-frame-pointer")]] ~trap_mask() noexcept;
 
@@ -68,7 +68,7 @@ namespace jw
 
             watchpoint(auto* ptr, watchpoint_type t, std::size_t size) : watchpoint(memory_info::near_to_linear(ptr), size, t) { }
 
-        #ifdef _DEBUG
+        #ifndef NDEBUG
             watchpoint(const watchpoint&) = delete;
             watchpoint& operator=(const watchpoint&) = delete;
             watchpoint(watchpoint&& m) : handle(m.handle), type(m.type) { m.handle = null_handle; }
@@ -117,7 +117,7 @@ namespace jw
             // Returns true if the watchpoint has been triggered.
             bool get_state() const
             {
-            #ifdef _DEBUG
+            #ifndef NDEBUG
                 bool c;
                 dpmi_error_code error;
                 asm("int 0x31;"
@@ -137,7 +137,7 @@ namespace jw
             // Reset the state of this watchpoint (DPMI 0.9, AX=0B03)
             void reset()
             {
-            #ifdef _DEBUG
+            #ifndef NDEBUG
                 bool c;
                 dpmi_error_code error;
                 asm (
@@ -154,7 +154,7 @@ namespace jw
             auto get_type() { return type; }
 
         private:
-        #ifdef _DEBUG
+        #ifndef NDEBUG
             const std::uint32_t null_handle { std::numeric_limits<std::uint32_t>::max() };
             std::uint32_t handle { null_handle };
         #endif
