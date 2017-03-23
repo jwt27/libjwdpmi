@@ -424,8 +424,8 @@ namespace jw
             constexpr memory(std::uintptr_t address, std::size_t num_bytes, std::uint32_t dpmi_handle = 0)
                 : addr(address), size(num_bytes), handle(dpmi_handle) { }
 
-            constexpr memory(const memory&) = default;
-            memory& operator=(const memory&) = default;
+            constexpr memory(const memory&) = delete;
+            memory& operator=(const memory&) = delete;
             memory(memory&& m) : addr(m.addr), size(m.size), handle(m.handle) { m.handle = 0; }
             memory& operator=(memory&& m)
             {

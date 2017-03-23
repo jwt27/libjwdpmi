@@ -31,7 +31,7 @@ namespace jw
             {
             public:
                 memory_lock(const memory_lock& c) = delete;
-                memory_lock(memory_lock&& m) noexcept : mem(m.mem) { m.locked = false; }
+                memory_lock(memory_lock&& m) noexcept : mem(std::move(m.mem)) { m.locked = false; }
 
                 memory_lock& operator=(const memory_lock& c) = delete;
                 memory_lock& operator=(memory_lock&& m) noexcept
