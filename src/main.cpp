@@ -82,6 +82,7 @@ int main(int argc, char** argv)
     try { throw 0; } catch (...) { }
     _crt0_startup_flags &= ~_CRT0_FLAG_LOCK_MEMORY;
 
+    int return_value { -1 };
     try 
     {   
         dpmi::detail::setup_exception_throwers();
@@ -110,11 +111,16 @@ int main(int argc, char** argv)
             dpmi::breakpoint();
         }
     
-        return jwdpmi_main(args); 
+        return_value = jwdpmi_main(args); 
     }
     catch (const std::exception& e) { std::cerr << "Caught exception in main()!\n"; jw::print_exception(e); }
     catch (...) { std::cerr << "Caught unknown exception in main()!\n"; }
-    return -1;
+
+    for (auto&t : thread::detail::scheduler::threads) t->abort();
+    auto thread_queue_copy = thread::detail::scheduler::threads;
+    for (auto&t : thread_queue_copy) thread::yield_while([&t] { return t->is_running(); });
+
+    return return_value;
 }
 
 namespace jw

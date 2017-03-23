@@ -27,6 +27,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 // TODO: task->delayed_start(), to schedule a task without immediately starting it.
 // TODO: make errno thread-local? other globals?
 
+int main(int, char**);
+
 namespace jw
 {
     namespace thread
@@ -39,6 +41,7 @@ namespace jw
             {
                 template<std::size_t> friend class task_base;
                 friend void ::jw::thread::yield();
+                friend int ::main(int, char**);
                 static dpmi::locked_pool_allocator<> alloc;
                 static std::deque<thread_ptr, dpmi::locked_pool_allocator<>> threads;
                 static thread_ptr current_thread;
