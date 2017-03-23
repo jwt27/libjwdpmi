@@ -274,7 +274,7 @@ namespace jw
             //DPMI 0.9 AX=0604
             static std::size_t get_page_size()
             {
-                static std::size_t page_size = 0;
+                static std::size_t page_size { 0 };
                 if (page_size > 0) return page_size;
 
                 dpmi_error_code error;
@@ -440,7 +440,7 @@ namespace jw
             }
 
             //DPMI 0.9 AX=0600
-            void lock_memory() const
+            void lock_memory()
             {
                 dpmi_error_code error;
                 split_uint32_t _addr = addr, _size = size;
@@ -459,7 +459,7 @@ namespace jw
             }
 
             //DPMI 0.9 AX=0601
-            void unlock_memory() const
+            void unlock_memory()
             {
                 dpmi_error_code error;
                 split_uint32_t _addr = addr, _size = size;
