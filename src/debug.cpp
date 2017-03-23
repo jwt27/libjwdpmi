@@ -53,7 +53,7 @@ namespace jw
             std::array<std::unique_ptr<exception_handler>, 0x20> exception_handlers;
             std::unique_ptr<std::iostream, allocator_delete<jw::dpmi::locking_allocator<std::iostream>>> gdb;
 
-            bool reentry { false };
+            volatile bool reentry { false };
 
             struct packet_string : public std::string
             {
