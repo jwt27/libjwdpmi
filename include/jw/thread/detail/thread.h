@@ -112,8 +112,8 @@ namespace jw
                 static bool trap_unmask(auto t) { return (--t->trap_masked) == 0; }
                 static bool trap_is_masked(auto t) { return t->trap_masked > 0; }
                 static bool trap_state(auto t) { return t->trap; }
-                static bool set_trap(auto t) { return t->trap = true; }
-                static bool clear_trap(auto t) { return t->trap = false; }
+                static void set_trap(auto t) { t->trap = true; }
+                static void clear_trap(auto t) { t->trap = false; }
             };
 
             using thread_ptr = std::shared_ptr<thread>;
