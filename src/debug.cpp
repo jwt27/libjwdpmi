@@ -767,13 +767,19 @@ namespace jw
 
                 if (reentry)
                 {
-                    if (exc == 0x01) return true;   // watchpoint trap, ignore
-                    if (exc == 0x03)                // breakpoint in debugger code, remove and ignore
+                    if (exc == 0x01)    // watchpoint trap, ignore
                     {
+                        if (debugmsg) std::clog << "reentry caused by watchpoint, ignoring.\n";
+                        return true;
+                    }
+                    if (exc == 0x03)    // breakpoint in debugger code, remove and ignore
+                    {
+                        if (debugmsg) std::clog << "reentry caused by breakpoint, ignoring.\n";
                         if (breakpoints.count(f->fault_address.offset - 1))
                         {
                             f->fault_address.offset -= 1;
                             *reinterpret_cast<byte*>(f->fault_address.offset) = breakpoints[f->fault_address.offset];
+                            if (debugmsg) std::clog << "breakpoint removed at 0x" << std::hex << f->fault_address.offset << "\n";
                         }
                         return true;
                     }
@@ -786,7 +792,6 @@ namespace jw
                 else
                 {
                     reentry = true;
-                    if (debugmsg) std::clog << *static_cast<new_exception_frame*>(f) << *r;
                     populate_thread_list();
                     if (exc == 0x01 || exc == 0x03)
                     {
@@ -797,6 +802,7 @@ namespace jw
                             f->flags.trap = false;
                             reentry = false;
                             current_thread->last_eip = f->fault_address.offset;
+                            if (debugmsg) std::clog << "trap masked at 0x" << std::hex << f->fault_address.offset << ", resuming with SIGCONT.\n";
                             return true;
                         }
                         if (current_thread->action == thread_info::step_range &&
@@ -805,10 +811,13 @@ namespace jw
                         {
                             reentry = false;
                             current_thread->last_eip = f->fault_address.offset;
+                            if (debugmsg) std::clog << "range step until 0x" << std::hex << current_thread->step_range_end;
+                            if (debugmsg) std::clog << ", now at 0x" << f->fault_address.offset << '\n';
                             return true;
                         }
                         thread::detail::thread_details::clear_trap(current_thread->thread.lock());
                     }
+                    if (debugmsg) std::clog << *static_cast<new_exception_frame*>(f) << *r;
                     if (t) current_thread->frame = *static_cast<new_exception_frame*>(f);
                     else static_cast<old_exception_frame&>(current_thread->frame) = *f;
                     current_thread->reg = *r;
