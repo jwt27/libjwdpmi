@@ -433,8 +433,7 @@ namespace jw
                 {
                     addr = m.addr;
                     size = m.size;
-                    handle = m.handle;
-                    m.handle = 0;
+                    std::swap(handle, m.handle);
                 }
                 return *this;
             }
