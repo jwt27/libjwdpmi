@@ -375,24 +375,24 @@ namespace jw
 
             static std::uintptr_t linear_to_near(std::uintptr_t address, selector sel = get_ds())
             {
-                return address - memory::get_selector_base_address(sel);
+                return address - get_selector_base_address(sel);
             }
 
             template <typename T>
             static T* linear_to_near(std::uintptr_t address, selector sel = get_ds())
             {
-                return static_cast<T*>(address + memory::get_selector_base_address(sel));
+                return static_cast<T*>(address + get_selector_base_address(sel));
             }
 
             static std::uintptr_t near_to_linear(std::uintptr_t address, selector sel = get_ds())
             {
-                return address + memory::get_selector_base_address(sel);
+                return address + get_selector_base_address(sel);
             }
 
             template <typename T>
             static std::uintptr_t near_to_linear(T* address, selector sel = get_ds())
             {
-                return reinterpret_cast<std::uintptr_t>(address) + memory::get_selector_base_address(sel);
+                return reinterpret_cast<std::uintptr_t>(address) + get_selector_base_address(sel);
             }
 
         public:
@@ -403,7 +403,7 @@ namespace jw
             template <typename T>
             T* get_ptr(selector sel = get_ds()) const
             {
-                std::uintptr_t start = addr - memory::get_selector_base_address(sel);
+                std::uintptr_t start = addr - get_selector_base_address(sel);
                 //std::cout << "get_ptr:" << std::hex << addr << "(near) = " << start << "(linear)" << std::endl;
                 //std::cout << reinterpret_cast<T* const>(start) << std::endl;
                 return reinterpret_cast<T* const>(start);
@@ -413,13 +413,13 @@ namespace jw
 
             template<typename T>
             memory(selector seg, T* ptr, std::size_t num_elements = 1)
-                : memory(memory::get_linear_address(seg, ptr), num_elements * sizeof(T), 0) { }
+                : memory(get_linear_address(seg, ptr), num_elements * sizeof(T), 0) { }
 
             //memory(selector seg, void(*ptr)(), std::size_t num_bytes)
             //    : memory(seg, reinterpret_cast<const void*>(ptr), num_bytes) { }
 
             memory(selector seg, const void* ptr, std::size_t num_bytes)
-                : memory(memory::get_linear_address(seg, ptr), num_bytes, 0) { }
+                : memory(get_linear_address(seg, ptr), num_bytes, 0) { }
 
             constexpr memory(std::uintptr_t address, std::size_t num_bytes, std::uint32_t dpmi_handle = 0)
                 : addr(address), size(num_bytes), handle(dpmi_handle) { }
