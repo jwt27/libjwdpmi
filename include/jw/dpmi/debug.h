@@ -63,10 +63,10 @@ namespace jw
             };
 
             template<typename T>
-            watchpoint(T* ptr, watchpoint_type t) : watchpoint(memory_info::near_to_linear(ptr), sizeof(T), t) 
+            watchpoint(T* ptr, watchpoint_type t) : watchpoint(memory::near_to_linear(ptr), sizeof(T), t) 
             { static_assert(sizeof(T) == 4 || sizeof(T) == 2 || sizeof(T) == 1); }
 
-            watchpoint(auto* ptr, watchpoint_type t, std::size_t size) : watchpoint(memory_info::near_to_linear(ptr), size, t) { }
+            watchpoint(auto* ptr, watchpoint_type t, std::size_t size) : watchpoint(memory::near_to_linear(ptr), size, t) { }
 
         #ifndef NDEBUG
             watchpoint(const watchpoint&) = delete;

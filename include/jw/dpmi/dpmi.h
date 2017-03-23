@@ -232,7 +232,7 @@ namespace jw
             asm volatile("int 0x2f;"::"a"(0x1680));
         }
 
-        struct memory_info
+        struct memory
         {
             //DPMI 0.9 AX=0006
             static inline std::uintptr_t get_selector_base_address(selector seg)  //TODO: cache cs/ss/ds //TODO: move to ldt_entry?
@@ -375,35 +375,70 @@ namespace jw
 
             static inline std::uintptr_t linear_to_near(std::uintptr_t address, selector sel = get_ds())
             {
-                return address - memory_info::get_selector_base_address(sel);
+                return address - memory::get_selector_base_address(sel);
             }
 
             template <typename T>
             static inline T* linear_to_near(std::uintptr_t address, selector sel = get_ds())
             {
-                return static_cast<T*>(address + memory_info::get_selector_base_address(sel));
+                return static_cast<T*>(address + memory::get_selector_base_address(sel));
             }
 
             static inline std::uintptr_t near_to_linear(std::uintptr_t address, selector sel = get_ds())
             {
-                return address + memory_info::get_selector_base_address(sel);
+                return address + memory::get_selector_base_address(sel);
             }
 
             template <typename T>
             static inline std::uintptr_t near_to_linear(T* address, selector sel = get_ds())
             {
-                return reinterpret_cast<std::uintptr_t>(address) + memory_info::get_selector_base_address(sel);
+                return reinterpret_cast<std::uintptr_t>(address) + memory::get_selector_base_address(sel);
             }
-        private:
-            memory_info() = delete;
-        };
 
-        class memory
-        {
-        protected:
-            std::uintptr_t addr;
-            std::size_t size;
-            std::uint32_t handle;
+        public:
+            constexpr std::uintptr_t get_address() const { return addr; }
+            constexpr std::size_t get_size() const { return size; }
+            constexpr std::uint32_t get_handle() const { return handle; }
+
+            template <typename T>
+            T* get_ptr(selector sel = get_ds()) const
+            {
+                std::uintptr_t start = addr - memory::get_selector_base_address(sel);
+                //std::cout << "get_ptr:" << std::hex << addr << "(near) = " << start << "(linear)" << std::endl;
+                //std::cout << reinterpret_cast<T* const>(start) << std::endl;
+                return reinterpret_cast<T* const>(start);
+            }
+
+            constexpr memory() : memory(0, 0) { }
+
+            template<typename T>
+            memory(selector seg, T* ptr, std::size_t num_elements = 1)
+                : memory(memory::get_linear_address(seg, ptr), num_elements * sizeof(T), 0) { }
+
+            //memory(selector seg, void(*ptr)(), std::size_t num_bytes)
+            //    : memory(seg, reinterpret_cast<const void*>(ptr), num_bytes) { }
+
+            memory(selector seg, const void* ptr, std::size_t num_bytes)
+                : memory(memory::get_linear_address(seg, ptr), num_bytes, 0) { }
+
+            constexpr memory(std::uintptr_t address, std::size_t num_bytes, std::uint32_t dpmi_handle = 0)
+                : addr(address), size(num_bytes), handle(dpmi_handle) { }
+
+            constexpr memory(const memory&) = default;
+            memory& operator=(const memory&) = default;
+            memory(memory&& m)
+                : addr(m.addr), size(m.size), handle(m.handle) { m.handle = 0; }
+            memory& operator=(memory&& m)
+            {
+                if (this != &m)
+                {
+                    addr = m.addr;
+                    size = m.size;
+                    handle = m.handle;
+                    m.handle = 0;
+                }
+                return *this;
+            }
 
             //DPMI 0.9 AX=0600
             void lock_memory() const
@@ -443,50 +478,10 @@ namespace jw
                 if (c) throw dpmi_error(error, "unlock_memory");
             }
 
-        public:
-            constexpr std::uintptr_t get_address() const { return addr; }
-            constexpr std::size_t get_size() const { return size; }
-            constexpr std::uint32_t get_handle() const { return handle; }
-
-            template <typename T>
-            T* get_ptr(selector sel = get_ds()) const
-            {
-                std::uintptr_t start = addr - memory_info::get_selector_base_address(sel);
-                //std::cout << "get_ptr:" << std::hex << addr << "(near) = " << start << "(linear)" << std::endl;
-                //std::cout << reinterpret_cast<T* const>(start) << std::endl;
-                return reinterpret_cast<T* const>(start);
-            }
-
-            constexpr memory() : memory(0, 0) { }
-
-            template<typename T>
-            memory(selector seg, T* ptr, std::size_t num_elements = 1)
-                : memory(memory_info::get_linear_address(seg, ptr), num_elements * sizeof(T), 0) { }
-
-            //memory(selector seg, void(*ptr)(), std::size_t num_bytes)
-            //    : memory(seg, reinterpret_cast<const void*>(ptr), num_bytes) { }
-
-            memory(selector seg, const void* ptr, std::size_t num_bytes)
-                : memory(memory_info::get_linear_address(seg, ptr), num_bytes, 0) { }
-
-            constexpr memory(std::uintptr_t address, std::size_t num_bytes, std::uint32_t dpmi_handle = 0)
-                : addr(address), size(num_bytes), handle(dpmi_handle) { }
-
-            constexpr memory(const memory&) = default;
-            memory& operator=(const memory&) = default;
-            memory(memory&& m)
-                : addr(m.addr), size(m.size), handle(m.handle) { m.handle = 0; }
-            memory& operator=(memory&& m)
-            {
-                if (this != &m)
-                {
-                    addr = m.addr;
-                    size = m.size;
-                    handle = m.handle;
-                    m.handle = 0;
-                }
-                return *this;
-            }
+        protected:
+            std::uintptr_t addr;
+            std::size_t size;
+            std::uint32_t handle;
         };
 
         // All general purpose registers, as pushed on the stack by the PUSHA instruction.
