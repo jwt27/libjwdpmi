@@ -25,9 +25,9 @@ namespace jw
     {
         // Returns true if in debug mode.
     #ifdef _DEBUG
-        bool debug();
+        bool debug() noexcept;
     #else
-        constexpr bool debug() { return false; }
+        constexpr bool debug() noexcept { return false; }
     #endif
 
         // Set a breakpoint
