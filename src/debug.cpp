@@ -755,7 +755,11 @@ namespace jw
                             else send_packet("E00");
                         }
                     }
-                    else if (p == 'k') return false;    // kill (this is a stupid way to do it...)
+                    else if (p == 'k')  // kill (this is a stupid way to do it...)
+                    {
+                        f->flags.trap = false;
+                        return false;
+                    }
                     else send_packet("");   // unknown packet
                     if (current_thread->action != thread_info::none) return current_thread->do_action();
                 }
