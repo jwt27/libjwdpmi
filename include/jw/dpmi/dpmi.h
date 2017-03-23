@@ -338,39 +338,39 @@ namespace jw
                 return (num_bytes / page) * page;
             }
 
-            static constexpr std::uintptr_t conventional_to_linear(std::uint16_t segment, std::uint16_t offset)
+            static constexpr std::uintptr_t conventional_to_linear(std::uint16_t segment, std::uint16_t offset) noexcept
             {
-                return segment * 0x10 + offset;
+                return (segment << 4) + offset;
             }
 
-            static constexpr std::uintptr_t conventional_to_linear(far_ptr16 addr)
+            static constexpr std::uintptr_t conventional_to_linear(far_ptr16 addr) noexcept
             {
                 return conventional_to_linear(addr.segment, addr.offset);
             }
 
-            static constexpr far_ptr16 linear_to_conventional(std::uintptr_t address)
+            static constexpr far_ptr16 linear_to_conventional(std::uintptr_t address) noexcept
             {
-                return far_ptr16(address / 0x10, address % 0x10); //TODO: round?
+                return far_ptr16(address >> 4, address & 0x0f); //TODO: round?
             }
 
-            static constexpr std::size_t bytes_to_paragraphs(std::size_t num_bytes)
+            static constexpr std::size_t bytes_to_paragraphs(std::size_t num_bytes) noexcept
             {
-                return num_bytes / 0x10 + (num_bytes % 0x10 > 0) ? 1 : 0;
+                return (num_bytes >> 4) + ((num_bytes & 0x0f) > 0) ? 1 : 0;
             }
 
-            static constexpr std::size_t paragraphs_to_bytes(std::size_t num_paragraphs)
+            static constexpr std::size_t paragraphs_to_bytes(std::size_t num_paragraphs) noexcept
             {
-                return num_paragraphs * 0x10;
+                return num_paragraphs << 4;
             }
 
-            static constexpr std::size_t round_up_to_paragraph_size(std::size_t num_bytes)
+            static constexpr std::size_t round_up_to_paragraph_size(std::size_t num_bytes) noexcept
             {
-                return (num_bytes / 0x10) * 0x10 + 0x10;
+                return round_down_to_paragraph_size(num_bytes) + 0x10;
             }
 
-            static constexpr std::size_t round_down_to_paragraph_size(std::size_t num_bytes)
+            static constexpr std::size_t round_down_to_paragraph_size(std::size_t num_bytes) noexcept
             {
-                return (num_bytes / 0x10) * 0x10;
+                return num_bytes & ~0x10;
             }
 
             static std::uintptr_t linear_to_near(std::uintptr_t address, selector sel = get_ds())
