@@ -296,7 +296,7 @@ namespace jw
             retry:
                 switch (gdb->get())
                 {
-                case '-': send_packet(sent.front());
+                case '-': if (sent.size() > 0) send_packet(sent.front());
                 case '+': if (sent.size() > 0) sent.pop_front();
                 default: goto retry;
                 case '$': break;
