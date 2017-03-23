@@ -366,7 +366,10 @@ namespace jw
                 case ebx: encode(out, &reg->ebx); return;
                 case ecx: encode(out, &reg->ecx); return;
                 case edx: encode(out, &reg->edx); return;
-                case ebp: encode(out, &reg->ebp); return;
+                case ebp: 
+                    if (reg->ebp >= frame->stack.offset) encode(out, &reg->ebp);
+                    else encode_null(out, reglen[r]);
+                    return;
                 case esi: encode(out, &reg->esi); return;
                 case edi: encode(out, &reg->edi); return;
                 case esp: encode(out, &frame->stack.offset); return;
