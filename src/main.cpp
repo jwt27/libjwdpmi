@@ -116,9 +116,9 @@ int main(int argc, char** argv)
     catch (const std::exception& e) { std::cerr << "Caught exception in main()!\n"; jw::print_exception(e); }
     catch (...) { std::cerr << "Caught unknown exception in main()!\n"; }
 
-    for (auto&t : thread::detail::scheduler::threads) t->abort();
+    for (auto& t : thread::detail::scheduler::threads) t->abort();
     auto thread_queue_copy = thread::detail::scheduler::threads;
-    for (auto&t : thread_queue_copy) thread::yield_while([&t] { return t->is_running(); });
+    for (auto& t : thread_queue_copy) thread::yield_while([&t] { return t->is_running(); });
 
     return return_value;
 }
