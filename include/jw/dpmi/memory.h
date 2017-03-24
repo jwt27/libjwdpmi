@@ -193,13 +193,20 @@ namespace jw
         struct linear_memory
         {
             constexpr std::uintptr_t get_address() const { return addr; }
-            constexpr std::size_t get_size() const { return size; }
+            virtual std::size_t get_size() const { return size; }
 
             template <typename T>
-            [[gnu::pure]] T* get_ptr(selector sel = get_ds()) const
+            [[gnu::pure]] T* get_ptr(selector sel = get_ds())
             {
                 std::uintptr_t start = addr - get_selector_base(sel);
                 return reinterpret_cast<T*>(start);
+            }
+
+            template <typename T>
+            [[gnu::pure]] const T* get_ptr(selector sel = get_ds()) const
+            {
+                std::uintptr_t start = addr - get_selector_base(sel);
+                return reinterpret_cast<const T*>(start);
             }
 
             constexpr linear_memory() : linear_memory(0, 0) { }
@@ -266,7 +273,15 @@ namespace jw
 
         struct memory_base : public linear_memory
         {
-            constexpr std::uint32_t get_handle() const { return handle; }
+            memory_base(std::size_t num_bytes, bool committed = true, std::uintptr_t desired_address = 0) : linear_memory(0, num_bytes)
+            {
+                allocate(committed, desired_address);
+            }
+
+            virtual ~memory_base() { deallocate(); }
+
+            memory_base& operator=(linear_memory&&) = delete;
+            memory_base& operator=(const linear_memory&) = delete;
 
             virtual void resize(std::size_t num_bytes, bool committed = true)
             {
@@ -274,8 +289,7 @@ namespace jw
                 else old_resize(num_bytes);
             }
 
-            memory_base& operator=(linear_memory&&) = delete;
-            memory_base& operator=(const linear_memory&) = delete;
+            std::uint32_t get_handle() const { return handle; }
 
         protected:
             virtual void allocate(bool committed = true, std::uintptr_t desired_address = 0)
@@ -300,6 +314,7 @@ namespace jw
 
             virtual void deallocate()
             {
+                if (handle == null_handle) return;
                 split_uint32_t _handle { handle };
                 dpmi_error_code error;
                 bool c;
@@ -418,10 +433,24 @@ namespace jw
         template <typename T, typename base = memory_base>
         struct memory : public base
         {
+            template<typename... Args>
+            memory(std::size_t num_elements, Args&&... args) : base(num_elements * sizeof(T), std::forward<Args>(args)...) { }
+            
+            auto* get_ptr(selector sel = get_ds()) { return linear_memory::get_ptr<T>(sel); }            
+            auto& operator*() { return *get_ptr(); }
+            auto* operator->() { return get_ptr(); }
+            auto& operator[](std::ptrdiff_t i) { return *(get_ptr() + i); }
 
+            const auto* get_ptr(selector sel = get_ds()) const { return linear_memory::get_ptr<T>(sel); }
+            const auto& operator*() const { return *get_ptr(); }
+            const auto* operator->() const { return get_ptr(); }
+            const auto& operator[](std::ptrdiff_t i) const { return *(get_ptr() + i); }
+
+            virtual void resize(std::size_t num_elements) override { base::resize(num_elements * sizeof(T)); }
+            virtual std::size_t get_size() const override { return linear_memory::get_size() / sizeof(T); }
         };
 
-        template <typename T>
+        template <typename T = byte>
         using raw_memory = memory<T, memory_base>;
     }
 }
