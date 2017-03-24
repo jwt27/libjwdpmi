@@ -192,8 +192,8 @@ namespace jw
 
         struct linear_memory
         {
-            constexpr std::uintptr_t get_address() const { return addr; }
-            virtual std::size_t get_size() const { return size; }
+            constexpr std::uintptr_t get_address() const noexcept { return addr; }
+            virtual std::size_t get_size() const noexcept { return size; }
 
             template <typename T>
             [[gnu::pure]] T* get_ptr(selector sel = get_ds())
@@ -285,8 +285,8 @@ namespace jw
             memory_base(const memory_base&) = delete;
             memory_base& operator=(const memory_base&) = delete;
 
-            memory_base(memory_base&& m) : linear_memory(m), handle(m.handle) { m.handle = null_handle; }
-            memory_base& operator=(memory_base&& m)
+            memory_base(memory_base&& m) noexcept : linear_memory(m), handle(m.handle) { m.handle = null_handle; }
+            memory_base& operator=(memory_base&& m) noexcept
             {
                 std::swap(handle, m.handle);
                 std::swap(size, m.size);
@@ -452,18 +452,18 @@ namespace jw
             memory(std::size_t num_elements, Args&&... args) : base(num_elements * sizeof(T), std::forward<Args>(args)...) { }
             
             auto* get_ptr(selector sel = get_ds()) { return linear_memory::get_ptr<T>(sel); }            
-            auto& operator*() { return *get_ptr(); }
-            auto* operator->() { return get_ptr(); }
-            auto& operator[](std::ptrdiff_t i) { return *(get_ptr() + i); }
+            auto& operator*() noexcept { return *get_ptr(); }
+            auto* operator->() noexcept { return get_ptr(); }
+            auto& operator[](std::ptrdiff_t i) noexcept { return *(get_ptr() + i); }
 
             const auto* get_ptr(selector sel = get_ds()) const { return linear_memory::get_ptr<T>(sel); }
-            const auto& operator*() const { return *get_ptr(); }
-            const auto* operator->() const { return get_ptr(); }
-            const auto& operator[](std::ptrdiff_t i) const { return *(get_ptr() + i); }
+            const auto& operator*() const noexcept { return *get_ptr(); }
+            const auto* operator->() const noexcept { return get_ptr(); }
+            const auto& operator[](std::ptrdiff_t i) const noexcept { return *(get_ptr() + i); }
 
             template<typename... Args>
             void resize(std::size_t num_elements, Args&&... args) { base::resize(num_elements * sizeof(T), std::forward<Args>(args)...); }
-            virtual std::size_t get_size() const override { return linear_memory::get_size() / sizeof(T); }
+            virtual std::size_t get_size() const noexcept override { return linear_memory::get_size() / sizeof(T); }
         };
 
         template <typename T = byte>
