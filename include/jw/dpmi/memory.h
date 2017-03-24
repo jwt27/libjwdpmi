@@ -273,12 +273,26 @@ namespace jw
 
         struct memory_base : public linear_memory
         {
-            memory_base(std::size_t num_bytes, bool committed = true, std::uintptr_t desired_address = 0) : linear_memory(0, num_bytes)
+            memory_base(const linear_memory& mem, bool committed = true) : linear_memory(mem)
             {
-                allocate(committed, desired_address);
+                allocate(committed, addr);
             }
 
+            memory_base(std::size_t num_bytes, bool committed = true) : memory_base(linear_memory(0, num_bytes), committed) { }
+
             virtual ~memory_base() { deallocate(); }
+
+            memory_base(const memory_base&) = delete;
+            memory_base& operator=(const memory_base&) = delete;
+
+            memory_base(memory_base&& m) : linear_memory(m), handle(m.handle) { m.handle = null_handle; }
+            memory_base& operator=(memory_base&& m)
+            {
+                std::swap(handle, m.handle);
+                std::swap(size, m.size);
+                std::swap(addr, m.addr);
+                return *this;
+            }
 
             memory_base& operator=(linear_memory&&) = delete;
             memory_base& operator=(const linear_memory&) = delete;
@@ -289,8 +303,8 @@ namespace jw
                 else old_resize(num_bytes);
             }
 
-            std::uint32_t get_handle() const { return handle; }
-            virtual operator bool() { return handle != null_handle; }
+            std::uint32_t get_handle() const noexcept { return handle; }
+            virtual operator bool() const noexcept { return handle != null_handle; }
 
         protected:
             virtual void allocate(bool committed = true, std::uintptr_t desired_address = 0)
