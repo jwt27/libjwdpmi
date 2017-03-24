@@ -263,6 +263,8 @@ namespace jw
 
         // *** anything below this line is work-in-progress *** //
 
+        struct no_alloc_tag { };
+
         struct memory_base : public linear_memory
         {
             memory_base(const linear_memory& mem, bool committed = true) : linear_memory(mem)
@@ -270,7 +272,7 @@ namespace jw
                 allocate(committed, addr);
             }
 
-            memory_base(std::size_t num_bytes, bool committed = true) : memory_base(linear_memory(0, num_bytes), committed) { }
+            memory_base(std::size_t num_bytes, bool committed = true) : memory_base(linear_memory { 0, num_bytes }, committed) { }
 
             virtual ~memory_base() { deallocate(); }
 
@@ -299,6 +301,9 @@ namespace jw
             virtual operator bool() const noexcept { return handle != null_handle; }
 
         protected:
+            constexpr memory_base(no_alloc_tag, const linear_memory& mem) noexcept : linear_memory(mem) { }
+            constexpr memory_base(no_alloc_tag, std::size_t num_bytes) noexcept : memory_base(no_alloc_tag { }, linear_memory { 0, num_bytes }) { }
+
             virtual void allocate(bool committed = true, std::uintptr_t desired_address = 0)
             {
                 if (new_alloc_supported) try
@@ -421,7 +426,7 @@ namespace jw
                         , "=c" (new_addr.lo)
                         , "+S" (new_handle.hi)
                         , "+D" (new_handle.lo)
-                        : "a" (0x0501)
+                        : "a" (0x0503)
                         , "b" (new_size.hi)
                         , "c" (new_size.lo)
                         : "memory");
@@ -457,6 +462,102 @@ namespace jw
             }
         };
 
+        struct device_memory_base : public memory_base
+        {
+            using base = memory_base;
+
+            device_memory_base(std::size_t num_bytes, std::uintptr_t physical_address)
+                : base(no_alloc_tag { }, round_up_to_page_size(num_bytes))
+            {
+                allocate(physical_address);
+            }
+
+            device_memory_base(const base&) = delete;
+
+            virtual void resize(std::size_t, bool = true) override { }
+
+            bool requires_new_selector() { return !device_map_supported; }
+
+        protected:
+            virtual void allocate(std::uintptr_t physical_address)
+            {
+                if (!new_alloc_supported) device_map_supported = false;
+                if (device_map_supported)
+                {
+                    capabilities c { };
+                    if (!c.supported || !c.flags.device_mapping) device_map_supported = false;
+                }
+                if (device_map_supported)
+                {
+                    base::allocate(false);
+                    new_alloc(physical_address);
+                }
+                else old_alloc(physical_address);
+            }
+
+            virtual void deallocate() override
+            {
+                if (device_map_supported)
+                {
+                    base::deallocate();
+                    return;
+                }
+                else
+                {
+                    split_uint32_t old_addr { addr };
+                    asm volatile(
+                        "int 0x31;"
+                        :: "a" (0x0801)
+                        , "b" (old_addr.hi)
+                        , "c" (old_addr.lo)
+                        : "memory");
+                    // This is an optional dpmi 1.0 function. don't care if this fails.
+                }
+            }
+
+            static bool device_map_supported;
+
+        private:
+            void old_alloc(std::uintptr_t physical_address)
+            {
+                split_uint32_t new_addr;
+                split_uint32_t new_size { size };
+                split_uint32_t phys { physical_address };
+                dpmi_error_code error;
+                bool c;
+                asm volatile(
+                    "int 0x31;"
+                    : "=@ccc" (c)
+                    , "=a" (error)
+                    , "=b" (new_addr.hi)
+                    , "=c" (new_addr.lo)
+                    : "b" (phys.hi)
+                    , "c" (phys.lo)
+                    , "S" (new_size.hi)
+                    , "D" (new_size.lo)
+                    : "memory");
+                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+                addr = new_addr;
+            }
+
+            void new_alloc(std::uintptr_t physical_address)
+            {
+                dpmi_error_code error;
+                bool c;
+                asm volatile(
+                    "int 0x31;"
+                    : "=@ccc" (c)
+                    , "=a" (error)
+                    : "a" (0x0508)
+                    , "b" (round_up_to_page_size(addr) - addr)
+                    , "c" (round_up_to_page_size(size) / get_page_size())
+                    , "d" (physical_address)
+                    , "S" (handle)
+                    : "memory");
+                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+            }
+        };
+
         template <typename T, typename base = memory_base>
         struct memory : public base
         {
@@ -478,7 +579,7 @@ namespace jw
             virtual std::size_t get_size() const noexcept override { return base::get_size() / sizeof(T); }
         };
 
-        template <typename T = byte>
-        using raw_memory = memory<T, memory_base>;
+        template <typename T = byte> using raw_memory = memory<T, memory_base>;
+        template <typename T = byte> using device_memory = memory<T, device_memory_base>;
     }
 }
