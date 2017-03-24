@@ -95,7 +95,7 @@ namespace jw
                     , "c"(addr.lo)
                     , "d"((t << 8) | size_bytes)
                     : "cc");
-                if (c) throw dpmi_error(error, "set_watchpoint");
+                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
             }
 
             // Remove a watchpoint (DPMI 0.9, AX=0B01)
@@ -127,7 +127,7 @@ namespace jw
                     , "b"(handle)
                     , "d"(0)
                     : "cc");
-                if (c) throw dpmi_error(error, "clear_watchpoint");
+                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
                 return error != 0;
             #else
                 return false;
@@ -147,7 +147,7 @@ namespace jw
                     : "a"(0x0b03)
                     , "b"(handle)
                     : "cc");
-                if (c) throw dpmi_error(error, "reset_watchpoint");
+                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
             #endif
             }
 

@@ -37,7 +37,7 @@ namespace jw
                 , "=d" (base.lo)
                 : "a" (0x0006)
                 , "b" (seg));
-            if (c) throw dpmi_error(error, "get_selector_base");
+            if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
 
             return base;
         }
@@ -58,7 +58,7 @@ namespace jw
                 , "c" (base.hi)
                 , "d" (base.lo)
                 : "memory");
-            if (c) throw dpmi_error(error, "set_selector_base");
+            if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
         }
 
         //DPMI 0.9 AX=0604
@@ -77,7 +77,7 @@ namespace jw
                 , "=b" (size.hi)
                 , "=c" (size.lo)
                 : "a" (0x0604));
-            if (c) throw dpmi_error(error, "get_page_size");
+            if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
 
             page_size = size;
             return page_size;
@@ -104,7 +104,7 @@ namespace jw
                 , "=r" (limit)
                 : "rm" (static_cast<std::uint32_t>(sel))
                 : "cc");
-            if (z) throw dpmi_error(invalid_segment, "get_selector_limit");
+            if (z) throw dpmi_error(invalid_segment, __PRETTY_FUNCTION__);
             return limit;
         }
 
@@ -124,7 +124,7 @@ namespace jw
                 , "c" (_limit.hi)
                 , "d" (_limit.lo)
                 : "memory");
-            if (c) throw dpmi_error(error, "set_selector_limit");
+            if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
         }
 
         template <typename T>
@@ -242,7 +242,7 @@ namespace jw
                     , "c" (_addr.lo)
                     , "S" (_size.hi)
                     , "D" (_size.lo));
-                if (c) throw dpmi_error(error, "lock_memory");
+                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
             }
 
             //DPMI 0.9 AX=0601
@@ -261,7 +261,7 @@ namespace jw
                     , "c" (_addr.lo)
                     , "S" (_size.hi)
                     , "D" (_size.lo));
-                if (c) throw dpmi_error(error, "unlock_memory");
+                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
             }
 
         protected:

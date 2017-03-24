@@ -169,7 +169,7 @@ namespace jw
                     , "b" (v)
                     , "c" (ptr.segment)
                     , "d" (ptr.offset));
-                if (c) throw dpmi_error(error, __FUNCTION__);
+                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
             }
 
             far_ptr32 irq_controller::get_pm_interrupt_vector(int_vector v)
@@ -184,7 +184,7 @@ namespace jw
                     , "=d" (ptr.offset)
                     : "a" (0x0204)
                     , "b" (v));
-                if (c) throw dpmi_error(error, __FUNCTION__);
+                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
                 return ptr;
             }
         }

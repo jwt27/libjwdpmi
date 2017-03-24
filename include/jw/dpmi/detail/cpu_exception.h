@@ -80,7 +80,7 @@ namespace jw
                     : "a" (func_no)                                 \
                     , "b" (exc_no)                                  \
                     : "cc");                                        \
-                if (c) throw dpmi_error(error, __FUNCTION__);       \
+                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);\
                 return far_ptr32(seg, offset);
 
             #define CALL_INT31_SET(func_no, exc_no, handler_ptr)    \
@@ -95,7 +95,7 @@ namespace jw
                     , "c" (handler_ptr.segment)                     \
                     , "d" (handler_ptr.offset)                      \
                     : "cc");                                        \
-                if (c) throw dpmi_error(error, __FUNCTION__);
+                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
 
 
                 static far_ptr32 get_exception_handler(exception_num n) { CALL_INT31_GET(0x0202, n); }      //DPMI 0.9 AX=0202
