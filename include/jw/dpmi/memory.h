@@ -290,6 +290,7 @@ namespace jw
             }
 
             std::uint32_t get_handle() const { return handle; }
+            virtual operator bool() { return handle != null_handle; }
 
         protected:
             virtual void allocate(bool committed = true, std::uintptr_t desired_address = 0)
@@ -446,7 +447,8 @@ namespace jw
             const auto* operator->() const { return get_ptr(); }
             const auto& operator[](std::ptrdiff_t i) const { return *(get_ptr() + i); }
 
-            virtual void resize(std::size_t num_elements) override { base::resize(num_elements * sizeof(T)); }
+            template<typename... Args>
+            void resize(std::size_t num_elements, Args&&... args) { base::resize(num_elements * sizeof(T), std::forward<Args>(args)...); }
             virtual std::size_t get_size() const override { return linear_memory::get_size() / sizeof(T); }
         };
 
