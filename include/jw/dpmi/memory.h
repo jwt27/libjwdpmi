@@ -275,13 +275,18 @@ namespace jw
         {
             constexpr std::uint32_t get_handle() const { return handle; }
 
-        protected:
-            virtual void allocate(bool uncommitted = false, std::uintptr_t desired_address = 0)
+            virtual void resize(std::size_t num_bytes, bool committed = true)
             {
-                static bool new_alloc_supported { true };
+                if (new_alloc_supported) new_resize(num_bytes, committed);
+                else old_resize(num_bytes);
+            }
+
+        protected:
+            virtual void allocate(bool committed = true, std::uintptr_t desired_address = 0)
+            {
                 if (new_alloc_supported) try
                 {
-                    new_alloc(uncommitted, desired_address);
+                    new_alloc(committed, desired_address);
                     return;
                 }
                 catch (const dpmi_error& e)
@@ -314,11 +319,7 @@ namespace jw
                 handle = null_handle;
             }
 
-            virtual void resize(std::size_t num_bytes)
-            {
-                // TODO
-            }
-
+            static bool new_alloc_supported;
             static constexpr std::uint32_t null_handle { std::numeric_limits<std::uint32_t>::max() };
             std::uint32_t handle { null_handle };
 
@@ -326,44 +327,95 @@ namespace jw
             void old_alloc()
             {
                 if (handle != null_handle) deallocate();
-                split_uint32_t _size { size };
-                split_uint32_t _addr, _handle;
+                split_uint32_t new_size { size };
+                split_uint32_t new_addr, new_handle;
                 dpmi_error_code error;
                 bool c;
                 asm volatile(
                     "int 0x31;"
                     : "=@ccc" (c)
                     , "=a" (error)
-                    , "=b" (_addr.hi)
-                    , "=c" (_addr.lo)
-                    , "=S" (_handle.hi)
-                    , "=D" (_handle.lo)
+                    , "=b" (new_addr.hi)
+                    , "=c" (new_addr.lo)
+                    , "=S" (new_handle.hi)
+                    , "=D" (new_handle.lo)
                     : "a" (0x0501)
-                    , "b" (_size.hi)
-                    , "c" (_size.lo)
+                    , "b" (new_size.hi)
+                    , "c" (new_size.lo)
                     : "memory");
                 if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
-                handle = _handle;
-                addr = _addr;
+                handle = new_handle;
+                addr = new_addr;
             }
 
-            void new_alloc(bool uncommitted, std::uintptr_t desired_address)
+            void new_alloc(bool committed, std::uintptr_t desired_address)
             {
                 if (handle != null_handle) deallocate();
+                std::uint32_t new_handle;
+                std::uintptr_t new_addr;
                 dpmi_error_code error;
                 bool c;
                 asm volatile(
                     "int 0x31;"
                     : "=@ccc" (c)
                     , "=a" (error)
-                    , "=b" (addr)
-                    , "=S" (handle)
+                    , "=b" (new_addr)
+                    , "=S" (new_handle)
                     : "a" (0x0504)
                     , "b" (desired_address)
                     , "c" (size)
-                    , "d" (static_cast<std::uint32_t>(uncommitted))
+                    , "d" (static_cast<std::uint32_t>(committed))
                     : "memory");
                 if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+                handle = new_handle;
+                addr = new_addr;
+            }
+
+            void old_resize(std::size_t num_bytes)
+            {
+                if (handle != null_handle) deallocate();
+                split_uint32_t new_size { num_bytes };
+                split_uint32_t new_handle { handle };
+                split_uint32_t new_addr;
+                dpmi_error_code error;
+                bool c;
+                asm volatile(
+                    "int 0x31;"
+                    : "=@ccc" (c)
+                    , "=a" (error)
+                    , "=b" (new_addr.hi)
+                    , "=c" (new_addr.lo)
+                    , "+S" (new_handle.hi)
+                    , "+D" (new_handle.lo)
+                    : "a" (0x0501)
+                    , "b" (new_size.hi)
+                    , "c" (new_size.lo)
+                    : "memory");
+                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+                handle = new_handle;
+                addr = new_addr;
+                size = new_size;
+            }
+
+            void new_resize(std::size_t num_bytes, bool committed)
+            {
+                std::uint32_t new_handle { handle };
+                std::uintptr_t new_addr;
+                dpmi_error_code error;
+                bool c;
+                asm volatile(
+                    "int 0x31;"
+                    : "=@ccc" (c)
+                    , "=a" (error)
+                    , "=b" (new_addr)
+                    , "+S" (new_handle)
+                    : "a" (0x0505)
+                    , "c" (num_bytes)
+                    , "d" (static_cast<std::uint32_t>(committed))
+                    : "memory");
+                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+                handle = new_handle;
+                addr = new_addr;
             }
         };
 
