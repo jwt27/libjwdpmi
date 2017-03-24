@@ -19,7 +19,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 // things from being swapped out, thus avoiding page faults.
 
 #pragma once
-#include <jw/dpmi/dpmi.h>
+#include <jw/dpmi/memory.h>
 
 namespace jw
 {
