@@ -191,7 +191,6 @@ namespace jw
         {
             constexpr std::uintptr_t get_linear_address() const { return addr; }
             constexpr std::size_t get_size() const { return size; }
-            constexpr std::uint32_t get_handle() const { return handle; }
 
             template <typename T>
             [[gnu::pure]] T* get_ptr(selector sel = get_ds()) const
@@ -202,29 +201,20 @@ namespace jw
 
             constexpr memory() : memory(0, 0) { }
 
-            template<typename T>
-            memory(selector seg, T* ptr, std::size_t num_elements = 1)
-                : memory(dpmi::get_linear_address(seg, ptr), num_elements * sizeof(T), 0) { }
+            template<typename T, std::enable_if_t<!std::is_void<T>::value, bool> = { }>
+            memory(selector seg, const T* ptr, std::size_t num_elements = 1)
+                : memory(dpmi::get_linear_address(seg, ptr), num_elements * sizeof(T)) { }
 
             memory(selector seg, const void* ptr, std::size_t num_bytes)
-                : memory(dpmi::get_linear_address(seg, ptr), num_bytes, 0) { }
+                : memory(dpmi::get_linear_address(seg, ptr), num_bytes) { }
 
-            constexpr memory(std::uintptr_t address, std::size_t num_bytes, std::uint32_t dpmi_handle = 0) noexcept
-                : addr(address), size(num_bytes), handle(dpmi_handle) { }
+            constexpr memory(std::uintptr_t address, std::size_t num_bytes) noexcept
+                : addr(address), size(num_bytes) { }
 
-            memory(const memory&) = delete;
-            memory& operator=(const memory&) = delete;
-            constexpr memory(memory&& m) noexcept : addr(m.addr), size(m.size), handle(m.handle) { m.handle = 0; }
-            constexpr memory& operator=(memory&& m) noexcept
-            {
-                if (this != &m)
-                {
-                    addr = m.addr;
-                    size = m.size;
-                    std::swap(handle, m.handle);
-                }
-                return *this;
-            }
+            constexpr memory(const memory&) noexcept = default;
+            constexpr memory& operator=(const memory&) noexcept = default;
+            constexpr memory(memory&& m) noexcept = default;
+            constexpr memory& operator=(memory&& m) noexcept = default;
 
             //DPMI 0.9 AX=0600
             void lock_memory()
@@ -267,7 +257,20 @@ namespace jw
         protected:
             std::uintptr_t addr;
             std::size_t size;
+        };
+
+        struct raw_memory_base : public memory
+        {
+            constexpr std::uint32_t get_handle() const { return handle; }
+
+        protected:
             std::uint32_t handle;
+        };
+
+        template <typename T>
+        struct raw_memory : public raw_memory_base
+        {
+
         };
     }
 }
