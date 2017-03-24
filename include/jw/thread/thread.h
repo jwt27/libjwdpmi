@@ -17,6 +17,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
 #include <stdexcept>
+#include <sstream>
 #include <jw/thread/detail/scheduler.h>
 
 namespace jw
@@ -39,17 +40,30 @@ namespace jw
         // Thrown when task->await() is called while no result will ever be available.
         struct illegal_await : public std::exception
         {
-            virtual const char* what() const noexcept override { return "Illegal call to await()."; }
-            const detail::thread_ptr task_ptr;
-            illegal_await(const detail::thread_ptr& t) noexcept : task_ptr(t) { }
+            virtual const char* what() const noexcept override 
+            { 
+                std::stringstream s;
+                s << "Illegal call to await().\n"; 
+                s << "Thread" << thread->name << " (id " << thread->id() << ")";
+                return s.str().c_str();
+            }
+            const detail::thread_ptr thread;
+            illegal_await(const detail::thread_ptr& t) noexcept : thread(t) { }
         };
 
         // Thrown on parent thread in a nested_exception when an unhandled exception occurs on a child thread.
         struct thread_exception : public std::exception
         {
-            virtual const char* what() const noexcept override { return "Exception thrown from thread."; }
-            const std::weak_ptr<detail::thread> task_ptr;
-            thread_exception(const detail::thread_ptr& t) noexcept : task_ptr(t) { }
+            virtual const char* what() const noexcept override 
+            {
+                std::stringstream s;
+                s << "Exception thrown from thread";
+                if (auto t = thread.lock()) s << ": " << t->name << " (id " << t->id() << ")";
+                else s << '.';
+                return s.str().c_str();
+            }
+            const std::weak_ptr<detail::thread> thread;
+            thread_exception(const detail::thread_ptr& t) noexcept : thread(t) { }
         };
 
         // Yields execution to the next thread in the queue.
