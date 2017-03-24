@@ -189,25 +189,25 @@ namespace jw
 
         struct memory
         {
-            constexpr std::uintptr_t get_address() const { return addr; }
+            constexpr std::uintptr_t get_linear_address() const { return addr; }
             constexpr std::size_t get_size() const { return size; }
             constexpr std::uint32_t get_handle() const { return handle; }
 
             template <typename T>
-            T* get_ptr(selector sel = get_ds()) const
+            [[gnu::pure]] T* get_ptr(selector sel = get_ds()) const
             {
                 std::uintptr_t start = addr - get_selector_base_address(sel);
-                return reinterpret_cast<T* const>(start);
+                return reinterpret_cast<T*>(start);
             }
 
             constexpr memory() : memory(0, 0) { }
 
             template<typename T>
             memory(selector seg, T* ptr, std::size_t num_elements = 1)
-                : memory(get_linear_address(seg, ptr), num_elements * sizeof(T), 0) { }
+                : memory(dpmi::get_linear_address(seg, ptr), num_elements * sizeof(T), 0) { }
 
             memory(selector seg, const void* ptr, std::size_t num_bytes)
-                : memory(get_linear_address(seg, ptr), num_bytes, 0) { }
+                : memory(dpmi::get_linear_address(seg, ptr), num_bytes, 0) { }
 
             constexpr memory(std::uintptr_t address, std::size_t num_bytes, std::uint32_t dpmi_handle = 0) noexcept
                 : addr(address), size(num_bytes), handle(dpmi_handle) { }
