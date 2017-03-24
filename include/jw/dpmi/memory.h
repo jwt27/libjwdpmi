@@ -462,19 +462,19 @@ namespace jw
             template<typename... Args>
             memory(std::size_t num_elements, Args&&... args) : base(num_elements * sizeof(T), std::forward<Args>(args)...) { }
             
-            [[gnu::pure]] auto* get_ptr(selector sel = get_ds()) { return linear_memory::get_ptr<T>(sel); }
+            [[gnu::pure]] auto* get_ptr(selector sel = get_ds()) { return base::template get_ptr<T>(sel); }
             [[gnu::pure]] auto* operator->() noexcept { return get_ptr(); }
             auto& operator*() noexcept { return *get_ptr(); }
             auto& operator[](std::ptrdiff_t i) noexcept { return *(get_ptr() + i); }
 
-            [[gnu::pure]] const auto* get_ptr(selector sel = get_ds()) const { return linear_memory::get_ptr<T>(sel); }
+            [[gnu::pure]] const auto* get_ptr(selector sel = get_ds()) const { return base::template get_ptr<T>(sel); }
             [[gnu::pure]] const auto* operator->() const noexcept { return get_ptr(); }
             const auto& operator*() const noexcept { return *get_ptr(); }
             const auto& operator[](std::ptrdiff_t i) const noexcept { return *(get_ptr() + i); }
 
             template<typename... Args>
             void resize(std::size_t num_elements, Args&&... args) { base::resize(num_elements * sizeof(T), std::forward<Args>(args)...); }
-            virtual std::size_t get_size() const noexcept override { return linear_memory::get_size() / sizeof(T); }
+            virtual std::size_t get_size() const noexcept override { return base::get_size() / sizeof(T); }
         };
 
         template <typename T = byte>
