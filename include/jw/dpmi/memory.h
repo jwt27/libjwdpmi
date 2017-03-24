@@ -96,10 +96,13 @@ namespace jw
         inline std::size_t get_selector_limit(selector sel = get_ds())
         {
             std::size_t limit;
-            asm("lsl %0, %1;"
-                : "=r" (limit)
+            bool z;
+            asm("lsl %1, %2;"
+                : "=@ccz" (z)
+                , "=r" (limit)
                 : "rm" (static_cast<std::uint32_t>(sel))
                 : "cc");
+            if (z) throw dpmi_error(invalid_segment, "get_selector_limit");
             return limit;
         }
 
