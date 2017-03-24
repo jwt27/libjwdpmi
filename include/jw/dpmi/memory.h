@@ -189,11 +189,11 @@ namespace jw
             return reinterpret_cast<std::uintptr_t>(address) + get_selector_base(sel);
         }
 
-        struct raw_memory_base;
+        struct memory_base;
 
-        struct memory
+        struct linear_memory
         {
-            constexpr std::uintptr_t get_linear_address() const { return addr; }
+            constexpr std::uintptr_t get_address() const { return addr; }
             constexpr std::size_t get_size() const { return size; }
 
             template <typename T>
@@ -203,27 +203,27 @@ namespace jw
                 return reinterpret_cast<T*>(start);
             }
 
-            constexpr memory() : memory(0, 0) { }
+            constexpr linear_memory() : linear_memory(0, 0) { }
 
             template<typename T, std::enable_if_t<!std::is_void<T>::value, bool> = { }>
-            memory(selector seg, const T* ptr, std::size_t num_elements = 1)
-                : memory(dpmi::get_linear_address(seg, ptr), num_elements * sizeof(T)) { }
+            linear_memory(selector seg, const T* ptr, std::size_t num_elements = 1)
+                : linear_memory(dpmi::get_linear_address(seg, ptr), num_elements * sizeof(T)) { }
 
-            memory(selector seg, const void* ptr, std::size_t num_bytes)
-                : memory(dpmi::get_linear_address(seg, ptr), num_bytes) { }
+            linear_memory(selector seg, const void* ptr, std::size_t num_bytes)
+                : linear_memory(dpmi::get_linear_address(seg, ptr), num_bytes) { }
 
-            constexpr memory(std::uintptr_t address, std::size_t num_bytes) noexcept
+            constexpr linear_memory(std::uintptr_t address, std::size_t num_bytes) noexcept
                 : addr(address), size(num_bytes) { }
 
-            constexpr memory(const memory&) noexcept = default;
-            constexpr memory& operator=(const memory&) noexcept = default;
-            constexpr memory(memory&& m) noexcept = default;
-            constexpr memory& operator=(memory&& m) noexcept = default;
+            constexpr linear_memory(const linear_memory&) noexcept = default;
+            constexpr linear_memory& operator=(const linear_memory&) noexcept = default;
+            constexpr linear_memory(linear_memory&& m) noexcept = default;
+            constexpr linear_memory& operator=(linear_memory&& m) noexcept = default;
 
-            memory(const raw_memory_base&) noexcept = delete;
-            memory& operator=(const raw_memory_base&) noexcept = delete;
-            memory(raw_memory_base&& m) noexcept = delete;
-            memory& operator=(raw_memory_base&& m) noexcept = delete;
+            linear_memory(const memory_base&) noexcept = delete;
+            linear_memory& operator=(const memory_base&) noexcept = delete;
+            linear_memory(memory_base&& m) noexcept = delete;
+            linear_memory& operator=(memory_base&& m) noexcept = delete;
 
             //DPMI 0.9 AX=0600
             void lock_memory()
@@ -268,16 +268,19 @@ namespace jw
             std::size_t size;
         };
 
-        struct raw_memory_base : public memory
+        struct memory_base : public linear_memory
         {
             constexpr std::uint32_t get_handle() const { return handle; }
 
         protected:
+            virtual void allocate(std::size_t num_bytes);
+            virtual void deallocate();
+
             std::uint32_t handle;
         };
 
-        template <typename T>
-        struct raw_memory : public raw_memory_base
+        template <typename T, typename base>
+        struct memory : public base
         {
 
         };

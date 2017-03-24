@@ -47,7 +47,7 @@ namespace jw
                     catch (const std::exception& e)
                     {
                         std::cerr << "Caught exception in memory_lock destructor! \n"
-                            << "locked region: " << std::hex << mem.get_linear_address() << " - " << (mem.get_linear_address() + mem.get_size()) << "\n"
+                            << "locked region: " << std::hex << mem.get_address() << " - " << (mem.get_address() + mem.get_size()) << "\n"
                             << "error: " << e.what() << std::endl;
                     }
                     catch (...) { std::cerr << "Caught exception in memory_lock destructor!" << std::endl; }
@@ -71,7 +71,7 @@ namespace jw
                     locked = false;
                 }
 
-                memory mem;
+                linear_memory mem;
                 bool locked { false };
             };
         }

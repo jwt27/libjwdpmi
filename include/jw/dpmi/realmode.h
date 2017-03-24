@@ -89,7 +89,7 @@ namespace jw
             if (c) throw dpmi_error(error, "call_rm_interrupt");
 
             if (new_reg != reg || new_reg_ds != get_ds())   // copy back if location changed.
-                *reg = *(memory(new_reg_ds, new_reg).get_ptr<rm_registers>());
+                *reg = *(linear_memory(new_reg_ds, new_reg).get_ptr<rm_registers>());
         }
     }
 }
