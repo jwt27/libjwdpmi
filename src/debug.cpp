@@ -755,10 +755,15 @@ namespace jw
                             else send_packet("E00");
                         }
                     }
-                    else if (p == 'k')  // kill (this is a stupid way to do it...)
+                    else if (p == 'k')  // kill
                     {
                         f->flags.trap = false;
-                        return false;
+                        f->stack.offset -= 4;                                                               // "sub esp, 4"
+                        f->stack.offset &= -0x10;                                                           // "and esp, -0x10"
+                        *reinterpret_cast<std::uintptr_t*>(f->stack.offset) = f->fault_address.offset;      // "mov [esp], eip"
+                        f->fault_address.offset = reinterpret_cast<std::uintptr_t>(jw::terminate);          // "mov eip, func"
+                        f->info_bits.redirect_elsewhere = true;
+                        return true;
                     }
                     else send_packet("");   // unknown packet
                     if (current_thread->action != thread_info::none) return current_thread->do_action();

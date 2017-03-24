@@ -102,13 +102,23 @@ namespace jw
                     current_thread->state = finished;
                 }
                 catch (const abort_thread&) { }
-                catch (...) { current_thread->exceptions.push_back(std::current_exception()); }
+                catch (const terminate_exception&) 
+                { 
+                    for (auto& t : threads) t->exceptions.push_back(std::current_exception());
+                }
+                catch (...) 
+                { 
+                    current_thread->exceptions.push_back(std::current_exception()); 
+                }
 
                 if (current_thread->state != finished) current_thread->state = initialized;
 
                 while (true) try { yield(); }
                 catch (const abort_thread&) { }
-                catch (...) { current_thread->exceptions.push_back(std::current_exception()); }
+                catch (...) 
+                { 
+                    current_thread->exceptions.push_back(std::current_exception()); 
+                }
             }
 
             // Rethrows exceptions that occured on child threads.
@@ -128,6 +138,12 @@ namespace jw
                     catch (const thread_exception& e)
                     {
                         if (e.task_ptr.use_count() > 1) continue; // Only rethrow if exception came from deleted/orphaned threads.
+                        auto& exceptions = current_thread->exceptions;
+                        exceptions.erase(remove_if(exceptions.begin(), exceptions.end(), [&](const auto& i) { return i == exc; }), exceptions.end());
+                        throw;
+                    }
+                    catch (terminate_exception& e)
+                    {
                         auto& exceptions = current_thread->exceptions;
                         exceptions.erase(remove_if(exceptions.begin(), exceptions.end(), [&](const auto& i) { return i == exc; }), exceptions.end());
                         throw;

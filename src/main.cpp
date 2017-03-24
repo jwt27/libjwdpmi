@@ -72,6 +72,11 @@ namespace jw
         auto new_malloc = reinterpret_cast<std::ptrdiff_t>(func);               // take the address of new malloc
         *reinterpret_cast<std::ptrdiff_t*>(p + 1) = new_malloc - post_call;     // hotpatch __cxa_alloc to call irq_safe_malloc instead.
     }
+
+    void terminate()
+    {
+        throw terminate_exception { };
+    }
 }
 
 int main(int argc, char** argv)
@@ -114,6 +119,7 @@ int main(int argc, char** argv)
         return_value = jwdpmi_main(args); 
     }
     catch (const std::exception& e) { std::cerr << "Caught exception in main()!\n"; jw::print_exception(e); }
+    catch (const jw::terminate_exception& e) { std::cerr << e.what() << '\n'; }
     catch (...) { std::cerr << "Caught unknown exception in main()!\n"; }
 
     for (auto& t : thread::detail::scheduler::threads) t->abort();
