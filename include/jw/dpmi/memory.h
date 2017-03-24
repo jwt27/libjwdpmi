@@ -55,7 +55,8 @@ namespace jw
                 : "a" (0x0007)
                 , "b" (seg)
                 , "c" (base.hi)
-                , "d" (base.lo));
+                , "d" (base.lo)
+                : "memory");
             if (c) throw dpmi_error(error, "set_selector_base_address");
         }
 
@@ -120,7 +121,8 @@ namespace jw
                 : "a" (0x0008)
                 , "b" (sel)
                 , "c" (_limit.hi)
-                , "d" (_limit.lo));
+                , "d" (_limit.lo)
+                : "memory");
             if (c) throw dpmi_error(error, "set_selector_limit");
         }
 
