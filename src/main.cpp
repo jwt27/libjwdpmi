@@ -124,7 +124,16 @@ int main(int argc, char** argv)
 
     for (auto& t : thread::detail::scheduler::threads) t->abort();
     auto thread_queue_copy = thread::detail::scheduler::threads;
-    for (auto& t : thread_queue_copy) thread::yield_while([&t] { return t->is_running(); });
+    for (auto& t : thread_queue_copy)
+    {
+        try
+        {
+            static_cast<thread::detail::task_base<0>*>(t.get())->abort(true);
+        }
+        catch (const std::exception& e) { std::cerr << "Caught exception from thread!\n"; jw::print_exception(e); }
+        catch (const jw::terminate_exception& e) { }
+        catch (...) { std::cerr << "Caught unknown exception from thread()!\n"; }
+    }
 
     return return_value;
 }
