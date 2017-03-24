@@ -190,8 +190,6 @@ namespace jw
             return reinterpret_cast<std::uintptr_t>(address) + get_selector_base(sel);
         }
 
-        struct memory_base;
-
         struct linear_memory
         {
             constexpr std::uintptr_t get_address() const { return addr; }
@@ -220,11 +218,6 @@ namespace jw
             constexpr linear_memory& operator=(const linear_memory&) noexcept = default;
             constexpr linear_memory(linear_memory&& m) noexcept = default;
             constexpr linear_memory& operator=(linear_memory&& m) noexcept = default;
-
-            linear_memory(const memory_base&) noexcept = delete;
-            linear_memory& operator=(const memory_base&) noexcept = delete;
-            linear_memory(memory_base&& m) noexcept = delete;
-            linear_memory& operator=(memory_base&& m) noexcept = delete;
 
             //DPMI 0.9 AX=0600
             void lock_memory()
@@ -280,6 +273,9 @@ namespace jw
                 if (new_alloc_supported) new_resize(num_bytes, committed);
                 else old_resize(num_bytes);
             }
+
+            memory_base& operator=(linear_memory&&) = delete;
+            memory_base& operator=(const linear_memory&) = delete;
 
         protected:
             virtual void allocate(bool committed = true, std::uintptr_t desired_address = 0)
@@ -424,5 +420,8 @@ namespace jw
         {
 
         };
+
+        template <typename T>
+        using raw_memory = memory<T, memory_base>;
     }
 }
