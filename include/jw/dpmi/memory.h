@@ -22,170 +22,170 @@ namespace jw
 {
     namespace dpmi
     {
+        //DPMI 0.9 AX=0006
+        inline std::uintptr_t get_selector_base_address(selector seg)  //TODO: cache cs/ss/ds
+        {
+            dpmi_error_code error;
+            split_uint32_t base;
+            bool c;
+
+            asm("int 0x31;"
+                : "=@ccc" (c)
+                , "=a" (error)
+                , "=c" (base.hi)
+                , "=d" (base.lo)
+                : "a" (0x0006)
+                , "b" (seg));
+            if (c) throw dpmi_error(error, "get_selector_base_address");
+
+            return base;
+        }
+
+        //DPMI 0.9 AX=0007
+        inline void set_selector_base_address(selector seg, std::uintptr_t linear_base)
+        {
+            dpmi_error_code error;
+            split_uint32_t base { linear_base };
+            bool c;
+
+            asm volatile(
+                "int 0x31;"
+                : "=@ccc" (c)
+                , "=a" (error)
+                : "a" (0x0007)
+                , "b" (seg)
+                , "c" (base.hi)
+                , "d" (base.lo));
+            if (c) throw dpmi_error(error, "set_selector_base_address");
+        }
+
+        //DPMI 0.9 AX=0604
+        inline std::size_t get_page_size()
+        {
+            static std::size_t page_size { 0 };
+            if (page_size > 0) return page_size;
+
+            dpmi_error_code error;
+            split_uint32_t size;
+            bool c;
+
+            asm("int 0x31;"
+                : "=@ccc" (c)
+                , "=a" (error)
+                , "=b" (size.hi)
+                , "=c" (size.lo)
+                : "a" (0x0604));
+            if (c) throw dpmi_error(error, "get_page_size");
+
+            page_size = size;
+            return page_size;
+        }
+
+        inline std::size_t round_down_to_page_size(std::size_t num_bytes)
+        {
+            std::size_t page = get_page_size();
+            return (num_bytes / page) * page;
+        }
+
+        inline std::size_t round_up_to_page_size(std::size_t num_bytes)
+        {
+            std::size_t page = get_page_size();
+            return round_down_to_page_size(num_bytes) + page;
+        }
+
+        inline std::size_t get_selector_limit(selector sel = get_ds())
+        {
+            std::size_t limit;
+            asm("lsl %0, %1;"
+                : "=r" (limit)
+                : "rm" (static_cast<std::uint32_t>(sel))
+                : "cc");
+            return limit;
+        }
+
+        //DPMI 0.9 AX=0008
+        inline void set_selector_limit(selector sel, std::size_t limit)
+        {
+            dpmi_error_code error;
+            split_uint32_t _limit = (limit > 1_MB) ? round_up_to_page_size(limit) - 1 : limit;
+            bool c;
+
+            asm volatile(
+                "int 0x31;"
+                : "=@ccc" (c)
+                , "=a" (error)
+                : "a" (0x0008)
+                , "b" (sel)
+                , "c" (_limit.hi)
+                , "d" (_limit.lo));
+            if (c) throw dpmi_error(error, "set_selector_limit");
+        }
+
+        template <typename T>
+        inline std::uintptr_t get_linear_address(selector seg, const T* ptr)
+        {
+            return get_selector_base_address(seg) + reinterpret_cast<std::uintptr_t>(ptr);
+        }
+            
+        inline constexpr std::uintptr_t conventional_to_linear(std::uint16_t segment, std::uint16_t offset) noexcept
+        {
+            return (segment << 4) + offset;
+        }
+
+        inline constexpr std::uintptr_t conventional_to_linear(far_ptr16 addr) noexcept
+        {
+            return conventional_to_linear(addr.segment, addr.offset);
+        }
+
+        inline constexpr far_ptr16 linear_to_conventional(std::uintptr_t address) noexcept
+        {
+            return far_ptr16(address >> 4, address & 0x0f); //TODO: round?
+        }
+
+        inline constexpr std::size_t bytes_to_paragraphs(std::size_t num_bytes) noexcept
+        {
+            return (num_bytes >> 4) + ((num_bytes & 0x0f) > 0) ? 1 : 0;
+        }
+
+        inline constexpr std::size_t paragraphs_to_bytes(std::size_t num_paragraphs) noexcept
+        {
+            return num_paragraphs << 4;
+        }
+
+        inline constexpr std::size_t round_down_to_paragraph_size(std::size_t num_bytes) noexcept
+        {
+            return num_bytes & ~0x10;
+        }
+            
+        inline constexpr std::size_t round_up_to_paragraph_size(std::size_t num_bytes) noexcept
+        {
+            return round_down_to_paragraph_size(num_bytes) + 0x10;
+        }
+
+        inline std::uintptr_t linear_to_near(std::uintptr_t address, selector sel = get_ds())
+        {
+            return address - get_selector_base_address(sel);
+        }
+
+        template <typename T>
+        inline T* linear_to_near(std::uintptr_t address, selector sel = get_ds())
+        {
+            return static_cast<T*>(address + get_selector_base_address(sel));
+        }
+
+        inline std::uintptr_t near_to_linear(std::uintptr_t address, selector sel = get_ds())
+        {
+            return address + get_selector_base_address(sel);
+        }
+
+        template <typename T>
+        inline std::uintptr_t near_to_linear(T* address, selector sel = get_ds())
+        {
+            return reinterpret_cast<std::uintptr_t>(address) + get_selector_base_address(sel);
+        }
+
         struct memory
         {
-            //DPMI 0.9 AX=0006
-            static std::uintptr_t get_selector_base_address(selector seg)  //TODO: cache cs/ss/ds
-            {
-                dpmi_error_code error;
-                split_uint32_t base;
-                bool c;
-
-                asm("int 0x31;"
-                    : "=@ccc" (c)
-                    , "=a" (error)
-                    , "=c" (base.hi)
-                    , "=d" (base.lo)
-                    : "a" (0x0006)
-                    , "b" (seg));
-                if (c) throw dpmi_error(error, "get_selector_base_address");
-
-                return base;
-            }
-
-            //DPMI 0.9 AX=0007
-            static void set_selector_base_address(selector seg, std::uintptr_t linear_base)
-            {
-                dpmi_error_code error;
-                split_uint32_t base { linear_base };
-                bool c;
-
-                asm volatile(
-                    "int 0x31;"
-                    : "=@ccc" (c)
-                    , "=a" (error)
-                    : "a" (0x0007)
-                    , "b" (seg)
-                    , "c" (base.hi)
-                    , "d" (base.lo));
-                if (c) throw dpmi_error(error, "set_selector_base_address");
-            }
-
-            //DPMI 0.9 AX=0604
-            static std::size_t get_page_size()
-            {
-                static std::size_t page_size { 0 };
-                if (page_size > 0) return page_size;
-
-                dpmi_error_code error;
-                split_uint32_t size;
-                bool c;
-
-                asm("int 0x31;"
-                    : "=@ccc" (c)
-                    , "=a" (error)
-                    , "=b" (size.hi)
-                    , "=c" (size.lo)
-                    : "a" (0x0604));
-                if (c) throw dpmi_error(error, "get_page_size");
-
-                page_size = size;
-                return page_size;
-            }
-
-            static std::size_t get_selector_limit(selector sel = get_ds())
-            {
-                std::size_t limit;
-                asm("lsl %0, %1;"
-                    : "=r" (limit)
-                    : "rm" (sel)
-                    : "cc");
-                return limit;
-            }
-
-            //DPMI 0.9 AX=0008
-            static void set_selector_limit(selector sel, std::size_t limit)
-            {
-                dpmi_error_code error;
-                split_uint32_t _limit = (limit > 1_MB) ? round_up_to_page_size(limit) - 1 : limit;
-                bool c;
-
-                asm volatile(
-                    "int 0x31;"
-                    : "=@ccc" (c)
-                    , "=a" (error)
-                    : "a" (0x0008)
-                    , "b" (sel)
-                    , "c" (_limit.hi)
-                    , "d" (_limit.lo));
-                if (c) throw dpmi_error(error, "set_selector_limit");
-            }
-
-            template <typename T>
-            static std::uintptr_t get_linear_address(selector seg, const T* ptr)
-            {
-                return get_selector_base_address(seg) + reinterpret_cast<std::uintptr_t>(ptr);
-            }
-
-            static std::size_t round_up_to_page_size(std::size_t num_bytes)
-            {
-                std::size_t page = get_page_size();
-                return (num_bytes / page) * page + page;
-            }
-            static std::size_t round_down_to_page_size(std::size_t num_bytes)
-            {
-                std::size_t page = get_page_size();
-                return (num_bytes / page) * page;
-            }
-
-            static constexpr std::uintptr_t conventional_to_linear(std::uint16_t segment, std::uint16_t offset) noexcept
-            {
-                return (segment << 4) + offset;
-            }
-
-            static constexpr std::uintptr_t conventional_to_linear(far_ptr16 addr) noexcept
-            {
-                return conventional_to_linear(addr.segment, addr.offset);
-            }
-
-            static constexpr far_ptr16 linear_to_conventional(std::uintptr_t address) noexcept
-            {
-                return far_ptr16(address >> 4, address & 0x0f); //TODO: round?
-            }
-
-            static constexpr std::size_t bytes_to_paragraphs(std::size_t num_bytes) noexcept
-            {
-                return (num_bytes >> 4) + ((num_bytes & 0x0f) > 0) ? 1 : 0;
-            }
-
-            static constexpr std::size_t paragraphs_to_bytes(std::size_t num_paragraphs) noexcept
-            {
-                return num_paragraphs << 4;
-            }
-
-            static constexpr std::size_t round_up_to_paragraph_size(std::size_t num_bytes) noexcept
-            {
-                return round_down_to_paragraph_size(num_bytes) + 0x10;
-            }
-
-            static constexpr std::size_t round_down_to_paragraph_size(std::size_t num_bytes) noexcept
-            {
-                return num_bytes & ~0x10;
-            }
-
-            static std::uintptr_t linear_to_near(std::uintptr_t address, selector sel = get_ds())
-            {
-                return address - get_selector_base_address(sel);
-            }
-
-            template <typename T>
-            static T* linear_to_near(std::uintptr_t address, selector sel = get_ds())
-            {
-                return static_cast<T*>(address + get_selector_base_address(sel));
-            }
-
-            static std::uintptr_t near_to_linear(std::uintptr_t address, selector sel = get_ds())
-            {
-                return address + get_selector_base_address(sel);
-            }
-
-            template <typename T>
-            static std::uintptr_t near_to_linear(T* address, selector sel = get_ds())
-            {
-                return reinterpret_cast<std::uintptr_t>(address) + get_selector_base_address(sel);
-            }
-
-        public:
             constexpr std::uintptr_t get_address() const { return addr; }
             constexpr std::size_t get_size() const { return size; }
             constexpr std::uint32_t get_handle() const { return handle; }
