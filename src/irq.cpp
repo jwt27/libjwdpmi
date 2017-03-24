@@ -46,7 +46,7 @@ namespace jw
                 byte* esp; asm("mov %0, esp;":"=rm"(esp));
                 if (static_cast<std::size_t>(esp - stack.data()) <= config::interrupt_minimum_stack_size)
                 {
-                    increase_stack_size->name = "Increasing stack size for IRQ handlers";
+                    increase_stack_size->name = "Increasing stack size for IRQ handlers";   // TODO: this is dangerous, do it somewhere else!
                     increase_stack_size->start();
                 }
 
