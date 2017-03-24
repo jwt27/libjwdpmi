@@ -546,7 +546,7 @@ namespace jw
                             {
                                 auto t = threads[id].thread.lock();
                                 msg << t->name;
-                                if (id == current_thread_id) msg << " (current thread)";
+                                if (id == current_thread_id) msg << " (*)";
                                 msg << ": ";
                                 switch (t->get_state())
                                 {

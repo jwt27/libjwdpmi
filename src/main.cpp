@@ -46,10 +46,10 @@ namespace jw
 {
     void print_exception(const std::exception& e, int level = 0) noexcept
     {
-        std::cerr << "Level " << level << ": " << e.what() << '\n';
+        std::cerr << "Level " << std::dec << level << ": " << e.what() << '\n';
         try { std::rethrow_if_nested(e); }
         catch (const std::exception& e) { print_exception(e, level + 1); }
-        catch (...) { std::cerr << "Level " << (level + 1) << ": Unknown exception.\n"; }
+        catch (...) { std::cerr << "Level " << std::dec << (level + 1) << ": Unknown exception.\n"; }
     }
 
     extern "C" void* irq_safe_malloc(std::size_t n)
@@ -126,13 +126,16 @@ int main(int argc, char** argv)
     auto thread_queue_copy = thread::detail::scheduler::threads;
     for (auto& t : thread_queue_copy)
     {
-        try
+        while (t->is_running() || t->pending_exceptions() > 0)
         {
-            static_cast<thread::detail::task_base<0>*>(t.get())->abort(true);
+            try
+            {
+                static_cast<thread::detail::task_base<0>*>(t.get())->abort(true);
+            }
+            catch (const std::exception& e) { std::cerr << "Caught exception from thread!\n"; jw::print_exception(e); }
+            catch (const jw::terminate_exception& e) { }
+            catch (...) { std::cerr << "Caught unknown exception from thread()!\n"; }
         }
-        catch (const std::exception& e) { std::cerr << "Caught exception from thread!\n"; jw::print_exception(e); }
-        catch (const jw::terminate_exception& e) { }
-        catch (...) { std::cerr << "Caught unknown exception from thread()!\n"; }
     }
 
     return return_value;

@@ -44,7 +44,7 @@ namespace jw
             { 
                 std::stringstream s;
                 s << "Illegal call to await().\n"; 
-                s << "Thread" << thread->name << " (id " << thread->id() << ")";
+                s << "Thread" << thread->name << " (id " << std::dec << thread->id() << ")";
                 return s.str().c_str();
             }
             const detail::thread_ptr thread;
@@ -58,7 +58,7 @@ namespace jw
             {
                 std::stringstream s;
                 s << "Exception thrown from thread";
-                if (auto t = thread.lock()) s << ": " << t->name << " (id " << t->id() << ")";
+                if (auto t = thread.lock()) s << ": " << t->name << " (id " << std::dec << t->id() << ")";
                 else s << '.';
                 return s.str().c_str();
             }
