@@ -187,6 +187,8 @@ namespace jw
             return reinterpret_cast<std::uintptr_t>(address) + get_selector_base_address(sel);
         }
 
+        struct raw_memory_base;
+
         struct memory
         {
             constexpr std::uintptr_t get_linear_address() const { return addr; }
@@ -215,6 +217,11 @@ namespace jw
             constexpr memory& operator=(const memory&) noexcept = default;
             constexpr memory(memory&& m) noexcept = default;
             constexpr memory& operator=(memory&& m) noexcept = default;
+
+            memory(const raw_memory_base&) noexcept = delete;
+            memory& operator=(const raw_memory_base&) noexcept = delete;
+            memory(raw_memory_base&& m) noexcept = delete;
+            memory& operator=(raw_memory_base&& m) noexcept = delete;
 
             //DPMI 0.9 AX=0600
             void lock_memory()
