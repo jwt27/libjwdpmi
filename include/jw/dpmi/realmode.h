@@ -65,6 +65,7 @@ namespace jw
 
         static_assert(sizeof( rm_registers) == 0x32, "check sizeof struct dpmi::rm_registers");
 
+        // Call a real-mode interrupt. Second parameter is modified.
         inline void call_rm_interrupt(std::uint8_t interrupt, rm_registers* reg)
         {
             selector new_reg_ds = get_ds();

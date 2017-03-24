@@ -25,7 +25,7 @@ namespace jw
         struct memory
         {
             //DPMI 0.9 AX=0006
-            static std::uintptr_t get_selector_base_address(selector seg)  //TODO: cache cs/ss/ds //TODO: move to ldt_entry?
+            static std::uintptr_t get_selector_base_address(selector seg)  //TODO: cache cs/ss/ds
             {
                 dpmi_error_code error;
                 split_uint32_t base;

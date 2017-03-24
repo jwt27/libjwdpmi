@@ -190,7 +190,7 @@ namespace jw
             std::uint16_t offset, segment;
 
             constexpr far_ptr16(selector seg = 0, std::uint16_t off = 0) noexcept : offset(off), segment(seg) { }
-            //constexpr far_ptr16(split_uint32_t far_ptr) noexcept : far_ptr16(far_ptr.hi, far_ptr.lo) { }
+            //constexpr far_ptr16(split_uint32_t far_ptr) noexcept : far_ptr16(far_ptr.lo, far_ptr.hi) { }
         };
 
         struct alignas(2) [[gnu::packed]] far_ptr32
