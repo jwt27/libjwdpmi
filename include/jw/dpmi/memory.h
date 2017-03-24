@@ -340,7 +340,8 @@ namespace jw
             bool is_valid_address(std::uintptr_t address)
             {
                 if (address <= get_selector_base()) return false;
-                if (get_selector_limit() < linear_to_near(address)) set_selector_limit(get_ds(), address + size);
+                //if (get_selector_limit() < linear_to_near(address + size)) set_selector_limit(get_ds(), address + size);
+                if (get_selector_limit() < linear_to_near(address + size)) set_selector_limit(get_ds(), get_selector_limit() * 2);
                 return true;
             }
 
