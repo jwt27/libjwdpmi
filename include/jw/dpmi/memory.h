@@ -346,7 +346,7 @@ namespace jw
             {
                 if (address <= get_selector_base()) return false;
                 //if (get_selector_limit() < linear_to_near(address + size)) set_selector_limit(get_ds(), address + size);
-                if (get_selector_limit() < linear_to_near(address + size)) set_selector_limit(get_ds(), get_selector_limit() * 2);
+                while (get_selector_limit() < linear_to_near(address + size)) set_selector_limit(get_ds(), get_selector_limit() * 2);
                 return true;
             }
 
@@ -478,6 +478,18 @@ namespace jw
 
             bool requires_new_selector() { return !device_map_supported; }
 
+            template <typename T>
+            [[gnu::pure]] T* get_ptr(selector sel = get_ds())
+            {
+                return linear_to_near<T>(addr + offset, sel);
+            }
+
+            template <typename T>
+            [[gnu::pure]] const T* get_ptr(selector sel = get_ds()) const
+            {
+                return get_ptr<const T>(sel);
+            }
+
         protected:
             virtual void allocate(std::uintptr_t physical_address)
             {
@@ -516,6 +528,7 @@ namespace jw
             }
 
             static bool device_map_supported;
+            std::ptrdiff_t offset { 0 };
 
         private:
             void old_alloc(std::uintptr_t physical_address)
@@ -542,6 +555,8 @@ namespace jw
 
             void new_alloc(std::uintptr_t physical_address)
             {
+                std::ptrdiff_t offset_in_block = round_up_to_page_size(addr) - addr;
+                offset = offset_in_block + (physical_address - round_down_to_page_size(physical_address));
                 dpmi_error_code error;
                 bool c;
                 asm volatile(
@@ -549,9 +564,9 @@ namespace jw
                     : "=@ccc" (c)
                     , "=a" (error)
                     : "a" (0x0508)
-                    , "b" (round_up_to_page_size(addr) - addr)
+                    , "b" (offset_in_block)
                     , "c" (round_up_to_page_size(size) / get_page_size())
-                    , "d" (physical_address)
+                    , "d" (round_down_to_page_size(physical_address))
                     , "S" (handle)
                     : "memory");
                 if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);

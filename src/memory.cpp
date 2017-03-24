@@ -22,5 +22,6 @@ namespace jw
     namespace dpmi
     {
         bool memory_base::new_alloc_supported { true };
+        bool device_memory_base::device_map_supported { true };
     }
 }
