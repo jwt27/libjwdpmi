@@ -274,7 +274,22 @@ namespace jw
 
             memory_base(std::size_t num_bytes, bool committed = true) : memory_base(linear_memory { 0, num_bytes }, committed) { }
 
-            virtual ~memory_base() { deallocate(); }
+            virtual ~memory_base() 
+            {
+                try
+                {
+                    deallocate();
+                }
+                catch (const std::exception& e)
+                {
+                    std::cerr << "Warning: caught exception while deallocating memory!\n";
+                    std::cerr << e.what() << '\n';
+                }
+                catch (...)
+                {
+                    std::cerr << "Warning: caught exception while deallocating memory!\n";
+                }
+            }
 
             memory_base(const memory_base&) = delete;
             memory_base& operator=(const memory_base&) = delete;
