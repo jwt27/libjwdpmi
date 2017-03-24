@@ -17,7 +17,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
 #include <cstdint>
-#include <jw/typedef.h>
+#include <jw/common.h>
 
 namespace jw
 {

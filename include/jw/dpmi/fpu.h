@@ -23,7 +23,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <jw/dpmi/irq_check.h>
 #include <jw/dpmi/lock.h>
 #include <jw/dpmi/alloc.h>
-#include <jw/typedef.h>
+#include <jw/common.h>
 #include <../jwdpmi_config.h>
 
 // TODO: find some way to completely avoid generating fpu instructions

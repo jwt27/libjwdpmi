@@ -17,7 +17,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
 #include <deque>
-#include <jw/typedef.h>
+#include <jw/common.h>
 #include <jw/io/detail/scancode.h>
 #include <jw/thread/task.h>
 

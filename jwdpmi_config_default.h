@@ -1,6 +1,6 @@
 #pragma once
 #include <crt0.h>
-#include <jw/typedef.h>
+#include <jw/common.h>
 
 namespace jw
 {

@@ -22,7 +22,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <vector>
 #include <map>
 
-#include <jw/typedef.h>
+#include <jw/common.h>
 #include <jw/dpmi/lock.h>
 #include <jw/dpmi/debug.h>
 #include <jw/dpmi/irq_mask.h>

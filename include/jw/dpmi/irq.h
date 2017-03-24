@@ -28,7 +28,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <jw/io/ioport.h>
 #include <jw/dpmi/alloc.h>
 #include <jw/dpmi/irq_check.h>
-#include <jw/typedef.h>
+#include <jw/common.h>
 #include <../jwdpmi_config.h>
 
 // --- --- --- Some notes on DPMI host behaviour: --- --- --- //
