@@ -176,7 +176,6 @@ namespace jw
                     initializer()
                     {
                         stack.resize(config::interrupt_initial_stack_size);
-                        increase_stack_size->name = "Increasing stack size for IRQ handlers";
                         pic0_cmd.write(0x68);   // TODO: restore to defaults
                         pic1_cmd.write(0x68);
                     }
