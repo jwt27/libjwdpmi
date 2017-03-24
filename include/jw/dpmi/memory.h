@@ -24,7 +24,7 @@ namespace jw
     namespace dpmi
     {
         //DPMI 0.9 AX=0006
-        [[gnu::pure]] inline std::uintptr_t get_selector_base(selector seg)  //TODO: cache cs/ss/ds
+        [[gnu::pure]] inline std::uintptr_t get_selector_base(selector seg = get_ds())
         {
             dpmi_error_code error;
             split_uint32_t base;
@@ -104,7 +104,7 @@ namespace jw
                 , "=r" (limit)
                 : "rm" (static_cast<std::uint32_t>(sel))
                 : "cc");
-            if (z) throw dpmi_error(invalid_segment, __PRETTY_FUNCTION__);
+            if (!z) throw dpmi_error(invalid_segment, __PRETTY_FUNCTION__);
             return limit;
         }
 
@@ -112,7 +112,7 @@ namespace jw
         inline void set_selector_limit(selector sel, std::size_t limit)
         {
             dpmi_error_code error;
-            split_uint32_t _limit = (limit > 1_MB) ? round_up_to_page_size(limit) - 1 : limit;
+            split_uint32_t _limit = (limit >= 1_MB) ? round_up_to_page_size(limit) - 1 : limit;
             bool c;
 
             asm volatile(
@@ -125,12 +125,6 @@ namespace jw
                 , "d" (_limit.lo)
                 : "memory");
             if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
-        }
-
-        template <typename T>
-        [[gnu::pure]] inline std::uintptr_t get_linear_address(selector seg, const T* ptr)
-        {
-            return get_selector_base(seg) + reinterpret_cast<std::uintptr_t>(ptr);
         }
             
         inline constexpr std::uintptr_t conventional_to_linear(std::uint16_t segment, std::uint16_t offset) noexcept
@@ -176,7 +170,7 @@ namespace jw
         template <typename T>
         [[gnu::pure]] inline T* linear_to_near(std::uintptr_t address, selector sel = get_ds())
         {
-            return static_cast<T*>(address + get_selector_base(sel));
+            return reinterpret_cast<T*>(linear_to_near(address, sel));
         }
 
         [[gnu::pure]] inline std::uintptr_t near_to_linear(std::uintptr_t address, selector sel = get_ds())
@@ -187,7 +181,7 @@ namespace jw
         template <typename T>
         [[gnu::pure]] inline std::uintptr_t near_to_linear(T* address, selector sel = get_ds())
         {
-            return reinterpret_cast<std::uintptr_t>(address) + get_selector_base(sel);
+            return near_to_linear(reinterpret_cast<std::uintptr_t>(address), sel);
         }
 
         struct linear_memory
@@ -198,25 +192,23 @@ namespace jw
             template <typename T>
             [[gnu::pure]] T* get_ptr(selector sel = get_ds())
             {
-                std::uintptr_t start = addr - get_selector_base(sel);
-                return reinterpret_cast<T*>(start);
+                return linear_to_near<T>(addr, sel);
             }
 
             template <typename T>
             [[gnu::pure]] const T* get_ptr(selector sel = get_ds()) const
             {
-                std::uintptr_t start = addr - get_selector_base(sel);
-                return reinterpret_cast<const T*>(start);
+                return get_ptr<const T>(sel);
             }
 
             constexpr linear_memory() : linear_memory(0, 0) { }
 
             template<typename T, std::enable_if_t<!std::is_void<T>::value, bool> = { }>
             linear_memory(selector seg, const T* ptr, std::size_t num_elements = 1)
-                : linear_memory(dpmi::get_linear_address(seg, ptr), num_elements * sizeof(T)) { }
+                : linear_memory(dpmi::near_to_linear(ptr, seg), num_elements * sizeof(T)) { }
 
             linear_memory(selector seg, const void* ptr, std::size_t num_bytes)
-                : linear_memory(dpmi::get_linear_address(seg, ptr), num_bytes) { }
+                : linear_memory(dpmi::near_to_linear(ptr, seg), num_bytes) { }
 
             constexpr linear_memory(std::uintptr_t address, std::size_t num_bytes) noexcept
                 : addr(address), size(num_bytes) { }
@@ -345,6 +337,13 @@ namespace jw
                 handle = null_handle;
             }
 
+            bool is_valid_address(std::uintptr_t address)
+            {
+                if (address <= get_selector_base()) return false;
+                if (get_selector_limit() < linear_to_near(address)) set_selector_limit(get_ds(), address + size);
+                return true;
+            }
+
             static bool new_alloc_supported;
             static constexpr std::uint32_t null_handle { std::numeric_limits<std::uint32_t>::max() };
             std::uint32_t handle { null_handle };
@@ -357,19 +356,22 @@ namespace jw
                 split_uint32_t new_addr, new_handle;
                 dpmi_error_code error;
                 bool c;
-                asm volatile(
-                    "int 0x31;"
-                    : "=@ccc" (c)
-                    , "=a" (error)
-                    , "=b" (new_addr.hi)
-                    , "=c" (new_addr.lo)
-                    , "=S" (new_handle.hi)
-                    , "=D" (new_handle.lo)
-                    : "a" (0x0501)
-                    , "b" (new_size.hi)
-                    , "c" (new_size.lo)
-                    : "memory");
-                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+                do
+                {
+                    asm volatile(
+                        "int 0x31;"
+                        : "=@ccc" (c)
+                        , "=a" (error)
+                        , "=b" (new_addr.hi)
+                        , "=c" (new_addr.lo)
+                        , "=S" (new_handle.hi)
+                        , "=D" (new_handle.lo)
+                        : "a" (0x0501)
+                        , "b" (new_size.hi)
+                        , "c" (new_size.lo)
+                        : "memory");
+                    if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+                } while (!is_valid_address(new_addr));
                 handle = new_handle;
                 addr = new_addr;
             }
@@ -381,18 +383,21 @@ namespace jw
                 std::uintptr_t new_addr;
                 dpmi_error_code error;
                 bool c;
-                asm volatile(
-                    "int 0x31;"
-                    : "=@ccc" (c)
-                    , "=a" (error)
-                    , "=b" (new_addr)
-                    , "=S" (new_handle)
-                    : "a" (0x0504)
-                    , "b" (desired_address)
-                    , "c" (size)
-                    , "d" (static_cast<std::uint32_t>(committed))
-                    : "memory");
-                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+                do
+                {
+                    asm volatile(
+                        "int 0x31;"
+                        : "=@ccc" (c)
+                        , "=a" (error)
+                        , "=b" (new_addr)
+                        , "=S" (new_handle)
+                        : "a" (0x0504)
+                        , "b" (desired_address)
+                        , "c" (size)
+                        , "d" (static_cast<std::uint32_t>(committed))
+                        : "memory");
+                    if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+                } while (!is_valid_address(new_addr));
                 handle = new_handle;
                 addr = new_addr;
             }
@@ -405,19 +410,22 @@ namespace jw
                 split_uint32_t new_addr;
                 dpmi_error_code error;
                 bool c;
-                asm volatile(
-                    "int 0x31;"
-                    : "=@ccc" (c)
-                    , "=a" (error)
-                    , "=b" (new_addr.hi)
-                    , "=c" (new_addr.lo)
-                    , "+S" (new_handle.hi)
-                    , "+D" (new_handle.lo)
-                    : "a" (0x0501)
-                    , "b" (new_size.hi)
-                    , "c" (new_size.lo)
-                    : "memory");
-                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+                do
+                {
+                    asm volatile(
+                        "int 0x31;"
+                        : "=@ccc" (c)
+                        , "=a" (error)
+                        , "=b" (new_addr.hi)
+                        , "=c" (new_addr.lo)
+                        , "+S" (new_handle.hi)
+                        , "+D" (new_handle.lo)
+                        : "a" (0x0501)
+                        , "b" (new_size.hi)
+                        , "c" (new_size.lo)
+                        : "memory");
+                    if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+                } while (!is_valid_address(new_addr));
                 handle = new_handle;
                 addr = new_addr;
                 size = new_size;
@@ -429,17 +437,20 @@ namespace jw
                 std::uintptr_t new_addr;
                 dpmi_error_code error;
                 bool c;
-                asm volatile(
-                    "int 0x31;"
-                    : "=@ccc" (c)
-                    , "=a" (error)
-                    , "=b" (new_addr)
-                    , "+S" (new_handle)
-                    : "a" (0x0505)
-                    , "c" (num_bytes)
-                    , "d" (static_cast<std::uint32_t>(committed))
-                    : "memory");
-                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+                do
+                {
+                    asm volatile(
+                        "int 0x31;"
+                        : "=@ccc" (c)
+                        , "=a" (error)
+                        , "=b" (new_addr)
+                        , "+S" (new_handle)
+                        : "a" (0x0505)
+                        , "c" (num_bytes)
+                        , "d" (static_cast<std::uint32_t>(committed))
+                        : "memory");
+                    if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+                } while (!is_valid_address(new_addr));
                 handle = new_handle;
                 addr = new_addr;
             }
@@ -451,14 +462,14 @@ namespace jw
             template<typename... Args>
             memory(std::size_t num_elements, Args&&... args) : base(num_elements * sizeof(T), std::forward<Args>(args)...) { }
             
-            auto* get_ptr(selector sel = get_ds()) { return linear_memory::get_ptr<T>(sel); }            
+            [[gnu::pure]] auto* get_ptr(selector sel = get_ds()) { return linear_memory::get_ptr<T>(sel); }
+            [[gnu::pure]] auto* operator->() noexcept { return get_ptr(); }
             auto& operator*() noexcept { return *get_ptr(); }
-            auto* operator->() noexcept { return get_ptr(); }
             auto& operator[](std::ptrdiff_t i) noexcept { return *(get_ptr() + i); }
 
-            const auto* get_ptr(selector sel = get_ds()) const { return linear_memory::get_ptr<T>(sel); }
+            [[gnu::pure]] const auto* get_ptr(selector sel = get_ds()) const { return linear_memory::get_ptr<T>(sel); }
+            [[gnu::pure]] const auto* operator->() const noexcept { return get_ptr(); }
             const auto& operator*() const noexcept { return *get_ptr(); }
-            const auto* operator->() const noexcept { return get_ptr(); }
             const auto& operator[](std::ptrdiff_t i) const noexcept { return *(get_ptr() + i); }
 
             template<typename... Args>
