@@ -16,6 +16,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #pragma once
+#include <limits>
 #include <jw/dpmi/dpmi.h>
 
 namespace jw
@@ -268,18 +269,105 @@ namespace jw
             std::size_t size;
         };
 
+        // *** anything below this line is work-in-progress *** //
+
         struct memory_base : public linear_memory
         {
             constexpr std::uint32_t get_handle() const { return handle; }
 
         protected:
-            virtual void allocate(std::size_t num_bytes);
-            virtual void deallocate();
+            virtual void allocate(bool uncommitted = false, std::uintptr_t desired_address = 0)
+            {
+                static bool new_alloc_supported { true };
+                if (new_alloc_supported) try
+                {
+                    new_alloc(uncommitted, desired_address);
+                    return;
+                }
+                catch (const dpmi_error& e)
+                {
+                    switch (e.code().value())
+                    {
+                    default: throw;
+                    case unsupported_function:
+                    case 0x0504:
+                        new_alloc_supported = false;
+                    }
+                }
+                old_alloc();
+            }
 
-            std::uint32_t handle;
+            virtual void deallocate()
+            {
+                split_uint32_t _handle { handle };
+                dpmi_error_code error;
+                bool c;
+                asm volatile(
+                    "int 0x31;"
+                    : "=@ccc" (c)
+                    , "=a" (error)
+                    : "a" (0x0502)
+                    , "S" (_handle.hi)
+                    , "D" (_handle.lo)
+                    : "memory");
+                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+                handle = null_handle;
+            }
+
+            virtual void resize(std::size_t num_bytes)
+            {
+                // TODO
+            }
+
+            static constexpr std::uint32_t null_handle { std::numeric_limits<std::uint32_t>::max() };
+            std::uint32_t handle { null_handle };
+
+        private:
+            void old_alloc()
+            {
+                if (handle != null_handle) deallocate();
+                split_uint32_t _size { size };
+                split_uint32_t _addr, _handle;
+                dpmi_error_code error;
+                bool c;
+                asm volatile(
+                    "int 0x31;"
+                    : "=@ccc" (c)
+                    , "=a" (error)
+                    , "=b" (_addr.hi)
+                    , "=c" (_addr.lo)
+                    , "=S" (_handle.hi)
+                    , "=D" (_handle.lo)
+                    : "a" (0x0501)
+                    , "b" (_size.hi)
+                    , "c" (_size.lo)
+                    : "memory");
+                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+                handle = _handle;
+                addr = _addr;
+            }
+
+            void new_alloc(bool uncommitted, std::uintptr_t desired_address)
+            {
+                if (handle != null_handle) deallocate();
+                dpmi_error_code error;
+                bool c;
+                asm volatile(
+                    "int 0x31;"
+                    : "=@ccc" (c)
+                    , "=a" (error)
+                    , "=b" (addr)
+                    , "=S" (handle)
+                    : "a" (0x0504)
+                    , "b" (desired_address)
+                    , "c" (size)
+                    , "d" (static_cast<std::uint32_t>(uncommitted))
+                    : "memory");
+                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+            }
         };
 
-        template <typename T, typename base>
+        template <typename T, typename base = memory_base>
         struct memory : public base
         {
 
