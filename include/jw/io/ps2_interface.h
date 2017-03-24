@@ -62,6 +62,7 @@ namespace jw
             virtual void set_keyboard_update_thread(thread::task<void()> t) override
             {
                 keyboard_update_thread = t;
+                keyboard_update_thread->name = "Keyboard auto-update thread";
             }
 
             ps2_interface();
