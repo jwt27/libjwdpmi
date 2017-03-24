@@ -23,7 +23,7 @@ namespace jw
     namespace dpmi
     {
         //DPMI 0.9 AX=0006
-        [[gnu::pure]] inline std::uintptr_t get_selector_base_address(selector seg)  //TODO: cache cs/ss/ds
+        [[gnu::pure]] inline std::uintptr_t get_selector_base(selector seg)  //TODO: cache cs/ss/ds
         {
             dpmi_error_code error;
             split_uint32_t base;
@@ -36,13 +36,13 @@ namespace jw
                 , "=d" (base.lo)
                 : "a" (0x0006)
                 , "b" (seg));
-            if (c) throw dpmi_error(error, "get_selector_base_address");
+            if (c) throw dpmi_error(error, "get_selector_base");
 
             return base;
         }
 
         //DPMI 0.9 AX=0007
-        inline void set_selector_base_address(selector seg, std::uintptr_t linear_base)
+        inline void set_selector_base(selector seg, std::uintptr_t linear_base)
         {
             dpmi_error_code error;
             split_uint32_t base { linear_base };
@@ -57,7 +57,7 @@ namespace jw
                 , "c" (base.hi)
                 , "d" (base.lo)
                 : "memory");
-            if (c) throw dpmi_error(error, "set_selector_base_address");
+            if (c) throw dpmi_error(error, "set_selector_base");
         }
 
         //DPMI 0.9 AX=0604
@@ -129,7 +129,7 @@ namespace jw
         template <typename T>
         [[gnu::pure]] inline std::uintptr_t get_linear_address(selector seg, const T* ptr)
         {
-            return get_selector_base_address(seg) + reinterpret_cast<std::uintptr_t>(ptr);
+            return get_selector_base(seg) + reinterpret_cast<std::uintptr_t>(ptr);
         }
             
         inline constexpr std::uintptr_t conventional_to_linear(std::uint16_t segment, std::uint16_t offset) noexcept
@@ -169,24 +169,24 @@ namespace jw
 
         [[gnu::pure]] inline std::uintptr_t linear_to_near(std::uintptr_t address, selector sel = get_ds())
         {
-            return address - get_selector_base_address(sel);
+            return address - get_selector_base(sel);
         }
 
         template <typename T>
         [[gnu::pure]] inline T* linear_to_near(std::uintptr_t address, selector sel = get_ds())
         {
-            return static_cast<T*>(address + get_selector_base_address(sel));
+            return static_cast<T*>(address + get_selector_base(sel));
         }
 
         [[gnu::pure]] inline std::uintptr_t near_to_linear(std::uintptr_t address, selector sel = get_ds())
         {
-            return address + get_selector_base_address(sel);
+            return address + get_selector_base(sel);
         }
 
         template <typename T>
         [[gnu::pure]] inline std::uintptr_t near_to_linear(T* address, selector sel = get_ds())
         {
-            return reinterpret_cast<std::uintptr_t>(address) + get_selector_base_address(sel);
+            return reinterpret_cast<std::uintptr_t>(address) + get_selector_base(sel);
         }
 
         struct raw_memory_base;
@@ -199,7 +199,7 @@ namespace jw
             template <typename T>
             [[gnu::pure]] T* get_ptr(selector sel = get_ds()) const
             {
-                std::uintptr_t start = addr - get_selector_base_address(sel);
+                std::uintptr_t start = addr - get_selector_base(sel);
                 return reinterpret_cast<T*>(start);
             }
 
