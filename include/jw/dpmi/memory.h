@@ -329,7 +329,7 @@ namespace jw
 
         protected:
             constexpr memory_base(no_alloc_tag, const linear_memory& mem) noexcept : linear_memory(mem) { }
-            constexpr memory_base(no_alloc_tag, std::size_t num_bytes) noexcept : memory_base(no_alloc_tag { }, linear_memory { 0, num_bytes }) { }
+            constexpr memory_base(no_alloc_tag, std::size_t num_bytes) noexcept : memory_base(no_alloc_tag { }, linear_memory { null_handle, num_bytes }) { }
 
             void allocate(bool committed = true, bool new_only = false, std::uintptr_t desired_address = 0)
             {
@@ -417,6 +417,11 @@ namespace jw
 
             virtual void resize(std::size_t, bool = true) override { }
             bool requires_new_selector() const noexcept { return !device_map_supported; }
+            virtual operator bool() const noexcept override 
+            { 
+                if (device_map_supported) return base::operator bool(); 
+                else return addr != null_handle; 
+            };
 
         protected:
             static bool device_map_supported;
@@ -498,6 +503,11 @@ namespace jw
             
             virtual void resize(std::size_t, bool = true) override { }
             bool requires_new_selector() const noexcept { return !dos_map_supported; }
+            virtual operator bool() const noexcept override 
+            { 
+                if (dos_map_supported) return base::operator bool(); 
+                else return addr != null_handle;
+            };
 
         protected:
             mapped_dos_memory_base(no_alloc_tag, std::size_t num_bytes) : base(no_alloc_tag { }, round_up_to_page_size(num_bytes) + get_page_size()) { }
@@ -577,6 +587,7 @@ namespace jw
             auto get_dos_ptr() const noexcept { return dos_addr; }
             virtual selector get_selector() const noexcept { return dos_handle; }
             virtual std::ptrdiff_t get_offset_in_block() const noexcept override { return offset; }
+            virtual operator bool() const noexcept override { return dos_handle != null_dos_handle; };
 
         protected:
             static constexpr selector null_dos_handle { std::numeric_limits<selector>::max() };
