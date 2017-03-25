@@ -482,7 +482,9 @@ namespace jw
         struct mapped_dos_memory_base : public memory_base
         {
             using base = memory_base;
-            mapped_dos_memory_base(std::size_t num_bytes, std::uintptr_t dos_linear_address) : base(no_alloc_tag { }, round_up_to_page_size(num_bytes) + get_page_size())
+            mapped_dos_memory_base(std::size_t num_bytes, std::uintptr_t dos_linear_address) 
+                : base(no_alloc_tag { }, round_up_to_page_size(num_bytes) + get_page_size())
+                , dos_addr(linear_to_conventional(dos_linear_address))
             {
                 allocate(dos_linear_address);
             }
@@ -494,11 +496,13 @@ namespace jw
             mapped_dos_memory_base(base&&) = delete;
             mapped_dos_memory_base& operator=(base&&) = delete;
 
-            mapped_dos_memory_base(mapped_dos_memory_base&& m) : base(static_cast<base&&>(m)), offset(m.offset), dos_handle(m.dos_handle) { m.dos_handle = null_dos_handle; }
+            mapped_dos_memory_base(mapped_dos_memory_base&& m) 
+                : base(static_cast<base&&>(m)), offset(m.offset), dos_handle(m.dos_handle), dos_addr(m.dos_addr) { m.dos_handle = null_dos_handle;  }
             mapped_dos_memory_base& operator=(mapped_dos_memory_base&& m) 
             {
                 base::operator=(static_cast<base&&>(m)); 
                 std::swap(dos_handle, m.dos_handle);
+                std::swap(dos_addr, m.dos_addr);
                 std::swap(offset, m.offset);
                 return *this; 
             }
@@ -506,6 +510,7 @@ namespace jw
             virtual void resize(std::size_t, bool = true) override { }
             bool requires_new_selector() const noexcept { return !dos_map_supported; }
             virtual selector get_selector() const noexcept { return dos_handle; }
+            auto get_dos_ptr() const noexcept { return dos_addr; }
             virtual operator bool() const noexcept override
             { 
                 if (dos_map_supported) return base::operator bool(); 
@@ -519,6 +524,7 @@ namespace jw
             std::ptrdiff_t offset { 0 };
             static constexpr selector null_dos_handle { std::numeric_limits<selector>::max() };
             selector dos_handle { null_dos_handle }; // this is actually a PM selector.
+            far_ptr16 dos_addr;
 
             void allocate(std::uintptr_t dos_linear_address)
             {
@@ -566,13 +572,8 @@ namespace jw
             dos_memory_base(base&&) = delete;
             dos_memory_base& operator=(base&&) = delete;
 
-            dos_memory_base(dos_memory_base&& m) : base(static_cast<base&&>(m)), dos_addr(m.dos_addr) { }
-            dos_memory_base& operator=(dos_memory_base&& m)
-            {
-                base::operator=(static_cast<base&&>(m));
-                std::swap(dos_addr, m.dos_addr);
-                return *this;
-            }
+            dos_memory_base(dos_memory_base&& m) : base(static_cast<base&&>(m)) { }
+            dos_memory_base& operator=(dos_memory_base&& m) { base::operator=(static_cast<base&&>(m)); return *this; }
 
             virtual void resize(std::size_t num_bytes, bool = true) override
             {
@@ -588,13 +589,10 @@ namespace jw
                 }
             }
 
-            auto get_dos_ptr() const noexcept { return dos_addr; }
             virtual std::ptrdiff_t get_offset_in_block() const noexcept override { return offset; }
             virtual operator bool() const noexcept override { return dos_handle != null_dos_handle; };
 
         protected:
-            far_ptr16 dos_addr;
-
             void allocate(std::size_t num_bytes)
             {
                 try
