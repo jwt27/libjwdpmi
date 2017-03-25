@@ -23,44 +23,6 @@ namespace jw
 {
     namespace dpmi
     {
-        //DPMI 0.9 AX=0006
-        [[gnu::pure]] inline std::uintptr_t get_selector_base(selector seg = get_ds())
-        {
-            dpmi_error_code error;
-            split_uint32_t base;
-            bool c;
-
-            asm("int 0x31;"
-                : "=@ccc" (c)
-                , "=a" (error)
-                , "=c" (base.hi)
-                , "=d" (base.lo)
-                : "a" (0x0006)
-                , "b" (seg));
-            if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
-
-            return base;
-        }
-
-        //DPMI 0.9 AX=0007
-        inline void set_selector_base(selector seg, std::uintptr_t linear_base)
-        {
-            dpmi_error_code error;
-            split_uint32_t base { linear_base };
-            bool c;
-
-            asm volatile(
-                "int 0x31;"
-                : "=@ccc" (c)
-                , "=a" (error)
-                : "a" (0x0007)
-                , "b" (seg)
-                , "c" (base.hi)
-                , "d" (base.lo)
-                : "memory");
-            if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
-        }
-
         //DPMI 0.9 AX=0604
         [[gnu::pure]] inline std::size_t get_page_size()
         {
@@ -94,41 +56,9 @@ namespace jw
             return round_down_to_page_size(num_bytes) + ((num_bytes & (page - 1)) == 0 ? 0 : page);
         }
 
-        inline std::size_t get_selector_limit(selector sel = get_ds())
-        {
-            std::size_t limit;
-            bool z;
-            asm("lsl %1, %2;"
-                : "=@ccz" (z)
-                , "=r" (limit)
-                : "rm" (static_cast<std::uint32_t>(sel))
-                : "cc");
-            if (!z) throw dpmi_error(invalid_segment, __PRETTY_FUNCTION__);
-            return limit;
-        }
-
-        //DPMI 0.9 AX=0008
-        inline void set_selector_limit(selector sel, std::size_t limit)
-        {
-            dpmi_error_code error;
-            split_uint32_t _limit = (limit >= 1_MB) ? round_up_to_page_size(limit) - 1 : limit;
-            bool c;
-
-            asm volatile(
-                "int 0x31;"
-                : "=@ccc" (c)
-                , "=a" (error)
-                : "a" (0x0008)
-                , "b" (sel)
-                , "c" (_limit.hi)
-                , "d" (_limit.lo)
-                : "memory");
-            if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
-        }
-
         struct ldt_entry
         {
-            ldt_entry(selector s) : sel(s), no_alloc(true) { }
+            ldt_entry(selector s) : sel(s) { }
             ldt_entry(std::uintptr_t linear_base, std::size_t limit)
             {
                 selector s;
@@ -163,10 +93,77 @@ namespace jw
             }
 
             auto get_selector() const noexcept { return sel; }
-            void set_base(auto b) { set_selector_base(sel, b); }
-            auto get_base() const { return get_selector_base(sel); }
-            void set_limit(auto l) { set_selector_limit(sel, l); }
-            auto get_limit() const { return get_selector_limit(sel); }
+            void set_base(auto b) { set_base(sel, b); }
+            auto get_base() const { return get_base(sel); }
+            void set_limit(auto l) { set_limit(sel, l); }
+            auto get_limit() const { return get_limit(sel); }
+            
+            [[gnu::pure]] static std::uintptr_t get_base(selector seg = get_ds())
+            {
+                dpmi_error_code error;
+                split_uint32_t base;
+                bool c;
+
+                asm("int 0x31;"
+                    : "=@ccc" (c)
+                    , "=a" (error)
+                    , "=c" (base.hi)
+                    , "=d" (base.lo)
+                    : "a" (0x0006)
+                    , "b" (seg));
+                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+
+                return base;
+            }
+
+            static void set_base(selector seg, std::uintptr_t linear_base)
+            {
+                dpmi_error_code error;
+                split_uint32_t base { linear_base };
+                bool c;
+
+                asm volatile(
+                    "int 0x31;"
+                    : "=@ccc" (c)
+                    , "=a" (error)
+                    : "a" (0x0007)
+                    , "b" (seg)
+                    , "c" (base.hi)
+                    , "d" (base.lo)
+                    : "memory");
+                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+            }
+
+            static std::size_t get_limit(selector sel = get_ds())
+            {
+                std::size_t limit;
+                bool z;
+                asm("lsl %1, %2;"
+                    : "=@ccz" (z)
+                    , "=r" (limit)
+                    : "rm" (static_cast<std::uint32_t>(sel))
+                    : "cc");
+                if (!z) throw dpmi_error(invalid_segment, __PRETTY_FUNCTION__);
+                return limit;
+            }
+
+            static void set_limit(selector sel, std::size_t limit)
+            {
+                dpmi_error_code error;
+                split_uint32_t _limit = (limit >= 1_MB) ? round_up_to_page_size(limit) - 1 : limit;
+                bool c;
+
+                asm volatile(
+                    "int 0x31;"
+                    : "=@ccc" (c)
+                    , "=a" (error)
+                    : "a" (0x0008)
+                    , "b" (sel)
+                    , "c" (_limit.hi)
+                    , "d" (_limit.lo)
+                    : "memory");
+                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+            }
 
         private:
             selector sel;
@@ -210,7 +207,7 @@ namespace jw
 
         [[gnu::pure]] inline std::intptr_t linear_to_near(std::uintptr_t address, selector sel = get_ds())
         {
-            return address - get_selector_base(sel);
+            return address - ldt_entry::get_base(sel);
         }
 
         template <typename T>
@@ -221,7 +218,7 @@ namespace jw
 
         [[gnu::pure]] inline std::uintptr_t near_to_linear(std::uintptr_t address, selector sel = get_ds())
         {
-            return address + get_selector_base(sel);
+            return address + ldt_entry::get_base(sel);
         }
 
         template <typename T>
@@ -483,10 +480,10 @@ namespace jw
 
             bool is_valid_address(std::uintptr_t address)
             {
-                if (address <= get_selector_base()) return false;
+                if (address <= ldt_entry::get_base(get_ds())) return false;
                 //if (get_selector_limit() < linear_to_near(address + size)) set_selector_limit(get_ds(), address + size);
-                while (get_selector_limit() < static_cast<std::uintptr_t>(linear_to_near(address + size)))
-                    set_selector_limit(get_ds(), get_selector_limit() * 2);
+                while (ldt_entry::get_limit(get_ds()) < static_cast<std::uintptr_t>(linear_to_near(address + size)))
+                    ldt_entry::set_limit(get_ds(), ldt_entry::get_limit(get_ds()) * 2);
                 return true;
             }
 
