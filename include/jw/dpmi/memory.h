@@ -535,7 +535,7 @@ namespace jw
         {
             using base = mapped_dos_memory_base;
 
-            dos_memory_base(std::size_t num_bytes) : base(no_alloc_tag { }, round_up_to_paragraph_size(num_bytes)) 
+            dos_memory_base(std::size_t num_bytes) : base(no_alloc_tag { }, round_up_to_paragraph_size(num_bytes))
             {
                 allocate(num_bytes);
             }
@@ -547,7 +547,7 @@ namespace jw
 
             dos_memory_base(dos_memory_base&& m) : base(static_cast<base&&>(m)), dos_addr(m.dos_addr), dos_handle(m.dos_handle) { m.dos_handle = null_dos_handle; }
             dos_memory_base& operator=(dos_memory_base&& m)
-            { 
+            {
                 base::operator=(static_cast<base&&>(m));
                 std::swap(dos_addr, m.dos_addr);
                 std::swap(dos_handle, m.dos_handle);
@@ -569,11 +569,12 @@ namespace jw
             }
 
             auto get_dos_ptr() const noexcept { return dos_addr; }
+            virtual selector get_selector() const noexcept { return dos_handle; }
 
         protected:
-            static constexpr std::uint16_t null_dos_handle { std::numeric_limits<std::uint16_t>::max() };
+            static constexpr selector null_dos_handle { std::numeric_limits<selector>::max() };
             far_ptr16 dos_addr;
-            std::uint16_t dos_handle { null_dos_handle };
+            selector dos_handle { null_dos_handle };
 
             void allocate(std::size_t num_bytes)
             {
