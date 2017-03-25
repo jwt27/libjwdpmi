@@ -92,7 +92,8 @@ namespace jw
         [[gnu::pure]] inline std::size_t round_up_to_page_size(std::size_t num_bytes)
         {
             std::size_t page = get_page_size();
-            return round_down_to_page_size(num_bytes) + page;
+            auto n = round_down_to_page_size(num_bytes);
+            return n + (n == num_bytes ? 0 : page);
         }
 
         inline std::size_t get_selector_limit(selector sel = get_ds())
@@ -505,6 +506,8 @@ namespace jw
             bool requires_new_selector() const noexcept { return !device_map_supported; }
 
         protected:
+            static bool device_map_supported;
+
             virtual void allocate(std::uintptr_t physical_address)
             {
                 if (!new_alloc_supported) device_map_supported = false;
@@ -536,8 +539,6 @@ namespace jw
                     // This is an optional dpmi 1.0 function. don't care if this fails.
                 }
             }
-
-            static bool device_map_supported;
 
         private:
             void old_alloc(std::uintptr_t physical_address)
@@ -601,6 +602,8 @@ namespace jw
             bool requires_new_selector() const noexcept { return !dos_map_supported; }
 
         protected:
+            mapped_dos_memory_base(no_alloc_tag, std::size_t num_bytes) : base(no_alloc_tag { }, num_bytes) { }
+
             static bool dos_map_supported;
 
             virtual void allocate(std::uintptr_t dos_linear_address)
@@ -639,6 +642,92 @@ namespace jw
             }
         };
 
+        struct dos_memory_base : public mapped_dos_memory_base
+        {
+            using base = mapped_dos_memory_base;
+
+            dos_memory_base(std::size_t num_bytes) : base(no_alloc_tag { }, round_up_to_paragraph_size(num_bytes)) 
+            {
+                allocate();
+            }
+
+            virtual void resize(std::size_t num_bytes, bool = true) override
+            {
+                base::deallocate();
+                dos_resize(round_up_to_paragraph_size(num_bytes));
+                base::allocate(conventional_to_linear(dos_addr));
+            }
+
+        protected:
+            static constexpr std::uint16_t null_dos_handle { std::numeric_limits<std::uint16_t>::max() };
+            far_ptr16 dos_addr;
+            std::uint16_t dos_handle { null_dos_handle };
+
+            virtual void allocate()
+            {
+                if (dos_handle != null_dos_handle) deallocate();
+                dos_alloc();
+                base::allocate(conventional_to_linear(dos_addr));
+            }
+
+            virtual void deallocate() override
+            {
+                base::deallocate();
+                if (dos_handle == null_dos_handle) return;
+                dos_dealloc();
+            }
+
+        private:
+            void dos_alloc()
+            {
+                std::uint16_t new_handle;
+                far_ptr16 new_addr { };
+                bool c;
+                asm volatile(
+                    "int 0x31;"
+                    : "=@ccc" (c)
+                    , "=a" (new_addr.segment)
+                    , "=d" (new_handle)
+                    : "a" (0x0100)
+                    , "b" (bytes_to_paragraphs(size))
+                    : "memory");
+                if (c) throw dpmi_error(new_addr.segment, __PRETTY_FUNCTION__);
+                dos_handle = new_handle;
+                dos_addr = new_addr;
+            }
+
+            void dos_dealloc()
+            {
+                dpmi_error_code error;
+                bool c;
+                asm volatile(
+                    "int 0x31;"
+                    : "=@ccc" (c)
+                    , "=a" (error)
+                    : "a" (0x0101)
+                    , "d" (dos_handle)
+                    : "memory");
+                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+                dos_handle = null_dos_handle;
+            }
+
+            void dos_resize(std::size_t num_bytes)
+            {
+                dpmi_error_code error;
+                bool c;
+                asm volatile(
+                    "int 0x31;"
+                    : "=@ccc" (c)
+                    , "=a" (error)
+                    : "a" (0x0102)
+                    , "b" (bytes_to_paragraphs(num_bytes))
+                    , "d" (dos_handle)
+                    : "memory");
+                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+                size = num_bytes;
+            }
+        };
+
         template <typename T, typename base = memory_base>
         struct memory : public base
         {
@@ -663,5 +752,6 @@ namespace jw
         template <typename T = byte> using raw_memory = memory<T, memory_base>;
         template <typename T = byte> using device_memory = memory<T, device_memory_base>;
         template <typename T = byte> using mapped_dos_memory = memory<T, mapped_dos_memory_base>;
+        template <typename T = byte> using dos_memory = memory<T, dos_memory_base>;
     }
 }
