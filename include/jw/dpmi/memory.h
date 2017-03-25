@@ -325,6 +325,7 @@ namespace jw
 
             std::uint32_t get_handle() const noexcept { return handle; }
             virtual operator bool() const noexcept { return handle != null_handle; }
+            virtual std::ptrdiff_t get_offset_in_block() const noexcept { return 0; }
 
         protected:
             constexpr memory_base(no_alloc_tag, const linear_memory& mem) noexcept : linear_memory(mem) { }
@@ -497,7 +498,6 @@ namespace jw
             
             virtual void resize(std::size_t, bool = true) override { }
             bool requires_new_selector() const noexcept { return !dos_map_supported; }
-            auto get_offset_in_block() const noexcept { return offset; }
 
         protected:
             mapped_dos_memory_base(no_alloc_tag, std::size_t num_bytes) : base(no_alloc_tag { }, round_up_to_page_size(num_bytes) + get_page_size()) { }
@@ -576,6 +576,7 @@ namespace jw
 
             auto get_dos_ptr() const noexcept { return dos_addr; }
             virtual selector get_selector() const noexcept { return dos_handle; }
+            virtual std::ptrdiff_t get_offset_in_block() const noexcept override { return offset; }
 
         protected:
             static constexpr selector null_dos_handle { std::numeric_limits<selector>::max() };
