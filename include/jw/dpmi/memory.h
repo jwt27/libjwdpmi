@@ -648,6 +648,7 @@ namespace jw
             virtual void resize(std::size_t, bool = true) override { }
             bool requires_new_selector() const noexcept { return !dos_map_supported; }
             auto get_dos_ptr() const noexcept { return dos_addr; }
+            virtual std::ptrdiff_t get_offset_in_block() const noexcept override { return offset; }
             virtual operator bool() const noexcept override
             { 
                 if (dos_map_supported) return base::operator bool(); 
@@ -740,7 +741,6 @@ namespace jw
                 }
             }
 
-            virtual std::ptrdiff_t get_offset_in_block() const noexcept override { return offset; }
             virtual operator bool() const noexcept override { return dos_handle != null_dos_handle; };
 
         protected:
