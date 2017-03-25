@@ -305,17 +305,17 @@ namespace jw
                 return *this;
             }
 
-            memory_base& operator=(linear_memory&&) = delete;
             memory_base& operator=(const linear_memory&) = delete;
+            memory_base& operator=(linear_memory&&) = delete;
             memory_base(const linear_memory&) = delete;
             memory_base(linear_memory&&) = delete;
 
-            memory_base(device_memory_base&&) = delete;
             memory_base& operator=(device_memory_base&&) = delete;
-            memory_base(mapped_dos_memory_base&&) = delete;
             memory_base& operator=(mapped_dos_memory_base&&) = delete;
-            memory_base(dos_memory_base&&) = delete;
             memory_base& operator=(dos_memory_base&&) = delete;
+            memory_base(device_memory_base&&) = delete;
+            memory_base(mapped_dos_memory_base&&) = delete;
+            memory_base(dos_memory_base&&) = delete;
 
             virtual void resize(std::size_t num_bytes, bool committed = true)
             {
