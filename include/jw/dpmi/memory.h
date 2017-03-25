@@ -649,12 +649,13 @@ namespace jw
 
             virtual std::weak_ptr<ldt_entry> get_ldt_entry() override
             {
+                if (dos_handle == null_dos_handle) alloc_selector();
                 if (!ldt) ldt = std::make_shared<ldt_entry>(dos_handle);
                 return ldt;
             }
 
             virtual selector get_selector() override
-            { 
+            {
                 if (dos_handle == null_dos_handle) alloc_selector();
                 return dos_handle; 
             }
