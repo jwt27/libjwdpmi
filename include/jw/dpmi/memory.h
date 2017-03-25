@@ -91,8 +91,7 @@ namespace jw
         [[gnu::pure]] inline std::size_t round_up_to_page_size(std::size_t num_bytes)
         {
             auto page = get_page_size();
-            auto n = round_down_to_page_size(num_bytes);
-            return n + ((num_bytes & (page - 1)) == 0 ? 0 : page);
+            return round_down_to_page_size(num_bytes) + ((num_bytes & (page - 1)) == 0 ? 0 : page);
         }
 
         inline std::size_t get_selector_limit(selector sel = get_ds())
@@ -129,7 +128,7 @@ namespace jw
             
         inline constexpr std::uintptr_t conventional_to_linear(std::uint16_t segment, std::uint16_t offset) noexcept
         {
-            return (segment << 4) + offset;
+            return (static_cast<std::uint32_t>(segment) << 4) + offset;
         }
 
         inline constexpr std::uintptr_t conventional_to_linear(far_ptr16 addr) noexcept
@@ -142,16 +141,6 @@ namespace jw
             return far_ptr16(address >> 4, address & 0x0f); //TODO: round?
         }
 
-        inline constexpr std::size_t bytes_to_paragraphs(std::size_t num_bytes) noexcept
-        {
-            return (num_bytes >> 4) + ((num_bytes & 0x0f) > 0) ? 1 : 0;
-        }
-
-        inline constexpr std::size_t paragraphs_to_bytes(std::size_t num_paragraphs) noexcept
-        {
-            return num_paragraphs << 4;
-        }
-
         inline constexpr std::size_t round_down_to_paragraph_size(std::size_t num_bytes) noexcept
         {
             return num_bytes & ~0x10;
@@ -159,10 +148,20 @@ namespace jw
             
         inline constexpr std::size_t round_up_to_paragraph_size(std::size_t num_bytes) noexcept
         {
-            return round_down_to_paragraph_size(num_bytes) + 0x10;
+            return round_down_to_paragraph_size(num_bytes) + ((num_bytes & 0x0f) == 0 ? 0x10 : 0);
         }
 
-        [[gnu::pure]] inline std::uintptr_t linear_to_near(std::uintptr_t address, selector sel = get_ds())
+        inline constexpr std::size_t bytes_to_paragraphs(std::size_t num_bytes) noexcept
+        {
+            return round_up_to_paragraph_size(num_bytes) >> 4;
+        }
+
+        inline constexpr std::size_t paragraphs_to_bytes(std::size_t num_paragraphs) noexcept
+        {
+            return num_paragraphs << 4;
+        }
+
+        [[gnu::pure]] inline std::intptr_t linear_to_near(std::uintptr_t address, selector sel = get_ds())
         {
             return address - get_selector_base(sel);
         }
@@ -373,7 +372,8 @@ namespace jw
             {
                 if (address <= get_selector_base()) return false;
                 //if (get_selector_limit() < linear_to_near(address + size)) set_selector_limit(get_ds(), address + size);
-                while (get_selector_limit() < linear_to_near(address + size)) set_selector_limit(get_ds(), get_selector_limit() * 2);
+                while (get_selector_limit() < static_cast<std::uintptr_t>(linear_to_near(address + size)))
+                    set_selector_limit(get_ds(), get_selector_limit() * 2);
                 return true;
             }
 
@@ -399,6 +399,12 @@ namespace jw
             }
 
             device_memory_base(const base&) = delete;
+            device_memory_base(const device_memory_base&) = delete;
+            device_memory_base(base&&) = delete;
+            device_memory_base& operator=(base&&) = delete;
+
+            device_memory_base(device_memory_base&& m) : base(static_cast<base&&>(m)) { }
+            device_memory_base& operator=(device_memory_base&& m) { base::operator=(static_cast<base&&>(m)); return *this; }
 
             virtual void resize(std::size_t, bool = true) override { }
             bool requires_new_selector() const noexcept { return !device_map_supported; }
@@ -454,12 +460,18 @@ namespace jw
             mapped_dos_memory_base(std::size_t num_bytes, far_ptr16 address) : mapped_dos_memory_base(num_bytes, conventional_to_linear(address)) { }
 
             mapped_dos_memory_base(const base&) = delete;
+            mapped_dos_memory_base(const mapped_dos_memory_base&) = delete;
+            mapped_dos_memory_base(base&&) = delete;
+            mapped_dos_memory_base& operator=(base&&) = delete;
+
+            mapped_dos_memory_base(mapped_dos_memory_base&& m) : base(static_cast<base&&>(m)) { }
+            mapped_dos_memory_base& operator=(mapped_dos_memory_base&& m) { base::operator=(static_cast<base&&>(m)); return *this; }
             
             virtual void resize(std::size_t, bool = true) override { }
             bool requires_new_selector() const noexcept { return !dos_map_supported; }
 
         protected:
-            mapped_dos_memory_base(no_alloc_tag, std::size_t num_bytes) : base(no_alloc_tag { }, num_bytes) { }
+            constexpr mapped_dos_memory_base(no_alloc_tag, std::size_t num_bytes) : base(no_alloc_tag { }, num_bytes) { }
 
             static bool dos_map_supported;
 
@@ -488,12 +500,28 @@ namespace jw
                 allocate();
             }
 
+            dos_memory_base(const base&) = delete;
+            dos_memory_base(const dos_memory_base&) = delete;
+            dos_memory_base(base&&) = delete;
+            dos_memory_base& operator=(base&&) = delete;
+
+            dos_memory_base(dos_memory_base&& m) : base(static_cast<base&&>(m)), dos_addr(m.dos_addr), dos_handle(m.dos_handle) { m.dos_handle = null_dos_handle; }
+            dos_memory_base& operator=(dos_memory_base&& m)
+            { 
+                base::operator=(static_cast<base&&>(m));
+                std::swap(dos_addr, m.dos_addr);
+                std::swap(dos_handle, m.dos_handle);
+                return *this;
+            }
+
             virtual void resize(std::size_t num_bytes, bool = true) override
             {
                 base::deallocate();
                 dos_resize(round_up_to_paragraph_size(num_bytes));
                 base::allocate(conventional_to_linear(dos_addr));
             }
+
+            auto get_dos_ptr() const noexcept { return dos_addr; }
 
         protected:
             static constexpr std::uint16_t null_dos_handle { std::numeric_limits<std::uint16_t>::max() };
