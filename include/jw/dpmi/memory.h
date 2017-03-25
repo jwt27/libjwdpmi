@@ -125,6 +125,53 @@ namespace jw
                 : "memory");
             if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
         }
+
+        struct ldt_entry
+        {
+            ldt_entry(selector s) : sel(s), no_alloc(true) { }
+            ldt_entry(std::uintptr_t linear_base, std::size_t limit)
+            {
+                selector s;
+                bool c;
+                asm volatile(
+                    "int 0x31;"
+                    : "=@ccc" (c)
+                    , "=a" (s)
+                    : "a" (0x0000)
+                    , "c" (1)
+                    : "memory");
+                if (c) throw dpmi_error(s, __PRETTY_FUNCTION__);
+                no_alloc = false;
+                sel = s;
+                set_base(linear_base);
+                set_limit(limit);
+            }
+
+            ~ldt_entry()
+            {
+                if (no_alloc) return;
+                dpmi_error_code error;
+                bool c;
+                asm volatile(
+                    "int 0x31;"
+                    : "=@ccc" (c)
+                    , "=a" (error)
+                    : "a" (0x0001)
+                    , "c" (sel)
+                    : "memory");
+                // if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+            }
+
+            auto get_selector() const noexcept { return sel; }
+            void set_base(auto b) { set_selector_base(sel, b); }
+            auto get_base() const { return get_selector_base(sel); }
+            void set_limit(auto l) { set_selector_limit(sel, l); }
+            auto get_limit() const { return get_selector_limit(sel); }
+
+        private:
+            selector sel;
+            bool no_alloc { true };
+        };
             
         inline constexpr std::uintptr_t conventional_to_linear(std::uint16_t segment, std::uint16_t offset) noexcept
         {
