@@ -537,7 +537,7 @@ namespace jw
 
             dos_memory_base(std::size_t num_bytes) : base(no_alloc_tag { }, round_up_to_paragraph_size(num_bytes)) 
             {
-                allocate();
+                allocate(num_bytes);
             }
 
             dos_memory_base(const base&) = delete;
@@ -575,12 +575,12 @@ namespace jw
             far_ptr16 dos_addr;
             std::uint16_t dos_handle { null_dos_handle };
 
-            void allocate()
+            void allocate(std::size_t num_bytes)
             {
                 try
                 {
                     deallocate();
-                    dos_alloc();
+                    dos_alloc(round_up_to_paragraph_size(num_bytes));
                     base::allocate(conventional_to_linear(dos_addr));
                 }
                 catch (...)
@@ -597,7 +597,7 @@ namespace jw
             }
 
         private:
-            void dos_alloc();
+            void dos_alloc(std::size_t num_bytes);
             void dos_dealloc();
             void dos_resize(std::size_t num_bytes);
         };

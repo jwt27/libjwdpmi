@@ -196,7 +196,7 @@ namespace jw
             if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
         }
 
-        void dos_memory_base::dos_alloc()
+        void dos_memory_base::dos_alloc(std::size_t num_bytes)
         {
             std::uint16_t new_handle;
             far_ptr16 new_addr { };
@@ -207,7 +207,7 @@ namespace jw
                 , "=a" (new_addr.segment)
                 , "=d" (new_handle)
                 : "a" (0x0100)
-                , "b" (bytes_to_paragraphs(size))
+                , "b" (bytes_to_paragraphs(num_bytes))
                 : "memory");
             if (c) throw dpmi_error(new_addr.segment, __PRETTY_FUNCTION__);
             dos_handle = new_handle;
