@@ -488,16 +488,22 @@ namespace jw
             mapped_dos_memory_base(base&&) = delete;
             mapped_dos_memory_base& operator=(base&&) = delete;
 
-            mapped_dos_memory_base(mapped_dos_memory_base&& m) : base(static_cast<base&&>(m)) { }
-            mapped_dos_memory_base& operator=(mapped_dos_memory_base&& m) { base::operator=(static_cast<base&&>(m)); return *this; }
+            mapped_dos_memory_base(mapped_dos_memory_base&& m) : base(static_cast<base&&>(m)), offset(m.offset) { }
+            mapped_dos_memory_base& operator=(mapped_dos_memory_base&& m) 
+            {
+                std::swap(offset, m.offset);
+                base::operator=(static_cast<base&&>(m)); return *this; 
+            }
             
             virtual void resize(std::size_t, bool = true) override { }
             bool requires_new_selector() const noexcept { return !dos_map_supported; }
+            auto get_offset_in_block() const noexcept { return offset; }
 
         protected:
             mapped_dos_memory_base(no_alloc_tag, std::size_t num_bytes) : base(no_alloc_tag { }, round_up_to_page_size(num_bytes) + get_page_size()) { }
 
             static bool dos_map_supported;
+            std::ptrdiff_t offset { 0 };
 
             void allocate(std::uintptr_t dos_linear_address)
             {

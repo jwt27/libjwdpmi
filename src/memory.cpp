@@ -177,7 +177,7 @@ namespace jw
         void mapped_dos_memory_base::new_alloc(std::uintptr_t dos_linear_address)
         {
             auto addr_start = round_down_to_page_size(dos_linear_address);
-            auto offset = dos_linear_address - addr_start;
+            offset = dos_linear_address - addr_start;
             auto pages = round_up_to_page_size(size) / get_page_size();
             addr += offset;
             size -= offset;
