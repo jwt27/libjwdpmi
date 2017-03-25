@@ -304,7 +304,7 @@ namespace jw
 
         struct linear_memory
         {
-            constexpr std::uintptr_t get_address() const noexcept { return addr; }
+            std::uintptr_t get_address() const noexcept { return addr; }
             virtual std::size_t get_size() const noexcept { return size; }
 
             template <typename T>
@@ -319,7 +319,7 @@ namespace jw
                 return get_ptr<const T>(sel);
             }
 
-            constexpr linear_memory() : linear_memory(0, 0) { }
+            linear_memory() : linear_memory(0, 0) { }
 
             template<typename T, std::enable_if_t<!std::is_void<T>::value, bool> = { }>
             linear_memory(selector seg, const T* ptr, std::size_t num_elements = 1)
@@ -328,13 +328,13 @@ namespace jw
             linear_memory(selector seg, const void* ptr, std::size_t num_bytes)
                 : linear_memory(dpmi::near_to_linear(ptr, seg), num_bytes) { }
 
-            constexpr linear_memory(std::uintptr_t address, std::size_t num_bytes) noexcept
+            linear_memory(std::uintptr_t address, std::size_t num_bytes) noexcept
                 : addr(address), size(num_bytes) { }
 
-            constexpr linear_memory(const linear_memory&) noexcept = default;
-            constexpr linear_memory& operator=(const linear_memory&) noexcept = default;
-            constexpr linear_memory(linear_memory&& m) noexcept = default;
-            constexpr linear_memory& operator=(linear_memory&& m) noexcept = default;
+            linear_memory(const linear_memory&) noexcept = default;
+            linear_memory& operator=(const linear_memory&) noexcept = default;
+            linear_memory(linear_memory&& m) noexcept = default;
+            linear_memory& operator=(linear_memory&& m) noexcept = default;
 
             //DPMI 0.9 AX=0600
             void lock_memory()
@@ -374,7 +374,19 @@ namespace jw
                 if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
             }
 
+            virtual std::weak_ptr<ldt_entry> get_ldt_entry()
+            {
+                if (!ldt) ldt = std::make_shared<ldt_entry>(addr, size);
+                return ldt;
+            }
+
+            virtual selector get_selector()
+            {
+                return get_ldt_entry().lock()->get_selector();
+            }
+
         protected:
+            std::shared_ptr<ldt_entry> ldt;
             std::uintptr_t addr;
             std::size_t size;
         };
@@ -447,8 +459,8 @@ namespace jw
             virtual std::ptrdiff_t get_offset_in_block() const noexcept { return 0; }
 
         protected:
-            constexpr memory_base(no_alloc_tag, const linear_memory& mem) noexcept : linear_memory(mem) { }
-            constexpr memory_base(no_alloc_tag, std::size_t num_bytes) noexcept : memory_base(no_alloc_tag { }, linear_memory { null_handle, num_bytes }) { }
+            memory_base(no_alloc_tag, const linear_memory& mem) noexcept : linear_memory(mem) { }
+            memory_base(no_alloc_tag, std::size_t num_bytes) noexcept : memory_base(no_alloc_tag { }, linear_memory { null_handle, num_bytes }) { }
 
             void allocate(bool committed = true, bool new_only = false, std::uintptr_t desired_address = 0)
             {
@@ -635,7 +647,13 @@ namespace jw
                 else return addr != null_handle;
             };
 
-            virtual selector get_selector()
+            virtual std::weak_ptr<ldt_entry> get_ldt_entry() override
+            {
+                if (!ldt) ldt = std::make_shared<ldt_entry>(dos_handle);
+                return ldt;
+            }
+
+            virtual selector get_selector() override
             { 
                 if (dos_handle == null_dos_handle) alloc_selector();
                 return dos_handle; 
