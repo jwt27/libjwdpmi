@@ -509,13 +509,18 @@ namespace jw
             
             virtual void resize(std::size_t, bool = true) override { }
             bool requires_new_selector() const noexcept { return !dos_map_supported; }
-            virtual selector get_selector() const noexcept { return dos_handle; }
             auto get_dos_ptr() const noexcept { return dos_addr; }
             virtual operator bool() const noexcept override
             { 
                 if (dos_map_supported) return base::operator bool(); 
                 else return addr != null_handle;
             };
+
+            virtual selector get_selector()
+            { 
+                if (dos_handle == null_dos_handle) alloc_selector();
+                return dos_handle; 
+            }
 
         protected:
             mapped_dos_memory_base(no_alloc_tag, std::size_t num_bytes) : base(no_alloc_tag { }, round_up_to_page_size(num_bytes) + get_page_size()) { }
@@ -556,6 +561,7 @@ namespace jw
 
         private:
             void new_alloc(std::uintptr_t dos_linear_address);
+            void alloc_selector();
         };
 
         struct dos_memory_base : public mapped_dos_memory_base

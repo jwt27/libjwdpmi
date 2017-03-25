@@ -201,6 +201,21 @@ namespace jw
             if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
         }
 
+        void mapped_dos_memory_base::alloc_selector()
+        {
+            selector sel;
+            bool c;
+            asm volatile(
+                "int 0x31;"
+                : "=@ccc" (c)
+                , "=a" (sel)
+                : "a" (0x0002)
+                , "b" (dos_addr.segment)
+                : "memory");
+            if (c) throw dpmi_error(sel, __PRETTY_FUNCTION__);
+            dos_handle = sel;
+        }
+
         void dos_memory_base::dos_alloc(std::size_t num_bytes)
         {
             throw_if_irq();
