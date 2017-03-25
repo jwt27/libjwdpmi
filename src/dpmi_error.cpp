@@ -53,7 +53,7 @@ namespace jw
             case 0x8022: return "DPMI Error 0x8022: Invalid selector: "                    "A selector does not correspond to a valid descriptor.";
             case 0x8023: return "DPMI Error 0x8023: Invalid handle: "                      "A handle parameter is invalid.";
             case 0x8024: return "DPMI Error 0x8024: Invalid callback: "                    "A callback parameter is invalid.";
-            case 0x8025: return "DPMI Error 0x8025: Invalid linear address: "              "A linear address rangeeither supplied as a parameter or implied by the call is invalid.";
+            case 0x8025: return "DPMI Error 0x8025: Invalid linear address: "              "A linear address range, either supplied as a parameter or implied by the call is invalid.";
             case 0x8026: return "DPMI Error 0x8026: Invalid request: "                     "The request is not supported by the underlying hardware.";
             default: ostringstream s; s << "DPMI Error 0x" << hex << ev << ": Unknown error."; return s.str();
             }
