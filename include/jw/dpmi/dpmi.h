@@ -201,6 +201,28 @@ namespace jw
             constexpr far_ptr32(selector seg = 0, std::uintptr_t off = 0) noexcept : offset(off), segment(seg) { }
         };
 
+        struct gs_override
+        {
+            gs_override(selector new_gs)
+            {
+                asm volatile("mov gs, %w0;" :: "rm" (new_gs));
+            }
+
+            ~gs_override()
+            {
+                asm volatile("mov gs, %w0;" :: "rm" (old_gs));
+            }
+
+            gs_override() = delete;
+            gs_override(const gs_override&) = delete;
+            gs_override(gs_override&&) = delete;
+            gs_override& operator=(const gs_override&) = delete;
+            gs_override& operator=(gs_override&&) = delete;
+
+        private:
+            selector old_gs { get_gs() };
+        };
+
         // Call a function which returns with RETF
         inline void call_far(far_ptr32 ptr)
         {

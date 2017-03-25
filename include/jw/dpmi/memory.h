@@ -397,7 +397,6 @@ namespace jw
             std::uintptr_t addr;
             std::size_t size;
         };
-
         
         struct device_memory_base;
         struct mapped_dos_memory_base;
