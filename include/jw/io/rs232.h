@@ -88,14 +88,18 @@ namespace jw
         private:
             port_num find_io_port(com_port p)
             {
-                switch (p)  // TODO: look up port numbers from 0040:0000
+                port_num port { 0 };
+                if (p <= com4)
                 {
-                case com1: return 0x3f8;
-                case com2: return 0x2f8;
-                case com3: return 0x3e8;
-                case com4: return 0x2e8;
-                default: throw std::invalid_argument { "Unknown COM port." };
+                    dpmi::mapped_dos_memory<port_num> com_ports { 4 , dpmi::far_ptr16 { 0x0040, 0x0000 } };
+                    if (com_ports.requires_new_selector())
+                    {
+                        throw std::runtime_error { "not implemented..." };
+                    }
+                    else port = com_ports[p];
                 }
+                if (port == 0) throw std::invalid_argument { "Invalid COM port." };
+                return port;
             }
 
             dpmi::irq_level find_irq(com_port p)
