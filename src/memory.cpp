@@ -15,7 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <jw/dpmi/alloc.h>
+#include <jw/dpmi/memory.h>
 
 namespace jw
 {
@@ -24,6 +24,8 @@ namespace jw
         bool memory_base::new_alloc_supported { true };
         bool device_memory_base::device_map_supported { true };
         bool mapped_dos_memory_base::dos_map_supported { true };
+
+        ldt_access_rights ldt_entry::get_access_rights() { return ldt_access_rights { sel }; }
 
         void memory_base::old_alloc()
         {

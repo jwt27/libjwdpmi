@@ -56,6 +56,8 @@ namespace jw
             return round_down_to_page_size(num_bytes) + ((num_bytes & (page - 1)) == 0 ? 0 : page);
         }
 
+        union ldt_access_rights;
+
         struct ldt_entry
         {
             ldt_entry(selector s) : sel(s) { }
@@ -115,6 +117,8 @@ namespace jw
             auto [[gnu::pure]] get_base() const { return get_base(sel); }
             void set_limit(auto l) { set_limit(sel, l); }
             auto [[gnu::pure]] get_limit() const { return get_limit(sel); }
+            ldt_access_rights get_access_rights();
+            void set_access_rights(const auto& r) { r.set(sel); }
             
             [[gnu::pure]] static std::uintptr_t get_base(selector seg = get_ds())
             {
@@ -275,7 +279,7 @@ namespace jw
             {
                 std::uint32_t r;
                 bool z;
-                asm("lar %k0, %1;"
+                asm("lar %k1, %2;"
                     : "=@ccz" (z)
                     , "=r" (r)
                     : "rm" (sel));
@@ -297,6 +301,9 @@ namespace jw
                     : "memory");
                 if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
             }
+
+            ldt_access_rights(auto ldt) : ldt_access_rights(ldt->get_selector()) { }
+            void set(auto ldt) { set(ldt->get_selector()); }
 
         private:
             std::uint16_t access_rights { 0x0010 };
