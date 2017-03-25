@@ -20,13 +20,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 namespace jw
 {
+    constexpr auto constexpr_min(auto a, auto b) { return std::min(a, b); }
+
     template<std::size_t size>
-    union alignas(2) [[gnu::packed]] split_uint
+    union alignas(constexpr_min(size >> 3, 4ul)) [[gnu::packed]] split_uint
     {
         struct [[gnu::packed]]
         {
-            split_uint<size / 2> lo;
-            split_uint<size / 2> hi;
+            split_uint<(size >> 1)> lo;
+            split_uint<(size >> 1)> hi;
         };
         std::uint64_t value : size;
         constexpr split_uint() noexcept : value(0) { }
@@ -46,6 +48,9 @@ namespace jw
     using split_uint16_t = split_uint<16>;
     using split_uint32_t = split_uint<32>;
     using split_uint64_t = split_uint<64>;
+
+    static_assert(sizeof(split_uint64_t) == 8, "check sizeof jw::split_int");
+    static_assert(alignof(split_uint64_t) == 4, "check alignof jw::split_int");
 
     union [[gnu::packed]] split_int14_t
     {                      
