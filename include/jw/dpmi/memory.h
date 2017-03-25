@@ -85,8 +85,7 @@ namespace jw
 
         [[gnu::pure]] inline std::size_t round_down_to_page_size(std::size_t num_bytes)
         {
-            std::size_t page = get_page_size();
-            return (num_bytes / page) * page;
+            return num_bytes & ~(get_page_size() - 1);
         }
 
         [[gnu::pure]] inline std::size_t round_up_to_page_size(std::size_t num_bytes)
@@ -438,7 +437,6 @@ namespace jw
 
             void old_resize(std::size_t num_bytes)
             {
-                if (handle != null_handle) deallocate();
                 split_uint32_t new_size { num_bytes };
                 split_uint32_t new_handle { handle };
                 split_uint32_t new_addr;
@@ -566,8 +564,7 @@ namespace jw
             void new_alloc(std::uintptr_t physical_address)
             {
                 base::allocate(false);
-                std::ptrdiff_t offset_in_block = round_up_to_page_size(addr) - addr;
-                auto offset = offset_in_block + (physical_address - round_down_to_page_size(physical_address));
+                auto offset = physical_address - round_down_to_page_size(physical_address);
                 addr += offset;
                 size -= offset;
                 dpmi_error_code error;
@@ -577,8 +574,8 @@ namespace jw
                     : "=@ccc" (c)
                     , "=a" (error)
                     : "a" (0x0508)
-                    , "b" (offset_in_block)
-                    , "c" (round_up_to_page_size(size) / get_page_size())
+                    , "b" (0)
+                    , "c" (round_up_to_page_size(size) / get_page_size() + 1)
                     , "d" (round_down_to_page_size(physical_address))
                     , "S" (handle)
                     : "memory");
@@ -622,8 +619,7 @@ namespace jw
             void new_alloc(std::uintptr_t dos_linear_address)
             {
                 base::allocate(false);
-                std::ptrdiff_t offset_in_block = round_up_to_page_size(addr) - addr;
-                auto offset = offset_in_block + (dos_linear_address - round_down_to_page_size(dos_linear_address));
+                auto offset = dos_linear_address - round_down_to_page_size(dos_linear_address);
                 addr += offset;
                 size -= offset;
                 dpmi_error_code error;
@@ -633,8 +629,8 @@ namespace jw
                     : "=@ccc" (c)
                     , "=a" (error)
                     : "a" (0x0509)
-                    , "b" (offset_in_block)
-                    , "c" (round_up_to_page_size(size) / get_page_size())
+                    , "b" (0)
+                    , "c" (round_up_to_page_size(size) / get_page_size() + 1)
                     , "d" (round_down_to_page_size(dos_linear_address))
                     , "S" (handle)
                     : "memory");
@@ -665,7 +661,7 @@ namespace jw
 
             virtual void allocate()
             {
-                if (dos_handle != null_dos_handle) deallocate();
+                deallocate();
                 dos_alloc();
                 base::allocate(conventional_to_linear(dos_addr));
             }
