@@ -221,7 +221,7 @@ namespace jw
                 access_rights = r >> 8;
             }
 
-            void set(selector sel)
+            void set(selector sel) const
             {
                 dpmi_error_code error;
                 bool c;
