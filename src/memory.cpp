@@ -154,7 +154,9 @@ namespace jw
 
         void device_memory_base::new_alloc(std::uintptr_t physical_address)
         {
-            auto offset = physical_address - round_down_to_page_size(physical_address);
+            auto addr_start = round_down_to_page_size(physical_address);
+            auto offset = physical_address - addr_start;
+            auto pages = round_up_to_page_size(size) / get_page_size();
             addr += offset;
             size -= offset;
             dpmi_error_code error;
@@ -165,8 +167,8 @@ namespace jw
                 , "=a" (error)
                 : "a" (0x0508)
                 , "b" (0)
-                , "c" (round_up_to_page_size(size) / get_page_size())
-                , "d" (round_down_to_page_size(physical_address))
+                , "c" (pages)
+                , "d" (addr_start)
                 , "S" (handle)
                 : "memory");
             if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
