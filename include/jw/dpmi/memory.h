@@ -85,7 +85,7 @@ namespace jw
 
         [[gnu::pure]] inline std::size_t round_down_to_page_size(std::size_t num_bytes)
         {
-            return num_bytes & ~(get_page_size() - 1);
+            return num_bytes & -get_page_size();
         }
 
         [[gnu::pure]] inline std::size_t round_up_to_page_size(std::size_t num_bytes)
@@ -143,12 +143,12 @@ namespace jw
 
         inline constexpr std::size_t round_down_to_paragraph_size(std::size_t num_bytes) noexcept
         {
-            return num_bytes & ~0x10;
+            return num_bytes & -0x10;
         }
             
         inline constexpr std::size_t round_up_to_paragraph_size(std::size_t num_bytes) noexcept
         {
-            return round_down_to_paragraph_size(num_bytes) + ((num_bytes & 0x0f) == 0 ? 0x10 : 0);
+            return round_down_to_paragraph_size(num_bytes) + ((num_bytes & 0x0f) == 0 ? 0 : 0x10);
         }
 
         inline constexpr std::size_t bytes_to_paragraphs(std::size_t num_bytes) noexcept
@@ -330,24 +330,32 @@ namespace jw
             constexpr memory_base(no_alloc_tag, const linear_memory& mem) noexcept : linear_memory(mem) { }
             constexpr memory_base(no_alloc_tag, std::size_t num_bytes) noexcept : memory_base(no_alloc_tag { }, linear_memory { 0, num_bytes }) { }
 
-            virtual void allocate(bool committed = true, std::uintptr_t desired_address = 0)
+            void allocate(bool committed = true, bool new_only = false, std::uintptr_t desired_address = 0)
             {
-                if (new_alloc_supported) try
+                try
                 {
-                    new_alloc(committed, desired_address);
-                    return;
-                }
-                catch (const dpmi_error& e)
-                {
-                    switch (e.code().value())
+                    if (new_alloc_supported) try
                     {
-                    default: throw;
-                    case unsupported_function:
-                    case 0x0504:
-                        new_alloc_supported = false;
+                        new_alloc(committed, desired_address);
+                        return;
                     }
+                    catch (const dpmi_error& e)
+                    {
+                        switch (e.code().value())
+                        {
+                        default: throw;
+                        case unsupported_function:
+                        case 0x0504:
+                            new_alloc_supported = false;
+                        }
+                    }
+                    if (new_only) return;
+                    old_alloc();
                 }
-                old_alloc();
+                catch (...)
+                {
+                    std::throw_with_nested(std::bad_alloc { });
+                }
             }
 
             virtual void deallocate()
@@ -412,16 +420,32 @@ namespace jw
         protected:
             static bool device_map_supported;
 
-            virtual void allocate(std::uintptr_t physical_address)
+            void allocate(std::uintptr_t physical_address)
             {
-                if (!new_alloc_supported) device_map_supported = false;
-                if (device_map_supported)
+                try
                 {
-                    capabilities c { };
-                    if (!c.supported || !c.flags.device_mapping) device_map_supported = false;
+                    if (!new_alloc_supported) device_map_supported = false;
+                    if (device_map_supported)
+                    {
+                        capabilities c { };
+                        if (!c.supported || !c.flags.device_mapping) device_map_supported = false;
+                    }
+                    if (device_map_supported)
+                    {
+                        base::allocate(false, true);
+                        if (new_alloc_supported)
+                        {
+                            new_alloc(physical_address);
+                            return;
+                        }
+                        else device_map_supported = false;
+                    }
+                    old_alloc(physical_address);
                 }
-                if (device_map_supported) new_alloc(physical_address);
-                else old_alloc(physical_address);
+                catch (...)
+                {
+                    std::throw_with_nested(std::bad_alloc { });
+                }
             }
 
             virtual void deallocate() override
@@ -471,20 +495,36 @@ namespace jw
             bool requires_new_selector() const noexcept { return !dos_map_supported; }
 
         protected:
-            constexpr mapped_dos_memory_base(no_alloc_tag, std::size_t num_bytes) : base(no_alloc_tag { }, num_bytes) { }
+            mapped_dos_memory_base(no_alloc_tag, std::size_t num_bytes) : base(no_alloc_tag { }, round_up_to_page_size(num_bytes) + get_page_size()) { }
 
             static bool dos_map_supported;
 
-            virtual void allocate(std::uintptr_t dos_linear_address)
+            void allocate(std::uintptr_t dos_linear_address)
             {
-                if (!new_alloc_supported) dos_map_supported = false;
-                if (dos_map_supported)
+                try
                 {
-                    capabilities c { };
-                    if (!c.supported || !c.flags.conventional_memory_mapping) dos_map_supported = false;
+                    if (!new_alloc_supported) dos_map_supported = false;
+                    if (dos_map_supported)
+                    {
+                        capabilities c { };
+                        if (!c.supported || !c.flags.conventional_memory_mapping) dos_map_supported = false;
+                    }
+                    if (dos_map_supported)
+                    {
+                        base::allocate(false, true);
+                        if (new_alloc_supported)
+                        {
+                            new_alloc(dos_linear_address);
+                            return;
+                        } 
+                        else dos_map_supported = false;
+                    }
+                    addr = dos_linear_address;
                 }
-                if (dos_map_supported) new_alloc(dos_linear_address);
-                else addr = dos_linear_address;
+                catch (...)
+                {
+                    std::throw_with_nested(std::bad_alloc { });
+                }
             }
 
         private:
@@ -516,9 +556,16 @@ namespace jw
 
             virtual void resize(std::size_t num_bytes, bool = true) override
             {
-                base::deallocate();
-                dos_resize(round_up_to_paragraph_size(num_bytes));
-                base::allocate(conventional_to_linear(dos_addr));
+                try
+                {
+                    base::deallocate();
+                    dos_resize(round_up_to_paragraph_size(num_bytes));
+                    base::allocate(conventional_to_linear(dos_addr));
+                }
+                catch (...)
+                {
+                    std::throw_with_nested(std::bad_alloc { });
+                }
             }
 
             auto get_dos_ptr() const noexcept { return dos_addr; }
@@ -528,11 +575,18 @@ namespace jw
             far_ptr16 dos_addr;
             std::uint16_t dos_handle { null_dos_handle };
 
-            virtual void allocate()
+            void allocate()
             {
-                deallocate();
-                dos_alloc();
-                base::allocate(conventional_to_linear(dos_addr));
+                try
+                {
+                    deallocate();
+                    dos_alloc();
+                    base::allocate(conventional_to_linear(dos_addr));
+                }
+                catch (...)
+                {
+                    std::throw_with_nested(std::bad_alloc { });
+                }
             }
 
             virtual void deallocate() override

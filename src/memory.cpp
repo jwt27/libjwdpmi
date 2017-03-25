@@ -154,7 +154,6 @@ namespace jw
 
         void device_memory_base::new_alloc(std::uintptr_t physical_address)
         {
-            base::allocate(false);
             auto offset = physical_address - round_down_to_page_size(physical_address);
             addr += offset;
             size -= offset;
@@ -166,7 +165,7 @@ namespace jw
                 , "=a" (error)
                 : "a" (0x0508)
                 , "b" (0)
-                , "c" (round_up_to_page_size(size) / get_page_size() + 1)
+                , "c" (round_up_to_page_size(size) / get_page_size())
                 , "d" (round_down_to_page_size(physical_address))
                 , "S" (handle)
                 : "memory");
@@ -175,8 +174,9 @@ namespace jw
 
         void mapped_dos_memory_base::new_alloc(std::uintptr_t dos_linear_address)
         {
-            base::allocate(false);
-            auto offset = dos_linear_address - round_down_to_page_size(dos_linear_address);
+            auto addr_start = round_down_to_page_size(dos_linear_address);
+            auto offset = dos_linear_address - addr_start;
+            auto pages = round_up_to_page_size(size) / get_page_size();
             addr += offset;
             size -= offset;
             dpmi_error_code error;
@@ -187,8 +187,8 @@ namespace jw
                 , "=a" (error)
                 : "a" (0x0509)
                 , "b" (0)
-                , "c" (round_up_to_page_size(size) / get_page_size() + 1)
-                , "d" (round_down_to_page_size(dos_linear_address))
+                , "c" (pages)
+                , "d" (addr_start)
                 , "S" (handle)
                 : "memory");
             if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
