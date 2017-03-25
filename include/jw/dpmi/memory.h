@@ -493,17 +493,8 @@ namespace jw
 
             bool requires_new_selector() const noexcept { return !device_map_supported; }
 
-            template <typename T>
-            [[gnu::pure]] T* get_ptr(selector sel = get_ds())
-            {
-                return linear_to_near<T>(addr + offset, sel);
-            }
-
-            template <typename T>
-            [[gnu::pure]] const T* get_ptr(selector sel = get_ds()) const
-            {
-                return get_ptr<const T>(sel);
-            }
+            template <typename T> [[gnu::pure]] T* get_ptr(selector sel = get_ds()) { return linear_to_near<T>(addr + offset, sel); }
+            template <typename T> [[gnu::pure]] const T* get_ptr(selector sel = get_ds()) const { return get_ptr<const T>(sel); }
 
         protected:
             virtual void allocate(std::uintptr_t physical_address)
@@ -603,11 +594,8 @@ namespace jw
             virtual void resize(std::size_t, bool = true) override { }
             bool requires_new_selector() const noexcept { return !dos_map_supported; }
 
-            template <typename T>
-            [[gnu::pure]] T* get_ptr(selector sel = get_ds()) { return linear_to_near<T>(addr + offset, sel); }
-
-            template <typename T>
-            [[gnu::pure]] const T* get_ptr(selector sel = get_ds()) const { return get_ptr<const T>(sel); }
+            template <typename T> [[gnu::pure]] T* get_ptr(selector sel = get_ds()) { return linear_to_near<T>(addr + offset, sel); }
+            template <typename T> [[gnu::pure]] const T* get_ptr(selector sel = get_ds()) const { return get_ptr<const T>(sel); }
 
         protected:
             static bool dos_map_supported;
