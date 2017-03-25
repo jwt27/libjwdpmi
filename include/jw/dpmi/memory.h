@@ -319,7 +319,6 @@ namespace jw
 
             virtual void resize(std::size_t num_bytes, bool committed = true)
             {
-                throw_if_irq();
                 if (new_alloc_supported) new_resize(num_bytes, committed);
                 else old_resize(num_bytes);
             }
@@ -336,7 +335,6 @@ namespace jw
             {
                 try
                 {
-                    if (committed) throw_if_irq();
                     if (new_alloc_supported) try
                     {
                         new_alloc(committed, desired_address);
@@ -353,7 +351,6 @@ namespace jw
                         }
                     }
                     if (new_only) return;
-                    throw_if_irq();
                     old_alloc();
                 }
                 catch (...)
@@ -449,7 +446,6 @@ namespace jw
                         }
                         else device_map_supported = false;
                     }
-                    throw_if_irq();
                     old_alloc(physical_address);
                 }
                 catch (...)
@@ -539,7 +535,6 @@ namespace jw
                         } 
                         else dos_map_supported = false;
                     }
-                    throw_if_irq();
                     addr = dos_linear_address;
                 }
                 catch (...)
@@ -579,7 +574,6 @@ namespace jw
             {
                 try
                 {
-                    throw_if_irq();
                     base::deallocate();
                     dos_resize(round_up_to_paragraph_size(num_bytes));
                     base::allocate(conventional_to_linear(dos_addr));
@@ -604,7 +598,6 @@ namespace jw
             {
                 try
                 {
-                    throw_if_irq();
                     deallocate();
                     dos_alloc(round_up_to_paragraph_size(num_bytes));
                     base::allocate(conventional_to_linear(dos_addr));
@@ -619,7 +612,6 @@ namespace jw
             {
                 base::deallocate();
                 if (dos_handle == null_dos_handle) return;
-                throw_if_irq();
                 dos_dealloc();
             }
 

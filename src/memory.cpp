@@ -27,6 +27,7 @@ namespace jw
 
         void memory_base::old_alloc()
         {
+            throw_if_irq();
             if (handle != null_handle) deallocate();
             split_uint32_t new_size { size };
             split_uint32_t new_addr, new_handle;
@@ -54,6 +55,7 @@ namespace jw
 
         void memory_base::new_alloc(bool committed, std::uintptr_t desired_address)
         {
+            if (committed) throw_if_irq();
             if (handle != null_handle) deallocate();
             std::uint32_t new_handle;
             std::uintptr_t new_addr;
@@ -80,6 +82,7 @@ namespace jw
 
         void memory_base::old_resize(std::size_t num_bytes)
         {
+            throw_if_irq();
             split_uint32_t new_size { num_bytes };
             split_uint32_t new_handle { handle };
             split_uint32_t new_addr;
@@ -108,6 +111,7 @@ namespace jw
 
         void memory_base::new_resize(std::size_t num_bytes, bool committed)
         {
+            if (committed) throw_if_irq();
             std::uint32_t new_handle { handle };
             std::uintptr_t new_addr;
             dpmi_error_code error;
@@ -132,6 +136,7 @@ namespace jw
 
         void device_memory_base::old_alloc(std::uintptr_t physical_address)
         {
+            throw_if_irq();
             split_uint32_t new_addr;
             split_uint32_t new_size { size };
             split_uint32_t phys { physical_address };
@@ -198,6 +203,7 @@ namespace jw
 
         void dos_memory_base::dos_alloc(std::size_t num_bytes)
         {
+            throw_if_irq();
             std::uint16_t new_handle;
             far_ptr16 new_addr { };
             bool c;
@@ -216,6 +222,7 @@ namespace jw
 
         void dos_memory_base::dos_dealloc()
         {
+            throw_if_irq();
             dpmi_error_code error;
             bool c;
             asm volatile(
@@ -231,6 +238,7 @@ namespace jw
 
         void dos_memory_base::dos_resize(std::size_t num_bytes)
         {
+            throw_if_irq();
             dpmi_error_code error;
             bool c;
             asm volatile(
