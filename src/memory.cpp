@@ -23,5 +23,6 @@ namespace jw
     {
         bool memory_base::new_alloc_supported { true };
         bool device_memory_base::device_map_supported { true };
+        bool mapped_dos_memory_base::dos_map_supported { true };
     }
 }

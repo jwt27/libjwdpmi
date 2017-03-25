@@ -491,7 +491,7 @@ namespace jw
 
             virtual void resize(std::size_t, bool = true) override { }
 
-            bool requires_new_selector() { return !device_map_supported; }
+            bool requires_new_selector() const noexcept { return !device_map_supported; }
 
             template <typename T>
             [[gnu::pure]] T* get_ptr(selector sel = get_ds())
@@ -588,6 +588,68 @@ namespace jw
             }
         };
 
+        struct mapped_dos_memory_base : public memory_base
+        {
+            using base = memory_base;
+            mapped_dos_memory_base(std::size_t num_bytes, std::uintptr_t dos_linear_address) : base(no_alloc_tag { }, num_bytes)
+            {
+                allocate(dos_linear_address);
+            }
+
+            mapped_dos_memory_base(std::size_t num_bytes, far_ptr16 address) : mapped_dos_memory_base(num_bytes, conventional_to_linear(address)) { }
+
+            mapped_dos_memory_base(const base&) = delete;
+            
+            virtual void resize(std::size_t, bool = true) override { }
+            bool requires_new_selector() const noexcept { return !dos_map_supported; }
+
+            template <typename T>
+            [[gnu::pure]] T* get_ptr(selector sel = get_ds()) { return linear_to_near<T>(addr + offset, sel); }
+
+            template <typename T>
+            [[gnu::pure]] const T* get_ptr(selector sel = get_ds()) const { return get_ptr<const T>(sel); }
+
+        protected:
+            static bool dos_map_supported;
+            std::ptrdiff_t offset { 0 };
+
+            virtual void allocate(std::uintptr_t dos_linear_address)
+            {
+                if (!new_alloc_supported) dos_map_supported = false;
+                if (dos_map_supported)
+                {
+                    capabilities c { };
+                    if (!c.supported || !c.flags.conventional_memory_mapping) dos_map_supported = false;
+                }
+                if (dos_map_supported)
+                {
+                    base::allocate(false);
+                    new_alloc(dos_linear_address);
+                }
+                else addr = dos_linear_address;
+            }
+
+        private:
+            void new_alloc(std::uintptr_t dos_linear_address)
+            {
+                std::ptrdiff_t offset_in_block = round_up_to_page_size(addr) - addr;
+                offset = offset_in_block + (dos_linear_address - round_down_to_page_size(dos_linear_address));
+                dpmi_error_code error;
+                bool c;
+                asm volatile(
+                    "int 0x31;"
+                    : "=@ccc" (c)
+                    , "=a" (error)
+                    : "a" (0x0509)
+                    , "b" (offset_in_block)
+                    , "c" (round_up_to_page_size(size) / get_page_size())
+                    , "d" (round_down_to_page_size(dos_linear_address))
+                    , "S" (handle)
+                    : "memory");
+                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+            }
+        };
+
         template <typename T, typename base = memory_base>
         struct memory : public base
         {
@@ -611,5 +673,6 @@ namespace jw
 
         template <typename T = byte> using raw_memory = memory<T, memory_base>;
         template <typename T = byte> using device_memory = memory<T, device_memory_base>;
+        template <typename T = byte> using mapped_dos_memory = memory<T, mapped_dos_memory_base>;
     }
 }
