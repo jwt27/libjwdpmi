@@ -494,7 +494,7 @@ namespace jw
             using base = memory_base;
 
             device_memory_base(std::size_t num_bytes, std::uintptr_t physical_address)
-                : base(no_alloc_tag { }, round_up_to_page_size(num_bytes))
+                : base(no_alloc_tag { }, round_up_to_page_size(num_bytes) + get_page_size())
             {
                 allocate(physical_address);
             }
@@ -502,11 +502,7 @@ namespace jw
             device_memory_base(const base&) = delete;
 
             virtual void resize(std::size_t, bool = true) override { }
-
             bool requires_new_selector() const noexcept { return !device_map_supported; }
-
-            template <typename T> [[gnu::pure]] T* get_ptr(selector sel = get_ds()) { return linear_to_near<T>(addr + offset, sel); }
-            template <typename T> [[gnu::pure]] const T* get_ptr(selector sel = get_ds()) const { return get_ptr<const T>(sel); }
 
         protected:
             virtual void allocate(std::uintptr_t physical_address)
@@ -517,11 +513,7 @@ namespace jw
                     capabilities c { };
                     if (!c.supported || !c.flags.device_mapping) device_map_supported = false;
                 }
-                if (device_map_supported)
-                {
-                    base::allocate(false);
-                    new_alloc(physical_address);
-                }
+                if (device_map_supported) new_alloc(physical_address);
                 else old_alloc(physical_address);
             }
 
@@ -546,7 +538,6 @@ namespace jw
             }
 
             static bool device_map_supported;
-            std::ptrdiff_t offset { 0 };
 
         private:
             void old_alloc(std::uintptr_t physical_address)
@@ -573,8 +564,11 @@ namespace jw
 
             void new_alloc(std::uintptr_t physical_address)
             {
+                base::allocate(false);
                 std::ptrdiff_t offset_in_block = round_up_to_page_size(addr) - addr;
-                offset = offset_in_block + (physical_address - round_down_to_page_size(physical_address));
+                auto offset = offset_in_block + (physical_address - round_down_to_page_size(physical_address));
+                addr += offset;
+                size -= offset;
                 dpmi_error_code error;
                 bool c;
                 asm volatile(
@@ -594,7 +588,7 @@ namespace jw
         struct mapped_dos_memory_base : public memory_base
         {
             using base = memory_base;
-            mapped_dos_memory_base(std::size_t num_bytes, std::uintptr_t dos_linear_address) : base(no_alloc_tag { }, num_bytes)
+            mapped_dos_memory_base(std::size_t num_bytes, std::uintptr_t dos_linear_address) : base(no_alloc_tag { }, round_up_to_page_size(num_bytes) + get_page_size())
             {
                 allocate(dos_linear_address);
             }
@@ -606,12 +600,8 @@ namespace jw
             virtual void resize(std::size_t, bool = true) override { }
             bool requires_new_selector() const noexcept { return !dos_map_supported; }
 
-            template <typename T> [[gnu::pure]] T* get_ptr(selector sel = get_ds()) { return linear_to_near<T>(addr + offset, sel); }
-            template <typename T> [[gnu::pure]] const T* get_ptr(selector sel = get_ds()) const { return get_ptr<const T>(sel); }
-
         protected:
             static bool dos_map_supported;
-            std::ptrdiff_t offset { 0 };
 
             virtual void allocate(std::uintptr_t dos_linear_address)
             {
@@ -621,19 +611,18 @@ namespace jw
                     capabilities c { };
                     if (!c.supported || !c.flags.conventional_memory_mapping) dos_map_supported = false;
                 }
-                if (dos_map_supported)
-                {
-                    base::allocate(false);
-                    new_alloc(dos_linear_address);
-                }
+                if (dos_map_supported) new_alloc(dos_linear_address);
                 else addr = dos_linear_address;
             }
 
         private:
             void new_alloc(std::uintptr_t dos_linear_address)
             {
+                base::allocate(false);
                 std::ptrdiff_t offset_in_block = round_up_to_page_size(addr) - addr;
-                offset = offset_in_block + (dos_linear_address - round_down_to_page_size(dos_linear_address));
+                auto offset = offset_in_block + (dos_linear_address - round_down_to_page_size(dos_linear_address));
+                addr += offset;
+                size -= offset;
                 dpmi_error_code error;
                 bool c;
                 asm volatile(
