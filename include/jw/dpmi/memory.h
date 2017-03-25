@@ -92,11 +92,28 @@ namespace jw
                 // if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
             }
 
+            static auto create_alias(selector s)
+            {
+                selector new_sel;
+                bool c;
+                asm volatile(
+                    "int 0x31;"
+                    : "=@ccc" (c)
+                    , "=a" (new_sel)
+                    : "a" (0x000A)
+                    , "b" (s)
+                    : "memory");
+                if (c) throw dpmi_error(new_sel, __PRETTY_FUNCTION__);
+                ldt_entry ldt { new_sel };
+                ldt.no_alloc = false;
+                return ldt;
+            }
+
             auto get_selector() const noexcept { return sel; }
             void set_base(auto b) { set_base(sel, b); }
-            auto get_base() const { return get_base(sel); }
+            auto [[gnu::pure]] get_base() const { return get_base(sel); }
             void set_limit(auto l) { set_limit(sel, l); }
-            auto get_limit() const { return get_limit(sel); }
+            auto [[gnu::pure]] get_limit() const { return get_limit(sel); }
             
             [[gnu::pure]] static std::uintptr_t get_base(selector seg = get_ds())
             {
@@ -166,6 +183,7 @@ namespace jw
             }
 
         private:
+            ldt_entry() { }
             selector sel;
             bool no_alloc { true };
         };
