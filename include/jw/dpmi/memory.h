@@ -59,6 +59,7 @@ namespace jw
         struct ldt_entry
         {
             ldt_entry(selector s) : sel(s) { }
+
             ldt_entry(std::uintptr_t linear_base, std::size_t limit)
             {
                 selector s;
@@ -77,21 +78,6 @@ namespace jw
                 set_limit(limit);
             }
 
-            ~ldt_entry()
-            {
-                if (no_alloc) return;
-                dpmi_error_code error;
-                bool c;
-                asm volatile(
-                    "int 0x31;"
-                    : "=@ccc" (c)
-                    , "=a" (error)
-                    : "a" (0x0001)
-                    , "c" (sel)
-                    : "memory");
-                // if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
-            }
-
             static auto create_alias(selector s)
             {
                 selector new_sel;
@@ -107,6 +93,21 @@ namespace jw
                 ldt_entry ldt { new_sel };
                 ldt.no_alloc = false;
                 return ldt;
+            }
+
+            ~ldt_entry()
+            {
+                if (no_alloc) return;
+                dpmi_error_code error;
+                bool c;
+                asm volatile(
+                    "int 0x31;"
+                    : "=@ccc" (c)
+                    , "=a" (error)
+                    : "a" (0x0001)
+                    , "c" (sel)
+                    : "memory");
+                // if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
             }
 
             auto get_selector() const noexcept { return sel; }
@@ -183,7 +184,6 @@ namespace jw
             }
 
         private:
-            ldt_entry() { }
             selector sel;
             bool no_alloc { true };
         };
