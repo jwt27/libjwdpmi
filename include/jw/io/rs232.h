@@ -94,14 +94,8 @@ namespace jw
                     dpmi::mapped_dos_memory<port_num> com_ports { 4 , dpmi::far_ptr16 { 0x0040, 0x0000 } };
                     if (com_ports.requires_new_selector()) // DPMI 0.9 host
                     {
-                        switch (p) // HACK...
-                        {
-                        case com1: port = 0x3f8; break;
-                        case com2: port = 0x2f8; break;
-                        case com3: port = 0x3e8; break;
-                        case com4: port = 0x2e8; break;
-                        default: port = 0;
-                        }
+                        dpmi::gs_override gs { com_ports.get_selector() };
+                        asm("mov %0, gs:[%1*2];": "=rm"(port) : "r" (p));
                     }
                     else port = com_ports[p];
                 }
