@@ -203,15 +203,8 @@ namespace jw
 
         struct gs_override
         {
-            gs_override(selector new_gs)
-            {
-                asm volatile("mov gs, %w0;" :: "rm" (new_gs));
-            }
-
-            ~gs_override()
-            {
-                asm volatile("mov gs, %w0;" :: "rm" (old_gs));
-            }
+            gs_override(selector new_gs) { set_gs(new_gs); }
+            ~gs_override() { set_gs(old_gs); }
 
             gs_override() = delete;
             gs_override(const gs_override&) = delete;
@@ -220,6 +213,7 @@ namespace jw
             gs_override& operator=(gs_override&&) = delete;
 
         private:
+            void set_gs(auto s) { asm volatile("mov gs, %w0;" :: "rm" (s)); }
             selector old_gs { get_gs() };
         };
 
