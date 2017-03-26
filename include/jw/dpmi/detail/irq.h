@@ -90,7 +90,12 @@ namespace jw
                 { 
                     interrupt_mask no_ints_here { };
                     handler_chain.push_back(p); add_flags();
-                    if (is_irq(vec)) irq_mask::unmask(vec_to_irq(vec));
+                    if (is_irq(vec))
+                    {
+                        auto i = vec_to_irq(vec);
+                        irq_mask::unmask(i);
+                        if (i > 7) irq_mask::unmask(2);
+                    }
                 }
                 void remove(irq_handler_base* p)
                 {
