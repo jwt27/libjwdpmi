@@ -471,11 +471,6 @@ namespace jw
             {
                 memory_resource(memory_base* m) : mem(m) { }
 
-                memory_resource(const memory_resource&) = delete;
-                memory_resource(memory_resource&&) = delete;
-                memory_resource& operator=(const memory_resource&) = delete;
-                memory_resource& operator=(memory_resource&&) = delete;
-
             protected:
                 virtual void* do_allocate(std::size_t, std::size_t) override
                 {
@@ -490,8 +485,10 @@ namespace jw
                 }
 
                 virtual bool do_is_equal(const std::experimental::pmr::memory_resource& other) const noexcept override 
-                { 
-                    return &other == this; 
+                {
+                    auto* p = dynamic_cast<const memory_resource*>(&other);
+                    if (p == nullptr) return false;
+                    return &p->mem == &mem;
                 }
 
                 bool in_use { false };
