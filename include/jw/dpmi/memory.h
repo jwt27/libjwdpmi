@@ -17,6 +17,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
 #include <limits>
+#include <experimental/memory_resource>
 #include <jw/dpmi/dpmi.h>
 
 namespace jw
@@ -463,8 +464,40 @@ namespace jw
             std::uint32_t get_handle() const noexcept { return handle; }
             virtual operator bool() const noexcept { return handle != null_handle; }
             virtual std::ptrdiff_t get_offset_in_block() const noexcept { return 0; }
+            auto* get_memory_resource() { return &mem_res; }
 
         protected:
+            struct memory_resource : public std::experimental::pmr::memory_resource
+            {
+                memory_resource(memory_base* m) : mem(m) { }
+
+                memory_resource(const memory_resource&) = delete;
+                memory_resource(memory_resource&&) = delete;
+                memory_resource& operator=(const memory_resource&) = delete;
+                memory_resource& operator=(memory_resource&&) = delete;
+
+            protected:
+                virtual void* do_allocate(std::size_t, std::size_t) override
+                {
+                    if (in_use) throw std::bad_alloc { };
+                    in_use = true;
+                    return mem->get_ptr<void>();
+                }
+
+                virtual void do_deallocate(void* p, std::size_t, std::size_t) override
+                {
+                    if (mem->get_ptr<void>() == p) in_use = false;
+                }
+
+                virtual bool do_is_equal(const std::experimental::pmr::memory_resource& other) const noexcept override 
+                { 
+                    return &other == this; 
+                }
+
+                bool in_use { false };
+                memory_base* mem;
+            } mem_res { this };
+
             memory_base(no_alloc_tag, const linear_memory& mem) noexcept : linear_memory(mem) { }
             memory_base(no_alloc_tag, std::size_t num_bytes) noexcept : memory_base(no_alloc_tag { }, linear_memory { null_handle, num_bytes }) { }
 
