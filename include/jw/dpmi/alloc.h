@@ -21,6 +21,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <memory>
 #include <vector>
 #include <map>
+#include <experimental/memory_resource>
 
 #include <jw/common.h>
 #include <jw/dpmi/lock.h>
@@ -234,6 +235,49 @@ namespace jw
             }
 
             std::shared_ptr<pool_type> pool;
+        };
+
+        class locking_memory_resource : public std::experimental::pmr::memory_resource
+        {
+            virtual ~locking_memory_resource()
+            {
+                if (!map->empty()) return;
+                delete map;
+                map = nullptr;
+            }
+
+        protected:
+            virtual void* do_allocate(std::size_t n, std::size_t a) override
+            {
+                throw_if_irq();
+                if (map == nullptr) map = new std::map<void*, ptr_with_lock> { };
+                void* p = ::operator new(n + a);
+                void* ap = reinterpret_cast<void*>((reinterpret_cast<std::uintptr_t>(p) & -a) + a);
+                map->emplace(ap, ptr_with_lock { p, n + a });
+                return ap;
+            }
+
+            virtual void do_deallocate(void* ap, std::size_t, std::size_t) noexcept override
+            {
+                auto* p = map->at(ap).p;
+                map->erase(ap);
+                ::operator delete(p);
+            }
+
+            virtual bool do_is_equal(const std::experimental::pmr::memory_resource& other) const noexcept override 
+            {
+                auto* o = dynamic_cast<const locking_memory_resource*>(&other);
+                return (o != nullptr);
+            }
+
+            struct ptr_with_lock
+            {
+                void* p;
+                data_lock lock;
+                ptr_with_lock(void* _p, std::size_t n) : p(_p), lock(p, n) { }
+            };
+
+            static std::map<void*, ptr_with_lock>* map;
         };
     }
 }

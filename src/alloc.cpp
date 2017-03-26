@@ -25,5 +25,7 @@ namespace jw
         {
             std::map<void*, data_lock>* locking_allocator_base::map { nullptr };
         }
+
+        std::map<void*, locking_memory_resource::ptr_with_lock>* locking_memory_resource::map;
     }
 }
