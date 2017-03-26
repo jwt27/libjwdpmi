@@ -117,13 +117,13 @@ namespace jw
                 { 
                     assert(i < 16); 
                     dpmi::version ver { };
-                    return i < 8 ? i + ver.pic_master_base : i + ver.pic_slave_base; 
+                    return i < 8 ? i + ver.pic_master_base : i - 8 + ver.pic_slave_base;
                 }
                 static irq_level vec_to_irq(int_vector v) noexcept
                 { 
                     dpmi::version ver { };
                     if (v >= ver.pic_master_base && v < ver.pic_master_base + 8u) return v - ver.pic_master_base;
-                    if (v >= ver.pic_slave_base && v < ver.pic_slave_base + 8u) return v - ver.pic_slave_base;
+                    if (v >= ver.pic_slave_base && v < ver.pic_slave_base + 8u) return v - ver.pic_slave_base + 8;
                     return 0xff;
                 }
 
