@@ -279,5 +279,7 @@ namespace jw
 
             static std::map<void*, ptr_with_lock>* map;
         };
+
+        // TODO: locked_pool_resource
     }
 }
