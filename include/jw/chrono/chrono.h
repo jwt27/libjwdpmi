@@ -37,16 +37,23 @@ namespace jw
             friend class steady_clock;
             friend class high_resolution_clock;
 
-            static void setup_pit(bool enable);
-            static void setup_rtc(bool enable);
+            static constexpr double pit_frequency { 1193181.666 };
+            static constexpr std::uint32_t rtc_frequency { 32768 };
+
+            static void setup_pit(bool enable, std::uint16_t freq_divider, bool enable_irq);
+            static void setup_rtc(bool enable, std::uint16_t freq_shift, bool enable_irq);
+
+        private:
+            static dpmi::irq_handler pit_irq;
+            static dpmi::irq_handler rtc_irq;
         };
 
-        struct system_clock             // RTC
+        struct rtc  // Real-Time Clock
         {
             using duration = std::chrono::microseconds;
             using rep = duration::rep;
             using period = duration::period;
-            using time_point = std::chrono::time_point<system_clock>;
+            using time_point = std::chrono::time_point<rtc>;
 
             static constexpr bool is_steady { false };
             static time_point now() noexcept;
@@ -54,23 +61,23 @@ namespace jw
             static time_point from_time_t(std::time_t t) noexcept;
         };
 
-        struct steady_clock             // PIT
+        struct pit  // Programmable Interval Timer
         {
             using duration = std::chrono::nanoseconds;
             using rep = duration::rep;
             using period = duration::period;
-            using time_point = std::chrono::time_point<steady_clock>;
+            using time_point = std::chrono::time_point<pit>;
 
             static constexpr bool is_steady { true };
             static time_point now() noexcept;
         };
 
-        struct high_resolution_clock    // RDTSC
+        struct tsc  // Time Stamp Counter
         {
             using duration = std::chrono::nanoseconds;
             using rep = duration::rep;
             using period = duration::period;
-            using time_point = std::chrono::time_point<high_resolution_clock>;
+            using time_point = std::chrono::time_point<tsc>;
 
             static constexpr bool is_steady { false };
             static time_point now() noexcept;
