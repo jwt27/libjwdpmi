@@ -393,6 +393,8 @@ namespace jw
                 return get_ldt_entry().lock()->get_selector();
             }
 
+            virtual bool requires_new_selector() const noexcept { return ldt_entry::get_base(get_ds()) < addr; }
+
         protected:
             std::shared_ptr<ldt_entry> ldt;
             std::uintptr_t addr;
@@ -583,7 +585,7 @@ namespace jw
             device_memory_base& operator=(device_memory_base&& m) { base::operator=(static_cast<base&&>(m)); return *this; }
 
             virtual void resize(std::size_t, bool = true) override { }
-            bool requires_new_selector() const noexcept { return !device_map_supported; }
+            virtual bool requires_new_selector() const noexcept override { return !device_map_supported; }
             virtual operator bool() const noexcept override 
             { 
                 if (device_map_supported) return base::operator bool(); 
@@ -675,7 +677,7 @@ namespace jw
             }
             
             virtual void resize(std::size_t, bool = true) override { }
-            bool requires_new_selector() const noexcept { return !dos_map_supported; }
+            virtual bool requires_new_selector() const noexcept override { return !dos_map_supported; }
             auto get_dos_ptr() const noexcept { return dos_addr; }
             virtual std::ptrdiff_t get_offset_in_block() const noexcept override { return offset; }
             virtual operator bool() const noexcept override
