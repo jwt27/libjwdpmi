@@ -106,6 +106,7 @@ namespace jw
             void set_irq(irq_level i) { disable(); irq = i; }
             void enable() { if (!enabled) detail::irq_controller::get_irq(irq).add(this); enabled = true; }
             void disable() { if (enabled) detail::irq_controller::get_irq(irq).remove(this); enabled = false; }
+            bool is_enabled() const noexcept { return enabled; }
 
         private:
             irq_handler(const irq_handler&) = delete;
