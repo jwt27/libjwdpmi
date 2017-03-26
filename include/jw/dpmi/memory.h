@@ -479,7 +479,7 @@ namespace jw
                     return mem->get_ptr<void>();
                 }
 
-                virtual void do_deallocate(void* p, std::size_t, std::size_t) override
+                virtual void do_deallocate(void* p, std::size_t, std::size_t) noexcept override
                 {
                     if (mem->get_ptr<void>() == p) in_use = false;
                 }
