@@ -184,26 +184,29 @@ namespace jw
         rtc::time_point rtc::now() noexcept
         {
             dpmi::interrupt_mask no_irq { };
-            auto from_bcd = [](byte bcd)
+            auto read_bcd = []
             {
-                auto dec = (bcd >> 4) * 10 + (bcd & 0xF);
-                //std::cout << "bcd=" << std::hex << (int)bcd << ", dec=" << std::dec << (int)dec << '\n';
-                return dec;
+                auto bcd = chrono::rtc_data.read();
+                return (bcd >> 4) * 10 + (bcd & 0xF);
+            };
+            auto set_index = [](byte i)
+            {
+                chrono::rtc_index.write(i);
             };
 
             std::uint64_t sec { 0 };
-            chrono::rtc_index.write(0x80);  // second
-            sec += from_bcd(chrono::rtc_data.read());
-            chrono::rtc_index.write(0x82);  // minute
-            sec += from_bcd(chrono::rtc_data.read()) * 60;
-            chrono::rtc_index.write(0x84);  // hour
-            sec += from_bcd(chrono::rtc_data.read()) * 60 * 60;
-            chrono::rtc_index.write(0x87);  // day
-            sec += (from_bcd(chrono::rtc_data.read()) - 1) * 60 * 60 * 24;
-            chrono::rtc_index.write(0x88);  // month
-            sec += (from_bcd(chrono::rtc_data.read()) - 1) * 60 * 60 * 24 * (365.2425 / 12);
-            chrono::rtc_index.write(0x09);  // year
-            sec += from_bcd(chrono::rtc_data.read()) * 60 * 60 * 24 * 365.2425;
+            set_index(0x80);    // second
+            sec += read_bcd();
+            set_index(0x82);    // minute
+            sec += read_bcd() * 60;
+            set_index(0x84);    // hour
+            sec += read_bcd() * 60 * 60;
+            set_index(0x87);    // day
+            sec += (read_bcd() - 1) * 60 * 60 * 24;
+            set_index(0x88);    // month
+            sec += (read_bcd() - 1) * 60 * 60 * 24 * (365.2425 / 12);
+            set_index(0x09);    // year
+            sec += read_bcd() * 60 * 60 * 24 * 365.2425;
             sec += 946684800;   // seconds from 1970 to 2000
             sec *= static_cast<std::uint64_t>(1e6);
             sec += chrono::rtc_ticks * chrono::ps_per_rtc_tick / 1e6;
