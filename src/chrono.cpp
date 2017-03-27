@@ -41,6 +41,8 @@ namespace jw
         const io::out_port<byte> pit_cmd { 0x43 };
         const io::io_port<byte> pit0_data { 0x40 };
 
+        chrono::reset_all chrono::reset;
+
         void chrono::update_tsc()
         {
             auto tsc = rdtsc();
