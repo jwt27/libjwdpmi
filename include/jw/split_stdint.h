@@ -55,16 +55,20 @@ namespace jw
     static_assert(sizeof(split_uint64_t) == 8, "check sizeof jw::split_int");
     static_assert(alignof(split_uint64_t) == 4, "check alignof jw::split_int");
 
-    union [[gnu::packed]] split_int14_t
+    template<typename T>
+    union [[gnu::packed]] split_int14
     {                      
         struct[[gnu::packed]]
         {
             unsigned lo : 7;
-            unsigned hi : 7;
+            T hi : 7;
         };
-        signed value : 14;
-        constexpr split_int14_t() noexcept : value(0) { }
-        constexpr split_int14_t(auto v) noexcept : value(v) { }
+        T value : 14;
+        constexpr split_int14() noexcept { }
+        constexpr split_int14(auto v) noexcept : value(v) { }
         constexpr operator auto() const noexcept { return value; }
     };
+
+    using split_uint14_t = split_int14<unsigned>;
+    using split_int14_t = split_int14<signed>;
 }
