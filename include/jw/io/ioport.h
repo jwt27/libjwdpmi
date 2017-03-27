@@ -81,8 +81,8 @@ namespace jw
         struct out_port
         {
             void write(T value) const { detail::out<T>(p, value); }
-            auto& operator=(auto value) { write(value); return *this; }
-            void operator()(T value) { return write(value); }
+            auto& operator=(auto value) const { write(value); return *this; }
+            void operator()(T value) const { return write(value); }
 
             constexpr out_port(auto _p) noexcept : p(_p) { }
             out_port(const out_port&) = delete;
@@ -95,8 +95,8 @@ namespace jw
         struct in_port
         {
             auto read() const { return detail::in<T>(p); }
-            operator T() { return read(); }
-            T operator()() { return read(); }
+            operator T() const { return read(); }
+            T operator()() const { return read(); }
 
             constexpr in_port(auto _p) noexcept : p(_p) { }
             in_port(const in_port&) = delete;
