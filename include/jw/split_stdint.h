@@ -31,7 +31,7 @@ namespace jw
             split_uint<(size >> 1)> hi;
         };
         std::uint64_t value : size;
-        constexpr split_uint() noexcept : value(0) { }
+        constexpr split_uint() noexcept { }
         constexpr split_uint(auto v) noexcept : value(v) { };
         constexpr operator auto() const noexcept { return value; }
     };
