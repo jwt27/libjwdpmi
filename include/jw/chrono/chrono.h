@@ -32,6 +32,11 @@ namespace jw
             return tsc;
         }
 
+        enum class tsc_reference
+        {
+            none, rtc, pit
+        };
+
         struct chrono
         {
             friend class rtc;
@@ -43,7 +48,7 @@ namespace jw
 
             static void setup_pit(bool enable, std::uint32_t freq_divider = 0x10000);   // default: 18.2Hz
             static void setup_rtc(bool enable, std::uint8_t freq_shift = 10);           // default: 64Hz
-            static void setup_tsc(std::size_t num_samples, bool use_rtc = true);
+            static void setup_tsc(std::size_t num_samples, tsc_reference ref = tsc_reference::none);
 
         private:
             static std::atomic<std::uint64_t> ps_per_tsc_tick;
@@ -60,6 +65,7 @@ namespace jw
             static void reset_pit();
             static void reset_rtc();
             static void reset_tsc();
+            static tsc_reference current_tsc_ref();
 
             static constexpr io::out_port<byte> rtc_index { 0x70 };
             static constexpr io::io_port<byte> rtc_data { 0x71 };

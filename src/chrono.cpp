@@ -27,7 +27,7 @@ namespace jw
         std::size_t tsc_sample_size { 0 };
         std::uint64_t tsc_total { 0 };
         std::uint64_t last_tsc;
-        bool sync_tsc_to_rtc { true };
+        tsc_reference tsc_ref { tsc_reference::pit };
 
         std::atomic<std::uint64_t> chrono::ps_per_tsc_tick;
         std::uint64_t chrono::ps_per_pit_tick;
@@ -43,6 +43,14 @@ namespace jw
 
         chrono::reset_all chrono::reset;
 
+        tsc_reference chrono::current_tsc_ref()
+        {
+            if (tsc_ref == tsc_reference::pit && chrono::pit_irq.is_enabled()) return tsc_ref;
+            else if (chrono::rtc_irq.is_enabled()) return tsc_reference::rtc;
+            else if (chrono::pit_irq.is_enabled()) return tsc_reference::pit;
+            else return tsc_reference::none;
+        }
+
         void chrono::update_tsc()
         {
             auto tsc = rdtsc();
@@ -55,7 +63,7 @@ namespace jw
                 tsc_total -= (tsc_total / tsc_sample_size);
                 --tsc_sample_size;
             }
-            auto ps = (sync_tsc_to_rtc && rtc_irq.is_enabled()) ? ps_per_rtc_tick : ps_per_pit_tick;
+            auto ps = (current_tsc_ref() == tsc_reference::rtc) ? ps_per_rtc_tick : ps_per_pit_tick;
             ps_per_tsc_tick = ps * tsc_sample_size / tsc_total;
         }
 
@@ -76,7 +84,7 @@ namespace jw
             rtc_index.write(0x0C);
             rtc_data.read();
 
-            if (sync_tsc_to_rtc || !pit_irq.is_enabled()) update_tsc();
+            if (current_tsc_ref() == tsc_reference::rtc) update_tsc();
 
             ack();
         }, dpmi::always_call };
@@ -85,7 +93,7 @@ namespace jw
         {
             ++pit_ticks;
 
-            if (!sync_tsc_to_rtc || !rtc_irq.is_enabled()) update_tsc();
+            if (current_tsc_ref() == tsc_reference::pit) update_tsc();
 
             ack();
         }, dpmi::always_call };
@@ -134,13 +142,13 @@ namespace jw
             rtc_data.read();                        // read and discard data
         }
 
-        void chrono::setup_tsc(std::size_t sample_size, bool use_rtc)
+        void chrono::setup_tsc(std::size_t sample_size, tsc_reference r)
         {
             if (sample_size == 0) throw std::out_of_range("TSC sample size must be non-zero.");
             tsc_max_sample_size = sample_size;
-            if (use_rtc != sync_tsc_to_rtc)
+            if (r != tsc_reference::none && r != current_tsc_ref())
             {
-                sync_tsc_to_rtc = use_rtc;
+                tsc_ref = r;
                 reset_tsc();
             }
         }
@@ -148,9 +156,9 @@ namespace jw
         void chrono::reset_pit()
         {
             dpmi::interrupt_mask no_irq { };
+            if (current_tsc_ref() == tsc_reference::pit) reset_tsc();
             pit_irq.disable();
             pit_ticks = 0;
-            reset_tsc();
             pit_cmd.write(0x34);
             pit0_data.write(0);
             pit0_data.write(0);
@@ -159,9 +167,9 @@ namespace jw
         void chrono::reset_rtc()
         {
             dpmi::interrupt_mask no_irq { };
+            if (current_tsc_ref() == tsc_reference::rtc) reset_tsc();
             rtc_irq.disable();
             rtc_ticks = 0;
-            reset_tsc();
             rtc_index.write(0x8B);                  // disable NMI, select register 0x0B
             auto b = rtc_data.read();               // read register
             rtc_index.write(0x8B);
