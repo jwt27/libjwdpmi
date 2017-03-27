@@ -34,7 +34,7 @@ namespace jw
         std::uint64_t chrono::ps_per_rtc_tick;
 
         std::atomic<std::uint64_t> chrono::pit_ticks;
-        std::uint_fast16_t chrono::rtc_ticks;
+        volatile std::uint_fast16_t chrono::rtc_ticks;
 
         constexpr io::out_port<byte> chrono::rtc_index;
         constexpr io::io_port<byte> chrono::rtc_data;

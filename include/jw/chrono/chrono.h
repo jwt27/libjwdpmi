@@ -56,7 +56,7 @@ namespace jw
             static std::uint64_t ps_per_rtc_tick;
 
             static std::atomic<std::uint64_t> pit_ticks;
-            static std::uint_fast16_t rtc_ticks;
+            static volatile std::uint_fast16_t rtc_ticks;
             
             static dpmi::irq_handler pit_irq;
             static dpmi::irq_handler rtc_irq;
