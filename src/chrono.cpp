@@ -146,7 +146,7 @@ namespace jw
         {
             if (sample_size == 0) throw std::out_of_range("TSC sample size must be non-zero.");
             tsc_max_sample_size = sample_size;
-            if (r != tsc_reference::none && r != current_tsc_ref())
+            if (r != tsc_reference::none && (r != current_tsc_ref() || current_tsc_ref() == tsc_reference::none))
             {
                 tsc_ref = r;
                 reset_tsc();
