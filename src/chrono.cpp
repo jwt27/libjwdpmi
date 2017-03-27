@@ -136,6 +136,7 @@ namespace jw
 
         void chrono::setup_tsc(std::size_t sample_size, bool use_rtc)
         {
+            if (sample_size == 0) throw std::out_of_range("TSC sample size must be non-zero.");
             tsc_max_sample_size = sample_size;
             if (use_rtc != sync_tsc_to_rtc)
             {
