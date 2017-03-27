@@ -52,11 +52,10 @@ namespace jw
             {
                 tsc_total -= samples.front();
                 samples.pop_front();
-                std::cerr << "pop";
             }
             auto ps = rtc_irq.is_enabled() ? ps_per_rtc_tick : ps_per_pit_tick;
             ps_per_tsc_tick = ps / (tsc_total / samples.size());
-            std::cerr << "tsc update, ps/tick = " << ps_per_tsc_tick << "\n";
+            //std::cerr << "tsc update, ps/tick = " << ps_per_tsc_tick << "\n";
         }
 
         dpmi::irq_handler chrono::rtc_irq { [](auto* ack)
@@ -78,7 +77,7 @@ namespace jw
             rtc_index.write(0x0C);
             rtc_data.read();
 
-            std::cerr << "rtc irq happened, count = " << rtc_ticks << "\n";
+            //std::cerr << "rtc irq happened, count = " << rtc_ticks << "\n";
 
             update_tsc();
 
@@ -187,7 +186,9 @@ namespace jw
             dpmi::interrupt_mask no_irq { };
             auto from_bcd = [](byte bcd)
             {
-                return (bcd >> 4) * 10 + (bcd & 0xF);
+                auto dec = (bcd >> 4) * 10 + (bcd & 0xF);
+                //std::cout << "bcd=" << std::hex << (int)bcd << ", dec=" << std::dec << (int)dec << '\n';
+                return dec;
             };
 
             std::uint64_t sec { 0 };
@@ -198,16 +199,15 @@ namespace jw
             chrono::rtc_index.write(0x84);  // hour
             sec += from_bcd(chrono::rtc_data.read()) * 60 * 60;
             chrono::rtc_index.write(0x87);  // day
-            sec += from_bcd(chrono::rtc_data.read()) * 24 * 60 * 60;
+            sec += (from_bcd(chrono::rtc_data.read()) - 1) * 60 * 60 * 24;
             chrono::rtc_index.write(0x88);  // month
-            sec += from_bcd(chrono::rtc_data.read()) * 24 * 60 * 60 * (365.2425 / 12);
+            sec += (from_bcd(chrono::rtc_data.read()) - 1) * 60 * 60 * 24 * (365.2425 / 12);
             chrono::rtc_index.write(0x09);  // year
-            sec += from_bcd(chrono::rtc_data.read()) * 24 * 60 * 60 * 365.2425;
+            sec += from_bcd(chrono::rtc_data.read()) * 60 * 60 * 24 * 365.2425;
             sec += 946684800;   // seconds from 1970 to 2000
-            sec *= static_cast<std::uint64_t>(1e12);    // to picoseconds
-            sec += chrono::rtc_ticks * chrono::ps_per_rtc_tick;
-            sec /= static_cast<std::uint64_t>(1e6);    // to microseconds
-            return time_point { duration{ sec } };
+            sec *= static_cast<std::uint64_t>(1e6);
+            sec += chrono::rtc_ticks * chrono::ps_per_rtc_tick / 1e6;
+            return time_point { duration { sec } };
         }
     }
 }
