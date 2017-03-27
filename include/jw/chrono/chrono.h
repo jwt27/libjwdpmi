@@ -56,7 +56,7 @@ namespace jw
             static dpmi::irq_handler pit_irq;
             static dpmi::irq_handler rtc_irq;
 
-            static void update_tsc();
+            INTERRUPT static void update_tsc();
             static void reset_pit();
             static void reset_rtc();
             static void reset_tsc();

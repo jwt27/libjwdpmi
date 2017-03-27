@@ -57,7 +57,7 @@ namespace jw
             ps_per_tsc_tick = ps * tsc_sample_size / tsc_total;
         }
 
-        dpmi::irq_handler chrono::rtc_irq { [](auto* ack)
+        dpmi::irq_handler chrono::rtc_irq { [](auto* ack) INTERRUPT
         {
             static byte last_sec { 0 };
             dpmi::interrupt_mask no_irq { };
@@ -79,7 +79,7 @@ namespace jw
             ack();
         }, dpmi::always_call | dpmi::no_auto_eoi };
 
-        dpmi::irq_handler chrono::pit_irq { [](auto* ack)
+        dpmi::irq_handler chrono::pit_irq { [](auto* ack) INTERRUPT
         {
             ++pit_ticks;
 
@@ -94,6 +94,8 @@ namespace jw
             reset_pit();
             if (!enable) return;
 
+            if (freq_divider < 1 || freq_divider > 0x10000) 
+                throw std::out_of_range("PIT frequency divisor must be a value between 1 and 0x10000, inclusive.");
             ps_per_pit_tick = 1e12 / (max_pit_frequency / freq_divider);
             pit_irq.set_irq(0);
             pit_irq.enable();
@@ -110,6 +112,7 @@ namespace jw
             reset_rtc();
             if (!enable) return;
 
+            if (freq_shift > 15) throw std::out_of_range("RTC frequency shift must be a value between 0 and 15, inclusive.");
             ps_per_rtc_tick = 1e12 / (max_rtc_frequency >> (freq_shift - 1));
             rtc_irq.set_irq(8);
             rtc_irq.enable();
