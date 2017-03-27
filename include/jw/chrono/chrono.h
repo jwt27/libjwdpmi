@@ -77,8 +77,15 @@ namespace jw
             static constexpr bool is_steady { false };
             static time_point now() noexcept;
 
-            static std::time_t to_time_t (const time_point& t) noexcept;    // TODO
-            static time_point from_time_t(std::time_t t) noexcept;
+            static std::time_t to_time_t(const time_point& t) noexcept
+            {
+                return std::chrono::duration_cast<std::chrono::seconds>(t.time_since_epoch()).count();
+            }
+
+            static time_point from_time_t(std::time_t t) noexcept
+            {
+                return time_point { std::chrono::duration_cast<duration>(std::chrono::seconds { t }) };
+            }
         };
 
         struct pit  // Programmable Interval Timer
