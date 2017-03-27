@@ -115,7 +115,7 @@ namespace jw
                 if (map[irq].count > 0) { map[irq].first = false; return; }
 
                 byte mask = 1 << (irq % 8);
-                auto port = irq < 8 ? pic0_data : pic1_data;
+                auto& port = irq < 8 ? pic0_data : pic1_data;
                 port.write(port.read() & ~mask);
             }
 
@@ -125,7 +125,7 @@ namespace jw
                 if (map[irq].count++ > 0) return;   // FIXME: race condition here
 
                 byte mask = 1 << (irq % 8);
-                auto port = irq < 8 ? pic0_data : pic1_data;
+                auto& port = irq < 8 ? pic0_data : pic1_data;
 
                 byte current = port.read();
                 map[irq].first = (current & mask) != 0;
@@ -139,7 +139,7 @@ namespace jw
                 if (map[irq].first) return;
 
                 byte mask = 1 << (irq % 8);
-                auto port = irq < 8 ? pic0_data : pic1_data;
+                auto& port = irq < 8 ? pic0_data : pic1_data;
 
                 port.write(port.read() & ~mask);
             }
