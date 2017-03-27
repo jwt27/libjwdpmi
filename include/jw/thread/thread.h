@@ -81,5 +81,21 @@ namespace jw
             dpmi::trap_mask dont_trace_here { };
             while (condition()) yield();
         };
+
+        // Yields execution until the given time point.
+        template<typename T> inline void yield_until(T time_point)
+        { 
+            if (dpmi::in_irq_context()) return;
+            dpmi::trap_mask dont_trace_here { };
+            yield_while([&time_point] { return T::clock::now() < time_point; });
+        };
+
+        // Yields execution for the given duration.
+        template<typename C> inline void yield_for(typename C::duration duration)
+        { 
+            if (dpmi::in_irq_context()) return;
+            dpmi::trap_mask dont_trace_here { };
+            yield_until(C::now() + duration);
+        };
     }
 }
