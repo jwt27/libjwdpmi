@@ -23,9 +23,8 @@ namespace jw
 {
     namespace chrono
     {
-        dpmi::locked_pool_allocator<> alloc { 256_KB };
-        std::deque<std::uint64_t, dpmi::locked_pool_allocator<>> tsc_samples { alloc };
-        std::size_t tsc_sample_size { 256 };
+        std::size_t tsc_max_sample_size { 1024 };
+        std::size_t tsc_sample_size { 0 };
         std::uint64_t tsc_total { 0 };
         std::uint64_t last_tsc;
         bool sync_tsc_to_rtc { true };
@@ -47,15 +46,15 @@ namespace jw
             auto tsc = rdtsc();
             auto diff = tsc - last_tsc;
             last_tsc = tsc;
-            tsc_samples.push_back(diff);
             tsc_total += diff;
-            while (tsc_samples.size() > tsc_sample_size)
+            ++tsc_sample_size;
+            while (tsc_sample_size > tsc_max_sample_size)
             {
-                tsc_total -= tsc_samples.front();
-                tsc_samples.pop_front();
+                tsc_total -= (tsc_total / tsc_sample_size);
+                --tsc_sample_size;
             }
             auto ps = (sync_tsc_to_rtc && rtc_irq.is_enabled()) ? ps_per_rtc_tick : ps_per_pit_tick;
-            ps_per_tsc_tick = ps / (tsc_total / tsc_samples.size());
+            ps_per_tsc_tick = ps * tsc_sample_size / tsc_total;
         }
 
         dpmi::irq_handler chrono::rtc_irq { [](auto* ack)
@@ -132,7 +131,7 @@ namespace jw
 
         void chrono::setup_tsc(std::size_t sample_size, bool use_rtc)
         {
-            tsc_sample_size = sample_size;
+            tsc_max_sample_size = sample_size;
             if (use_rtc != sync_tsc_to_rtc)
             {
                 sync_tsc_to_rtc = use_rtc;
@@ -168,7 +167,7 @@ namespace jw
         void chrono::reset_tsc()
         {
             dpmi::interrupt_mask no_irq { };
-            tsc_samples.clear();
+            tsc_sample_size = 0;
             tsc_total = 0;
             last_tsc = rdtsc();
         }

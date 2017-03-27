@@ -41,9 +41,9 @@ namespace jw
             static constexpr long double max_pit_frequency { 1194375.0L / 1.001L };     // freq = max_pit_frequency / divider
             static constexpr std::uint32_t max_rtc_frequency { 0x8000 };                // freq = max_rtc_frequency >> (shift - 1)
 
-            static void setup_pit(bool enable, std::uint32_t freq_divider = 0x1000);    // default: 18.2Hz
+            static void setup_pit(bool enable, std::uint32_t freq_divider = 0x10000);   // default: 18.2Hz
             static void setup_rtc(bool enable, std::uint8_t freq_shift = 10);           // default: 64Hz
-            static void setup_tsc(std::size_t num_samples = 256, bool use_rtc = true);
+            static void setup_tsc(std::size_t num_samples, bool use_rtc = true);
 
         private:
             static std::atomic<std::uint64_t> ps_per_tsc_tick;
