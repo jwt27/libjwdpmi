@@ -23,11 +23,12 @@ namespace jw
 {
     namespace chrono
     {
-        dpmi::locked_pool_allocator<> alloc { 32_KB };
-        std::deque<std::uint64_t, dpmi::locked_pool_allocator<>> samples { alloc };
-        std::size_t tsc_sample_size;
+        dpmi::locked_pool_allocator<> alloc { 256_KB };
+        std::deque<std::uint64_t, dpmi::locked_pool_allocator<>> tsc_samples { alloc };
+        std::size_t tsc_sample_size { 256 };
         std::uint64_t tsc_total { 0 };
         std::uint64_t last_tsc;
+        bool sync_tsc_to_rtc { true };
 
         std::atomic<std::uint64_t> chrono::ps_per_tsc_tick;
         std::uint64_t chrono::ps_per_pit_tick;
@@ -46,22 +47,19 @@ namespace jw
             auto tsc = rdtsc();
             auto diff = tsc - last_tsc;
             last_tsc = tsc;
-            samples.push_back(diff);
+            tsc_samples.push_back(diff);
             tsc_total += diff;
-            while (samples.size() > tsc_sample_size)
+            while (tsc_samples.size() > tsc_sample_size)
             {
-                tsc_total -= samples.front();
-                samples.pop_front();
+                tsc_total -= tsc_samples.front();
+                tsc_samples.pop_front();
             }
-            auto ps = rtc_irq.is_enabled() ? ps_per_rtc_tick : ps_per_pit_tick;
-            ps_per_tsc_tick = ps / (tsc_total / samples.size());
-            //std::cerr << "tsc update, ps/tick = " << ps_per_tsc_tick << "\n";
+            auto ps = (sync_tsc_to_rtc && rtc_irq.is_enabled()) ? ps_per_rtc_tick : ps_per_pit_tick;
+            ps_per_tsc_tick = ps / (tsc_total / tsc_samples.size());
         }
 
         dpmi::irq_handler chrono::rtc_irq { [](auto* ack)
         {
-            try
-            {
             static byte last_sec { 0 };
             dpmi::interrupt_mask no_irq { };
 
@@ -77,24 +75,19 @@ namespace jw
             rtc_index.write(0x0C);
             rtc_data.read();
 
-            //std::cerr << "rtc irq happened, count = " << rtc_ticks << "\n";
-
-            update_tsc();
+            if (sync_tsc_to_rtc || !pit_irq.is_enabled()) update_tsc();
 
             ack();
-            }
-            catch (const std::exception& e) { std::cerr << e.what() << '\n'; }
         }, dpmi::always_call | dpmi::no_auto_eoi };
 
         dpmi::irq_handler chrono::pit_irq { [](auto* ack)
         {
             ++pit_ticks;
-            std::cerr << "pit irq happened, count = " << pit_ticks << "\n";
 
-            if (!rtc_irq.is_enabled()) update_tsc();
+            if (!sync_tsc_to_rtc || !rtc_irq.is_enabled()) update_tsc();
 
             ack();
-        }, dpmi::always_call | dpmi::no_auto_eoi };
+        }, dpmi::always_call };
 
         void chrono::setup_pit(bool enable, std::uint32_t freq_divider)
         {
@@ -103,7 +96,7 @@ namespace jw
             if (!enable) return;
 
             ps_per_pit_tick = 1e12 / (max_pit_frequency / freq_divider);
-            pit_irq.set_irq(1);
+            pit_irq.set_irq(0);
             pit_irq.enable();
 
             split_uint16_t div { freq_divider };
@@ -137,9 +130,14 @@ namespace jw
             rtc_data.read();                        // read and discard data
         }
 
-        void chrono::setup_tsc(std::size_t sample_size)
+        void chrono::setup_tsc(std::size_t sample_size, bool use_rtc)
         {
             tsc_sample_size = sample_size;
+            if (use_rtc != sync_tsc_to_rtc)
+            {
+                sync_tsc_to_rtc = use_rtc;
+                reset_tsc();
+            }
         }
 
         void chrono::reset_pit()
@@ -170,7 +168,7 @@ namespace jw
         void chrono::reset_tsc()
         {
             dpmi::interrupt_mask no_irq { };
-            samples.clear();
+            tsc_samples.clear();
             tsc_total = 0;
             last_tsc = rdtsc();
         }

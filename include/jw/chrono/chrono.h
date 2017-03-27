@@ -28,7 +28,7 @@ namespace jw
         inline std::uint64_t rdtsc() noexcept
         {
             std::uint64_t tsc;
-            asm("rdtsc;": "=A" (tsc));
+            asm volatile ("rdtsc;": "=A" (tsc));
             return tsc;
         }
 
@@ -43,7 +43,7 @@ namespace jw
 
             static void setup_pit(bool enable, std::uint32_t freq_divider = 0x1000);    // default: 18.2Hz
             static void setup_rtc(bool enable, std::uint8_t freq_shift = 10);           // default: 64Hz
-            static void setup_tsc(std::size_t num_samples = 10);
+            static void setup_tsc(std::size_t num_samples = 256, bool use_rtc = true);
 
         private:
             static std::atomic<std::uint64_t> ps_per_tsc_tick;
