@@ -23,7 +23,7 @@ namespace jw
 {
     namespace chrono
     {
-        std::size_t tsc_max_sample_size { 1024 };
+        std::size_t tsc_max_sample_size { 0x100000 };
         std::size_t tsc_sample_size { 0 };
         std::uint64_t tsc_total { 0 };
         std::uint64_t last_tsc;
