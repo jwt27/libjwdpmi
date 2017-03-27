@@ -24,15 +24,16 @@ namespace jw
     {
         namespace detail
         {
-            volatile bool cr0_allowed { true };
+            bool cr0_allowed { true };
             bool cr0_access_known { false };
             bool test_cr0_access()
             {
                 if (!cr0_access_known)
                 {
-                    dpmi::exception_handler exc { 0x0d, [](auto*, exception_frame* frame, bool)
+                    volatile bool test { true };
+                    dpmi::exception_handler exc { 0x0d, [&test](auto*, exception_frame* frame, bool)
                     {
-                        cr0_allowed = false;
+                        test = false;
                         frame->fault_address.offset += 3;
                         return true;
                     } };
@@ -42,20 +43,22 @@ namespace jw
                         "mov cr0, eax;"
                         :::"eax");
 
+                    cr0_allowed = test;
                     cr0_access_known = true;
                 }
                 return cr0_allowed;
             }
 
-            volatile bool cr4_allowed { true };
+            bool cr4_allowed { true };
             bool cr4_access_known { false };
             bool test_cr4_access()
             {
                 if (!cr4_access_known)
                 {
-                    dpmi::exception_handler exc { 0x0d, [](auto*, exception_frame* frame, bool)
+                    volatile bool test { true };
+                    dpmi::exception_handler exc { 0x0d, [&test](auto*, exception_frame* frame, bool)
                     {
-                        cr4_allowed = false;
+                        test = false;
                         frame->fault_address.offset += 3;
                         return true;
                     } };
@@ -65,7 +68,8 @@ namespace jw
                         "mov cr4, eax;"
                         :::"eax");
 
-                    cr0_access_known = true;
+                    cr4_allowed = test;
+                    cr4_access_known = true;
                 }
                 return cr4_allowed;
             }
