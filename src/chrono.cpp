@@ -114,7 +114,7 @@ namespace jw
             reset_rtc();
             if (!enable) return;
 
-            if (freq_shift > 15) throw std::out_of_range("RTC frequency shift must be a value between 0 and 15, inclusive.");
+            if (freq_shift < 1 || freq_shift > 15) throw std::out_of_range("RTC frequency shift must be a value between 1 and 15, inclusive.");
             ps_per_rtc_tick = 1e12 / (max_rtc_frequency >> (freq_shift - 1));
             rtc_irq.set_irq(8);
             rtc_irq.enable();
