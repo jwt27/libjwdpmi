@@ -12,6 +12,7 @@ Current features include:
 * RS-232 serial communication using `std::iostream`.
 * Event-driven keyboard interface.
 * GDB remote debugging support.
+* Full implementation of PIT, RTC and RDTSC clocks using `std::chrono`.
 
 ## Installing
 * Build and install DJGPP (the DOS port of gcc)  
