@@ -77,7 +77,7 @@ namespace jw
             if (sync_tsc_to_rtc || !pit_irq.is_enabled()) update_tsc();
 
             ack();
-        }, dpmi::always_call | dpmi::no_auto_eoi };
+        }, dpmi::always_call };
 
         dpmi::irq_handler chrono::pit_irq { [](auto* ack) INTERRUPT
         {
