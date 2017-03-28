@@ -40,8 +40,8 @@ namespace jw
 
         constexpr io::out_port<byte> chrono::rtc_index;
         constexpr io::io_port<byte> chrono::rtc_data;
-        const io::out_port<byte> pit_cmd { 0x43 };
-        const io::io_port<byte> pit0_data { 0x40 };
+        constexpr io::out_port<byte> pit_cmd { 0x43 };
+        constexpr io::io_port<byte> pit0_data { 0x40 };
 
         chrono::reset_all chrono::reset;
 
