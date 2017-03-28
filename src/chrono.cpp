@@ -23,13 +23,14 @@ namespace jw
 {
     namespace chrono
     {
-        std::size_t tsc_max_sample_size { 0x100000 };
+        std::size_t tsc_max_sample_size { 0x10000 };
         std::size_t tsc_sample_size { 0 };
         std::uint64_t tsc_total { 0 };
         std::uint64_t last_tsc;
         tsc_reference tsc_ref { tsc_reference::pit };
+        bool tsc_resync { true };
 
-        std::atomic<std::uint64_t> chrono::ps_per_tsc_tick;
+        std::atomic<std::uint64_t> chrono::fs_per_tsc_tick;
         std::uint64_t chrono::ps_per_pit_tick;
         std::uint64_t chrono::ps_per_rtc_tick;
 
@@ -56,6 +57,7 @@ namespace jw
             auto tsc = rdtsc();
             auto diff = tsc - last_tsc;
             last_tsc = tsc;
+            if (tsc_resync) { tsc_resync = false; return; }
             tsc_total += diff;
             ++tsc_sample_size;
             while (tsc_sample_size > tsc_max_sample_size)
@@ -64,7 +66,7 @@ namespace jw
                 --tsc_sample_size;
             }
             auto ps = (current_tsc_ref() == tsc_reference::rtc) ? ps_per_rtc_tick : ps_per_pit_tick;
-            ps_per_tsc_tick = ps * tsc_sample_size / tsc_total;
+            fs_per_tsc_tick = ps * tsc_sample_size * 1000 / tsc_total;
         }
 
         dpmi::irq_handler chrono::rtc_irq { [](auto* ack) INTERRUPT
@@ -183,7 +185,8 @@ namespace jw
             dpmi::interrupt_mask no_irq { };
             tsc_sample_size = 0;
             tsc_total = 0;
-            last_tsc = rdtsc();
+            tsc_resync = true;
+            //last_tsc = rdtsc();
         }
 
         chrono::reset_all::~reset_all()

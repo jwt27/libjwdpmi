@@ -51,7 +51,7 @@ namespace jw
             static void setup_tsc(std::size_t num_samples, tsc_reference ref = tsc_reference::none);
 
         private:
-            static std::atomic<std::uint64_t> ps_per_tsc_tick;
+            static std::atomic<std::uint64_t> fs_per_tsc_tick;
             static std::uint64_t ps_per_pit_tick;
             static std::uint64_t ps_per_rtc_tick;
 
@@ -128,7 +128,7 @@ namespace jw
                     auto t = std::chrono::duration_cast<duration>(std::chrono::high_resolution_clock::now().time_since_epoch());
                     return time_point { t };
                 }
-                return time_point { duration { chrono::ps_per_tsc_tick * rdtsc() / 1000 } };
+                return time_point { duration { static_cast<std::int64_t>(static_cast<double>(chrono::fs_per_tsc_tick) * rdtsc() / 1000000.0) } };
             }
         };
     }
