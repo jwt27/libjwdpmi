@@ -23,11 +23,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <jw/dpmi/irq_check.h>
 #include <jw/dpmi/lock.h>
 #include <jw/dpmi/alloc.h>
+#include <jw/alloc.h>
 #include <jw/common.h>
 #include <../jwdpmi_config.h>
 
 // TODO: find some way to completely avoid generating fpu instructions
-#define NO_FPU_ATTR [[gnu::flatten, gnu::optimize("no-tree-vectorize"), gnu::target("no-mmx", "no-sse")]]
+//#define NO_FPU_ATTR [[gnu::flatten, gnu::optimize("no-tree-vectorize"), gnu::target("no-mmx", "no-sse")]]
 
 namespace jw
 {
@@ -117,21 +118,21 @@ namespace jw
 
             class fpu_context_switcher_t : class_lock<fpu_context_switcher_t>
             {
-                locked_pool_allocator<> alloc { config::interrupt_fpu_context_pool };
-                std::deque<std::shared_ptr<fpu_context>, locked_pool_allocator<>> contexts { alloc };
+                locked_pool_allocator<fpu_context> alloc { config::interrupt_fpu_context_pool };
+                std::deque<fpu_context*, locked_pool_allocator<>> contexts { alloc };
                 
                 fpu_context default_irq_context;
                 bool lazy_switching { false };
                 bool init { false };
                 std::uint32_t last_restored { 0 };
                 
-                NO_FPU_ATTR void switch_context()
+                void switch_context()
                 {
                     if (contexts.back() == nullptr)
                     {
                         if (last_restored < contexts.size() - 1)
                         {
-                            if (contexts[last_restored] == nullptr) contexts[last_restored] = std::allocate_shared<fpu_context>(alloc); // TODO: check if this does zero-initialization (it shouldn't)
+                            if (contexts[last_restored] == nullptr) contexts[last_restored] = alloc.allocate(1);
                             contexts[last_restored]->save();
                         }
                         default_irq_context.restore();
@@ -144,7 +145,7 @@ namespace jw
                 fpu_context_switcher_t();
                 ~fpu_context_switcher_t();
 
-                NO_FPU_ATTR void enter() noexcept
+                void enter() noexcept
                 {
                     if (!init) return;
                     contexts.push_back(nullptr);
@@ -154,7 +155,7 @@ namespace jw
                     cr0.set();
                 }
 
-                NO_FPU_ATTR void leave() noexcept
+                void leave() noexcept
                 {
                     if (!init) return;
                     contexts.pop_back();
@@ -164,7 +165,7 @@ namespace jw
                     cr0.set();
                 }
 
-                std::shared_ptr<fpu_context> get_last_context()
+                fpu_context* get_last_context()
                 {
                     if (contexts.back() == nullptr) switch_context();
                     return contexts[last_restored];
