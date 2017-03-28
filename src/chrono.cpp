@@ -31,7 +31,6 @@ namespace jw
         tsc_reference tsc_ref { tsc_reference::pit };
         bool tsc_resync { true };
 
-        std::atomic<std::uint64_t> chrono::fs_per_tsc_tick;
         std::atomic<std::uint32_t> chrono::tsc_ticks_per_irq;
         std::uint64_t chrono::ps_per_pit_tick;
         std::uint64_t chrono::ps_per_rtc_tick;

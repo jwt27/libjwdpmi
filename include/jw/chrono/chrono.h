@@ -51,7 +51,6 @@ namespace jw
             static void setup_tsc(std::size_t num_samples, tsc_reference ref = tsc_reference::none);
 
         private:
-            static std::atomic<std::uint64_t> fs_per_tsc_tick;
             static std::atomic<std::uint32_t> tsc_ticks_per_irq;
             static std::uint64_t ps_per_pit_tick;
             static std::uint64_t ps_per_rtc_tick;
