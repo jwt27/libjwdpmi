@@ -18,6 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <jw/chrono/chrono.h>
 #include <jw/io/ioport.h>
 #include <jw/dpmi/irq_mask.h>
+#include <libc/farptrgs.h>
 
 namespace jw
 {
@@ -31,6 +32,7 @@ namespace jw
         bool tsc_resync { true };
 
         std::atomic<std::uint64_t> chrono::fs_per_tsc_tick;
+        std::atomic<std::uint32_t> chrono::tsc_ticks_per_irq;
         std::uint64_t chrono::ps_per_pit_tick;
         std::uint64_t chrono::ps_per_rtc_tick;
 
@@ -55,18 +57,17 @@ namespace jw
         void chrono::update_tsc()
         {
             auto tsc = rdtsc();
-            auto diff = tsc - last_tsc;
+            std::uint32_t diff = tsc - last_tsc;
             last_tsc = tsc;
             if (tsc_resync) { tsc_resync = false; return; }
             tsc_total += diff;
             ++tsc_sample_size;
             while (tsc_sample_size > tsc_max_sample_size)
             {
-                tsc_total -= (tsc_total / tsc_sample_size);
+                tsc_total -= static_cast<std::uint32_t>(tsc_total / tsc_sample_size);
                 --tsc_sample_size;
             }
-            auto ps = (current_tsc_ref() == tsc_reference::rtc) ? ps_per_rtc_tick : ps_per_pit_tick;
-            fs_per_tsc_tick = ps * tsc_sample_size * 1000 / tsc_total;
+            tsc_ticks_per_irq = tsc_total / tsc_sample_size;
         }
 
         dpmi::irq_handler chrono::rtc_irq { [](auto* ack) INTERRUPT
@@ -98,7 +99,7 @@ namespace jw
             if (current_tsc_ref() == tsc_reference::pit) update_tsc();
 
             ack();
-        }, dpmi::always_call };
+        }, dpmi::always_call | dpmi::no_interrupts };
 
         void chrono::setup_pit(bool enable, std::uint32_t freq_divider)
         {

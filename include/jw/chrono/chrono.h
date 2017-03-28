@@ -52,6 +52,7 @@ namespace jw
 
         private:
             static std::atomic<std::uint64_t> fs_per_tsc_tick;
+            static std::atomic<std::uint32_t> tsc_ticks_per_irq;
             static std::uint64_t ps_per_pit_tick;
             static std::uint64_t ps_per_rtc_tick;
 
@@ -128,7 +129,10 @@ namespace jw
                     auto t = std::chrono::duration_cast<duration>(std::chrono::high_resolution_clock::now().time_since_epoch());
                     return time_point { t };
                 }
-                return time_point { duration { static_cast<std::int64_t>(static_cast<double>(chrono::fs_per_tsc_tick) * rdtsc() / 1000000.0) } };
+                double ps = (chrono::current_tsc_ref() == tsc_reference::rtc) ? chrono::ps_per_rtc_tick : chrono::ps_per_pit_tick;
+                ps /= chrono::tsc_ticks_per_irq;
+                //std::cout << "ticks/irq=" << chrono::tsc_ticks_per_irq << '\n';
+                return time_point { duration { static_cast<std::int64_t>(ps * rdtsc() / 1000) } };
             }
         };
     }
