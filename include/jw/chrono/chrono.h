@@ -131,7 +131,6 @@ namespace jw
                 }
                 double ps = (chrono::current_tsc_ref() == tsc_reference::rtc) ? chrono::ps_per_rtc_tick : chrono::ps_per_pit_tick;
                 ps /= chrono::tsc_ticks_per_irq;
-                //std::cout << "ticks/irq=" << chrono::tsc_ticks_per_irq << '\n';
                 return time_point { duration { static_cast<std::int64_t>(ps * rdtsc() / 1000) } };
             }
         };
