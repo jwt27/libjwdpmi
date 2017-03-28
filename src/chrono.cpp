@@ -31,7 +31,7 @@ namespace jw
         tsc_reference tsc_ref { tsc_reference::pit };
         bool tsc_resync { true };
 
-        std::atomic<std::uint32_t> chrono::tsc_ticks_per_irq;
+        std::atomic<std::uint32_t> chrono::tsc_ticks_per_irq { 0 };
         std::uint64_t chrono::ps_per_pit_tick;
         std::uint64_t chrono::ps_per_rtc_tick;
 
@@ -98,7 +98,7 @@ namespace jw
             if (current_tsc_ref() == tsc_reference::pit) update_tsc();
 
             ack();
-        }, dpmi::always_call | dpmi::no_interrupts };
+        }, dpmi::always_call };
 
         void chrono::setup_pit(bool enable, std::uint32_t freq_divider)
         {
@@ -185,8 +185,8 @@ namespace jw
             dpmi::interrupt_mask no_irq { };
             tsc_sample_size = 0;
             tsc_total = 0;
+            tsc_ticks_per_irq = 0;
             tsc_resync = true;
-            //last_tsc = rdtsc();
         }
 
         chrono::reset_all::~reset_all()

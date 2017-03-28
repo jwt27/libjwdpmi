@@ -128,6 +128,7 @@ namespace jw
                     auto t = std::chrono::duration_cast<duration>(std::chrono::high_resolution_clock::now().time_since_epoch());
                     return time_point { t };
                 }
+                thread::yield_while([] { return chrono::tsc_ticks_per_irq == 0; });
                 double ps = (chrono::current_tsc_ref() == tsc_reference::rtc) ? chrono::ps_per_rtc_tick : chrono::ps_per_pit_tick;
                 ps /= chrono::tsc_ticks_per_irq;
                 return time_point { duration { static_cast<std::int64_t>(ps * rdtsc() / 1000) } };
