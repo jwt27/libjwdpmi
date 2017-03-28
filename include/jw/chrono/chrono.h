@@ -65,7 +65,15 @@ namespace jw
             static void reset_pit();
             static void reset_rtc();
             static void reset_tsc();
-            static tsc_reference current_tsc_ref();
+
+            static tsc_reference preferred_tsc_ref;
+            static tsc_reference current_tsc_ref()
+            {
+                if (preferred_tsc_ref == tsc_reference::pit && chrono::pit_irq.is_enabled()) return preferred_tsc_ref;
+                else if (chrono::rtc_irq.is_enabled()) return tsc_reference::rtc;
+                else if (chrono::pit_irq.is_enabled()) return tsc_reference::pit;
+                else return tsc_reference::none;
+            }
 
             static constexpr io::out_port<byte> rtc_index { 0x70 };
             static constexpr io::io_port<byte> rtc_data { 0x71 };

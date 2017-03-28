@@ -28,7 +28,7 @@ namespace jw
         std::size_t tsc_sample_size { 0 };
         std::uint64_t tsc_total { 0 };
         std::uint64_t last_tsc;
-        tsc_reference tsc_ref { tsc_reference::pit };
+        tsc_reference chrono::preferred_tsc_ref { tsc_reference::pit };
         bool tsc_resync { true };
 
         std::atomic<std::uint32_t> chrono::tsc_ticks_per_irq { 0 };
@@ -44,14 +44,6 @@ namespace jw
         const io::io_port<byte> pit0_data { 0x40 };
 
         chrono::reset_all chrono::reset;
-
-        tsc_reference chrono::current_tsc_ref()
-        {
-            if (tsc_ref == tsc_reference::pit && chrono::pit_irq.is_enabled()) return tsc_ref;
-            else if (chrono::rtc_irq.is_enabled()) return tsc_reference::rtc;
-            else if (chrono::pit_irq.is_enabled()) return tsc_reference::pit;
-            else return tsc_reference::none;
-        }
 
         void chrono::update_tsc()
         {
@@ -150,7 +142,7 @@ namespace jw
             tsc_max_sample_size = sample_size;
             if (r != tsc_reference::none && (r != current_tsc_ref() || current_tsc_ref() == tsc_reference::none))
             {
-                tsc_ref = r;
+                preferred_tsc_ref = r;
                 reset_tsc();
             }
         }
