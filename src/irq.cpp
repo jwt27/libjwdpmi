@@ -29,7 +29,7 @@ namespace jw
             volatile std::uint32_t interrupt_count { 0 };
             locked_pool_allocator<> irq_controller::alloc { 4_KB };
             std::vector<int_vector, locked_pool_allocator<>> irq_controller::current_int { alloc };
-            std::unordered_map<int_vector, irq_controller, std::hash<int_vector>, std::equal_to<int_vector>, locking_allocator<>> irq_controller::entries { };
+            std::map<int_vector, irq_controller, std::less<int_vector>, locking_allocator<>> irq_controller::entries { };
             std::vector<byte, locking_allocator<>> irq_controller::stack { };
             std::uint32_t irq_controller::stack_use_count { };
             constexpr io::io_port<byte> irq_controller::pic0_cmd;
