@@ -22,10 +22,13 @@ namespace jw
 {
     constexpr auto constexpr_min(auto a, auto b) { return std::min(a, b); }
 
+    template<typename T, std::size_t size, typename condition = bool>
+    union alignas(constexpr_min(size >> 3, 4ul))[[gnu::packed]] split_int;
+
     template<typename T, std::size_t size>
-    union alignas(constexpr_min(size >> 3, 4ul)) [[gnu::packed]] split_int
+    union alignas(constexpr_min(size >> 3, 4ul)) [[gnu::packed]] split_int<T, size, std::enable_if_t<(size >> 1) % 2 == 0, bool>>
     {
-        struct [[gnu::packed]]
+        struct[[gnu::packed]]
         {
             split_int<unsigned, (size >> 1)> lo;
             split_int<T, (size >> 1)> hi;
@@ -36,8 +39,22 @@ namespace jw
         constexpr operator auto() const noexcept { return value; }
     };
 
+    template<typename T, std::size_t size>
+    union alignas(constexpr_min(size >> 3, 4ul)) [[gnu::packed]] split_int<T, size, std::enable_if_t<(size >> 1) % 2 != 0, bool>>
+    {
+        struct[[gnu::packed]]
+        {
+             unsigned lo : size >> 1;
+             T hi : size >> 1;
+        };
+        std::conditional_t<std::is_signed<T>::value, std::int64_t, std::uint64_t> value : size;
+        constexpr split_int() noexcept { }
+        constexpr split_int(auto v) noexcept : value(v) { };
+        constexpr operator auto() const noexcept { return value; }
+    };
+
     template<typename T>
-    union alignas(1) [[gnu::packed]] split_int<T, 8>
+    union alignas(1) [[gnu::packed]] split_int<T, 8, bool>
     {
         std::conditional_t<std::is_signed<T>::value, std::int8_t, std::uint8_t> value;
         constexpr split_int() noexcept { }
@@ -54,21 +71,4 @@ namespace jw
 
     static_assert(sizeof(split_uint64_t) == 8, "check sizeof jw::split_int");
     static_assert(alignof(split_uint64_t) == 4, "check alignof jw::split_int");
-
-    template<typename T>
-    union [[gnu::packed]] split_int14
-    {                      
-        struct[[gnu::packed]]
-        {
-            unsigned lo : 7;
-            T hi : 7;
-        };
-        T value : 14;
-        constexpr split_int14() noexcept { }
-        constexpr split_int14(auto v) noexcept : value(v) { }
-        constexpr operator auto() const noexcept { return value; }
-    };
-
-    using split_uint14_t = split_int14<unsigned>;
-    using split_int14_t = split_int14<signed>;
 }
