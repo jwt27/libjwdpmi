@@ -55,7 +55,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 // TODO: (eventually) software interrupts, real-mode callbacks
 
-#define INTERRUPT [[gnu::hot, gnu::optimize("O3"), gnu::used]]
+#define INTERRUPT [[gnu::hot, gnu::optimize("O3")]]
 
 namespace jw
 {
