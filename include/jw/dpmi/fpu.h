@@ -158,6 +158,7 @@ namespace jw
                 void leave() noexcept
                 {
                     if (!init) return;
+                    if (contexts.back() != nullptr) alloc.deallocate(contexts.back(), 1);
                     contexts.pop_back();
                     if (!lazy_switching) switch_context();
                     cr0_t cr0 { };
