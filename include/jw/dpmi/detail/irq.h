@@ -24,7 +24,7 @@ namespace jw
     {
         namespace detail
         {
-            class [[gnu::packed]] irq_wrapper
+            class [[gnu::packed]] irq_wrapper : class_lock<irq_wrapper>
             {
             public:
                 using entry_fptr = void(*)(int_vector) noexcept;
@@ -63,7 +63,7 @@ namespace jw
             {
                 std::deque<irq_handler_base*, locking_allocator<>> handler_chain { };
                 int_vector vec;
-                std::shared_ptr<irq_wrapper> wrapper;
+                irq_wrapper wrapper;
                 far_ptr32 old_handler { };
                 irq_config_flags flags { };
 
@@ -75,10 +75,11 @@ namespace jw
                 INTERRUPT void operator()();
 
                 irq_controller(const irq_controller&) = delete;
-                irq_controller(int_vector v) : vec(v), old_handler(get_pm_interrupt_vector(v))
+                irq_controller(int_vector v) : vec(v), 
+                    wrapper(v, interrupt_entry_point, get_stack_ptr, &data->stack_use_count), 
+                    old_handler(get_pm_interrupt_vector(v))
                 {
-                    wrapper = std::allocate_shared<irq_wrapper>(locking_allocator<> { }, v, interrupt_entry_point, get_stack_ptr, &data->stack_use_count);
-                    set_pm_interrupt_vector(vec, wrapper->get_ptr());
+                    set_pm_interrupt_vector(vec, wrapper.get_ptr());
                 }
 
             public:
