@@ -27,7 +27,6 @@ namespace jw
         std::size_t tsc_max_sample_size { 0x10000 };
         std::size_t tsc_sample_size { 0 };
         std::uint64_t tsc_total { 0 };
-        std::uint64_t last_tsc;
         tsc_reference chrono::preferred_tsc_ref { tsc_reference::pit };
         bool tsc_resync { true };
 
@@ -47,6 +46,7 @@ namespace jw
 
         void chrono::update_tsc()
         {
+            static std::uint64_t last_tsc;
             auto tsc = rdtsc();
             std::uint32_t diff = tsc - last_tsc;
             last_tsc = tsc;
@@ -81,7 +81,7 @@ namespace jw
             if (current_tsc_ref() == tsc_reference::rtc) update_tsc();
 
             ack();
-        }, dpmi::always_call };
+        }, dpmi::always_call | dpmi::no_interrupts };
 
         dpmi::irq_handler chrono::pit_irq { [](auto* ack) INTERRUPT
         {
@@ -90,7 +90,7 @@ namespace jw
             if (current_tsc_ref() == tsc_reference::pit) update_tsc();
 
             ack();
-        }, dpmi::always_call };
+        }, dpmi::always_call | dpmi::no_auto_eoi };
 
         void chrono::setup_pit(bool enable, std::uint32_t freq_divider)
         {
@@ -138,13 +138,13 @@ namespace jw
 
         void chrono::setup_tsc(std::size_t sample_size, tsc_reference r)
         {
-            if (sample_size == 0) throw std::out_of_range("TSC sample size must be non-zero.");
-            tsc_max_sample_size = sample_size;
+            if (sample_size != 0) tsc_max_sample_size = sample_size;
             if (r != tsc_reference::none && (r != current_tsc_ref() || current_tsc_ref() == tsc_reference::none))
             {
                 preferred_tsc_ref = r;
                 reset_tsc();
             }
+            thread::yield_while([] { return tsc_ticks_per_irq == 0; });
         }
 
         void chrono::reset_pit()
