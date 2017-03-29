@@ -27,7 +27,7 @@ namespace jw
                 bool no_data_available : 1;
             };
 
-            struct mpu401_streambuf : std::streambuf
+            struct mpu401_streambuf : std::basic_streambuf<byte, std::char_traits<byte>>
             {
                 mpu401_streambuf(mpu401_config c) : cfg(c), cmd_port(cfg.port + 1), status_port(cfg.port + 1), data_port(cfg.port) { }
 
@@ -46,9 +46,9 @@ namespace jw
             };
         }
 
-        struct mpu401_stream : std::iostream
+        struct mpu401_stream : std::basic_iostream<byte, std::char_traits<byte>>
         {
-            mpu401_stream(mpu401_config c) : std::iostream(&streambuf), streambuf(c) { }
+            mpu401_stream(mpu401_config c) : std::basic_iostream<byte, std::char_traits<byte>>(&streambuf), streambuf(c) { }
 
         private:
             detail::mpu401_streambuf streambuf;
