@@ -91,7 +91,7 @@ namespace jw
             if (dpmi::in_irq_context()) return condition();
             dpmi::trap_mask dont_trace_here { };
             bool c;
-            yield_while([&time_point, &condition, &c] { return T::clock::now() < time_point && (c = condition()); });
+            yield_while([&] { return (c = condition()) && T::clock::now() < time_point; });
             return c;
         };
 
