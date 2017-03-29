@@ -89,7 +89,26 @@ namespace jw
                 if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
 
                 if (new_reg != this || new_reg_ds != get_ds())   // copy back if location changed.
-                    *this = *(linear_memory(new_reg_ds, new_reg).get_ptr<rm_registers>());
+                {
+                    auto ptr = linear_memory { new_reg_ds, new_reg };
+                    if (ptr.requires_new_selector())
+                    {
+                        asm("push es;"
+                            "push ds;"
+                            "pop es;"
+                            "mov ds, %w0;"
+                            "rep movsb;"
+                            "push es;"
+                            "pop ds;"
+                            "pop es;"
+                            :: "rm" (new_reg_ds)
+                            , "c" (sizeof(rm_registers))
+                            , "S" (new_reg)
+                            , "D" (this)
+                            : "memory");
+                    }
+                    else *this = *(ptr.get_ptr<rm_registers>());
+                }
             }
         };
 
