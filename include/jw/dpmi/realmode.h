@@ -63,7 +63,6 @@ namespace jw
             }
             friend auto& operator<<(std::ostream& out, const rm_registers& in) { return in.print(out); }
 
-            // Call a real-mode interrupt. Second parameter is modified.
             void call_rm_interrupt(int_vector interrupt)
             {
                 selector new_reg_ds = get_ds();
