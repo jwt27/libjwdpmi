@@ -24,15 +24,15 @@ namespace jw
 {
     namespace chrono
     {
-        std::size_t tsc_max_sample_size { 0x10000 };
+        std::size_t tsc_max_sample_size { 1000 };
         std::size_t tsc_sample_size { 0 };
         std::uint64_t tsc_total { 0 };
         tsc_reference chrono::preferred_tsc_ref { tsc_reference::pit };
         bool tsc_resync { true };
 
         std::atomic<std::uint32_t> chrono::tsc_ticks_per_irq { 0 };
-        std::uint64_t chrono::ps_per_pit_tick;
-        std::uint64_t chrono::ps_per_rtc_tick;
+        double chrono::ns_per_pit_tick;
+        double chrono::ns_per_rtc_tick;
 
         std::atomic<std::uint64_t> chrono::pit_ticks;
         volatile std::uint_fast16_t chrono::rtc_ticks;
@@ -100,7 +100,7 @@ namespace jw
 
             if (freq_divider < 1 || freq_divider > 0x10000) 
                 throw std::out_of_range("PIT frequency divisor must be a value between 1 and 0x10000, inclusive.");
-            ps_per_pit_tick = 1e12 / (max_pit_frequency / freq_divider);
+            ns_per_pit_tick = 1e9 / (max_pit_frequency / freq_divider);
             pit_irq.set_irq(0);
             pit_irq.enable();
 
@@ -117,7 +117,7 @@ namespace jw
             if (!enable) return;
 
             if (freq_shift < 1 || freq_shift > 15) throw std::out_of_range("RTC frequency shift must be a value between 1 and 15, inclusive.");
-            ps_per_rtc_tick = 1e12 / (max_rtc_frequency >> (freq_shift - 1));
+            ns_per_rtc_tick = 1e9 / (max_rtc_frequency >> (freq_shift - 1));
             rtc_irq.set_irq(8);
             rtc_irq.enable();
 
@@ -215,7 +215,7 @@ namespace jw
             sec += read_bcd() * 60 * 60 * 24 * 365.2425;
             sec += 946684800;   // seconds from 1970 to 2000
             sec *= static_cast<std::uint64_t>(1e6);
-            sec += chrono::rtc_ticks * chrono::ps_per_rtc_tick / 1e6;
+            sec += chrono::rtc_ticks * chrono::ns_per_rtc_tick / 1e3;
             return time_point { duration { sec } };
         }
     }

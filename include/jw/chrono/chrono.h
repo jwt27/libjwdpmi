@@ -52,8 +52,8 @@ namespace jw
 
         private:
             static std::atomic<std::uint32_t> tsc_ticks_per_irq;
-            static std::uint64_t ps_per_pit_tick;
-            static std::uint64_t ps_per_rtc_tick;
+            static double ns_per_pit_tick;
+            static double ns_per_rtc_tick;
 
             static std::atomic<std::uint64_t> pit_ticks;
             static volatile std::uint_fast16_t rtc_ticks;
@@ -117,7 +117,7 @@ namespace jw
                     auto t = std::chrono::duration_cast<duration>(std::chrono::steady_clock::now().time_since_epoch());
                     return time_point { t };
                 }
-                return time_point { duration { chrono::ps_per_pit_tick * chrono::pit_ticks / 1000 } };
+                return time_point { duration { static_cast<std::int64_t>(chrono::ns_per_pit_tick * chrono::pit_ticks) } };
             }
         };
 
@@ -136,10 +136,10 @@ namespace jw
                     auto t = std::chrono::duration_cast<duration>(std::chrono::high_resolution_clock::now().time_since_epoch());
                     return time_point { t };
                 }
-                double ps = (chrono::current_tsc_ref() == tsc_reference::rtc) ? chrono::ps_per_rtc_tick : chrono::ps_per_pit_tick;
-                ps *= rdtsc();
-                ps /= chrono::tsc_ticks_per_irq * 1000.0;
-                return time_point { duration { static_cast<std::int64_t>(ps) } };
+                double ns = (chrono::current_tsc_ref() == tsc_reference::rtc) ? chrono::ns_per_rtc_tick : chrono::ns_per_pit_tick;
+                ns *= rdtsc();
+                ns /= chrono::tsc_ticks_per_irq;
+                return time_point { duration { static_cast<std::int64_t>(ns) } };
             }
         };
     }
