@@ -161,7 +161,7 @@ namespace jw
                     contexts.pop_back();
                     if (!lazy_switching) switch_context();
                     cr0_t cr0 { };
-                    cr0.task_switched = true;
+                    cr0.task_switched = (last_restored != contexts.size() - 1);
                     cr0.set();
                 }
 
