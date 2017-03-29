@@ -85,20 +85,22 @@ namespace jw
             yield_until(C::now() + duration);
         };
 
-        // Combination of yield_while() and yield_until()
-        template<typename T, typename F> inline void yield_while_until(F condition, T time_point)
+        // Combination of yield_while() and yield_until(). Returns true on timeout.
+        template<typename T, typename F> inline bool yield_while_until(F condition, T time_point)
         { 
-            if (dpmi::in_irq_context()) return;
+            if (dpmi::in_irq_context()) return true;
             dpmi::trap_mask dont_trace_here { };
-            yield_while([&time_point, &condition] { return T::clock::now() < time_point && condition(); });
+            T t;
+            yield_while([&time_point, &condition, &t] { return (t = T::clock::now()) < time_point && condition(); });
+            return t >= time_point;
         };
 
-        // Combination of yield_while() and yield_for()
-        template<typename C, typename F> inline void yield_while_for(F condition, typename C::duration duration) 
+        // Combination of yield_while() and yield_for(). Returns true on timeout.
+        template<typename C, typename F> inline bool yield_while_for(F condition, typename C::duration duration) 
         { 
-            if (dpmi::in_irq_context()) return;
+            if (dpmi::in_irq_context()) return true;
             dpmi::trap_mask dont_trace_here { };
-            yield_while_until(condition, C::now() + duration);
+            return yield_while_until(condition, C::now() + duration);
         };
     }
 }
