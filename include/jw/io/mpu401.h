@@ -29,7 +29,8 @@ namespace jw
 
             struct mpu401_streambuf : std::basic_streambuf<byte, std::char_traits<byte>>
             {
-                mpu401_streambuf(mpu401_config c) : cfg(c), cmd_port(cfg.port + 1), status_port(cfg.port + 1), data_port(cfg.port) { }
+                mpu401_streambuf(mpu401_config c);
+                virtual ~mpu401_streambuf();
 
             protected:
                 virtual int sync() override;
@@ -43,6 +44,8 @@ namespace jw
                 out_port<byte> cmd_port;
                 in_port<mpu401_status> status_port;
                 io_port<byte> data_port;
+
+                static std::unordered_map<port_num, bool> port_use_map;
             };
         }
 
