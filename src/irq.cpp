@@ -27,27 +27,20 @@ namespace jw
         namespace detail
         {
             volatile std::uint32_t interrupt_count { 0 };
-            locked_pool_allocator<> irq_controller::alloc { 4_KB };
-            std::vector<int_vector, locked_pool_allocator<>> irq_controller::current_int { alloc };
-            std::map<int_vector, irq_controller, std::less<int_vector>, locking_allocator<>> irq_controller::entries { };
-            std::vector<byte, locking_allocator<>> irq_controller::stack { };
-            std::uint32_t irq_controller::stack_use_count { };
             constexpr io::io_port<byte> irq_controller::pic0_cmd;
             constexpr io::io_port<byte> irq_controller::pic1_cmd;
-            irq_controller::initializer irq_controller::init { };
-            thread::task<void()> irq_controller::increase_stack_size { []() { stack.resize(stack.size() * 2); } };
+            irq_controller::irq_controller_data* irq_controller::data { nullptr };
 
             void irq_controller::interrupt_entry_point(int_vector vec) noexcept
             {
                 ++interrupt_count;
-                current_int.push_back(vec);
+                data->current_int.push_back(vec);
                 fpu_context_switcher.enter();
                 
                 byte* esp; asm("mov %0, esp;":"=rm"(esp));
-                if (static_cast<std::size_t>(esp - stack.data()) <= config::interrupt_minimum_stack_size)
+                if (static_cast<std::size_t>(esp - data->stack.data()) <= config::interrupt_minimum_stack_size)
                 {
-                    increase_stack_size->name = "Increasing stack size for IRQ handlers";   // TODO: this is dangerous, do it somewhere else!
-                    increase_stack_size->start();
+                    data->increase_stack_size->start();
                 }
 
                 auto i = vec_to_irq(vec);
@@ -56,11 +49,11 @@ namespace jw
                 try
                 {
                     std::unique_ptr<irq_mask> mask;
-                    if (!(entries.at(vec).flags & no_interrupts)) asm("sti");
-                    else if (entries.at(vec).flags & no_reentry) mask = std::make_unique<irq_mask>(i);
-                    if (!(entries.at(vec).flags & no_auto_eoi)) send_eoi();
+                    if (!(data->entries.at(vec).flags & no_interrupts)) asm("sti");
+                    else if (data->entries.at(vec).flags & no_reentry) mask = std::make_unique<irq_mask>(i);
+                    if (!(data->entries.at(vec).flags & no_auto_eoi)) send_eoi();
                 
-                    entries.at(vec)();
+                    data->entries.at(vec)();
                 }
                 catch (...) { std::cerr << "OOPS" << std::endl; } // TODO: exception handling
 
@@ -69,7 +62,7 @@ namespace jw
                 acknowledge();
                 fpu_context_switcher.leave();
                 --interrupt_count;
-                current_int.pop_back();
+                data->current_int.pop_back();
             }
 
             void irq_controller::operator()()
@@ -158,7 +151,7 @@ namespace jw
 
             byte* irq_controller::get_stack_ptr() noexcept
             {
-                return stack.data() + (stack.size() >> (stack_use_count++)) - 4;
+                return data->stack.data() + (data->stack.size() >> (data->stack_use_count++)) - 4;
             }
 
             void irq_controller::set_pm_interrupt_vector(int_vector v, far_ptr32 ptr)

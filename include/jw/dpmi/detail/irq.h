@@ -77,7 +77,7 @@ namespace jw
                 irq_controller(const irq_controller&) = delete;
                 irq_controller(int_vector v) : vec(v), old_handler(get_pm_interrupt_vector(v))
                 {
-                    wrapper = std::allocate_shared<irq_wrapper>(locking_allocator<> { }, v, interrupt_entry_point, get_stack_ptr, &stack_use_count);
+                    wrapper = std::allocate_shared<irq_wrapper>(locking_allocator<> { }, v, interrupt_entry_point, get_stack_ptr, &data->stack_use_count);
                     set_pm_interrupt_vector(vec, wrapper->get_ptr());
                 }
 
@@ -102,12 +102,19 @@ namespace jw
                     interrupt_mask no_ints_here { };
                     std::remove_if(handler_chain.begin(), handler_chain.end(), [p](auto a) { return a == p; });
                     add_flags();
+                    if (handler_chain.empty()) data->entries.erase(vec);
+                    if (data->entries.empty())
+                    {
+                        delete data;
+                        data = nullptr;
+                    }
                 }
 
                 static irq_controller& get(int_vector v)
                 {
-                    if (entries.count(v) == 0) entries.emplace(v, irq_controller { v });
-                    return entries.at(v);
+                    if (data == nullptr) data = new irq_controller_data { };
+                    if (data->entries.count(v) == 0) data->entries.emplace(v, irq_controller { v });
+                    return data->entries.at(v);
                 }
 
                 static irq_controller& get_irq(irq_level i) { return get(irq_to_vec(i)); }
@@ -128,13 +135,13 @@ namespace jw
                 }
 
                 static bool is_irq(int_vector v) { return vec_to_irq(v) != 0xff; }
-                static bool is_acknowledged() { return current_int.back() == 0; }
+                static bool is_acknowledged() { return data->current_int.back() == 0; }
 
                 INTERRUPT static void acknowledge() noexcept
                 {
                     if (is_acknowledged()) return;
                     send_eoi();
-                    current_int.back() = 0;
+                    data->current_int.back() = 0;
                 }
 
                 INTERRUPT static auto in_service() noexcept
@@ -149,8 +156,8 @@ namespace jw
 
                 INTERRUPT static void send_eoi() noexcept
                 {
-                    auto v = current_int.back();
-                    if (entries.at(v).flags & always_chain) return;
+                    auto v = data->current_int.back();
+                    if (data->entries.at(v).flags & always_chain) return;
                     auto i = vec_to_irq(v);
                     if (i >= 16) return;
                     if (!in_service()[i]) return;
@@ -166,25 +173,26 @@ namespace jw
                 INTERRUPT static byte* get_stack_ptr() noexcept;
                 INTERRUPT static void interrupt_entry_point(int_vector vec) noexcept;
 
-                static locked_pool_allocator<> alloc;
-                static std::vector<int_vector, locked_pool_allocator<>> current_int; // Current interrupt vector. Set to 0 when acknowlegded.
-                static std::map<int_vector, irq_controller, std::less<int_vector>, locking_allocator<>> entries;
-                static std::vector<byte, locking_allocator<>> stack;
-                static std::uint32_t stack_use_count;
                 static constexpr io::io_port<byte> pic0_cmd { 0x20 };
                 static constexpr io::io_port<byte> pic1_cmd { 0xA0 };
 
-                static thread::task<void()> increase_stack_size;
-
-                struct initializer
+                struct irq_controller_data : class_lock<irq_controller_data>
                 {
-                    initializer()
+                    irq_controller_data()
                     {
                         stack.resize(config::interrupt_initial_stack_size);
+                        increase_stack_size->name = "Increasing stack size for IRQ handlers";
                         pic0_cmd.write(0x68);   // TODO: restore to defaults
                         pic1_cmd.write(0x68);
                     }
-                } static init;
+
+                    thread::task<void()> increase_stack_size { [this]() { stack.resize(stack.size() * 2); } };
+                    locked_pool_allocator<> alloc { 4_KB };
+                    std::vector<int_vector, locked_pool_allocator<>> current_int { alloc }; // Current interrupt vector. Set to 0 when acknowlegded.
+                    std::map<int_vector, irq_controller, std::less<int_vector>, locking_allocator<>> entries { };
+                    std::vector<byte, locking_allocator<>> stack { };
+                    std::uint32_t stack_use_count { 0 };
+                } static * data;
             };
         }
     }
