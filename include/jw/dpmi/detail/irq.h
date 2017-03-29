@@ -63,7 +63,7 @@ namespace jw
             {
                 std::deque<irq_handler_base*, locking_allocator<>> handler_chain { };
                 int_vector vec;
-                irq_wrapper wrapper;
+                std::unique_ptr<irq_wrapper> wrapper;
                 far_ptr32 old_handler { };
                 irq_config_flags flags { };
 
@@ -75,11 +75,11 @@ namespace jw
                 INTERRUPT void operator()();
 
                 irq_controller(const irq_controller&) = delete;
-                irq_controller(int_vector v) : vec(v), 
-                    wrapper(v, interrupt_entry_point, get_stack_ptr, &data->stack_use_count), 
+                irq_controller(int_vector v) : vec(v),
                     old_handler(get_pm_interrupt_vector(v))
                 {
-                    set_pm_interrupt_vector(vec, wrapper.get_ptr());
+                    wrapper = std::make_unique<irq_wrapper>(v, interrupt_entry_point, get_stack_ptr, &data->stack_use_count), 
+                    set_pm_interrupt_vector(vec, wrapper->get_ptr());
                 }
 
             public:
