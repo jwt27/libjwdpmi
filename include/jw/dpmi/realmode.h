@@ -57,7 +57,7 @@ namespace jw
                 using namespace std;
                 out << hex << setfill('0');
                 out << "es=" << setw(4) << es << " ds=" << setw(4) << ds << " fs=" << setw(4) << fs << " gs=" << setw(4) << gs << "\n";
-                out << "cs=" << setw(4) << cs << " ip=" << setw(4) << ip << " ss=" << setw(4) << ss << " sp=" << setw(4) << sp << " flags=" << setw(4) << flags_reg << "\n";
+                out << "cs=" << setw(4) << cs << " ip=" << setw(4) << ip << " ss=" << setw(4) << ss << " sp=" << setw(4) << sp << " flags=" << setw(4) << raw_flags << "\n";
                 out << hex << setfill(' ') << setw(0) << flush;
                 return out;
             }
@@ -72,9 +72,11 @@ namespace jw
                 bool c;
 
                 asm volatile(
+                    "push es;"
                     "mov es, %w2;"
                     "int 0x31;"
                     "mov %w2, es;"
+                    "pop es;"
                     : "=@ccc" (c)
                     , "=a" (error)
                     , "+rm" (new_reg_ds)
