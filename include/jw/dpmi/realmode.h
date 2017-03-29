@@ -17,6 +17,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
 #include <jw/dpmi/memory.h>
+#include <jw/dpmi/irq.h>
 
 namespace jw
 {
@@ -61,35 +62,35 @@ namespace jw
                 return out;
             }
             friend auto& operator<<(std::ostream& out, const rm_registers& in) { return in.print(out); }
+
+            // Call a real-mode interrupt. Second parameter is modified.
+            void call_rm_interrupt(int_vector interrupt)
+            {
+                selector new_reg_ds = get_ds();
+                rm_registers* new_reg;
+                dpmi_error_code error;
+                bool c;
+
+                asm volatile(
+                    "mov es, %w2;"
+                    "int 0x31;"
+                    "mov %w2, es;"
+                    : "=@ccc" (c)
+                    , "=a" (error)
+                    , "+rm" (new_reg_ds)
+                    , "=D" (new_reg)
+                    : "a" (0x0300)
+                    , "b" (interrupt)
+                    , "D" (this)
+                    , "c" (0)   // TODO: stack?
+                    : "memory");
+                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+
+                if (new_reg != this || new_reg_ds != get_ds())   // copy back if location changed.
+                    *this = *(linear_memory(new_reg_ds, new_reg).get_ptr<rm_registers>());
+            }
         };
 
         static_assert(sizeof( rm_registers) == 0x32, "check sizeof struct dpmi::rm_registers");
-
-        // Call a real-mode interrupt. Second parameter is modified.
-        inline void call_rm_interrupt(std::uint8_t interrupt, rm_registers* reg)
-        {
-            selector new_reg_ds = get_ds();
-            rm_registers* new_reg;
-            dpmi_error_code error;
-            bool c;
-
-            asm volatile(
-                "mov es, %w2;"
-                "int 0x31;"
-                "mov %w2, es;"
-                : "=@ccc" (c)
-                , "=a" (error)
-                , "+rm" (new_reg_ds)
-                , "=D" (new_reg)
-                : "a" (0x0300)
-                , "b" (interrupt)
-                , "D" (reg)
-                , "c" (0)   // TODO: stack?
-                : "memory");
-            if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
-
-            if (new_reg != reg || new_reg_ds != get_ds())   // copy back if location changed.
-                *reg = *(linear_memory(new_reg_ds, new_reg).get_ptr<rm_registers>());
-        }
     }
 }
