@@ -32,6 +32,11 @@ namespace jw
                 mpu401_streambuf(mpu401_config c);
                 virtual ~mpu401_streambuf();
 
+                mpu401_streambuf(const mpu401_streambuf&) = delete;
+                mpu401_streambuf(mpu401_streambuf&&) = delete;
+                mpu401_streambuf& operator=(const mpu401_streambuf&) = delete;
+                mpu401_streambuf& operator=(mpu401_streambuf&&) = delete;
+
             protected:
                 virtual int sync() override;
                 virtual std::streamsize xsgetn(char_type* s, std::streamsize n) override;
@@ -40,10 +45,41 @@ namespace jw
                 virtual int_type overflow(int_type c = traits_type::eof()) override;
 
             private:
+                void get() noexcept
+                {
+                    if (getting.test_and_set()) return;
+                    while (!status_port.read().no_data_available && rx_ptr < rx_buf.end()) 
+                        *(rx_ptr++) = data_port.read();
+                    setg(rx_buf.begin(), gptr(), rx_ptr - 1);
+                    getting.clear();
+                }
+
+                void put() noexcept
+                {
+                    if (putting.test_and_set()) return;
+                    while (!status_port.read().dont_send_data && tx_ptr < pptr())
+                        data_port.write(*tx_ptr++);
+                    putting.clear();
+                }
+
+                dpmi::irq_handler irq_handler { [this](auto ack) INTERRUPT
+                {
+                    if (!status_port.read().no_data_available) ack();
+                    get();
+                    put();
+                } };
+
                 mpu401_config cfg;
                 out_port<byte> cmd_port;
                 in_port<mpu401_status> status_port;
                 io_port<byte> data_port;
+                std::atomic_flag getting { false };
+                std::atomic_flag putting { false };
+
+                std::array<char_type, 1_KB> rx_buf;
+                std::array<char_type, 1_KB> tx_buf;
+                char_type* rx_ptr { rx_buf.data() };
+                char_type* tx_ptr { tx_buf.data() };
 
                 static std::unordered_map<port_num, bool> port_use_map;
             };

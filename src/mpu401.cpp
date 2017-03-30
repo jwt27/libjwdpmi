@@ -33,16 +33,26 @@ namespace jw
                 cmd_port.write(0x3F);   // set UART mode (should ACK, maybe some cheap cards won't)
                 if (!thread::yield_while_for<chrono::pit>([this] { return status_port.read().no_data_available; }, timeout))
                     if (data_port.read() != 0xFE) throw std::runtime_error("Expected ACK from MPU401.");
+
+                irq_handler.set_irq(cfg.irq);
+                if (cfg.use_irq) irq_handler.enable();
             }
 
             mpu401_streambuf::~mpu401_streambuf()
             {
+                irq_handler.disable();
                 cmd_port.write(0xFF);
                 port_use_map[cfg.port] = false;
             }
 
             int mpu401_streambuf::sync()
             {
+                while (tx_ptr < pptr())
+                {
+                    overflow();
+                    underflow();
+                    thread::yield();
+                }
                 return 0;
             }
 
