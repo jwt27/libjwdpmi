@@ -3,35 +3,83 @@
 
 #pragma once
 #include <experimental/vector>
+#include <type_traits>
 #include <jw/vector2.h>
 
 namespace jw
 {
-    template<typename T>
-    struct matrix 
+    template<typename M>
+    struct matrix_range
     {
-        using vector2s = vector2<std::size_t>;
+        constexpr matrix_range(M& matrix, const vector2i& position, const vector2i& dimensions) noexcept 
+            : m(matrix), pos(position), dim(dimensions) { }
 
-        matrix(std::size_t w, std::size_t h, T* data) : p(data), dim(w, h) { }
+        constexpr auto make_range(const vector2i& position, const vector2i& dimensions) const noexcept { return matrix_range { m, position, dimensions }; }
 
-        constexpr T& operator()(const vector2s& pos) { return *(p + pos.x + size().x * pos.y); }
-        constexpr T& operator()(std::size_t x, std::size_t y) { return (*this)(vector2s { x, y }); }
+        constexpr auto& operator()(vector2i p) noexcept 
+        { 
+            auto* ptr = m.data();
+            p.x %= dim.x;
+            p.y %= dim.y;
+            auto offset = pos + p;
+            return *(ptr + offset.x + m.size().x * offset.y);
+        }
 
+        constexpr const auto& operator()(vector2i p) const noexcept 
+        { 
+            auto* ptr = m.data();
+            p.x %= dim.x;
+            p.y %= dim.y;
+            auto offset = pos + p;
+            return *(ptr + offset.x + m.size().x * offset.y);
+        }
+
+        constexpr const auto& operator()(std::ptrdiff_t x, std::ptrdiff_t y) const noexcept { return (*this)({ x, y }); }
+        constexpr auto& operator()(std::ptrdiff_t x, std::ptrdiff_t y) noexcept { return (*this)({ x, y }); }
+
+        constexpr auto size() const noexcept { return dim; }
         constexpr auto width() const noexcept { return size().x; }
         constexpr auto height() const noexcept { return size().y; }
         constexpr auto data_size() const noexcept { return width() * height(); }
-        constexpr auto size() const noexcept { return dim; }
+
+        M& m;
+        const vector2i pos, dim;
+    };
+
+    template<typename R>
+    struct matrix_iterator
+    {
+        constexpr matrix_iterator(R& range, const vector2i& pos) noexcept : r(range), p(pos) { }
+
+        constexpr auto* operator->() noexcept { return &r(p); }
+        constexpr const auto* operator->() const noexcept { return &r(p); }
+        constexpr auto& operator*() noexcept { return r(p); }
+        constexpr const auto& operator*() const noexcept { return r(p); }
+
+        constexpr auto& operator+=(const auto& n) const noexcept { p += n; return *this; }
+        constexpr auto& operator-=(const auto& n) const noexcept { p -= n; return *this; }
+
+        R& r;
+        vector2i p;
+    };
+
+    template<typename T>
+    struct matrix : public matrix_range<matrix<T>>
+    {
+        constexpr matrix(std::size_t w, std::size_t h, T* data) : matrix_range<matrix<T>>(*this, { 0, 0 }, { w, h }), p(data) { }
+
+        constexpr auto* data() noexcept { return p; }
+        constexpr const auto* data() const noexcept { return data(); }
 
     protected:
-        T* const p;
-        const vector2s dim;
+        T* p;
     };
 
     template<typename T>
     struct matrix_container : public matrix<T>
     {
         matrix_container(std::size_t w, std::size_t h, std::experimental::pmr::memory_resource* memres = std::experimental::pmr::get_default_resource()) 
-            : matrix<T>(w, h, data.data()), data(w * h, std::experimental::pmr::polymorphic_allocator<T> { memres }) { }
+            : matrix<T>(w, h, nullptr), data(w * h, std::experimental::pmr::polymorphic_allocator<T> { memres }) { this->p = data.data(); }
 
     protected:
         std::experimental::pmr::vector<T> data;
@@ -40,7 +88,7 @@ namespace jw
     template<typename T, std::size_t w, std::size_t h>
     struct fixed_matrix : public matrix<T> 
     {
-        fixed_matrix() : matrix<T>(w, h, data.data()) { }
+        constexpr fixed_matrix() : matrix<T>(w, h, data.data()) { }
 
     protected:
         std::array<T, w * h> data;
