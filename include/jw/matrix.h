@@ -16,24 +16,8 @@ namespace jw
 
         constexpr auto make_range(const vector2i& position, const vector2i& dimensions) const noexcept { return matrix_range { m, position, dimensions }; }
 
-        constexpr auto& operator()(vector2i p) noexcept 
-        { 
-            auto* ptr = m.data();
-            p.x %= dim.x;
-            p.y %= dim.y;
-            auto offset = pos + p;
-            return *(ptr + offset.x + m.size().x * offset.y);
-        }
-
-        constexpr const auto& operator()(vector2i p) const noexcept 
-        { 
-            auto* ptr = m.data();
-            p.x %= dim.x;
-            p.y %= dim.y;
-            auto offset = pos + p;
-            return *(ptr + offset.x + m.size().x * offset.y);
-        }
-
+        constexpr auto& operator()(vector2i p) noexcept { return get(p, m.data()); }
+        constexpr const auto& operator()(vector2i p) const noexcept { return get(p, m.data()); }
         constexpr const auto& operator()(std::ptrdiff_t x, std::ptrdiff_t y) const noexcept { return (*this)({ x, y }); }
         constexpr auto& operator()(std::ptrdiff_t x, std::ptrdiff_t y) noexcept { return (*this)({ x, y }); }
 
@@ -41,6 +25,15 @@ namespace jw
         constexpr auto width() const noexcept { return size().x; }
         constexpr auto height() const noexcept { return size().y; }
         constexpr auto data_size() const noexcept { return width() * height(); }
+
+    protected:
+        constexpr auto& get(vector2i p, auto* ptr) const noexcept
+        {
+            p.x %= dim.x;
+            p.y %= dim.y;
+            auto offset = pos + p;
+            return *(ptr + offset.x + m.size().x * offset.y);
+        }
 
         M& m;
         const vector2i pos, dim;
