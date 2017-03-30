@@ -50,7 +50,7 @@ namespace jw
                     if (getting.test_and_set()) return;
                     while (!status_port.read().no_data_available && rx_ptr < rx_buf.end()) 
                         *(rx_ptr++) = data_port.read();
-                    setg(rx_buf.begin(), gptr(), rx_ptr - 1);
+                    setg(rx_buf.begin(), gptr(), rx_ptr);
                     getting.clear();
                 }
 
