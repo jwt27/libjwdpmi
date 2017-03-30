@@ -47,6 +47,8 @@ namespace jw
 
         constexpr auto square_magnitude() const noexcept { return x*x + y*y; }
         constexpr auto magnitude() const noexcept { return std::sqrt(square_magnitude()); }
+        template<typename U = float> constexpr auto angle_cast() const noexcept { return std::atan(static_cast<U>(y) / x); }
+        constexpr auto angle() const noexcept { return angle_cast<float>(); }
     };
 
     using vector2i = vector2<std::int32_t>;
