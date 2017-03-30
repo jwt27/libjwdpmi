@@ -31,7 +31,7 @@ namespace jw
         constexpr vector2& operator*=(const auto& rhs) { x *= rhs; y *= rhs; return *this; }
         constexpr vector2& operator/=(const auto& rhs) { x /= rhs; y /= rhs; return *this; }
 
-        template <typename U> friend constexpr auto operator*(const vector2& lhs, const vector2<U>& rhs) { return lhs.x * rhs.x + lhs.y * lhs.y; }
+        template <typename U> friend constexpr auto operator*(const vector2& lhs, const vector2<U>& rhs) { return lhs.x * rhs.x + lhs.y * rhs.y; }
 
         template <typename U> friend constexpr auto operator+(const vector2& lhs, const vector2<U>& rhs) { return vector2<decltype(std::declval<T>() + std::declval<U>())> { lhs.x, lhs.y } += rhs; }
         template <typename U> friend constexpr auto operator-(const vector2& lhs, const vector2<U>& rhs) { return vector2<decltype(std::declval<T>() - std::declval<U>())> { lhs.x, lhs.y } -= rhs; }
