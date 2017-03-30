@@ -47,8 +47,8 @@ namespace jw
 
         constexpr auto square_magnitude() const noexcept { return x*x + y*y; }
         constexpr auto magnitude() const noexcept { return std::sqrt(square_magnitude()); }
-        template<typename U = float> constexpr auto angle_cast() const noexcept { return std::atan(static_cast<U>(y) / x); }
-        constexpr auto angle() const noexcept { return angle_cast<float>(); }
+        template<typename U> constexpr auto angle_from(const vector2<U>& other) const noexcept { return std::acos((*this * other) / (magnitude() * other.magnitude())); }
+        constexpr auto angle() const noexcept { return angle_from(up()); }
     };
 
     using vector2i = vector2<std::int32_t>;
