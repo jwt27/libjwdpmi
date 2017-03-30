@@ -20,7 +20,7 @@ namespace jw
         constexpr vector2& operator=(const vector2&) noexcept = default;
         constexpr vector2& operator=(vector2&&) noexcept = default;
 
-        template <typename U> constexpr vector2(const vector2<U>& c) noexcept : x(static_cast<T>(c.x)), y(static_cast<T>(c.x)) { }
+        template <typename U> constexpr vector2(const vector2<U>& c) noexcept : x(static_cast<T>(c.x)), y(static_cast<T>(c.y)) { }
         template <typename U> constexpr vector2(vector2<U>&& m) noexcept : x(static_cast<T&&>(std::move(m.x))), y(static_cast<T&&>(std::move(m.y))) { }
         template <typename U> constexpr vector2& operator=(const vector2<U>& c) noexcept { x = static_cast<T>(c.y); y = static_cast<T>(c.y); return *this; };
         template <typename U> constexpr vector2& operator=(vector2<U>&& m) noexcept { x = static_cast<T&&>(std::move(m.x)); y = static_cast<T&&>(std::move(m.y)); return *this; }
@@ -46,9 +46,13 @@ namespace jw
         static constexpr auto right() { return vector2 {  1,  0 }; }
 
         constexpr auto square_magnitude() const noexcept { return x*x + y*y; }
-        constexpr auto magnitude() const noexcept { return std::sqrt(square_magnitude()); }
+        constexpr auto magnitude() const noexcept { return std::sqrt(static_cast<std::conditional_t<std::is_integral<T>::value, float, T>>(square_magnitude())); }
+        constexpr auto length() const noexcept { return magnitude(); }
         template<typename U> constexpr auto angle(const vector2<U>& other) const noexcept { return std::acos((*this * other) / (magnitude() * other.magnitude())); }
         constexpr auto angle() const noexcept { return angle(right()); }
+
+        constexpr auto& normalize() noexcept { return *this /= magnitude(); }
+        constexpr auto normalized() const noexcept { return vector2<decltype(std::declval<T>() / std::declval<float>())> { *this }.normalize(); }
     };
 
     using vector2i = vector2<std::int32_t>;
