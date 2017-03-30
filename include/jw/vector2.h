@@ -4,6 +4,7 @@
 #pragma once
 #include <cstdint>
 #include <utility>
+#include <cmath>
 
 namespace jw
 {
@@ -43,6 +44,9 @@ namespace jw
         static constexpr auto down()  { return vector2 {  0,  1 }; }
         static constexpr auto left()  { return vector2 { -1,  0 }; }
         static constexpr auto right() { return vector2 {  1,  0 }; }
+
+        constexpr auto square_magnitude() const noexcept { return x*x + y*y; }
+        constexpr auto magnitude() const noexcept { return std::sqrt(square_magnitude()); }
     };
 
     using vector2i = vector2<std::int32_t>;
