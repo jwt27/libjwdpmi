@@ -73,6 +73,7 @@ namespace jw
         {
             irq_handler.disable();
             command<send_data, recv_ack, recv_discard_any>({ 0xFF });  // reset keyboard
+            set_scancode_set(1);
             config = initial_config;
             write_config();                 // restore PS/2 configuration data
             initialized = false;
