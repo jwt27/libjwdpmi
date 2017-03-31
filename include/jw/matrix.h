@@ -14,7 +14,12 @@ namespace jw
         constexpr matrix_range(M& matrix, const vector2i& position, const vector2i& dimensions) noexcept 
             : m(matrix), pos(position), dim(dimensions) { }
 
-        constexpr auto make_range(const vector2i& position, const vector2i& dimensions) const noexcept { return matrix_range { m, position, dimensions }; }
+        constexpr auto make_range(const vector2i& position, const vector2i& dimensions) const noexcept
+        {
+            auto new_pos = pos + position;
+            auto new_dim = vector2i::min(dimensions, dim - new_pos);
+            return matrix_range { m, pos + new_pos, new_dim };
+        }
 
         constexpr auto& operator()(vector2i p) noexcept { return get(p, m.data()); }
         constexpr const auto& operator()(vector2i p) const noexcept { return get(p, m.data()); }

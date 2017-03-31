@@ -77,6 +77,7 @@ namespace jw
             copy *= max;
             return copy;
         }
+
         static constexpr auto max(const auto& a, const auto& b) noexcept
         {
             auto max_x = static_cast<T>(std::abs(a.x) > abs(b.x) ? a.x : b.x);
