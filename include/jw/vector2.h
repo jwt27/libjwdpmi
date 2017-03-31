@@ -79,34 +79,18 @@ namespace jw
         }
         static constexpr auto max(const auto& a, const auto& b) noexcept
         {
-            auto max_x = std::max(static_cast<T>(a.x), static_cast<T>(a.x));
-            auto max_y = std::max(static_cast<T>(a.y), static_cast<T>(a.y));
+            auto max_x = static_cast<T>(std::abs(a.x) > abs(b.x) ? a.x : b.x);
+            auto max_y = static_cast<T>(std::abs(a.y) > abs(b.y) ? a.y : b.y);
             return vector2 { max_x, max_y }; 
         }
 
         static constexpr auto min(const auto& a, const auto& b) noexcept
         {
-            auto min_x = std::min(static_cast<T>(a.x), static_cast<T>(a.x));
-            auto min_y = std::min(static_cast<T>(a.y), static_cast<T>(a.y));
+            auto min_x = static_cast<T>(std::abs(a.x) < abs(b.x) ? a.x : b.x);
+            auto min_y = static_cast<T>(std::abs(a.y) < abs(b.y) ? a.y : b.y);
             return vector2 { min_x, min_y };
         }
     };
-
-    template<typename T, typename U> inline constexpr auto max(const vector2<T>& a, const vector2<U>& b) noexcept
-    {
-        using V = decltype(std::declval<T>() + std::declval<U>());
-        auto max_x = std::max(static_cast<V>(a.x), static_cast<V>(a.x));
-        auto max_y = std::max(static_cast<V>(a.y), static_cast<V>(a.y));
-        return vector2<V> { max_x, max_y }; 
-    }
-
-    template<typename T, typename U> inline constexpr auto min(const vector2<T>& a, const vector2<U>& b) noexcept
-    {
-        using V = decltype(std::declval<T>() + std::declval<U>());
-        auto min_x = std::min(static_cast<V>(a.x), static_cast<V>(a.x));
-        auto min_y = std::min(static_cast<V>(a.y), static_cast<V>(a.y));
-        return vector2<V> { min_x, min_y };
-    }
 
     using vector2i = vector2<std::int32_t>;
     using vector2f = vector2<float>;
