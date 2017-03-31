@@ -33,10 +33,10 @@ namespace jw
 
         template <typename U> friend constexpr auto operator*(const vector2& lhs, const vector2<U>& rhs) { return lhs.x * rhs.x + lhs.y * rhs.y; }
 
-        template <typename U> friend constexpr auto operator+(const vector2& lhs, const vector2<U>& rhs) { return vector2<decltype(std::declval<T>() + std::declval<U>())> { lhs.x, lhs.y } += rhs; }
-        template <typename U> friend constexpr auto operator-(const vector2& lhs, const vector2<U>& rhs) { return vector2<decltype(std::declval<T>() - std::declval<U>())> { lhs.x, lhs.y } -= rhs; }
-        template <typename U> friend constexpr auto operator*(const vector2& lhs, const U& rhs) { return vector2<decltype(std::declval<T>() * std::declval<U>())> { lhs.x, lhs.y } *= rhs; }
-        template <typename U> friend constexpr auto operator/(const vector2& lhs, const U& rhs) { return vector2<decltype(std::declval<T>() / std::declval<U>())> { lhs.x, lhs.y } /= rhs; }
+        template <typename U> friend constexpr auto operator+(const vector2& lhs, const vector2<U>& rhs) { return vector2<decltype(std::declval<T>() + std::declval<U>())> { lhs } += rhs; }
+        template <typename U> friend constexpr auto operator-(const vector2& lhs, const vector2<U>& rhs) { return vector2<decltype(std::declval<T>() - std::declval<U>())> { lhs } -= rhs; }
+        template <typename U> friend constexpr auto operator*(const vector2& lhs, const U& rhs) { return vector2<decltype(std::declval<T>() * std::declval<U>())> { lhs } *= rhs; }
+        template <typename U> friend constexpr auto operator/(const vector2& lhs, const U& rhs) { return vector2<decltype(std::declval<T>() / std::declval<U>())> { lhs } /= rhs; }
         
         friend constexpr auto& operator<<(std::ostream& out, const vector2& in) { return out << '(' << in.x << ", " << in.y << ')'; }
 
