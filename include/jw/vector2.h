@@ -103,6 +103,24 @@ namespace jw
             auto min_y = static_cast<T>(std::abs(a.y) < abs(b.y) ? a.y : b.y);
             return vector2 { min_x, min_y };
         }
+
+        static constexpr auto sign_max(const auto& a, const auto& b) noexcept
+        {
+            auto max_x = static_cast<T>(std::abs(a.x) > abs(b.x) ? a.x : b.x);
+            auto max_y = static_cast<T>(std::abs(a.y) > abs(b.y) ? a.y : b.y);
+            max_x = std::signbit(max_x) != std::signbit(a.x) ? -max_x : max_x;
+            max_y = std::signbit(max_y) != std::signbit(a.y) ? -max_y : max_y;
+            return vector2 { max_x, max_y }; 
+        }
+
+        static constexpr auto sign_min(const auto& a, const auto& b) noexcept
+        {
+            auto min_x = static_cast<T>(std::abs(a.x) < abs(b.x) ? a.x : b.x);
+            auto min_y = static_cast<T>(std::abs(a.y) < abs(b.y) ? a.y : b.y);
+            min_x = std::signbit(min_x) != std::signbit(a.x) ? -min_x : min_x;
+            min_y = std::signbit(min_y) != std::signbit(a.y) ? -min_y : min_y;
+            return vector2 { min_x, min_y };
+        }
     };
 
     using vector2i = vector2<std::int32_t>;
