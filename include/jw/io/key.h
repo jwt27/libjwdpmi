@@ -98,8 +98,9 @@ namespace jw
             using E::E;
             using E::operator=;
 
-            constexpr bool is_down() { return value & down; }
-            constexpr bool is_up() { return !is_down(); }
+            constexpr bool is_down() const noexcept { return value & down; }
+            constexpr bool is_up() const noexcept { return !is_down(); }
+            constexpr explicit operator bool() const noexcept { return is_down(); }
         };
 
         using key_state_pair = std::pair<key, key_state>;
