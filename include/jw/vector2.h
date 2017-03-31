@@ -37,6 +37,8 @@ namespace jw
         template <typename U> friend constexpr auto operator-(const vector2& lhs, const vector2<U>& rhs) { return vector2<decltype(std::declval<T>() - std::declval<U>())> { lhs } -= rhs; }
         template <typename U> friend constexpr auto operator*(const vector2& lhs, const U& rhs) { return vector2<decltype(std::declval<T>() * std::declval<U>())> { lhs } *= rhs; }
         template <typename U> friend constexpr auto operator/(const vector2& lhs, const U& rhs) { return vector2<decltype(std::declval<T>() / std::declval<U>())> { lhs } /= rhs; }
+        template <typename U> friend constexpr auto operator*(const U& lhs, const vector2& rhs) { return rhs * lhs; }
+        template <typename U> friend constexpr auto operator/(const U& lhs, const vector2& rhs) { return rhs / lhs; }
         
         friend constexpr auto& operator<<(std::ostream& out, const vector2& in) { return out << '(' << in.x << ", " << in.y << ')'; }
 
