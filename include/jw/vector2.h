@@ -79,6 +79,22 @@ namespace jw
         }
     };
 
+    template<typename T, typename U> static constexpr auto max(const vector2<T>& a, const vector2<U>& b) noexcept
+    {
+        using V = decltype(std::declval<T>() + std::declval<U>());
+        auto max_x = std::max(static_cast<V>(a.x), static_cast<V>(a.x));
+        auto max_y = std::max(static_cast<V>(a.y), static_cast<V>(a.y));
+        return vector2<V> { max_x, max_y }; 
+    }
+
+    template<typename T, typename U> static constexpr auto min(const vector2<T>& a, const vector2<U>& b) noexcept
+    {
+        using V = decltype(std::declval<T>() + std::declval<U>());
+        auto min_x = std::min(static_cast<V>(a.x), static_cast<V>(a.x));
+        auto min_y = std::min(static_cast<V>(a.y), static_cast<V>(a.y));
+        return vector2<V> { min_x, min_y };
+    }
+
     using vector2i = vector2<std::int32_t>;
     using vector2f = vector2<float>;
 }
