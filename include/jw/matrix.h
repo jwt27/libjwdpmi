@@ -42,6 +42,8 @@ namespace jw
         {
             p.x %= dim.x;
             p.y %= dim.y;
+            if (p.x < 0) p.x = dim.x + p.x;
+            if (p.y < 0) p.y = dim.y + p.y;
             auto offset = pos + p;
             return *(ptr + offset.x + m.size().x * offset.y);
         }
@@ -74,7 +76,7 @@ namespace jw
 
         constexpr auto* data() noexcept { return p; }
         constexpr const auto* data() const noexcept { return data(); }
-        constexpr auto data_size() const noexcept { return width() * height(); }
+        constexpr auto data_size() const noexcept { return this->width() * this->height(); }
 
     protected:
         T* p;
