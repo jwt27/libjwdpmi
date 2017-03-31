@@ -36,7 +36,6 @@ namespace jw
         constexpr auto size() const noexcept { return dim; }
         constexpr auto width() const noexcept { return size().x; }
         constexpr auto height() const noexcept { return size().y; }
-        constexpr auto data_size() const noexcept { return width() * height(); }
 
     protected:
         constexpr auto& get(vector2i p, auto* ptr) const noexcept
@@ -75,6 +74,7 @@ namespace jw
 
         constexpr auto* data() noexcept { return p; }
         constexpr const auto* data() const noexcept { return data(); }
+        constexpr auto data_size() const noexcept { return width() * height(); }
 
     protected:
         T* p;
