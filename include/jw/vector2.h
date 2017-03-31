@@ -51,7 +51,7 @@ namespace jw
         template<typename U> constexpr auto angle(const vector2<U>& other) const noexcept { return std::acos((*this * other) / (magnitude() * other.magnitude())); }
         constexpr auto angle() const noexcept { return angle(right()); }
         template<typename U> constexpr auto scale(const vector2<U>& other) noexcept { x *= other.x; y *= other.y; return *this; }
-        template<typename U> constexpr auto scaled(const vector2<U>& other) noexcept { return vector2<decltype(std::declval<T>() * std::declval<U>())> { *this }.scale(other); }
+        template<typename U> constexpr auto scaled(const vector2<U>& other) const noexcept { return vector2<decltype(std::declval<T>() * std::declval<U>())> { *this }.scale(other); }
 
         constexpr auto& normalize() noexcept { return *this /= magnitude(); }
         constexpr auto normalized() const noexcept { return vector2<decltype(std::declval<T>() / std::declval<float>())> { *this }.normalize(); }
