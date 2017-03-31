@@ -21,6 +21,18 @@ namespace jw
         constexpr const auto& operator()(std::ptrdiff_t x, std::ptrdiff_t y) const noexcept { return (*this)({ x, y }); }
         constexpr auto& operator()(std::ptrdiff_t x, std::ptrdiff_t y) noexcept { return (*this)({ x, y }); }
 
+        constexpr void fill(const auto& f) noexcept
+        {
+            for (auto y = 0; y < height(); ++y)
+                std::fill_n(&(*this)(0, y), width(), f);
+        }
+
+        constexpr void assign(const matrix_range& copy) noexcept
+        {
+            for (auto y = 0; y < std::min(height(), copy.height()); ++y)
+                std::copy_n(copy(0, y), std::min(width(), copy.width()), &(*this)(0, y));
+        }
+
         constexpr auto size() const noexcept { return dim; }
         constexpr auto width() const noexcept { return size().x; }
         constexpr auto height() const noexcept { return size().y; }
