@@ -50,8 +50,10 @@ namespace jw
         constexpr auto square_magnitude() const noexcept { return x*x + y*y; }
         constexpr auto magnitude() const noexcept { return std::sqrt(static_cast<std::conditional_t<std::is_integral<T>::value, float, T>>(square_magnitude())); }
         constexpr auto length() const noexcept { return magnitude(); }
+
         template<typename U> constexpr auto angle(const vector2<U>& other) const noexcept { return std::acos((*this * other) / (magnitude() * other.magnitude())); }
         constexpr auto angle() const noexcept { return angle(right()); }
+
         template<typename U> constexpr auto scale(const vector2<U>& other) noexcept { x *= other.x; y *= other.y; return *this; }
         template<typename U> constexpr auto scaled(const vector2<U>& other) const noexcept { return vector2<decltype(std::declval<T>() * std::declval<U>())> { *this }.scale(other); }
 
