@@ -1,19 +1,5 @@
-/******************************* libjwdpmi **********************************
-    Copyright (C) 2016-2017  J.W. Jagersma
-
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-                                                                            */
+/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #include <jw/thread/task.h>
 #pragma once
@@ -63,8 +49,8 @@ namespace jw
             {
                 std::deque<irq_handler_base*, locking_allocator<>> handler_chain { };
                 int_vector vec;
-                std::unique_ptr<irq_wrapper> wrapper;
                 far_ptr32 old_handler { };
+                irq_wrapper wrapper;
                 irq_config_flags flags { };
 
                 void add_flags() noexcept { flags = { }; for (auto* p : handler_chain) flags |= p->flags; }
@@ -72,25 +58,27 @@ namespace jw
                 static void set_pm_interrupt_vector(int_vector v, far_ptr32 ptr);
                 static far_ptr32 get_pm_interrupt_vector(int_vector v);
 
-                INTERRUPT void operator()();
-
-                irq_controller(const irq_controller&) = delete;
-                irq_controller(int_vector v) : vec(v),
-                    old_handler(get_pm_interrupt_vector(v))
-                {
-                    wrapper = std::make_unique<irq_wrapper>(v, interrupt_entry_point, get_stack_ptr, &data->stack_use_count), 
-                    set_pm_interrupt_vector(vec, wrapper->get_ptr());
-                }
+                INTERRUPT void call();
 
             public:
-                irq_controller(irq_controller&& m) : handler_chain(m.handler_chain), vec(m.vec), wrapper(std::move(m.wrapper)), old_handler(m.old_handler), flags(m.flags) { m.old_handler = { }; }
+                irq_controller(int_vector v) : vec(v), old_handler(get_pm_interrupt_vector(v)),
+                    wrapper(v, interrupt_entry_point, get_stack_ptr, &data->stack_use_count)
+                {
+                    set_pm_interrupt_vector(vec, wrapper.get_ptr());
+                }
+
+                irq_controller(irq_controller&& m) = delete;
+                irq_controller(const irq_controller& m) = delete;
+                irq_controller& operator=(irq_controller&& m) = delete;
+                irq_controller& operator=(const irq_controller& m) = delete;
 
                 ~irq_controller() { if (old_handler.offset != 0) set_pm_interrupt_vector(vec, old_handler); }
 
                 void add(irq_handler_base* p) 
                 { 
                     interrupt_mask no_ints_here { };
-                    handler_chain.push_back(p); add_flags();
+                    handler_chain.push_back(p);
+                    add_flags();
                     if (is_irq(vec))
                     {
                         auto i = vec_to_irq(vec);
@@ -98,10 +86,11 @@ namespace jw
                         if (i > 7) irq_mask::unmask(2);
                     }
                 }
+
                 void remove(irq_handler_base* p)
                 {
                     interrupt_mask no_ints_here { };
-                    std::remove_if(handler_chain.begin(), handler_chain.end(), [p](auto a) { return a == p; });
+                    handler_chain.erase(std::remove_if(handler_chain.begin(), handler_chain.end(), [p](auto a) { return a == p; }), handler_chain.end());
                     add_flags();
                     if (handler_chain.empty()) data->entries.erase(vec);
                     if (data->entries.empty())
@@ -114,8 +103,8 @@ namespace jw
                 static irq_controller& get(int_vector v)
                 {
                     if (data == nullptr) data = new irq_controller_data { };
-                    if (data->entries.count(v) == 0) data->entries.emplace(v, irq_controller { v });
-                    return data->entries.at(v);
+                    if (data->entries.count(v) == 0) data->entries.emplace(v, std::make_unique<irq_controller>(v));
+                    return *data->entries.at(v);
                 }
 
                 static irq_controller& get_irq(irq_level i) { return get(irq_to_vec(i)); }
@@ -158,7 +147,7 @@ namespace jw
                 INTERRUPT static void send_eoi() noexcept
                 {
                     auto v = data->current_int.back();
-                    if (data->entries.at(v).flags & always_chain) return;
+                    if (data->entries.at(v)->flags & always_chain) return;
                     auto i = vec_to_irq(v);
                     if (i >= 16) return;
                     if (!in_service()[i]) return;
@@ -190,7 +179,7 @@ namespace jw
                     thread::task<void()> increase_stack_size { [this]() { stack.resize(stack.size() * 2); } };
                     locked_pool_allocator<> alloc { 4_KB };
                     std::vector<int_vector, locked_pool_allocator<>> current_int { alloc }; // Current interrupt vector. Set to 0 when acknowlegded.
-                    std::map<int_vector, irq_controller, std::less<int_vector>, locking_allocator<>> entries { };
+                    std::map<int_vector, std::unique_ptr<irq_controller>, std::less<int_vector>, locking_allocator<>> entries { };
                     std::vector<byte, locking_allocator<>> stack { };
                     std::uint32_t stack_use_count { 0 };
                 } static * data;

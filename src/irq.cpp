@@ -1,19 +1,5 @@
-/******************************* libjwdpmi **********************************
-Copyright (C) 2016-2017  J.W. Jagersma
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/
+/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #include <algorithm>
 #include <jw/dpmi/irq.h>
@@ -49,11 +35,11 @@ namespace jw
                 try
                 {
                     std::unique_ptr<irq_mask> mask;
-                    if (!(data->entries.at(vec).flags & no_interrupts)) asm("sti");
-                    else if (data->entries.at(vec).flags & no_reentry) mask = std::make_unique<irq_mask>(i);
-                    if (!(data->entries.at(vec).flags & no_auto_eoi)) send_eoi();
+                    if (!(data->entries.at(vec)->flags & no_interrupts)) asm("sti");
+                    else if (data->entries.at(vec)->flags & no_reentry) mask = std::make_unique<irq_mask>(i);
+                    if (!(data->entries.at(vec)->flags & no_auto_eoi)) send_eoi();
                 
-                    data->entries.at(vec)();
+                    data->entries.at(vec)->call();
                 }
                 catch (...) { std::cerr << "OOPS" << std::endl; } // TODO: exception handling
 
@@ -65,7 +51,7 @@ namespace jw
                 data->current_int.pop_back();
             }
 
-            void irq_controller::operator()()
+            void irq_controller::call()
             {
                 for (auto f : handler_chain)
                 {
