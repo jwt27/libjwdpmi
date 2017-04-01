@@ -43,11 +43,6 @@ namespace jw
         
         friend constexpr auto& operator<<(std::ostream& out, const vector2& in) { return out << '(' << in.x << ", " << in.y << ')'; }
 
-        static constexpr auto up()    { return vector2 {  0, -1 }; }
-        static constexpr auto down()  { return vector2 {  0,  1 }; }
-        static constexpr auto left()  { return vector2 { -1,  0 }; }
-        static constexpr auto right() { return vector2 {  1,  0 }; }
-
         constexpr auto square_magnitude() const noexcept { return x*x + y*y; }
         constexpr auto magnitude() const noexcept { return std::sqrt(static_cast<std::conditional_t<std::is_integral<T>::value, float, T>>(square_magnitude())); }
         constexpr auto length() const noexcept { return magnitude(); }
@@ -89,6 +84,11 @@ namespace jw
         }
 
         template<typename U> constexpr auto clamped(const U& min, const U& max) const noexcept { return vector2<U> { *this }.clamp(min, max); }
+
+        static constexpr auto up()    { return vector2 {  0, -1 }; }
+        static constexpr auto down()  { return vector2 {  0,  1 }; }
+        static constexpr auto left()  { return vector2 { -1,  0 }; }
+        static constexpr auto right() { return vector2 {  1,  0 }; }
 
         static constexpr auto max(const auto& a, const auto& b) noexcept
         {
