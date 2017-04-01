@@ -83,13 +83,13 @@ namespace jw
         constexpr void fill(const auto& fill) noexcept
         {
             for (auto y = 0; y < height(); ++y)
-                std::fill_n(&(*this)(0, y), width(), fill);
+                std::fill_n(&(*this).get(0, y), width(), fill);
         }
 
         constexpr void assign(const auto& copy) noexcept
         {
             for (auto y = 0; y < std::min(height(), copy.height()); ++y)
-                std::copy_n(&copy(0, y), std::min(width(), copy.width()), &(*this)(0, y));
+                std::copy_n(&copy.get(0, y), std::min(width(), copy.width()), &(*this).get(0, y));
         }
 
         constexpr auto begin() noexcept { return iterator { *this, { 0, 0 }}; }
