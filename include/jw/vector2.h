@@ -90,6 +90,20 @@ namespace jw
 
         template<typename U> constexpr auto clamped(const U& min, const U& max) const noexcept { return vector2<U> { *this }.clamp(min, max); }
 
+        constexpr auto sign() const noexcept 
+        {
+            auto sign_x = x == 0 ? 0 : x < 0 ? -1 : 1;
+            auto sign_y = x == 0 ? 0 : x < 0 ? -1 : 1;
+            return vector2 { sign_x, sign_y };
+        }
+
+        template<typename U> constexpr auto& copy_sign(const vector2<U>& other) noexcept 
+        {
+            x = std::signbit(x) != std::signbit(other.x) ? -x : x;
+            y = std::signbit(y) != std::signbit(other.y) ? -y : y;
+            return *this;
+        }
+
         static constexpr auto up()    { return vector2 {  0, -1 }; }
         static constexpr auto down()  { return vector2 {  0,  1 }; }
         static constexpr auto left()  { return vector2 { -1,  0 }; }
@@ -122,24 +136,6 @@ namespace jw
         {
             auto min_x = std::min(static_cast<T>(a.x), static_cast<T>(b.x));
             auto min_y = std::min(static_cast<T>(a.y), static_cast<T>(b.y));
-            return vector2 { min_x, min_y };
-        }
-
-        static constexpr auto sign_max(const auto& a, const auto& b) noexcept
-        {
-            auto max_x = static_cast<T>(std::abs(a.x) > abs(b.x) ? a.x : b.x);
-            auto max_y = static_cast<T>(std::abs(a.y) > abs(b.y) ? a.y : b.y);
-            max_x = std::signbit(max_x) != std::signbit(a.x) ? -max_x : max_x;
-            max_y = std::signbit(max_y) != std::signbit(a.y) ? -max_y : max_y;
-            return vector2 { max_x, max_y }; 
-        }
-
-        static constexpr auto sign_min(const auto& a, const auto& b) noexcept
-        {
-            auto min_x = static_cast<T>(std::abs(a.x) < abs(b.x) ? a.x : b.x);
-            auto min_y = static_cast<T>(std::abs(a.y) < abs(b.y) ? a.y : b.y);
-            min_x = std::signbit(min_x) != std::signbit(a.x) ? -min_x : min_x;
-            min_y = std::signbit(min_y) != std::signbit(a.y) ? -min_y : min_y;
             return vector2 { min_x, min_y };
         }
     };

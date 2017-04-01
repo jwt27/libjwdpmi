@@ -18,10 +18,10 @@ namespace jw
         constexpr matrix_iterator& operator=(const matrix_iterator&) noexcept = default;
         constexpr matrix_iterator& operator=(matrix_iterator&&) noexcept = default;
 
-        constexpr auto* operator->() noexcept { return &r(p); }
-        constexpr const auto* operator->() const noexcept { return &r(p); }
-        constexpr auto& operator*() noexcept { return r(p); }
-        constexpr const auto& operator*() const noexcept { return r(p); }
+        constexpr auto* operator->() noexcept { return &r.get(p, r.m.data()); }
+        constexpr const auto* operator->() const noexcept { return &r.get(p, r.m.data()); }
+        constexpr auto& operator*() noexcept { return r.get(p, r.m.data()); }
+        constexpr const auto& operator*() const noexcept { return r.get(p, r.m.data()); }
         constexpr auto& operator[](std::ptrdiff_t n) const noexcept  { return *(matrix_iterator { *this } += n); }
 
         constexpr auto& operator-=(const vector2i& n) const noexcept { p -= n; return *this; }
@@ -31,11 +31,19 @@ namespace jw
         constexpr auto& operator+=(std::ptrdiff_t n) const noexcept 
         {
             p.x += n;
-            auto div = std::div(p.x, r.width());
-            p.x = div.rem;
-            p.y += div.quot;
+            if (p.x > r.width())
+            {
+                p.y += p.x / r.width();
+                p.x %= r.width();
+            }
             return *this;
         }
+
+        constexpr auto& operator++() const noexcept { return *this += 1; }
+        constexpr auto& operator++(int) const noexcept { auto copy = matrix_iterator { *this }; *this += 1; return copy; }
+
+        friend constexpr bool operator==(const matrix_iterator& lhs, const matrix_iterator& rhs) noexcept { return &(*lhs) == &(*rhs); }
+        friend constexpr bool operator!=(const matrix_iterator& lhs, const matrix_iterator& rhs) noexcept { return !(lhs == rhs); }
 
         R& r;
         mutable vector2i p;
@@ -53,7 +61,7 @@ namespace jw
         constexpr auto make_range(const vector2i& position, const vector2i& dimensions) const noexcept
         {
             auto new_pos = pos + vector2i::max_abs(position, vector2i { 0,0 });
-            auto new_dim = vector2i::sign_min(dimensions, dim - new_pos);
+            auto new_dim = vector2i::min(dimensions, dim - new_pos).copy_sign(dimensions);
             return matrix_range { m, pos + new_pos, new_dim };
         }
 
@@ -61,6 +69,9 @@ namespace jw
         constexpr const auto& operator()(vector2i p) const noexcept { return get_wrap(p, m.data()); }
         constexpr const auto& operator()(std::ptrdiff_t x, std::ptrdiff_t y) const noexcept { return (*this)({ x, y }); }
         constexpr auto& operator()(std::ptrdiff_t x, std::ptrdiff_t y) noexcept { return (*this)({ x, y }); }
+
+        friend constexpr bool operator==(const matrix_range& lhs, const matrix_range& rhs) noexcept { return lhs.m.data() == rhs.m.data() && lhs.pos == rhs.pos && lhs.dim == rhs.dim; }
+        friend constexpr bool operator!=(const matrix_range& lhs, const matrix_range& rhs) noexcept { return !(lhs == rhs); }
 
         constexpr void fill(const auto& fill) noexcept
         {
