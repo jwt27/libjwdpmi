@@ -25,21 +25,21 @@ namespace jw
         template <typename U> constexpr vector2& operator=(const vector2<U>& c) noexcept { x = static_cast<T>(c.y); y = static_cast<T>(c.y); return *this; };
         template <typename U> constexpr vector2& operator=(vector2<U>&& m) noexcept { x = static_cast<T&&>(std::move(m.x)); y = static_cast<T&&>(std::move(m.y)); return *this; }
 
-        template <typename U> constexpr auto& operator+=(const vector2<U>& rhs) { x += rhs.x; y += rhs.y; return *this; }
-        template <typename U> constexpr auto& operator-=(const vector2<U>& rhs) { x -= rhs.x; y -= rhs.y; return *this; }
+        template <typename U> constexpr auto& operator+=(const vector2<U>& rhs) noexcept { x += rhs.x; y += rhs.y; return *this; }
+        template <typename U> constexpr auto& operator-=(const vector2<U>& rhs) noexcept { x -= rhs.x; y -= rhs.y; return *this; }
 
-        constexpr vector2& operator*=(const auto& rhs) { x *= rhs; y *= rhs; return *this; }
-        constexpr vector2& operator/=(const auto& rhs) { x /= rhs; y /= rhs; return *this; }
+        constexpr vector2& operator*=(const auto& rhs) noexcept { x *= rhs; y *= rhs; return *this; }
+        constexpr vector2& operator/=(const auto& rhs) noexcept { x /= rhs; y /= rhs; return *this; }
 
         template <typename U> friend constexpr auto operator*(const vector2& lhs, const vector2<U>& rhs) { return lhs.x * rhs.x + lhs.y * rhs.y; }
 
-        template <typename U> friend constexpr auto operator+(const vector2& lhs, const vector2<U>& rhs) { return vector2<decltype(std::declval<T>() + std::declval<U>())> { lhs } += rhs; }
-        template <typename U> friend constexpr auto operator-(const vector2& lhs, const vector2<U>& rhs) { return vector2<decltype(std::declval<T>() - std::declval<U>())> { lhs } -= rhs; }
-        template <typename U> friend constexpr auto operator*(const vector2& lhs, const U& rhs) { return vector2<decltype(std::declval<T>() * std::declval<U>())> { lhs } *= rhs; }
-        template <typename U> friend constexpr auto operator/(const vector2& lhs, const U& rhs) { return vector2<decltype(std::declval<T>() / std::declval<U>())> { lhs } /= rhs; }
-        template <typename U> friend constexpr auto operator*(const U& lhs, const vector2& rhs) { return rhs * lhs; }
-        template <typename U> friend constexpr auto operator/(const U& lhs, const vector2& rhs) { return rhs / lhs; }
-        template <typename U> constexpr auto operator-() const noexcept { return vector2 { -x, -y }; }
+        template <typename U> friend constexpr auto operator+(const vector2& lhs, const vector2<U>& rhs) noexcept { return vector2<decltype(std::declval<T>() + std::declval<U>())> { lhs } += rhs; }
+        template <typename U> friend constexpr auto operator-(const vector2& lhs, const vector2<U>& rhs) noexcept { return vector2<decltype(std::declval<T>() - std::declval<U>())> { lhs } -= rhs; }
+        template <typename U> friend constexpr auto operator*(const vector2& lhs, const U& rhs) noexcept { return vector2<decltype(std::declval<T>() * std::declval<U>())> { lhs } *= rhs; }
+        template <typename U> friend constexpr auto operator/(const vector2& lhs, const U& rhs) noexcept { return vector2<decltype(std::declval<T>() / std::declval<U>())> { lhs } /= rhs; }
+        template <typename U> friend constexpr auto operator*(const U& lhs, const vector2& rhs) noexcept { return rhs * lhs; }
+        template <typename U> friend constexpr auto operator/(const U& lhs, const vector2& rhs) noexcept { return rhs / lhs; }
+        constexpr auto operator-() const noexcept { return vector2 { -x, -y }; }
         
         friend constexpr auto& operator<<(std::ostream& out, const vector2& in) { return out << '(' << in.x << ", " << in.y << ')'; }
 
