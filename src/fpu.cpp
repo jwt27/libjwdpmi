@@ -3,6 +3,7 @@
 
 #include <jw/dpmi/fpu.h>
 #include <jw/dpmi/cpu_exception.h>
+#include <jw/dpmi/irq.h>
 
 namespace jw
 {
@@ -100,7 +101,7 @@ namespace jw
                 init = true;
                 if (!test_cr0_access() || cr0.fpu_emulation) return;
                 
-                exc07_handler = std::make_unique<exception_handler>(0x07, [this](cpu_registers*, exception_frame*, bool)
+                exc07_handler = std::make_unique<exception_handler>(0x07, [this](cpu_registers*, exception_frame*, bool) INTERRUPT
                 {
                     cr0_t cr0 { };
                     cr0.task_switched = false;

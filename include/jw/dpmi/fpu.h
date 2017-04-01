@@ -23,6 +23,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <jw/dpmi/irq_check.h>
 #include <jw/dpmi/lock.h>
 #include <jw/dpmi/alloc.h>
+#include <jw/dpmi/irq.h>
 #include <jw/alloc.h>
 #include <jw/common.h>
 #include <../jwdpmi_config.h>
@@ -126,7 +127,7 @@ namespace jw
                 bool init { false };
                 std::uint32_t last_restored { 0 };
                 
-                void switch_context()
+                INTERRUPT void switch_context()
                 {
                     if (contexts.back() == nullptr)
                     {
@@ -145,7 +146,7 @@ namespace jw
                 fpu_context_switcher_t();
                 ~fpu_context_switcher_t();
 
-                void enter() noexcept
+                INTERRUPT void enter() noexcept
                 {
                     if (!init) return;
                     contexts.push_back(nullptr);
@@ -155,7 +156,7 @@ namespace jw
                     cr0.set();
                 }
 
-                void leave() noexcept
+                INTERRUPT void leave() noexcept
                 {
                     if (!init) return;
                     if (contexts.back() != nullptr) alloc.deallocate(contexts.back(), 1);
