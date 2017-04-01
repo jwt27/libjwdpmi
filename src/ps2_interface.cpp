@@ -57,7 +57,7 @@ namespace jw
 
         ps2_interface::ps2_interface()
         {
-            if (initialized) throw std::exception(); // only one instance allowed
+            if (initialized) throw std::runtime_error("Only one ps2_interface instance allowed.");
 
             dpmi::irq_mask irq1_disable { 1 };
             config.translate_scancodes = true;
