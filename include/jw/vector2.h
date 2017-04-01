@@ -85,16 +85,16 @@ namespace jw
             return copy;
         }
 
-        constexpr vector2& clamp(const auto& min, const auto& max) noexcept
-        { 
-            x = std::min(static_cast<T>(x), static_cast<T>(max.x));
-            x = std::max(static_cast<T>(x), static_cast<T>(min.x));
-            y = std::min(static_cast<T>(y), static_cast<T>(max.y));
-            y = std::max(static_cast<T>(y), static_cast<T>(min.y));
+        constexpr vector2& clamp(const vector2& min, const vector2& max) noexcept
+        {
+            x = std::min(x, max.x);
+            x = std::max(x, min.x);
+            y = std::min(y, max.y);
+            y = std::max(y, min.y);
             return *this;
         }
 
-        template<typename U> constexpr auto clamped(const U& min, const U& max) const noexcept { return vector2<U> { *this }.clamp(min, max); }
+        template<typename U> constexpr auto clamped(const vector2<U>& min, const vector2<U>& max) const noexcept { return vector2<U> { *this }.clamp(min, max); }
 
         constexpr auto sign() const noexcept 
         {
