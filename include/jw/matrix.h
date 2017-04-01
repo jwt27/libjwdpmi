@@ -8,6 +8,23 @@
 
 namespace jw
 {
+    template<typename R>
+    struct matrix_iterator
+    {
+        constexpr matrix_iterator(R& range, const vector2i& pos) noexcept : r(range), p(pos) { }
+
+        constexpr auto* operator->() noexcept { return &r(p); }
+        constexpr const auto* operator->() const noexcept { return &r(p); }
+        constexpr auto& operator*() noexcept { return r(p); }
+        constexpr const auto& operator*() const noexcept { return r(p); }
+
+        constexpr auto& operator+=(const auto& n) const noexcept { p += n; return *this; }
+        constexpr auto& operator-=(const auto& n) const noexcept { p -= n; return *this; }
+
+        R& r;
+        vector2i p;
+    };
+
     template<typename M>
     struct matrix_range
     {
@@ -57,27 +74,11 @@ namespace jw
         const vector2i pos, dim;
     };
 
-    template<typename R>
-    struct matrix_iterator
-    {
-        constexpr matrix_iterator(R& range, const vector2i& pos) noexcept : r(range), p(pos) { }
-
-        constexpr auto* operator->() noexcept { return &r(p); }
-        constexpr const auto* operator->() const noexcept { return &r(p); }
-        constexpr auto& operator*() noexcept { return r(p); }
-        constexpr const auto& operator*() const noexcept { return r(p); }
-
-        constexpr auto& operator+=(const auto& n) const noexcept { p += n; return *this; }
-        constexpr auto& operator-=(const auto& n) const noexcept { p -= n; return *this; }
-
-        R& r;
-        vector2i p;
-    };
-
     template<typename T>
     struct matrix : public matrix_range<matrix<T>>
     {
-        constexpr matrix(std::size_t w, std::size_t h, T* data) : matrix_range<matrix<T>>(*this, { 0, 0 }, { w, h }), p(data) { }
+        constexpr matrix(vector2i size, T* data) : matrix_range<matrix<T>>(*this, { 0, 0 }, size), p(data) { }
+        constexpr matrix(std::size_t w, std::size_t h, T* data) : matrix(vector2i { w, h }, data) { }
 
         constexpr auto* data() noexcept { return p; }
         constexpr const auto* data() const noexcept { return data(); }
@@ -90,8 +91,10 @@ namespace jw
     template<typename T>
     struct matrix_container : public matrix<T>
     {
-        matrix_container(std::size_t w, std::size_t h, std::experimental::pmr::memory_resource* memres = std::experimental::pmr::get_default_resource()) 
-            : matrix<T>(w, h, nullptr), data(w * h, std::experimental::pmr::polymorphic_allocator<T> { memres }) { this->p = data.data(); }
+        matrix_container(vector2i size, std::experimental::pmr::memory_resource* memres = std::experimental::pmr::get_default_resource()) 
+            : matrix<T>(size, nullptr), data(size.x * size.y, std::experimental::pmr::polymorphic_allocator<T> { memres }) { this->p = data.data(); }
+        matrix_container(std::size_t w, std::size_t h, std::experimental::pmr::memory_resource* memres = std::experimental::pmr::get_default_resource())
+            : matrix_container(vector2i { w,h }, memres) { }
 
     protected:
         std::experimental::pmr::vector<T> data;
