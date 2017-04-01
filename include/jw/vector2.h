@@ -60,6 +60,9 @@ namespace jw
         constexpr auto& normalize() noexcept { return *this /= magnitude(); }
         constexpr auto normalized() const noexcept { return vector2<decltype(std::declval<T>() / std::declval<decltype(magnitude())>())> { *this }.normalize(); }
 
+        constexpr auto& round() noexcept { x = jw::round(x); y = jw::round(y); return *this; }
+        constexpr auto rounded() const noexcept { return vector2 { jw::round(x),  jw::round(y) }; }
+
         constexpr auto distance_from(const auto& other) const noexcept { return (*this - other).magnitude(); }
 
         constexpr vector2& clamp_magnitude(const auto& max) noexcept
