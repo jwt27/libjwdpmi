@@ -56,6 +56,8 @@ namespace jw
         constexpr auto& normalize() noexcept { return *this /= magnitude(); }
         constexpr auto normalized() const noexcept { return vector2<decltype(std::declval<T>() / std::declval<decltype(magnitude())>())> { *this }.normalize(); }
 
+        constexpr auto distance_from(const auto& other) const noexcept { return (*this - other).magnitude(); }
+
         constexpr vector2& clamp_magnitude(const auto& max) noexcept
         { 
             if (magnitude() > max)
@@ -89,6 +91,8 @@ namespace jw
         static constexpr auto down()  { return vector2 {  0,  1 }; }
         static constexpr auto left()  { return vector2 { -1,  0 }; }
         static constexpr auto right() { return vector2 {  1,  0 }; }
+
+        static constexpr auto distance(const auto& a, const auto& b) noexcept { return a.distance_from(b); }
 
         static constexpr auto max(const auto& a, const auto& b) noexcept
         {
