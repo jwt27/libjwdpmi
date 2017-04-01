@@ -26,6 +26,8 @@ namespace jw
         template <typename U> constexpr vector2& operator=(const vector2<U>& c) noexcept { x = static_cast<T>(c.y); y = static_cast<T>(c.y); return *this; };
         template <typename U> constexpr vector2& operator=(vector2<U>&& m) noexcept { x = static_cast<T&&>(std::move(m.x)); y = static_cast<T&&>(std::move(m.y)); return *this; }
 
+        template <typename U> constexpr operator vector2<U>() const noexcept { return vector2<U>{ std::is_integral<U>::value ? (*this).rounded() : *this }; }
+
         template <typename U> constexpr auto& operator+=(const vector2<U>& rhs) noexcept { x += rhs.x; y += rhs.y; return *this; }
         template <typename U> constexpr auto& operator-=(const vector2<U>& rhs) noexcept { x -= rhs.x; y -= rhs.y; return *this; }
 
