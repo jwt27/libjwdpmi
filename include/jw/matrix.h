@@ -13,33 +13,52 @@ namespace jw
     {
         constexpr matrix_iterator(R& range, const vector2i& pos) noexcept : r(range), p(pos) { }
 
+        constexpr matrix_iterator(const matrix_iterator&) noexcept = default;
+        constexpr matrix_iterator(matrix_iterator&&) noexcept = default;
+        constexpr matrix_iterator& operator=(const matrix_iterator&) noexcept = default;
+        constexpr matrix_iterator& operator=(matrix_iterator&&) noexcept = default;
+
         constexpr auto* operator->() noexcept { return &r(p); }
         constexpr const auto* operator->() const noexcept { return &r(p); }
         constexpr auto& operator*() noexcept { return r(p); }
         constexpr const auto& operator*() const noexcept { return r(p); }
+        constexpr auto& operator[](std::ptrdiff_t n) const noexcept  { return *(matrix_iterator { *this } += n); }
 
-        constexpr auto& operator+=(const auto& n) const noexcept { p += n; return *this; }
-        constexpr auto& operator-=(const auto& n) const noexcept { p -= n; return *this; }
+        constexpr auto& operator-=(const vector2i& n) const noexcept { p -= n; return *this; }
+        constexpr auto& operator+=(const vector2i& n) const noexcept { p += n; return *this; }
+
+        constexpr auto& operator-=(std::ptrdiff_t n) const noexcept { return *this += -n; }
+        constexpr auto& operator+=(std::ptrdiff_t n) const noexcept 
+        {
+            p.x += n;
+            auto div = std::div(p.x, r.width());
+            p.x = div.rem;
+            p.y += div.quot;
+            return *this;
+        }
 
         R& r;
-        vector2i p;
+        mutable vector2i p;
     };
 
     template<typename M>
     struct matrix_range
     {
+        using iterator = matrix_iterator<matrix_range>;
+        friend iterator;
+
         constexpr matrix_range(M& matrix, const vector2i& position, const vector2i& dimensions) noexcept 
             : m(matrix), pos(position), dim(dimensions) { }
 
         constexpr auto make_range(const vector2i& position, const vector2i& dimensions) const noexcept
         {
-            auto new_pos = pos + position;
+            auto new_pos = pos + vector2i::max_abs(position, vector2i { 0,0 });
             auto new_dim = vector2i::sign_min(dimensions, dim - new_pos);
             return matrix_range { m, pos + new_pos, new_dim };
         }
 
-        constexpr auto& operator()(vector2i p) noexcept { return get(p, m.data()); }
-        constexpr const auto& operator()(vector2i p) const noexcept { return get(p, m.data()); }
+        constexpr auto& operator()(vector2i p) noexcept { return get_wrap(p, m.data()); }
+        constexpr const auto& operator()(vector2i p) const noexcept { return get_wrap(p, m.data()); }
         constexpr const auto& operator()(std::ptrdiff_t x, std::ptrdiff_t y) const noexcept { return (*this)({ x, y }); }
         constexpr auto& operator()(std::ptrdiff_t x, std::ptrdiff_t y) noexcept { return (*this)({ x, y }); }
 
@@ -55,17 +74,26 @@ namespace jw
                 std::copy_n(&copy(0, y), std::min(width(), copy.width()), &(*this)(0, y));
         }
 
+        constexpr auto begin() noexcept { return iterator { *this, { 0, 0 }}; }
+        constexpr auto end() noexcept { return iterator { *this, dim }; }
+
         constexpr auto size() const noexcept { return dim; }
         constexpr auto width() const noexcept { return size().x; }
         constexpr auto height() const noexcept { return size().y; }
 
     protected:
-        constexpr auto& get(vector2i p, auto* ptr) const noexcept
+        constexpr auto& get_wrap(vector2i p, auto* ptr) const noexcept
         {
             p.x %= dim.x;
             p.y %= dim.y;
             if (p.x < 0) p.x = dim.x + p.x;
             if (p.y < 0) p.y = dim.y + p.y;
+            auto offset = pos + p;
+            return *(ptr + offset.x + m.size().x * offset.y);
+        }
+
+        constexpr auto& get(vector2i p, auto* ptr) const noexcept
+        {
             auto offset = pos + p;
             return *(ptr + offset.x + m.size().x * offset.y);
         }
