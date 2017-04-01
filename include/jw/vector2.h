@@ -108,6 +108,20 @@ namespace jw
             return vector2 { min_x, min_y };
         }
 
+        static constexpr auto max_abs(const auto& a, const auto& b) noexcept
+        {
+            auto max_x = std::max(static_cast<T>(a.x), static_cast<T>(b.x));
+            auto max_y = std::max(static_cast<T>(a.y), static_cast<T>(b.y));
+            return vector2 { max_x, max_y }; 
+        }
+
+        static constexpr auto min_abs(const auto& a, const auto& b) noexcept
+        {
+            auto min_x = std::min(static_cast<T>(a.x), static_cast<T>(b.x));
+            auto min_y = std::min(static_cast<T>(a.y), static_cast<T>(b.y));
+            return vector2 { min_x, min_y };
+        }
+
         static constexpr auto sign_max(const auto& a, const auto& b) noexcept
         {
             auto max_x = static_cast<T>(std::abs(a.x) > abs(b.x) ? a.x : b.x);
