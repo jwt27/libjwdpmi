@@ -58,7 +58,7 @@ namespace jw
         constexpr matrix_range(M& matrix, const vector2i& position, const vector2i& dimensions) noexcept 
             : m(matrix), pos(position), dim(dimensions) { }
 
-        constexpr auto make_range(const vector2i& position, const vector2i& dimensions) const noexcept
+        constexpr auto range(const vector2i& position, const vector2i& dimensions) const noexcept
         {
             auto new_pos = pos + vector2i::max_abs(position, vector2i { 0,0 });
             auto new_dim = vector2i::min(dimensions, dim - new_pos).copysign(dimensions);
