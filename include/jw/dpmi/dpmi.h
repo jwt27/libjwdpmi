@@ -190,7 +190,11 @@ namespace jw
             std::uint16_t offset, segment;
 
             constexpr far_ptr16(selector seg = 0, std::uint16_t off = 0) noexcept : offset(off), segment(seg) { }
-            //constexpr far_ptr16(split_uint32_t far_ptr) noexcept : far_ptr16(far_ptr.lo, far_ptr.hi) { }
+            friend auto& operator<<(std::ostream& out, const far_ptr16& in) 
+            {
+                using namespace std;
+                return out << hex << setfill('0') << setw(4) << in.segment << ':' << setw(4) << in.offset << setfill(' ');
+            }
         };
 
         struct alignas(2) [[gnu::packed]] far_ptr32
@@ -199,6 +203,11 @@ namespace jw
             selector segment;
 
             constexpr far_ptr32(selector seg = 0, std::uintptr_t off = 0) noexcept : offset(off), segment(seg) { }
+            friend auto& operator<<(std::ostream& out, const far_ptr32& in) 
+            {
+                using namespace std;
+                return out << hex << setfill('0') << setw(4) << in.segment << ':' << setw(8) << in.offset << setfill(' ');
+            }
         };
 
         struct gs_override
