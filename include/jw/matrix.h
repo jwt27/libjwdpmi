@@ -18,10 +18,10 @@ namespace jw
         constexpr matrix_iterator& operator=(const matrix_iterator&) noexcept = default;
         constexpr matrix_iterator& operator=(matrix_iterator&&) noexcept = default;
 
-        constexpr auto* operator->() noexcept { return &r.get(p, r.m.data()); }
-        constexpr const auto* operator->() const noexcept { return &r.get(p, r.m.data()); }
-        constexpr auto& operator*() noexcept { return r.get(p, r.m.data()); }
-        constexpr const auto& operator*() const noexcept { return r.get(p, r.m.data()); }
+        constexpr auto* operator->() noexcept { return &r.get(p); }
+        constexpr const auto* operator->() const noexcept { return &r.get(p); }
+        constexpr auto& operator*() noexcept { return r.get(p); }
+        constexpr const auto& operator*() const noexcept { return r.get(p); }
         constexpr auto& operator[](std::ptrdiff_t n) const noexcept  { return *(matrix_iterator { *this } += n); }
 
         constexpr auto& operator-=(const vector2i& n) const noexcept { p -= n; return *this; }
