@@ -114,15 +114,15 @@ namespace jw
 
         static constexpr auto max(const auto& a, const auto& b) noexcept
         {
-            auto max_x = static_cast<T>(std::abs(a.x) > abs(b.x) ? a.x : b.x);
-            auto max_y = static_cast<T>(std::abs(a.y) > abs(b.y) ? a.y : b.y);
+            auto max_x = static_cast<T>(std::abs(a.x) > std::abs(b.x) ? a.x : b.x);
+            auto max_y = static_cast<T>(std::abs(a.y) > std::abs(b.y) ? a.y : b.y);
             return vector2 { max_x, max_y }; 
         }
 
         static constexpr auto min(const auto& a, const auto& b) noexcept
         {
-            auto min_x = static_cast<T>(std::abs(a.x) < abs(b.x) ? a.x : b.x);
-            auto min_y = static_cast<T>(std::abs(a.y) < abs(b.y) ? a.y : b.y);
+            auto min_x = static_cast<T>(std::abs(a.x) < std::abs(b.x) ? a.x : b.x);
+            auto min_y = static_cast<T>(std::abs(a.y) < std::abs(b.y) ? a.y : b.y);
             return vector2 { min_x, min_y };
         }
 
