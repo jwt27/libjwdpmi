@@ -40,6 +40,9 @@ namespace jw
         template <typename U> friend constexpr auto operator*(const U& lhs, const vector2& rhs) noexcept { return rhs * lhs; }
         template <typename U> friend constexpr auto operator/(const U& lhs, const vector2& rhs) noexcept { return rhs / lhs; }
         constexpr auto operator-() const noexcept { return vector2 { -x, -y }; }
+
+        template <typename U> friend constexpr bool operator==(const vector2& lhs, const vector2<U>& rhs) noexcept { return rhs.x == lhs.x && rhs.y == lhs.y; }
+        template <typename U> friend constexpr bool operator!=(const vector2& lhs, const vector2<U>& rhs) noexcept { return !(rhs == lhs); }
         
         friend constexpr auto& operator<<(std::ostream& out, const vector2& in) { return out << '(' << in.x << ", " << in.y << ')'; }
 
