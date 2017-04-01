@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <utility>
 #include <cmath>
+#include <jw/math.h>
 
 namespace jw
 {
@@ -97,10 +98,10 @@ namespace jw
             return vector2 { sign_x, sign_y };
         }
 
-        template<typename U> constexpr auto& copy_sign(const vector2<U>& other) noexcept 
+        template<typename U> constexpr auto& copysign(const vector2<U>& other) noexcept 
         {
-            x = std::signbit(x) != std::signbit(other.x) ? -x : x;
-            y = std::signbit(y) != std::signbit(other.y) ? -y : y;
+            x = jw::copysign(x, static_cast<T>(other.x));
+            y = jw::copysign(y, static_cast<T>(other.y));
             return *this;
         }
 
