@@ -65,10 +65,17 @@ namespace jw
             return matrix_range { m, pos + new_pos, new_dim };
         }
 
+        // bounds checking with automatic wrap-around
         constexpr auto& operator()(vector2i p) noexcept { return get_wrap(p, m.data()); }
         constexpr const auto& operator()(vector2i p) const noexcept { return get_wrap(p, m.data()); }
         constexpr const auto& operator()(std::ptrdiff_t x, std::ptrdiff_t y) const noexcept { return (*this)({ x, y }); }
         constexpr auto& operator()(std::ptrdiff_t x, std::ptrdiff_t y) noexcept { return (*this)({ x, y }); }
+
+        // no bounds checking
+        constexpr const auto& get(vector2i p) const noexcept { return get(p, m.data()); }
+        constexpr auto& get(vector2i p) noexcept { return get(p, m.data()); }
+        constexpr const auto& get(std::ptrdiff_t x, std::ptrdiff_t y) const noexcept { return get({ x, y }); }
+        constexpr auto& get(std::ptrdiff_t x, std::ptrdiff_t y) noexcept { return get({ x, y }); }
 
         friend constexpr bool operator==(const matrix_range& lhs, const matrix_range& rhs) noexcept { return lhs.m.data() == rhs.m.data() && lhs.pos == rhs.pos && lhs.dim == rhs.dim; }
         friend constexpr bool operator!=(const matrix_range& lhs, const matrix_range& rhs) noexcept { return !(lhs == rhs); }
