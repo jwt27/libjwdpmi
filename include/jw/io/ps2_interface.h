@@ -22,6 +22,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <jw/dpmi/lock.h>
 #include <jw/io/ioport.h>
 #include <jw/thread/task.h>
+#include <jw/chrono/chrono.h>
 
 // TODO: clean this up
 // TODO: keyboard commands enum, instead of using raw hex values
@@ -69,6 +70,8 @@ namespace jw
             virtual ~ps2_interface();
 
         private:
+            struct keyboard_error : public std::exception { };
+
             void write_to_controller(byte b)
             {
                 thread::yield_while([this]() { return get_status().busy; });
@@ -81,14 +84,15 @@ namespace jw
                 data_port.write(b);
             }
 
-            byte read_from_keyboard() //TODO: timeout check 
+            byte read_from_keyboard()
             {
-                //do
-                //{
-                //    assert(!get_status().timeout_error);
-                //    assert(!get_status().parity_error);  // TODO: throw exceptions
-                //} while (!get_status().data_available);
-                thread::yield_while([this]() { return !get_status().data_available; });
+                bool timeout = thread::yield_while_for<chrono::rtc>([this]
+                {
+                    auto s = get_status();
+                    if (s.parity_error || s.timeout_error) throw keyboard_error { };
+                    return !s.data_available;
+                }, std::chrono::seconds { 5 });
+                if (timeout) throw keyboard_error { };
                 auto b = data_port.read();
                 if (config.translate_scancodes) b = detail::scancode::undo_translation(b);
                 return b;
@@ -125,10 +129,19 @@ namespace jw
             template<cmd_sequence_element... cmd>
             byte command(const std::initializer_list<byte>& data)
             {
-                dpmi::irq_mask no_irq { 1 };
-                byte result;
-                ps2_command<cmd...>(data.begin(), result);
-                return result;
+                retry:
+                try
+                {
+                    dpmi::irq_mask no_irq { 1 };
+                    byte result;
+                    ps2_command<cmd...>(data.begin(), result);
+                    return result;
+                }
+                catch (const keyboard_error&)
+                {
+                    reset();
+                    goto retry;
+                }
             }
 
             struct[[gnu::packed]] controller_status
@@ -183,7 +196,6 @@ namespace jw
                     do
                     {
                         auto c = data_port.read();
-                        //std::clog << "scancode: " << std::hex << (int)c << '\n';
                         if (config.translate_scancodes) *detail::scancode::undo_translation_inserter(scancode_queue) = c;
                         else scancode_queue.push_back(c);
                     } while (get_status().data_available);
