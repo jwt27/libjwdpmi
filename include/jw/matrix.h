@@ -65,6 +65,8 @@ namespace jw
             return matrix_range { m, pos + new_pos, new_dim };
         }
 
+        constexpr auto range_abs(const vector2i& topleft, const vector2i& bottomright) const noexcept { return range(topleft, bottomright - topleft); }
+
         // bounds checking with automatic wrap-around
         constexpr auto& operator()(vector2i p) noexcept { return get_wrap(p, m.data()); }
         constexpr const auto& operator()(vector2i p) const noexcept { return get_wrap(p, m.data()); }
