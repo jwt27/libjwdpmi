@@ -48,8 +48,8 @@ namespace jw
             byte value { };
             constexpr pixel_pal8() noexcept = default;
             constexpr pixel_pal8(byte v) : value(v) { }
-            constexpr pixel_pal8& operator=(byte p) { value = p == 0 ? value : p; return *this; }
-            constexpr pixel_pal8& operator=(const pixel_pal8& p) { value = p.value == 0 ? value : p.value; return *this; }
+            constexpr pixel_pal8& operator=(byte p) { value = (p == 0 ? value : p); return *this; }
+            constexpr pixel_pal8& operator=(const pixel_pal8& p) { value = (p.value == 0 ? value : p.value); return *this; }
             constexpr operator byte() { return value; }
         };
         static_assert(sizeof(pixel_pal8) == 1 , "pixel_pal8 has incorrect size.");
