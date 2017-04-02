@@ -151,9 +151,9 @@ namespace jw
     template<typename T, std::size_t w, std::size_t h>
     struct fixed_matrix : public matrix<T> 
     {
-        constexpr fixed_matrix() : matrix<T>(w, h, data.data()) { }
+        constexpr fixed_matrix() : matrix<T>(w, h, array.data()) { }
 
     protected:
-        std::array<T, w * h> data;
+        std::array<T, w * h> array;
     };
 }
