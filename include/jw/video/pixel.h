@@ -41,8 +41,9 @@ namespace jw
             constexpr text_char& operator=(char c) noexcept { value.character = c; return *this; }
             constexpr operator char() const noexcept{ return value.character; }
         };
+        static_assert(sizeof(text_char) == 2 && alignof(text_char) == 2, "text_char has incorrect size or alignment.");
 
-        struct pixel_pal8
+        struct [[gnu::packed]] pixel_pal8
         {
             byte value { };
             constexpr pixel_pal8() noexcept = default;
@@ -51,5 +52,6 @@ namespace jw
             constexpr pixel_pal8& operator=(const pixel_pal8& p) { value = p.value == 0 ? value : p.value; return *this; }
             constexpr operator byte() { return value; }
         };
+        static_assert(sizeof(pixel_pal8) == 1 , "pixel_pal8 has incorrect size.");
     }
 }
