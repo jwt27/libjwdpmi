@@ -803,10 +803,10 @@ namespace jw
         };
 
         template <typename T, typename base = memory_base>
-        struct memory : public base
+        struct memory_t : public base
         {
             template<typename... Args>
-            memory(std::size_t num_elements, Args&&... args) : base(num_elements * sizeof(T), std::forward<Args>(args)...) { }
+            memory_t(std::size_t num_elements, Args&&... args) : base(num_elements * sizeof(T), std::forward<Args>(args)...) { }
             
             [[gnu::pure]] auto* get_ptr(selector sel = get_ds()) { return base::template get_ptr<T>(sel); }
             [[gnu::pure]] auto* operator->() noexcept { return get_ptr(); }
@@ -823,9 +823,9 @@ namespace jw
             virtual std::size_t get_size() const noexcept override { return base::get_size() / sizeof(T); }
         };
 
-        template <typename T = byte> using raw_memory = memory<T, memory_base>;
-        template <typename T = byte> using device_memory = memory<T, device_memory_base>;
-        template <typename T = byte> using mapped_dos_memory = memory<T, mapped_dos_memory_base>;
-        template <typename T = byte> using dos_memory = memory<T, dos_memory_base>;
+        template <typename T = byte> using memory = memory_t<T, memory_base>;
+        template <typename T = byte> using device_memory = memory_t<T, device_memory_base>;
+        template <typename T = byte> using mapped_dos_memory = memory_t<T, mapped_dos_memory_base>;
+        template <typename T = byte> using dos_memory = memory_t<T, dos_memory_base>;
     }
 }
