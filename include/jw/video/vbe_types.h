@@ -51,7 +51,7 @@ namespace jw
             std::array<char, 256> oem_data;
         };
 
-        struct [[gnu::packed]] vbe_mode_info
+        struct alignas(4) [[gnu::packed]] vbe_mode_info
         {
             struct [[gnu::packed]]
             {
@@ -144,7 +144,7 @@ namespace jw
             byte _reserved[190]; // HACK: should be 189?
         };
 
-        struct[[gnu::packed]] crtc_info
+        struct [[gnu::packed]] crtc_info
         {
             std::uint16_t h_total;
             std::uint16_t h_sync_start;
@@ -165,7 +165,7 @@ namespace jw
             byte _reserved[40];
         };
 
-        union [[gnu::packed]] vbe_mode
+        union alignas(2) [[gnu::packed]] vbe_mode
         {
             struct [[gnu::packed]]
             {
