@@ -1,26 +1,11 @@
-/******************************* libjwdpmi **********************************
-Copyright (C) 2016-2017  J.W. Jagersma
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/
+/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #include <iostream>
 #include <jw/io/ps2_interface.h>
 #include <jw/dpmi/irq_mask.h>
 #include <jw/thread/thread.h>
-
-//#define DOSBOX_BUG
+#include <../jwdpmi_config.h>
 
 // references: 
 // IBM keyboard datasheet   --> http://www.mcamafia.de/pdf/ibm_hitrc11.pdf
@@ -49,7 +34,7 @@ namespace jw
             config.keyboard_interrupt = true;
             write_config();
 
-            set_scancode_set(2);
+            set_scancode_set(set2);
             enable_typematic(true);
 
             irq_handler.enable();
@@ -72,23 +57,25 @@ namespace jw
         ps2_interface::~ps2_interface()
         {
             irq_handler.disable();
-            set_scancode_set(2);
+            set_scancode_set(set2);
             config = initial_config;
             config.translate_scancodes = true;
             write_config();                 // restore PS/2 configuration data
             initialized = false;
         }
 
-
         void ps2_interface::set_scancode_set(byte set)
         {
-        #ifdef DOSBOX_BUG
-            command<send_data, recv_ack, send_data, recv_ack, recv_ack>({ 0xF0, set }); // Dosbox-X sends two ACKs
-            current_scancode_set = static_cast<scancode_set>(command<send_data, recv_ack, send_data, recv_data, recv_ack>({ 0xF0, 0 }));  // Dosbox-X sends ACK-data-ACK...
-        #else                                                                
-            command<send_data, recv_ack, send_data, recv_ack>({ 0xF0, set });
-            current_scancode_set = static_cast<scancode_set>(command<send_data, recv_ack, send_data, recv_ack, recv_data>({ 0xF0, 0 }));  // Should be ACK-ACK-data.
-        #endif
+            if (config::dosbox)
+            {
+                command<send_data, recv_ack, send_data, recv_ack, recv_ack>({ 0xF0, set }); // Dosbox-X sends two ACKs
+                current_scancode_set = static_cast<scancode_set>(command<send_data, recv_ack, send_data, recv_data, recv_ack>({ 0xF0, 0 }));  // Dosbox-X sends ACK-data-ACK...
+            }
+            else
+            {
+                command<send_data, recv_ack, send_data, recv_ack>({ 0xF0, set });
+                current_scancode_set = static_cast<scancode_set>(command<send_data, recv_ack, send_data, recv_ack, recv_data>({ 0xF0, 0 }));  // Should be ACK-ACK-data.
+            }
 
             if (set == set3) command<send_data, recv_ack>({ 0xF8 });    // Enable make/break mode for all keys.
         }

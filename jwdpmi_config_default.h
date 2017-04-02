@@ -36,5 +36,8 @@ namespace jw
 
         // Enable debug messages from the gdb interface
         const bool enable_gdb_debug_messages = false;
+
+        // Enable this to work around buggy keyboard code in dosbox.
+        const bool dosbox = false;
     }
 }
