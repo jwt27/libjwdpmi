@@ -72,9 +72,9 @@ namespace jw
         ps2_interface::~ps2_interface()
         {
             irq_handler.disable();
-            //command<send_data, recv_ack, recv_discard_any>({ 0xFF });  // reset keyboard
-            set_scancode_set(1);
+            set_scancode_set(2);
             config = initial_config;
+            config.translate_scancodes = true;
             write_config();                 // restore PS/2 configuration data
             initialized = false;
         }
