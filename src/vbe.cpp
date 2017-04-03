@@ -18,22 +18,10 @@ namespace jw
                 error << "VBE function not supported.";
                 throw std::runtime_error { error.str() };
             }
-            if (ax.hi == 0x01)
-            {
-                error << "VBE function call failed.";
-                throw std::runtime_error { error.str() };
-            }
-            if (ax.hi == 0x02)
-            {
-                error << "VBE function call not supported in current hardware configuration.";
-                throw std::runtime_error { error.str() };
-            }
-            if (ax.hi == 0x03)
-            {
-                error << "VBE function call invalid in current video mode.";
-                throw std::runtime_error { error.str() };
-            }
-            error << "Unknown failure.";
+            if (ax.hi == 0x01) error << "VBE function call failed.";
+            else if (ax.hi == 0x02) error << "VBE function call not supported in current hardware configuration.";
+            else if (ax.hi == 0x03) error << "VBE function call invalid in current video mode.";
+            else error << "Unknown failure.";
             throw std::runtime_error { error.str() };
         }
 
