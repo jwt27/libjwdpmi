@@ -10,19 +10,31 @@ namespace jw
         void vbe::check_error(split_uint16_t ax, auto function_name)
         {
             if (ax == 0x004f) return;
-            std::stringstream error { };
-            error << function_name << ": ";
+            std::stringstream msg { };
+            msg << function_name << ": ";
 
             if (ax.lo != 0x4f)
             {
-                error << "VBE function not supported.";
-                throw std::runtime_error { error.str() };
+                msg << "VBE function not supported.";
+                throw not_supported { msg.str() };
             }
-            if (ax.hi == 0x01) error << "VBE function call failed.";
-            else if (ax.hi == 0x02) error << "VBE function call not supported in current hardware configuration.";
-            else if (ax.hi == 0x03) error << "VBE function call invalid in current video mode.";
-            else error << "Unknown failure.";
-            throw std::runtime_error { error.str() };
+            if (ax.hi == 0x01)
+            {
+                msg << "VBE function call failed.";
+                throw failed { msg.str() };
+            }
+            if (ax.hi == 0x02)
+            {
+                msg << "VBE function call not supported in current hardware configuration.";
+                throw not_supported_in_current_hardware { msg.str() };
+            }
+            if (ax.hi == 0x03)
+            {
+                msg << "VBE function call invalid in current video mode.";
+                throw invalid_in_current_video_mode { msg.str() };
+            }
+            msg << "Unknown failure.";
+            throw error { msg.str() };
         }
 
         void vbe::populate_mode_list(dpmi::far_ptr16 list_ptr)
