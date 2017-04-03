@@ -22,7 +22,7 @@ namespace jw
             dpmi::far_ptr16 oem_product_name;
             dpmi::far_ptr16 oem_product_version;
             byte _reserved[222];
-            char oem_data[256];
+            byte oem_data[256];
         };
 
         struct vbe_info
@@ -48,7 +48,7 @@ namespace jw
             std::string oem_vendor_name;
             std::string oem_product_name;
             std::string oem_product_version;
-            std::array<char, 256> oem_data;
+            std::array<byte, 256> oem_data;
         };
 
         struct alignas(4) [[gnu::packed]] vbe_mode_info
