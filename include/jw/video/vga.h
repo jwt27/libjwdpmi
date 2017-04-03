@@ -19,9 +19,9 @@ namespace jw
                 reg.call_rm_interrupt(0x10);
             }
 
-            virtual void set_cursor_shape();
+            virtual void set_cursor_shape() { }
 
-            virtual void set_cursor_position();
+            virtual void set_cursor_position() { }
             
 
             virtual ~bios() { }
