@@ -17,6 +17,7 @@ namespace jw
             const std::list<vbe_mode_info>& get_modes() { get_vbe_info(); return modes; }
 
         protected:
+            void check_error(split_uint16_t ax, auto function_name);
             void populate_mode_list(dpmi::far_ptr16 list_ptr);
 
             vbe_info info;

@@ -7,6 +7,36 @@ namespace jw
 {
     namespace video
     {
+        void vbe::check_error(split_uint16_t ax, auto function_name)
+        {
+            if (ax == 0x004f) return;
+            std::stringstream error { };
+            error << function_name << ": ";
+
+            if (ax.lo != 0x4f)
+            {
+                error << "VBE function not supported.";
+                throw std::runtime_error { error.str() };
+            }
+            if (ax.hi == 0x01)
+            {
+                error << "VBE function call failed.";
+                throw std::runtime_error { error.str() };
+            }
+            if (ax.hi == 0x02)
+            {
+                error << "VBE function call not supported in current hardware configuration.";
+                throw std::runtime_error { error.str() };
+            }
+            if (ax.hi == 0x03)
+            {
+                error << "VBE function call invalid in current video mode.";
+                throw std::runtime_error { error.str() };
+            }
+            error << "Unknown failure.";
+            throw std::runtime_error { error.str() };
+        }
+
         const vbe_info& vbe::get_vbe_info()
         {
             if (info.vbe_signature == "VESA") return info;
@@ -19,8 +49,7 @@ namespace jw
             reg.es = raw_info.get_dos_ptr().segment;
             reg.di = raw_info.get_dos_ptr().offset;
             reg.call_rm_interrupt(0x10);
-            // TODO: check ax for return value
-            if (strncmp(ptr->vbe_signature, "VESA", 4) != 0) throw std::runtime_error { "VBE2 not supported." };
+            check_error(reg.ax, __PRETTY_FUNCTION__);
 
             info.vbe_signature.assign(ptr->vbe_signature, ptr->vbe_signature + 4);
             info.vbe_version = ptr->vbe_version;
@@ -48,7 +77,7 @@ namespace jw
                 reg.es = mode_info.get_dos_ptr().segment;
                 reg.di = mode_info.get_dos_ptr().offset;
                 reg.call_rm_interrupt(0x10);
-                // TODO: check ax for return value
+                check_error(reg.ax, __PRETTY_FUNCTION__);
                 modes.push_back(*mode_info.get_ptr());
             }
         }
@@ -66,8 +95,8 @@ namespace jw
             reg.es = raw_info.get_dos_ptr().segment;
             reg.di = raw_info.get_dos_ptr().offset;
             reg.call_rm_interrupt(0x10);
-            // TODO: check ax for return value
-            if (strncmp(ptr->vbe_signature, "VESA", 4) != 0) throw std::runtime_error { "VBE2 not supported." };
+            check_error(reg.ax, __PRETTY_FUNCTION__);
+            if (strncmp(ptr->vbe_signature, "VESA", 4) != 0) throw std::runtime_error { "VBE2+ not supported." };
 
             info.vbe_signature.assign(ptr->vbe_signature, ptr->vbe_signature + 4);
             info.vbe_version = ptr->vbe_version;
