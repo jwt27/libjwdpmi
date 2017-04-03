@@ -97,7 +97,7 @@ namespace jw
             reg.di = raw_info.get_dos_ptr().offset;
             reg.call_rm_interrupt(0x10);
             check_error(reg.ax, __PRETTY_FUNCTION__);
-            if (strncmp(ptr->vbe_signature, "VESA", 4) != 0) throw std::runtime_error { "VBE2+ not supported." };
+            if (strncmp(ptr->vbe_signature, "VESA", 4) != 0) throw not_supported { "VBE2+ not supported." };
 
             info.vbe_signature.assign(ptr->vbe_signature, ptr->vbe_signature + 4);
             info.vbe_version = ptr->vbe_version;

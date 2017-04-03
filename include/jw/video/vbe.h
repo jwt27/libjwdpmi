@@ -19,6 +19,8 @@ namespace jw
             struct not_supported_in_current_hardware : public error { using error::error; };
             struct invalid_in_current_video_mode : public error { using error::error; };
 
+            vbe() { get_vbe_info(); }
+
             virtual const vbe_info& get_vbe_info();
             const std::list<vbe_mode_info>& get_modes() { get_vbe_info(); return modes; }
             virtual void set_mode(vbe_mode m, const crtc_info* crtc = nullptr) override;
