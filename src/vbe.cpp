@@ -31,6 +31,7 @@ namespace jw
             dpmi::dos_memory<vbe_mode_info> mode_info { 1 };
             for (auto* mode_ptr = mode_list.get_ptr(); *mode_ptr != 0xffff; ++mode_ptr)
             {
+                *mode_info = { };
                 dpmi::rm_registers reg { };
                 reg.ax = 0x4f01;
                 reg.cx = *mode_ptr;
