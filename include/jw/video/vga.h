@@ -11,7 +11,7 @@ namespace jw
     {
         struct bios
         {
-            virtual void set_mode(const vbe_mode& m)
+            virtual void set_mode(vbe_mode m, const crtc_info* = nullptr)
             {
                 dpmi::rm_registers reg { };
                 reg.ah = 0x00;

@@ -126,5 +126,33 @@ namespace jw
 
             return info;
         }
+
+        void vbe::set_mode(vbe_mode m, const crtc_info*)
+        {
+            dpmi::rm_registers reg { };
+            reg.ax = 0x4f02;
+            reg.bx = m.raw_value;
+            reg.call_rm_interrupt(0x10);
+            check_error(reg.ax, __PRETTY_FUNCTION__);
+        }
+
+        void vbe3::set_mode(vbe_mode m, const crtc_info* crtc)
+        {
+            if (crtc == nullptr) m.use_custom_crtc_timings = false;
+            dpmi::rm_registers reg { };
+            reg.ax = 0x4f02;
+            reg.bx = m.raw_value;
+            if (m.use_custom_crtc_timings)
+            {
+                dpmi::dos_memory<crtc_info> crtc_ptr { 1 };
+                *crtc_ptr = *crtc;
+                reg.es = crtc_ptr.get_dos_ptr().segment;
+                reg.di = crtc_ptr.get_dos_ptr().offset;
+                reg.call_rm_interrupt(0x10);
+            }
+            else reg.call_rm_interrupt(0x10);
+            check_error(reg.ax, __PRETTY_FUNCTION__);
+        }
+
     }
 }

@@ -21,6 +21,7 @@ namespace jw
 
             virtual const vbe_info& get_vbe_info();
             const std::list<vbe_mode_info>& get_modes() { get_vbe_info(); return modes; }
+            virtual void set_mode(vbe_mode m, const crtc_info* crtc = nullptr) override;
 
         protected:
             void check_error(split_uint16_t ax, auto function_name);
@@ -37,7 +38,7 @@ namespace jw
 
         struct vbe3 : public vbe2
         {
-            
+            virtual void set_mode(vbe_mode m, const crtc_info* crtc = nullptr) override;
         };
     }
 }
