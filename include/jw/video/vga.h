@@ -13,10 +13,10 @@ namespace jw
         {
             virtual void set_mode(vbe_mode m, const crtc_info* = nullptr)
             {
-                dpmi::rm_registers reg { };
+                dpmi::realmode_registers reg { };
                 reg.ah = 0x00;
                 reg.al = m.mode;
-                reg.call_rm_interrupt(0x10);
+                reg.call_int(0x10);
             }
 
             virtual void set_cursor_shape() { }

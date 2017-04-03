@@ -24,7 +24,7 @@ namespace jw
     namespace dpmi
     {
         // CPU register structure for DPMI real-mode functions.
-        struct alignas(2) [[gnu::packed]] rm_registers : public cpu_registers
+        struct alignas(2) [[gnu::packed]] realmode_registers : public cpu_registers
         {
             union[[gnu::packed]]
             {
@@ -49,8 +49,8 @@ namespace jw
                 } flags;
             };
             std::uint16_t es, ds, fs, gs;
-            std::uint16_t ip, cs; // not used in call_rm_interrupt()
-            std::uint16_t sp, ss; // not required for call_rm_interrupt()
+            std::uint16_t ip, cs; // not used in call_int()
+            std::uint16_t sp, ss; // not required for call_int()
 
             auto& print(std::ostream& out) const
             {
@@ -61,12 +61,12 @@ namespace jw
                 out << hex << setfill(' ') << setw(0) << flush;
                 return out;
             }
-            friend auto& operator<<(std::ostream& out, const rm_registers& in) { return in.print(out); }
+            friend auto& operator<<(std::ostream& out, const realmode_registers& in) { return in.print(out); }
 
-            void call_rm_interrupt(int_vector interrupt)
+            void call_int(int_vector interrupt)
             {
                 selector new_reg_ds = get_ds();
-                rm_registers* new_reg;
+                realmode_registers* new_reg;
                 dpmi_error_code error;
                 bool c;
 
@@ -101,16 +101,16 @@ namespace jw
                             "pop ds;"
                             "pop es;"
                             :: "rm" (new_reg_ds)
-                            , "c" (sizeof(rm_registers))
+                            , "c" (sizeof(realmode_registers))
                             , "S" (new_reg)
                             , "D" (this)
                             : "memory");
                     }
-                    else *this = *(ptr.get_ptr<rm_registers>());
+                    else *this = *(ptr.get_ptr<realmode_registers>());
                 }
             }
         };
 
-        static_assert(sizeof( rm_registers) == 0x32, "check sizeof struct dpmi::rm_registers");
+        static_assert(sizeof( realmode_registers) == 0x32, "check sizeof struct dpmi::realmode_registers");
     }
 }

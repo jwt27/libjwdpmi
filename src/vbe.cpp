@@ -7,7 +7,7 @@ namespace jw
 {
     namespace video
     {
-        void vbe::check_error(split_uint16_t ax, auto function_name)
+        void vbe::check_error(split_uint16_t ax, const char* function_name)
         {
             if (ax == 0x004f) return;
             std::stringstream msg { };
@@ -44,29 +44,33 @@ namespace jw
             for (auto* mode_ptr = mode_list.get_ptr(); *mode_ptr != 0xffff; ++mode_ptr)
             {
                 *mode_info = { };
-                dpmi::rm_registers reg { };
+                dpmi::realmode_registers reg { };
                 reg.ax = 0x4f01;
                 reg.cx = *mode_ptr;
                 reg.es = mode_info.get_dos_ptr().segment;
                 reg.di = mode_info.get_dos_ptr().offset;
-                reg.call_rm_interrupt(0x10);
+                reg.call_int(0x10);
                 check_error(reg.ax, __PRETTY_FUNCTION__);
-                modes.push_back(*mode_info.get_ptr());
+                modes.push_back(*mode_info);
             }
         }
 
         const vbe_info& vbe::get_vbe_info()
         {
-            if (info.vbe_signature == "VESA") return info;
+            if (info.vbe_signature != "VESA") init();
+            return info;
+        }
 
+        void vbe::init()
+        {
             dpmi::dos_memory<raw_vbe_info> raw_info { 1 };
             auto* ptr = raw_info.get_ptr();
 
-            dpmi::rm_registers reg { };
+            dpmi::realmode_registers reg { };
             reg.ax = 0x4f00;
             reg.es = raw_info.get_dos_ptr().segment;
             reg.di = raw_info.get_dos_ptr().offset;
-            reg.call_rm_interrupt(0x10);
+            reg.call_int(0x10);
             check_error(reg.ax, __PRETTY_FUNCTION__);
 
             info.vbe_signature.assign(ptr->vbe_signature, ptr->vbe_signature + 4);
@@ -79,23 +83,19 @@ namespace jw
                 info.oem_string = str.get_ptr();
             }
             populate_mode_list(ptr->video_mode_list);
-
-            return info;
         }
 
-        const vbe_info& vbe2::get_vbe_info()
+        void vbe2::init()
         {
-            if (info.vbe_signature == "VESA") return info;
-
             dpmi::dos_memory<raw_vbe_info> raw_info { 1 };
             auto* ptr = raw_info.get_ptr();
             std::copy_n("VBE2", 4, ptr->vbe_signature);
 
-            dpmi::rm_registers reg { };
+            dpmi::realmode_registers reg { };
             reg.ax = 0x4f00;
             reg.es = raw_info.get_dos_ptr().segment;
             reg.di = raw_info.get_dos_ptr().offset;
-            reg.call_rm_interrupt(0x10);
+            reg.call_int(0x10);
             check_error(reg.ax, __PRETTY_FUNCTION__);
             if (strncmp(ptr->vbe_signature, "VESA", 4) != 0) throw not_supported { "VBE2+ not supported." };
 
@@ -123,23 +123,26 @@ namespace jw
                 info.oem_product_version = str.get_ptr();
             }
             populate_mode_list(ptr->video_mode_list);
+        }
 
-            return info;
+        void vbe3::init()
+        {
+            vbe2::init();
         }
 
         void vbe::set_mode(vbe_mode m, const crtc_info*)
         {
-            dpmi::rm_registers reg { };
+            dpmi::realmode_registers reg { };
             reg.ax = 0x4f02;
             reg.bx = m.raw_value;
-            reg.call_rm_interrupt(0x10);
+            reg.call_int(0x10);
             check_error(reg.ax, __PRETTY_FUNCTION__);
         }
 
         void vbe3::set_mode(vbe_mode m, const crtc_info* crtc)
         {
             if (crtc == nullptr) m.use_custom_crtc_timings = false;
-            dpmi::rm_registers reg { };
+            dpmi::realmode_registers reg { };
             reg.ax = 0x4f02;
             reg.bx = m.raw_value;
             if (m.use_custom_crtc_timings)
@@ -148,11 +151,10 @@ namespace jw
                 *crtc_ptr = *crtc;
                 reg.es = crtc_ptr.get_dos_ptr().segment;
                 reg.di = crtc_ptr.get_dos_ptr().offset;
-                reg.call_rm_interrupt(0x10);
+                reg.call_int(0x10);
             }
-            else reg.call_rm_interrupt(0x10);
+            else reg.call_int(0x10);
             check_error(reg.ax, __PRETTY_FUNCTION__);
         }
-
     }
 }
