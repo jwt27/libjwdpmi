@@ -23,7 +23,6 @@ namespace jw
 
             virtual void set_cursor_position() { }
             
-
             virtual ~bios() { }
         };
 

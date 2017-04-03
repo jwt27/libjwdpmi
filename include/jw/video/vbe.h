@@ -13,15 +13,19 @@ namespace jw
     {
         struct vbe : public vga
         {
+            virtual const vbe_info& get_vbe_info();
+            const std::list<vbe_mode_info>& get_modes() { get_vbe_info(); return modes; }
 
         protected:
+            void populate_mode_list(dpmi::far_ptr16 list_ptr);
+
             vbe_info info;
             std::list<vbe_mode_info> modes { };
         };
 
         struct vbe2 : public vbe
         {
-            virtual const vbe_info& get_vbe_info();
+            virtual const vbe_info& get_vbe_info() override;
         };
 
         struct vbe3 : public vbe2
