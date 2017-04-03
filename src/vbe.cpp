@@ -25,6 +25,23 @@ namespace jw
             throw std::runtime_error { error.str() };
         }
 
+        void vbe::populate_mode_list(dpmi::far_ptr16 list_ptr)
+        {
+            dpmi::mapped_dos_memory<std::uint16_t> mode_list { 256, list_ptr };
+            dpmi::dos_memory<vbe_mode_info> mode_info { 1 };
+            for (auto* mode_ptr = mode_list.get_ptr(); *mode_ptr != 0xffff; ++mode_ptr)
+            {
+                dpmi::rm_registers reg { };
+                reg.ax = 0x4f01;
+                reg.cx = *mode_ptr;
+                reg.es = mode_info.get_dos_ptr().segment;
+                reg.di = mode_info.get_dos_ptr().offset;
+                reg.call_rm_interrupt(0x10);
+                check_error(reg.ax, __PRETTY_FUNCTION__);
+                modes.push_back(*mode_info.get_ptr());
+            }
+        }
+
         const vbe_info& vbe::get_vbe_info()
         {
             if (info.vbe_signature == "VESA") return info;
@@ -51,23 +68,6 @@ namespace jw
             populate_mode_list(ptr->video_mode_list);
 
             return info;
-        }
-
-        void vbe::populate_mode_list(dpmi::far_ptr16 list_ptr)
-        {
-            dpmi::mapped_dos_memory<std::uint16_t> mode_list { 256, list_ptr };
-            dpmi::dos_memory<vbe_mode_info> mode_info { 1 };
-            for (auto* mode_ptr = mode_list.get_ptr(); *mode_ptr != 0xffff; ++mode_ptr)
-            {
-                dpmi::rm_registers reg { };
-                reg.ax = 0x4f01;
-                reg.cx = *mode_ptr;
-                reg.es = mode_info.get_dos_ptr().segment;
-                reg.di = mode_info.get_dos_ptr().offset;
-                reg.call_rm_interrupt(0x10);
-                check_error(reg.ax, __PRETTY_FUNCTION__);
-                modes.push_back(*mode_info.get_ptr());
-            }
         }
 
         const vbe_info& vbe2::get_vbe_info()
