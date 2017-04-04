@@ -42,5 +42,27 @@ namespace jw
             virtual void init() override;
             virtual void set_mode(vbe_mode m, const crtc_info* crtc = nullptr) override;
         };
+
+        inline std::unique_ptr<vbe> get_vbe_interface()
+        {
+            try
+            {
+                auto v = std::make_unique<vbe3>();
+                v->init();
+                return std::move(v);
+            }
+            catch (vbe::not_supported) { }
+            try
+            {
+                auto v = std::make_unique<vbe2>();
+                v->init();
+                return std::move(v);
+            }
+            catch (vbe::not_supported) { }
+
+            auto v = std::make_unique<vbe>();
+            v->init();
+            return std::move(v);
+        }
     }
 }
