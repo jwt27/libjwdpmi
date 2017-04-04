@@ -67,11 +67,17 @@ namespace jw
                 reg.di = mode_info.get_dos_ptr().offset;
                 reg.call_int(0x10);
                 check_error(reg.ax, __PRETTY_FUNCTION__);
-                modes[num] = *mode_info;
+                if (mode_info->attr.is_supported) modes[num] = *mode_info;
             };
 
             for (auto* mode_ptr = mode_list.get_ptr(); *mode_ptr != 0xffff; ++mode_ptr)
                 get_mode(*mode_ptr);
+
+            for (auto n = 0; n < 0x7f; ++n)
+            {
+                try { get_mode(n); }
+                catch (const error&) { }
+            }
         }
 
         const vbe_info& vbe::get_vbe_info()
