@@ -10,6 +10,7 @@ namespace jw
     namespace video
     {
         std::vector<byte> vbe2_pm_interface { };
+        std::unique_ptr<dpmi::device_memory<byte>> vbe2_mmio;
         bool vbe2_pm { false };
 
         std::unique_ptr<dpmi::mapped_dos_memory<byte>> a000, b000, b800;
@@ -162,6 +163,19 @@ namespace jw
             dpmi::mapped_dos_memory<byte> pm_table { reg.cx, dpmi::far_ptr16 { reg.es, reg.di } };
             byte* pm_table_ptr = pm_table.get_ptr();
             vbe2_pm_interface.assign(pm_table_ptr, pm_table_ptr + reg.cx);
+            auto* io_list = reinterpret_cast<std::uint16_t*>(vbe2_pm_interface.data());
+            if (*io_list != 0)
+            {
+                while (*io_list != 0xffff) ++io_list;
+                if (*++io_list != 0xffff)
+                {
+                    auto* addr = reinterpret_cast<std::uintptr_t*>(io_list);
+                    auto* size = io_list + 2;
+                    vbe2_mmio = std::make_unique<dpmi::device_memory<byte>>(*size, *addr);
+                    auto ar = dpmi::ldt_access_rights { dpmi::get_ds() };
+                    vbe2_mmio->get_ldt_entry().lock()->set_access_rights(ar);
+                }
+            }
             vbe2_pm = true;
         }
 
