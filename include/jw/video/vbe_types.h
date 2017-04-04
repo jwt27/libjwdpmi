@@ -88,14 +88,14 @@ namespace jw
                 bool stereo_supported : 1;
                 bool dual_display_supported : 1;
                 unsigned : 3;
-            } mode_attributes;
+            } attr;
             struct [[gnu::packed]]
             {
                 bool relocatable_windows_supported : 1;
                 bool is_readable : 1;
                 bool is_writeable : 1;
                 unsigned : 5;
-            } winA_attributes, winB_attributes;
+            } winA_attr, winB_attr;
             std::uint16_t win_granularity;
             std::uint16_t win_size;
             std::uint16_t winA_segment;
