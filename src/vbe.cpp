@@ -208,6 +208,7 @@ namespace jw
             std::size_t code_size;
             asm("jmp copy_end%=;"
                 "copy_begin%=:"
+                "push es; push fs; push gs;"
                 "push ebp;"
                 "mov ebp, esp;"
                 "mov si, ss;"
@@ -219,6 +220,7 @@ namespace jw
                 "mov ss, si;"
                 "mov esp, ebp;"
                 "pop ebp;"
+                "pop gs; pop fs; pop es;"
                 "retf;"
                 "copy_end%=:"
                 "mov %0, offset copy_begin%=;"
