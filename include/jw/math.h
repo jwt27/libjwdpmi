@@ -20,4 +20,19 @@ namespace jw
     template<> constexpr inline auto round(long double a) { return __builtin_roundl(a); }
     template<> constexpr inline auto round(double a) { return __builtin_round(a); }
     template<> constexpr inline auto round(float a) { return __builtin_roundf(a); }
+
+    template<typename T> inline auto checksum8(const T& value)
+    {
+        std::uint8_t r { 0 };
+        auto* ptr = reinterpret_cast<byte*>(&value);
+        for (std::size_t i = 0; i < sizeof(T); ++i) r += ptr[i];
+        return r;
+    }
+
+    template<> inline auto checksum8(const std::string& value)
+    {
+        std::uint8_t r { 0 };
+        for (auto c : value) r += c;
+        return r;
+    }
 }
