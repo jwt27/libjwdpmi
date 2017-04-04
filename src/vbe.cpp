@@ -279,6 +279,7 @@ namespace jw
                 vbe3_stack.reset();
                 video_bios.reset();
                 bios_data_area.reset();
+                throw;
             }
         }
 
