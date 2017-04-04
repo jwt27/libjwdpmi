@@ -57,18 +57,21 @@ namespace jw
         {
             dpmi::mapped_dos_memory<std::uint16_t> mode_list { 256, list_ptr };
             dpmi::dos_memory<vbe_mode_info> mode_info { 1 };
-            for (auto* mode_ptr = mode_list.get_ptr(); *mode_ptr != 0xffff; ++mode_ptr)
+            auto get_mode = [&](std::uint16_t num)
             {
                 *mode_info = { };
                 dpmi::realmode_registers reg { };
                 reg.ax = 0x4f01;
-                reg.cx = *mode_ptr;
+                reg.cx = num;
                 reg.es = mode_info.get_dos_ptr().segment;
                 reg.di = mode_info.get_dos_ptr().offset;
                 reg.call_int(0x10);
                 check_error(reg.ax, __PRETTY_FUNCTION__);
-                modes.push_back(*mode_info);
-            }
+                modes[num] = *mode_info;
+            };
+
+            for (auto* mode_ptr = mode_list.get_ptr(); *mode_ptr != 0xffff; ++mode_ptr)
+                get_mode(*mode_ptr);
         }
 
         const vbe_info& vbe::get_vbe_info()
