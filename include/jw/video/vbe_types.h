@@ -9,21 +9,38 @@ namespace jw
 {
     namespace video
     {
-        struct [[gnu::packed]] raw_vbe_info
+        namespace detail
         {
-            char vbe_signature[4];
-            std::uint16_t vbe_version;
-            dpmi::far_ptr16 oem_string;
-            std::uint32_t capabilities;
-            dpmi::far_ptr16 video_mode_list;
-            std::uint16_t total_memory;
-            std::uint16_t oem_software_ver;
-            dpmi::far_ptr16 oem_vendor_name;
-            dpmi::far_ptr16 oem_product_name;
-            dpmi::far_ptr16 oem_product_version;
-            byte _reserved[222];
-            byte oem_data[256];
-        };
+            struct[[gnu::packed]] vbe3_pm_info
+            {
+                char pmid[4];
+                std::uint16_t entry_point;
+                std::uint16_t init_entry_point;
+                dpmi::selector bda_selector;
+                dpmi::selector a000_selector;
+                dpmi::selector b000_selector;
+                dpmi::selector b800_selector;
+                dpmi::selector code_selector;
+                bool in_protected_mode;
+                byte checksum;
+            };
+
+            struct[[gnu::packed]] raw_vbe_info
+            {
+                char vbe_signature[4];
+                std::uint16_t vbe_version;
+                dpmi::far_ptr16 oem_string;
+                std::uint32_t capabilities;
+                dpmi::far_ptr16 video_mode_list;
+                std::uint16_t total_memory;
+                std::uint16_t oem_software_ver;
+                dpmi::far_ptr16 oem_vendor_name;
+                dpmi::far_ptr16 oem_product_name;
+                dpmi::far_ptr16 oem_product_version;
+                byte _reserved[222];
+                byte oem_data[256];
+            };
+        }
 
         struct vbe_info
         {
@@ -180,7 +197,7 @@ namespace jw
             std::uint16_t raw_value;
         };
 
-        static_assert(sizeof(raw_vbe_info) == 0x200, "check sizeof raw_vbe_info_block.");
+        static_assert(sizeof(detail::raw_vbe_info) == 0x200, "check sizeof raw_vbe_info_block.");
         static_assert(sizeof(vbe_mode_info) == 0x100, "check sizeof mode_info_block.");
         static_assert(sizeof(crtc_info) == 0x3B, "check sizeof crtc_info_block.");
         static_assert(sizeof(vbe_mode) == 0x2, "check sizeof vbe_mode_flags.");

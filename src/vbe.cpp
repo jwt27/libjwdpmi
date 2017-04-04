@@ -9,6 +9,8 @@ namespace jw
     {
         std::vector<byte> vbe2_pm_interface { };
 
+        dpmi::far_ptr32 vbe3_call { };
+
         void vbe::check_error(split_uint16_t ax, const char* function_name)
         {
             if (ax == 0x004f) return;
@@ -65,7 +67,7 @@ namespace jw
 
         void vbe::init()
         {
-            dpmi::dos_memory<raw_vbe_info> raw_info { 1 };
+            dpmi::dos_memory<detail::raw_vbe_info> raw_info { 1 };
             auto* ptr = raw_info.get_ptr();
 
             dpmi::realmode_registers reg { };
@@ -89,7 +91,7 @@ namespace jw
 
         void vbe2::init()
         {
-            dpmi::dos_memory<raw_vbe_info> raw_info { 1 };
+            dpmi::dos_memory<detail::raw_vbe_info> raw_info { 1 };
             auto* ptr = raw_info.get_ptr();
             std::copy_n("VBE2", 4, ptr->vbe_signature);
 
