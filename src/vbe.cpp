@@ -7,6 +7,8 @@ namespace jw
 {
     namespace video
     {
+        std::vector<byte> vbe2_pm_interface { };
+
         void vbe::check_error(split_uint16_t ax, const char* function_name)
         {
             if (ax == 0x004f) return;
@@ -123,6 +125,15 @@ namespace jw
                 info.oem_product_version = str.get_ptr();
             }
             populate_mode_list(ptr->video_mode_list);
+
+            reg = { };
+            reg.ax = 0x4f0a;
+            reg.bl = 0;
+            reg.call_int(0x10);
+            check_error(reg.ax, __PRETTY_FUNCTION__);
+            dpmi::mapped_dos_memory<byte> pm_table { reg.cx, dpmi::far_ptr16 { reg.es, reg.di } };
+            byte* pm_table_ptr = pm_table.get_ptr();
+            vbe2_pm_interface.assign(pm_table_ptr, pm_table_ptr + reg.cx);
         }
 
         void vbe3::init()
