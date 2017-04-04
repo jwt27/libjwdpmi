@@ -20,7 +20,7 @@ namespace jw
                 dpmi::selector a000_selector;
                 dpmi::selector b000_selector;
                 dpmi::selector b800_selector;
-                dpmi::selector code_selector;
+                dpmi::selector data_selector;
                 bool in_protected_mode;
                 byte checksum;
             };
