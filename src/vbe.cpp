@@ -235,7 +235,7 @@ namespace jw
             vbe3_call_wrapper_mem.get_ldt_entry().lock()->set_access_rights(ar);
             vbe3_call.segment = vbe3_call_wrapper_mem.get_selector();
 
-            asm volatile("call fword ptr [vbe3_call];":::"eax", "ebx", "ecx", "edx", "esi", "edi");
+            asm volatile("call fword ptr [vbe3_call];":::"eax", "ebx", "ecx", "edx", "esi", "edi", "cc");
 
             entry_point.offset = pmid->entry_point;
             std::copy_n(reinterpret_cast<byte*>(&entry_point), sizeof(far_ptr16), vbe3_call_wrapper.data());
