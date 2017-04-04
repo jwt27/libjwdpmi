@@ -29,7 +29,7 @@ namespace jw
             void populate_mode_list(dpmi::far_ptr16 list_ptr);
 
             vbe_info info;
-            std::map<std::uint_fast16_t,vbe_mode_info> modes { };
+            std::map<std::uint_fast16_t, vbe_mode_info> modes { };
         };
 
         struct vbe2 : public vbe

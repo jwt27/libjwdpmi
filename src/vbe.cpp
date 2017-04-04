@@ -126,7 +126,7 @@ namespace jw
             reg.di = raw_info.get_dos_ptr().offset;
             reg.call_int(0x10);
             check_error(reg.ax, __PRETTY_FUNCTION__);
-            if (strncmp(ptr->vbe_signature, "VESA", 4) != 0) throw not_supported { "VBE2+ not supported." };
+            if (ptr->vbe_version < 0x0200) throw not_supported { "VBE2+ not supported." };
 
             info.vbe_signature.assign(ptr->vbe_signature, ptr->vbe_signature + 4);
             info.vbe_version = ptr->vbe_version;
@@ -169,6 +169,7 @@ namespace jw
         {
             using namespace dpmi;
             vbe2::init();
+            if (info.vbe_version < 0x0300) throw not_supported { "VBE3+ not supported." };
             if (vbe3_pm) return;
 
             try
