@@ -24,7 +24,7 @@ namespace jw
     template<typename T> inline auto checksum8(const T& value)
     {
         std::uint8_t r { 0 };
-        auto* ptr = reinterpret_cast<byte*>(&value);
+        auto* ptr = reinterpret_cast<const byte*>(&value);
         for (std::size_t i = 0; i < sizeof(T); ++i) r += ptr[i];
         return r;
     }
