@@ -1,7 +1,9 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
+#include <memory>
 #include <jw/video/vbe.h>
+#include <jw/math.h>
 
 namespace jw
 {
@@ -9,7 +11,19 @@ namespace jw
     {
         std::vector<byte> vbe2_pm_interface { };
 
-        dpmi::far_ptr32 vbe3_call { };
+        std::unique_ptr<dpmi::mapped_dos_memory<byte>> a000, b000, b800;
+        std::unique_ptr<dpmi::memory<byte>> vbe3_stack { };
+        std::vector<byte> video_bios { };
+        std::vector<byte> bios_data_area { };
+        detail::vbe3_pm_info* pmid { nullptr };
+
+        std::vector<byte> vbe3_call_wrapper { };
+        dpmi::far_ptr32 vbe3_call asm("vbe3_call") { };
+
+        dpmi::linear_memory video_bios_data;
+        dpmi::linear_memory video_bios_code;
+        dpmi::linear_memory bios_data_area_mem;
+        dpmi::linear_memory vbe3_call_wrapper_mem;
 
         void vbe::check_error(split_uint16_t ax, const char* function_name)
         {
@@ -140,7 +154,84 @@ namespace jw
 
         void vbe3::init()
         {
+            using namespace dpmi;
             vbe2::init();
+
+            {
+                mapped_dos_memory<byte> video_bios_ptr { 64_KB, far_ptr16 { 0xC000, 0 } };
+                auto* ptr = video_bios_ptr.get_ptr();
+                video_bios.assign(ptr, ptr + 64_KB);
+            }
+            char* search_ptr = reinterpret_cast<char*>(video_bios.data());
+            const char* search_value = "PMID";
+            search_ptr = std::search(search_ptr, search_ptr + 64_KB, search_value, search_value + 4);
+            if (strncmp(search_ptr, search_value, 4) != 0) return;
+            pmid = reinterpret_cast<detail::vbe3_pm_info*>(search_ptr);
+            if (checksum8(*pmid) != 0) return;
+
+            bios_data_area.assign(1_KB, 0);
+            bios_data_area_mem = { get_ds(), bios_data_area.data(), bios_data_area.size() };
+            pmid->bda_selector = bios_data_area_mem.get_selector();
+            auto ar = ldt_access_rights { get_ds() };
+            ar.is_32_bit = false;
+            bios_data_area_mem.get_ldt_entry().lock()->set_access_rights(ar);
+
+            a000 = std::make_unique<mapped_dos_memory<byte>>(64_KB, far_ptr16 { 0xA000, 0 });
+            b000 = std::make_unique<mapped_dos_memory<byte>>(64_KB, far_ptr16 { 0xB000, 0 });
+            b800 = std::make_unique<mapped_dos_memory<byte>>(32_KB, far_ptr16 { 0xB800, 0 });
+            pmid->a000_selector = a000->get_selector();
+            pmid->b000_selector = b000->get_selector();
+            pmid->b800_selector = b800->get_selector();
+
+            video_bios_data = { get_ds(), video_bios.data(), video_bios.size() };
+            video_bios_code = { get_ds(), video_bios.data(), video_bios.size() };
+            video_bios_data.get_ldt_entry().lock()->set_access_rights(ar);
+            ar.type = code_segment;
+            video_bios_code.get_ldt_entry().lock()->set_access_rights(ar);
+            pmid->code_selector = video_bios_data.get_selector();
+
+            vbe3_stack = std::make_unique<memory<byte>>(4_KB);
+            ar = ldt_access_rights { get_ss() };
+            ar.is_32_bit = false;
+            vbe3_stack->get_ldt_entry().lock()->set_access_rights(ar);
+            auto stack_ptr = far_ptr32 { vbe3_stack->get_selector(), vbe3_stack->get_size() & -0x10 };
+            auto entry_point = far_ptr32 { video_bios_code.get_selector(), pmid->init_entry_point };
+
+            std::copy_n(reinterpret_cast<byte*>(&entry_point), 6, std::back_inserter(vbe3_call_wrapper));
+            std::copy_n(reinterpret_cast<byte*>(&stack_ptr), 6, std::back_inserter(vbe3_call_wrapper));
+            vbe3_call.offset = vbe3_call_wrapper.size();
+
+            pmid->in_protected_mode = true;
+
+            byte* code_start;
+            std::size_t code_size;
+            asm("jmp copy_end%=;"
+                "copy_begin%=:"
+                "push ebp;"
+                "mov ebp, esp;"
+                "mov bx, ss;"
+                "lss esp, fword ptr cs:[6];"
+                "call fword ptr cs:[0];"
+                "mov ss, bx;"
+                "mov esp, ebp;"
+                "pop ebp;"
+                "retf;"
+                "copy_end%=:"
+                "mov %0, offset copy_begin%=;"
+                "mov %1, offset copy_end%=;"
+                "sub %1, %0;"
+                : "=rm,r" (code_start)
+                , "=r,rm" (code_size)
+                ::"cc");
+            std::copy_n(code_start, code_size, std::back_inserter(vbe3_call_wrapper));
+            vbe3_call_wrapper_mem = { get_ds(), vbe3_call_wrapper.data(), vbe3_call_wrapper.size() };
+            ar = ldt_access_rights { get_cs() };
+            vbe3_call_wrapper_mem.get_ldt_entry().lock()->set_access_rights(ar);
+
+            asm volatile("call fword ptr [vbe3_call];");
+
+            entry_point = far_ptr32 { video_bios_code.get_selector(), pmid->entry_point };
+            std::copy_n(reinterpret_cast<byte*>(&entry_point), 6, vbe3_call_wrapper.data());
         }
 
         void vbe::set_mode(vbe_mode m, const crtc_info*)
