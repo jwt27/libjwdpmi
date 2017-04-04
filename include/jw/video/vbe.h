@@ -19,14 +19,12 @@ namespace jw
             struct not_supported_in_current_hardware : public error { using error::error; };
             struct invalid_in_current_video_mode : public error { using error::error; };
 
-            vbe() { init(); }
-
+            virtual void init();
             const vbe_info& get_vbe_info();
             const std::list<vbe_mode_info>& get_modes() { get_vbe_info(); return modes; }
             virtual void set_mode(vbe_mode m, const crtc_info* crtc = nullptr) override;
 
         protected:
-            virtual void init();
             void check_error(split_uint16_t ax, const char* function_name);
             void populate_mode_list(dpmi::far_ptr16 list_ptr);
 
@@ -36,17 +34,13 @@ namespace jw
 
         struct vbe2 : public vbe
         {
-
-        protected:
             virtual void init() override;
         };
 
         struct vbe3 : public vbe2
         {
-            virtual void set_mode(vbe_mode m, const crtc_info* crtc = nullptr) override;
-
-        protected:
             virtual void init() override;
+            virtual void set_mode(vbe_mode m, const crtc_info* crtc = nullptr) override;
         };
     }
 }
