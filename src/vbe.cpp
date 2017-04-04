@@ -264,6 +264,9 @@ namespace jw
                 ar = ldt_access_rights { get_cs() };
                 vbe3_call_wrapper_mem.get_ldt_entry().lock()->set_access_rights(ar);
                 vbe3_call.segment = vbe3_call_wrapper_mem.get_selector();
+                auto cs_limit = reinterpret_cast<std::size_t>(vbe3_call_wrapper.data() + code_size);
+                if (ldt_entry::get_limit(get_cs()) < cs_limit) 
+                    ldt_entry::set_limit(get_cs(), cs_limit);
 
                 asm volatile("call fword ptr [vbe3_call];":::"eax", "ebx", "ecx", "edx", "esi", "edi", "cc");
 

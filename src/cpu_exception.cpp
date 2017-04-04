@@ -1,19 +1,6 @@
-/******************************* libjwdpmi **********************************
-Copyright (C) 2016-2017  J.W. Jagersma
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/
+/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
+/* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
 #include <jw/dpmi/cpu_exception.h>
 #include <jw/dpmi/debug.h>
@@ -153,6 +140,9 @@ namespace jw
 
             auto* ptr = linear_memory(get_cs(), start, size).get_ptr<byte>();
             std::copy_n(ptr, size, code.data());
+            auto cs_limit = reinterpret_cast<std::size_t>(code.data() + size);
+            if (ldt_entry::get_limit(get_cs()) < cs_limit) 
+                ldt_entry::set_limit(get_cs(), cs_limit);
 
             asm volatile(
                 "mov %w0, ds;"
