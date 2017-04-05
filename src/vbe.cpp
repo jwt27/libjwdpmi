@@ -591,7 +591,7 @@ namespace jw
             return reg.bh;
         }
 
-        std::uint32_t vbe3::get_closest_pixel_clock(std::uint32_t desired)
+        std::uint32_t vbe3::get_closest_pixel_clock(std::uint32_t desired_clock, std::uint16_t mode_num)
         {
             if (vbe3_pm)
             {
@@ -602,8 +602,9 @@ namespace jw
                     , "=c" (ecx)
                     : "a" (0x4f0b)
                     , "b" (0)
-                    , "c" (desired)
-                    : "edx", "edi", "esi", "cc");
+                    , "c" (desired_clock)
+                    , "d" (mode_num)
+                    : "edi", "esi", "cc");
                 check_error(ax, __PRETTY_FUNCTION__);
                 return ecx;
             }
@@ -612,7 +613,8 @@ namespace jw
                 dpmi::realmode_registers reg { };
                 reg.ax = 0x4f0b;
                 reg.bl = 0;
-                reg.ecx = desired;
+                reg.ecx = desired_clock;
+                reg.dx = mode_num;
                 reg.call_int(0x10);
                 check_error(reg.ax, __PRETTY_FUNCTION__);
                 return reg.cx != 0;
