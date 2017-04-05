@@ -49,6 +49,7 @@ namespace jw
         {
             virtual void init() override;
             virtual void set_display_start(vector2i pos, bool wait_for_vsync = false) override;
+            virtual void set_palette_data(const std::vector<pixel_bgra>& data, std::uint8_t first = 0, bool wait_for_vsync = false);
         };
 
         struct vbe3 : public vbe2
@@ -70,7 +71,7 @@ namespace jw
             //virtual void enable_stereo()
             //virtual void disable_stereo()
             virtual std::uint8_t set_dac_palette_format(std::uint8_t bits_per_channel) override;
-            virtual void set_palette_data(const std::vector<pixel_bgra>& data, std::uint8_t first, bool wait_for_vsync = false);
+            virtual void set_palette_data(const std::vector<pixel_bgra>& data, std::uint8_t first = 0, bool wait_for_vsync = false) override;
             //virtual get_palette_data()
             //virtual set_palette_data_secondary()
             //virtual get_palette_data_secondary()
