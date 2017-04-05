@@ -11,6 +11,9 @@ namespace jw
     {
         std::vector<byte> vbe2_pm_interface { };
         std::unique_ptr<dpmi::device_memory<byte>> vbe2_mmio;
+        std::uintptr_t vbe2_call_set_window;
+        std::uintptr_t vbe2_call_set_display_start;
+        std::uintptr_t vbe2_call_set_palette;
         bool vbe2_pm { false };
 
         std::unique_ptr<dpmi::mapped_dos_memory<byte>> a000, b000, b800;
@@ -164,6 +167,17 @@ namespace jw
             dpmi::mapped_dos_memory<byte> pm_table { reg.cx, dpmi::far_ptr16 { reg.es, reg.di } };
             byte* pm_table_ptr = pm_table.get_ptr();
             vbe2_pm_interface.assign(pm_table_ptr, pm_table_ptr + reg.cx);
+            auto cs_limit = reinterpret_cast<std::size_t>(vbe2_pm_interface.data() + reg.cx);
+            if (dpmi::ldt_entry::get_limit(dpmi::get_cs()) < cs_limit) 
+                dpmi::ldt_entry::set_limit(dpmi::get_cs(), cs_limit);
+
+            {
+                auto* ptr = vbe2_pm_interface.data();
+                vbe2_call_set_window = reinterpret_cast<std::uintptr_t>(ptr) + *reinterpret_cast<std::uint16_t*>(ptr + 0);
+                vbe2_call_set_display_start = reinterpret_cast<std::uintptr_t>(ptr) + *reinterpret_cast<std::uint16_t*>(ptr + 2);
+                vbe2_call_set_palette = reinterpret_cast<std::uintptr_t>(ptr) + *reinterpret_cast<std::uint16_t*>(ptr + 4);
+            }
+
             auto* io_list = reinterpret_cast<std::uint16_t*>(vbe2_pm_interface.data());
             if (*io_list != 0)
             {
@@ -319,11 +333,6 @@ namespace jw
             return std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t>();
         }
 
-        std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> vbe2::set_scanline_length(std::uint32_t width, bool width_in_pixels)
-        {
-            return std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t>();
-        }
-
         std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> vbe3::set_scanline_length(std::uint32_t width, bool width_in_pixels)
         {
             if (!vbe3_pm) return vbe2::set_scanline_length(width, width_in_pixels);
@@ -336,7 +345,8 @@ namespace jw
                          , "=d" (max_scanlines)
                          : "a" (0x4f06)
                          , "b" (width_in_pixels ? 0 : 2)
-                         , "c" (width));
+                         , "c" (width)
+                         : "edi", "esi", "memory", "cc");
             check_error(ax, __PRETTY_FUNCTION__);
 
             return { pixels_per_scanline, bytes_per_scanline, max_scanlines };
