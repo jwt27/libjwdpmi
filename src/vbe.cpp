@@ -2,6 +2,7 @@
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #include <memory>
+#include <cstring>
 #include <jw/video/vbe.h>
 #include <jw/math.h>
 
@@ -443,7 +444,7 @@ namespace jw
                 , "b" (wait_for_vsync ? 0x80 : 0)
                 , "c" (split_start.lo)
                 , "d" (split_start.hi)
-                : "edi", "esi", "cc");
+                : "edi", "esi", "esp", "cc");
             check_error(ax, __PRETTY_FUNCTION__);
         }
 
@@ -589,6 +590,28 @@ namespace jw
             reg.call_int(0x10);
             check_error(reg.ax, __PRETTY_FUNCTION__);
             return reg.bh;
+        }
+
+        void vbe3::set_palette_data(const std::vector<pixel_bgra>& data, std::uint8_t first, bool wait_for_vsync)
+        {
+            if (!vbe3_pm) return;
+
+            dpmi::linear_memory data_mem { dpmi::get_ds(), data.data(), data.size() };
+            std::uint16_t ax;
+            asm volatile(
+                "push es;"
+                "mov es, %w1;"
+                "call fword ptr [vbe3_call];"
+                "pop es;"
+                : "=a" (ax)
+                : "rm" (data_mem.get_selector())
+                , "a" (0x4f09)
+                , "b" (wait_for_vsync ? 0x80 : 0)
+                , "c" (std::min(data.size(), 256ul))
+                , "d" (first)
+                , "D" (0)
+                : "esi", "esp", "cc");
+            check_error(ax, __PRETTY_FUNCTION__);
         }
 
         std::uint32_t vbe3::get_closest_pixel_clock(std::uint32_t desired_clock, std::uint16_t mode_num)

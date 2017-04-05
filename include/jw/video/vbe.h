@@ -2,10 +2,11 @@
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
-#include <cstring>
-#include <list>
+#include <map>
+#include <vector>
 #include <jw/video/vga.h>
 #include <jw/video/vbe_types.h>
+#include <jw/video/pixel.h>
 #include <jw/vector2.h>
 
 namespace jw
@@ -69,7 +70,7 @@ namespace jw
             //virtual void enable_stereo()
             //virtual void disable_stereo()
             virtual std::uint8_t set_dac_palette_format(std::uint8_t bits_per_channel) override;
-            //virtual set_palette_data(bool wait_for_vsync)
+            virtual void set_palette_data(const std::vector<pixel_bgra>& data, std::uint8_t first, bool wait_for_vsync = false);
             //virtual get_palette_data()
             //virtual set_palette_data_secondary()
             //virtual get_palette_data_secondary()
