@@ -54,6 +54,25 @@ namespace jw
         };
         static_assert(sizeof(px8) == 1 , "px8 has incorrect size.");
 
+        struct alignas(2) [[gnu::packed]] px15
+        {
+            unsigned b : 5;
+            unsigned g : 5;
+            unsigned r : 5;
+        };
+
+        struct alignas(2) [[gnu::packed]] px16
+        {
+            unsigned b : 5;
+            unsigned g : 6;
+            unsigned r : 5;
+        };
+
+        struct [[gnu::packed]] px24
+        {
+            std::uint8_t b, g, r;
+        };
+
         struct alignas(4) [[gnu::packed]] px32
         {
             std::uint8_t b, g, r, a;
