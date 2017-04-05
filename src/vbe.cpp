@@ -361,7 +361,7 @@ namespace jw
                 : "a" (0x4f06)
                 , "b" (width_in_pixels ? 0 : 2)
                 , "c" (width)
-                : "edi", "esi", "memory", "cc");
+                : "edi", "esi", "cc");
             check_error(ax, __PRETTY_FUNCTION__);
             return { pixels_per_scanline, bytes_per_scanline, max_scanlines };
         }
@@ -404,7 +404,7 @@ namespace jw
                 , "=d" (max_scanlines)
                 : "a" (0x4f06)
                 , "b" (3)
-                : "edi", "esi", "memory", "cc");
+                : "edi", "esi", "cc");
             check_error(ax, __PRETTY_FUNCTION__);
             return { pixels_per_scanline, bytes_per_scanline, max_scanlines };
         }
@@ -443,7 +443,7 @@ namespace jw
                 , "b" (wait_for_vsync ? 0x80 : 0)
                 , "c" (split_start.lo)
                 , "d" (split_start.hi)
-                : "edi", "esi", "memory", "cc");
+                : "edi", "esi", "cc");
             check_error(ax, __PRETTY_FUNCTION__);
         }
 
@@ -459,7 +459,7 @@ namespace jw
                 , "b" (wait_for_vsync ? 0x80 : 0)
                 , "c" (pos.x)
                 , "d" (pos.y)
-                : "edi", "esi", "memory", "cc");
+                : "edi", "esi", "cc");
             check_error(ax, __PRETTY_FUNCTION__);
         }
 
@@ -487,7 +487,7 @@ namespace jw
                 , "=d" (first_scanline)
                 : "a" (0x4f07)
                 , "b" (1)
-                : "edi", "esi", "memory", "cc");
+                : "edi", "esi", "cc");
             check_error(ax, __PRETTY_FUNCTION__);
             return { first_pixel, first_scanline };
         }
@@ -506,7 +506,7 @@ namespace jw
                     : "a" (0x4f07)
                     , "b" (wait_for_vsync ? 0x82 : 2)
                     , "c" (start)
-                    : "edx", "edi", "esi", "memory", "cc");
+                    : "edx", "edi", "esi", "cc");
                 check_error(ax, __PRETTY_FUNCTION__);
             }
             else
