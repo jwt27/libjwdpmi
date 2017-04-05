@@ -36,6 +36,7 @@ namespace jw
 
             vbe_info info;
             std::map<std::uint_fast16_t, vbe_mode_info> modes { };
+            vbe_mode mode;
         };
 
         struct vbe2 : public vbe
