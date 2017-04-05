@@ -420,8 +420,8 @@ namespace jw
 
         void vbe2::set_display_start(vector2i pos, bool wait_for_vsync)
         {
-            //if (!vbe2_pm) 
-            return vbe2::set_display_start(pos, wait_for_vsync);
+            //if (!vbe2_pm)
+            return vbe::set_display_start(pos, wait_for_vsync);
 
             dpmi::selector mmio = vbe2_mmio ? vbe2_mmio->get_selector() : dpmi::get_ds();
             std::uint16_t ax;
