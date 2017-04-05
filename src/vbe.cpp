@@ -590,5 +590,33 @@ namespace jw
             check_error(reg.ax, __PRETTY_FUNCTION__);
             return reg.bh;
         }
+
+        std::uint32_t vbe3::get_closest_pixel_clock(std::uint32_t desired)
+        {
+            if (vbe3_pm)
+            {
+                std::uint16_t ax;
+                std::uint32_t ecx;
+                asm("call fword ptr [vbe3_call];"
+                    : "=a" (ax)
+                    , "=c" (ecx)
+                    : "a" (0x4f0b)
+                    , "b" (0)
+                    , "c" (desired)
+                    : "edx", "edi", "esi", "cc");
+                check_error(ax, __PRETTY_FUNCTION__);
+                return ecx;
+            }
+            else
+            {
+                dpmi::realmode_registers reg { };
+                reg.ax = 0x4f0b;
+                reg.bl = 0;
+                reg.ecx = desired;
+                reg.call_int(0x10);
+                check_error(reg.ax, __PRETTY_FUNCTION__);
+                return reg.cx != 0;
+            }
+        }
     }
 }

@@ -73,8 +73,7 @@ namespace jw
             //virtual get_palette_data()
             //virtual set_palette_data_secondary()
             //virtual get_palette_data_secondary()
-            //virtual std::uint32_t get_pixel_clock()
-            //virtual std::uint32_t set_pixel_clock(std::uint32_t)
+            virtual std::uint32_t get_closest_pixel_clock(std::uint32_t desired);
         };
 
         inline std::unique_ptr<vbe> get_vbe_interface()
