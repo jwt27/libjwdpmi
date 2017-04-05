@@ -6,6 +6,7 @@
 #include <list>
 #include <jw/video/vga.h>
 #include <jw/video/vbe_types.h>
+#include <jw/vector2.h>
 
 namespace jw
 {
@@ -26,8 +27,8 @@ namespace jw
             virtual std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> set_scanline_length(std::uint32_t width, bool width_in_pixels = true);
             virtual std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> get_scanline_length();
             virtual std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> get_max_scanline_length();
-            virtual void set_display_start(std::uint32_t first_pixel, std::uint32_t first_scanline, bool wait_for_vsync = false);
-            virtual std::tuple<std::uint32_t, std::uint32_t> get_display_start();
+            virtual void set_display_start(vector2i pos, bool wait_for_vsync = false);
+            virtual vector2i get_display_start();
 
         protected:
             void check_error(split_uint16_t ax, const char* function_name);
@@ -40,7 +41,7 @@ namespace jw
         struct vbe2 : public vbe
         {
             virtual void init() override;
-            virtual void set_display_start(std::uint32_t first_pixel, std::uint32_t first_scanline, bool wait_for_vsync = false) override;
+            virtual void set_display_start(vector2i pos, bool wait_for_vsync = false) override;
         };
 
         struct vbe3 : public vbe2
@@ -54,8 +55,8 @@ namespace jw
             //virtual std::uint32_t get_window()
             virtual std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> set_scanline_length(std::uint32_t width, bool width_in_pixels = true) override;
             virtual std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> get_max_scanline_length() override;
-            virtual void set_display_start(std::uint32_t first_pixel, std::uint32_t first_scanline, bool wait_for_vsync = false) override;
-            virtual std::tuple<std::uint32_t, std::uint32_t> get_display_start() override;
+            virtual void set_display_start(vector2i pos, bool wait_for_vsync = false) override;
+            virtual vector2i get_display_start() override;
             //virtual void schedule_display_start(bool wait_for_vsync = false)
             //virtual void schedule_stereo_display_start(bool wait_for_vsync = false)
             //virtual bool get_scheduled_display_start_status()

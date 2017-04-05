@@ -404,21 +404,21 @@ namespace jw
             return { pixels_per_scanline, bytes_per_scanline, max_scanlines };
         }
 
-        void vbe::set_display_start(std::uint32_t first_pixel, std::uint32_t first_scanline, bool wait_for_vsync)
+        void vbe::set_display_start(vector2i pos, bool wait_for_vsync)
         {
             dpmi::realmode_registers reg { };
             reg.ax = 0x4f07;
             reg.bx = wait_for_vsync ? 0x80 : 0;
-            reg.cx = first_pixel;
-            reg.dx = first_scanline;
+            reg.cx = pos.x;
+            reg.dx = pos.y;
             reg.call_int(0x10);
             check_error(reg.ax, __PRETTY_FUNCTION__);
         }
 
-        void vbe2::set_display_start(std::uint32_t first_pixel, std::uint32_t first_scanline, bool wait_for_vsync)
+        void vbe2::set_display_start(vector2i pos, bool wait_for_vsync)
         {
             //if (!vbe2_pm) 
-            return vbe2::set_display_start(first_pixel, first_scanline, wait_for_vsync);
+            return vbe2::set_display_start(pos, wait_for_vsync);
 
             dpmi::selector mmio = vbe2_mmio ? vbe2_mmio->get_selector() : dpmi::get_ds();
             std::uint16_t ax;
@@ -438,9 +438,9 @@ namespace jw
             check_error(ax, __PRETTY_FUNCTION__);
         }
 
-        void vbe3::set_display_start(std::uint32_t first_pixel, std::uint32_t first_scanline, bool wait_for_vsync)
+        void vbe3::set_display_start(vector2i pos, bool wait_for_vsync)
         {
-            if (!vbe3_pm) return vbe2::set_display_start(first_pixel, first_scanline, wait_for_vsync);
+            if (!vbe3_pm) return vbe2::set_display_start(pos, wait_for_vsync);
 
             std::uint16_t ax;
             asm volatile(
@@ -448,13 +448,13 @@ namespace jw
                 : "=a" (ax)
                 : "a" (0x4f07)
                 , "b" (wait_for_vsync ? 0x80 : 0)
-                , "c" (first_pixel)
-                , "d" (first_scanline)
+                , "c" (pos.x)
+                , "d" (pos.y)
                 : "edi", "esi", "memory", "cc");
             check_error(ax, __PRETTY_FUNCTION__);
         }
 
-        std::tuple<std::uint32_t, std::uint32_t> vbe::get_display_start()
+        vector2i vbe::get_display_start()
         {
             dpmi::realmode_registers reg { };
             reg.ax = 0x4f07;
@@ -466,7 +466,7 @@ namespace jw
             return { first_pixel, first_scanline };
         }
 
-        std::tuple<std::uint32_t, std::uint32_t> vbe3::get_display_start()
+        vector2i vbe3::get_display_start()
         {
             if (!vbe3_pm) return vbe2::get_display_start();
 
