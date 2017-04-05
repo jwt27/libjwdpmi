@@ -186,15 +186,16 @@ namespace jw
         {
             struct [[gnu::packed]]
             {
-                unsigned mode : 8;
-                bool is_vbe_mode : 1;
-                unsigned : 2;
+                unsigned mode : 11;
                 bool use_custom_crtc_timings : 1;
                 unsigned : 2;
                 bool use_lfb_mode : 1;
                 bool dont_clear_video_memory : 1;
             };
             std::uint16_t raw_value;
+
+            constexpr vbe_mode() : raw_value(0) { }
+            constexpr vbe_mode(std::uint16_t num) : raw_value(num) { }
         };
 
         static_assert(sizeof(detail::raw_vbe_info) == 0x200, "check sizeof raw_vbe_info_block.");
