@@ -31,6 +31,8 @@ namespace jw
             virtual vector2i get_display_start();
             virtual void schedule_display_start(vector2i pos, bool wait_for_vsync = false);
             virtual bool get_scheduled_display_start_status();
+            virtual std::uint8_t set_dac_palette_format(std::uint8_t bits_per_channel);
+            virtual std::uint8_t get_dac_palette_format();
 
         protected:
             void check_error(split_uint16_t ax, const char* function_name);
@@ -66,8 +68,7 @@ namespace jw
             virtual bool get_scheduled_display_start_status() override;
             //virtual void enable_stereo()
             //virtual void disable_stereo()
-            //virtual std::uint8_t set_dac_palette_format()
-            //virtual std::uint8_t get_dac_palette_format()
+            virtual std::uint8_t set_dac_palette_format(std::uint8_t bits_per_channel) override;
             //virtual set_palette_data(bool wait_for_vsync)
             //virtual get_palette_data()
             //virtual set_palette_data_secondary()

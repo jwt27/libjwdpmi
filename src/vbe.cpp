@@ -480,8 +480,7 @@ namespace jw
             if (!vbe3_pm) return vbe2::get_display_start();
 
             std::uint16_t ax, first_pixel, first_scanline;
-            asm volatile(
-                "call fword ptr [vbe3_call];"
+            asm("call fword ptr [vbe3_call];"
                 : "=a" (ax)
                 , "=c" (first_pixel)
                 , "=d" (first_scanline)
@@ -535,8 +534,7 @@ namespace jw
             if (vbe3_pm)
             {
                 std::uint16_t ax, cx;
-                asm volatile(
-                    "call fword ptr [vbe3_call];"
+                asm("call fword ptr [vbe3_call];"
                     : "=a" (ax)
                     , "=c" (cx)
                     : "a" (0x4f07)
@@ -554,6 +552,43 @@ namespace jw
                 check_error(reg.ax, __PRETTY_FUNCTION__);
                 return reg.cx != 0;
             }
+        }
+
+        std::uint8_t vbe::set_dac_palette_format(std::uint8_t bits_per_channel)
+        {
+            dpmi::realmode_registers reg { };
+            reg.ax = 0x4f08;
+            reg.bh = bits_per_channel;
+            reg.call_int(0x10);
+            check_error(reg.ax, __PRETTY_FUNCTION__);
+            return reg.bh;
+        }
+
+        std::uint8_t vbe3::set_dac_palette_format(std::uint8_t bits_per_channel)
+        {
+            if (!vbe3_pm) return vbe2::set_dac_palette_format(bits_per_channel);
+
+            std::uint16_t ax;
+            split_uint16_t bx;
+            asm volatile(
+                "call fword ptr [vbe3_call];"
+                : "=a" (ax)
+                , "=b" (bx)
+                : "a" (0x4f08)
+                , "b" (bits_per_channel << 8)
+                : "ecx", "edx", "edi", "esi", "cc");
+            check_error(ax, __PRETTY_FUNCTION__);
+            return bx.hi;
+        }
+
+        std::uint8_t vbe::get_dac_palette_format()
+        {
+            dpmi::realmode_registers reg { };
+            reg.ax = 0x4f08;
+            reg.bx = 1;
+            reg.call_int(0x10);
+            check_error(reg.ax, __PRETTY_FUNCTION__);
+            return reg.bh;
         }
     }
 }
