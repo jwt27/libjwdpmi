@@ -592,7 +592,7 @@ namespace jw
             return reg.bh;
         }
 
-        void vbe2::set_palette_data(const std::vector<pixel_bgra>& data, std::uint8_t first, bool wait_for_vsync)
+        void vbe2::set_palette_data(std::vector<pixel_bgra>::const_iterator begin, std::vector<pixel_bgra>::const_iterator end, std::uint8_t first, bool wait_for_vsync)
         {
             if (vbe2_pm)
             {
@@ -610,20 +610,20 @@ namespace jw
                     , "rm" (mmio)
                     , "a" (0x4f09)
                     , "b" (wait_for_vsync ? 0x80 : 0)
-                    , "c" (std::min(data.size(), 256ul))
+                    , "c" (std::min(end - begin, std::ptrdiff_t { 256 }))
                     , "d" (first)
-                    , "D" (data.data())
+                    , "D" (&*begin)
                     : "esi", "esp", "cc");
             }
             else
             {
-                dpmi::dos_memory<pixel_bgra> dos_data { data.size() };
-                std::copy_n(data.data(), data.size(), dos_data.get_ptr());
+                dpmi::dos_memory<pixel_bgra> dos_data { static_cast<std::size_t>(end - begin) };
+                std::copy_n(&*begin, end - begin, dos_data.get_ptr());
 
                 dpmi::realmode_registers reg { };
                 reg.ax = 0x4f09;
                 reg.bx = wait_for_vsync ? 0x80 : 0;
-                reg.cx = std::min(data.size(), 256ul);
+                reg.cx = std::min(end - begin, std::ptrdiff_t { 256 });
                 reg.dx = first;
                 reg.es = dos_data.get_dos_ptr().segment;
                 reg.di = dos_data.get_dos_ptr().offset;
@@ -632,11 +632,11 @@ namespace jw
             }
         }
 
-        void vbe3::set_palette_data(const std::vector<pixel_bgra>& data, std::uint8_t first, bool wait_for_vsync)
+        void vbe3::set_palette_data(std::vector<pixel_bgra>::const_iterator begin, std::vector<pixel_bgra>::const_iterator end, std::uint8_t first, bool wait_for_vsync)
         {
-            if (!vbe3_pm) return vbe2::set_palette_data(data, first, wait_for_vsync);
+            if (!vbe3_pm) return vbe2::set_palette_data(begin, end, first, wait_for_vsync);
 
-            dpmi::linear_memory data_mem { dpmi::get_ds(), data.data(), data.size() };
+            dpmi::linear_memory data_mem { dpmi::get_ds(), &*begin,  static_cast<std::size_t>(end - begin) };
             std::uint16_t ax;
             asm volatile(
                 "push es;"
@@ -647,7 +647,7 @@ namespace jw
                 : "rm" (data_mem.get_selector())
                 , "a" (0x4f09)
                 , "b" (wait_for_vsync ? 0x80 : 0)
-                , "c" (std::min(data.size(), 256ul))
+                , "c" (std::min(end - begin, std::ptrdiff_t { 256 }))
                 , "d" (first)
                 , "D" (0)
                 : "esi", "esp", "cc");
