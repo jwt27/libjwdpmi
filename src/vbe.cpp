@@ -422,8 +422,12 @@ namespace jw
 
         void vbe2::set_display_start(vector2i pos, bool wait_for_vsync)
         {
-            //if (!vbe2_pm)
-            return vbe::set_display_start(pos, wait_for_vsync);
+            if (!vbe2_pm) return vbe::set_display_start(pos, wait_for_vsync);
+
+            auto bps = (mode.use_lfb_mode && info.vbe_version >= 0x300) ? mode_info->linear_bytes_per_scanline : mode_info->bytes_per_scanline;
+            auto start = pos.x + pos.y * bps;
+            if (mode_info->bits_per_pixel >= 8) start = ((start & 3) << 30 | (start >> 2)); 
+            split_uint32_t split_start { start };
 
             dpmi::selector mmio = vbe2_mmio ? vbe2_mmio->get_selector() : dpmi::get_ds();
             std::uint16_t ax;
@@ -437,8 +441,8 @@ namespace jw
                 , "rm" (mmio)
                 , "a" (0x4f07)
                 , "b" (wait_for_vsync ? 0x80 : 0)
-                , "c" (0)   // TODO: calculate from current mode dimensions
-                , "d" (0)
+                , "c" (split_start.lo)
+                , "d" (split_start.hi)
                 : "edi", "esi", "memory", "cc");
             check_error(ax, __PRETTY_FUNCTION__);
         }
