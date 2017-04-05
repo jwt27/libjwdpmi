@@ -310,6 +310,7 @@ namespace jw
             reg.call_int(0x10);
             check_error(reg.ax, __PRETTY_FUNCTION__);
             mode = m;
+            mode_info = &modes[m.mode];
         }
 
         void vbe3::set_mode(vbe_mode m, const crtc_info* crtc)
@@ -329,6 +330,7 @@ namespace jw
             else reg.call_int(0x10);
             check_error(reg.ax, __PRETTY_FUNCTION__);
             mode = m;
+            mode_info = &modes[m.mode];
         } 
 
         std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> vbe::set_scanline_length(std::uint32_t width, bool width_in_pixels)
