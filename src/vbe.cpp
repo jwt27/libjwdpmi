@@ -432,7 +432,7 @@ namespace jw
                 , "rm" (mmio)
                 , "a" (0x4f07)
                 , "b" (wait_for_vsync ? 0x80 : 0)
-                , "c" (0)   // TODO
+                , "c" (0)   // TODO: calculate from current mode dimensions
                 , "d" (0)
                 : "edi", "esi", "memory", "cc");
             check_error(ax, __PRETTY_FUNCTION__);
