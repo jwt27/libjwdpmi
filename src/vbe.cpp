@@ -4,6 +4,8 @@
 #include <memory>
 #include <cstring>
 #include <jw/video/vbe.h>
+#include <jw/dpmi/memory.h>
+#include <jw/dpmi/realmode.h>
 #include <jw/math.h>
 
 namespace jw

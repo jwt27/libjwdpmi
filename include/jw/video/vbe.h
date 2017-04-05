@@ -49,7 +49,7 @@ namespace jw
         {
             virtual void init() override;
             virtual void set_display_start(vector2i pos, bool wait_for_vsync = false) override;
-            virtual void set_palette_data(std::vector<pixel_bgra>::const_iterator begin, std::vector<pixel_bgra>::const_iterator end, std::uint8_t first = 0, bool wait_for_vsync = false);
+            virtual void set_palette_data(std::vector<pixel_bgra>::const_iterator begin, std::vector<pixel_bgra>::const_iterator end, std::uint8_t first = 0, bool wait_for_vsync = false) override;
         };
 
         struct vbe3 : public vbe2
