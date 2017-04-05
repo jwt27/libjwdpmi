@@ -41,6 +41,29 @@ namespace jw
         {
             virtual void init() override;
             virtual void set_mode(vbe_mode m, const crtc_info* crtc = nullptr) override;
+            //virtual vbe_mode get_current_mode()
+            //virtual save_state()
+            //virtual restore_state()
+            //virtual void set_window()
+            //virtual get_window()
+            //virtual set_scanline_length()
+            //virtual std::uint32_t get_scanline_length()
+            //virtual std::uint32_t get_max_scanline_length()
+            //virtual set_display_start(bool wait_for_vsync)
+            //virtual get_display_start()
+            //virtual schedule_display_start(bool wait_for_vsync)
+            //virtual schedule_stereo_display_start(bool wait_for_vsync)
+            //virtual get_scheduled_display_start_status()
+            //virtual enable_stereo()
+            //virtual disable_stereo()
+            //virtual std::uint8_t set_dac_palette_format()
+            //virtual std::uint8_t get_dac_palette_format()
+            //virtual set_palette_data(bool wait_for_vsync)
+            //virtual get_palette_data()
+            //virtual set_palette_data_secondary()
+            //virtual get_palette_data_secondary()
+            //virtual std::uint32_t get_pixel_clock()
+            //virtual std::uint32_t set_pixel_clock(std::uint32_t)
         };
 
         inline std::unique_ptr<vbe> get_vbe_interface()
