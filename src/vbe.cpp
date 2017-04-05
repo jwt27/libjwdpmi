@@ -213,7 +213,7 @@ namespace jw
                 char* search_ptr = reinterpret_cast<char*>(video_bios->get_ptr());
                 const char* search_value = "PMID";
                 search_ptr = std::search(search_ptr, search_ptr + 64_KB, search_value, search_value + 4);
-                if (strncmp(search_ptr, search_value, 4) != 0) return;
+                if (std::strncmp(search_ptr, search_value, 4) != 0) return;
                 pmid = reinterpret_cast<detail::vbe3_pm_info*>(search_ptr);
                 if (checksum8(*pmid) != 0) return;
                 pmid->in_protected_mode = true;
@@ -221,7 +221,7 @@ namespace jw
                 bios_data_area = std::make_unique<memory<byte>>(4_KB);
                 std::fill_n(bios_data_area->get_ptr(), 4_KB, 0);
                 pmid->bda_selector = bios_data_area->get_selector();
-                auto ar = ldt_access_rights { get_ds() };
+                ldt_access_rights ar { get_ds() };
                 ar.is_32_bit = false;
                 bios_data_area->get_ldt_entry().lock()->set_access_rights(ar);
 
@@ -243,8 +243,8 @@ namespace jw
                 ar = ldt_access_rights { get_ss() };
                 ar.is_32_bit = false;
                 vbe3_stack->get_ldt_entry().lock()->set_access_rights(ar);
-                auto stack_ptr = far_ptr32 { vbe3_stack->get_selector(), (vbe3_stack->get_size() - 0x10) & -0x10 };
-                auto entry_point = far_ptr16 { video_bios_code.get_selector(), pmid->init_entry_point };
+                far_ptr32 stack_ptr { vbe3_stack->get_selector(), (vbe3_stack->get_size() - 0x10) & -0x10 };
+                far_ptr16 entry_point { video_bios_code.get_selector(), pmid->init_entry_point };
 
                 std::copy_n(reinterpret_cast<byte*>(&entry_point), sizeof(far_ptr16), std::back_inserter(vbe3_call_wrapper));
                 std::copy_n(reinterpret_cast<byte*>(&stack_ptr), sizeof(far_ptr32), std::back_inserter(vbe3_call_wrapper));
@@ -425,7 +425,7 @@ namespace jw
             std::uint16_t ax;
             asm volatile(
                 "push es;"
-                "mov es, %2;"
+                "mov es, %w2;"
                 "call %1;"
                 "pop es;"
                 : "=a" (ax)
