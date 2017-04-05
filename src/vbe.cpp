@@ -623,7 +623,7 @@ namespace jw
                 dpmi::realmode_registers reg { };
                 reg.ax = 0x4f09;
                 reg.bx = wait_for_vsync ? 0x80 : 0;
-                reg.cx = data.size();
+                reg.cx = std::min(data.size(), 256ul);
                 reg.dx = first;
                 reg.es = dos_data.get_dos_ptr().segment;
                 reg.di = dos_data.get_dos_ptr().offset;
