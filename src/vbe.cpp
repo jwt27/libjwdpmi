@@ -84,7 +84,8 @@ namespace jw
                 try { get_mode(n); }
                 catch (const error&) { }
             }
-            get_mode(0x81ff);
+            try { get_mode(0x81ff); }
+            catch (const error&) { }
         }
 
         const vbe_info& vbe::get_vbe_info()
