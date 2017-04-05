@@ -519,5 +519,30 @@ namespace jw
                 check_error(reg.ax, __PRETTY_FUNCTION__);
             }
         }
+        bool vbe3::get_scheduled_display_start_status()
+        {
+            if (vbe3_pm)
+            {
+                std::uint16_t ax, cx;
+                asm volatile(
+                    "call fword ptr [vbe3_call];"
+                    : "=a" (ax)
+                    , "=c" (cx)
+                    : "a" (0x4f07)
+                    , "b" (4)
+                    : "edx", "edi", "esi", "cc");
+                check_error(ax, __PRETTY_FUNCTION__);
+                return cx != 0;
+            }
+            else
+            {
+                dpmi::realmode_registers reg { };
+                reg.ax = 0x4f07;
+                reg.bx = 4;
+                reg.call_int(0x10);
+                check_error(reg.ax, __PRETTY_FUNCTION__);
+                return reg.cx != 0;
+            }
+        }
     }
 }

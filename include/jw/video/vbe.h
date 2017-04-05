@@ -61,7 +61,7 @@ namespace jw
             virtual vector2i get_display_start() override;
             virtual void schedule_display_start(vector2i pos, bool wait_for_vsync = false);
             //virtual void schedule_stereo_display_start(bool wait_for_vsync = false)
-            //virtual bool get_scheduled_display_start_status()
+            virtual bool get_scheduled_display_start_status();
             //virtual void enable_stereo()
             //virtual void disable_stereo()
             //virtual std::uint8_t set_dac_palette_format()
