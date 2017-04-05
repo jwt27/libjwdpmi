@@ -491,5 +491,33 @@ namespace jw
             check_error(ax, __PRETTY_FUNCTION__);
             return { first_pixel, first_scanline };
         }
+
+        void vbe3::schedule_display_start(vector2i pos, bool wait_for_vsync)
+        { 
+            auto bps = mode.use_lfb_mode ? mode_info->linear_bytes_per_scanline : mode_info->bytes_per_scanline;
+            auto start = pos.x + pos.y * bps;
+
+            if (vbe3_pm)
+            {
+                std::uint16_t ax;
+                asm volatile(
+                    "call fword ptr [vbe3_call];"
+                    : "=a" (ax)
+                    : "a" (0x4f07)
+                    , "b" (wait_for_vsync ? 0x82 : 2)
+                    , "c" (start)
+                    : "edx", "edi", "esi", "memory", "cc");
+                check_error(ax, __PRETTY_FUNCTION__);
+            }
+            else
+            {
+                dpmi::realmode_registers reg { };
+                reg.ax = 0x4f07;
+                reg.bx = wait_for_vsync ? 0x82 : 2;
+                reg.ecx = start;
+                reg.call_int(0x10);
+                check_error(reg.ax, __PRETTY_FUNCTION__);
+            }
+        }
     }
 }
