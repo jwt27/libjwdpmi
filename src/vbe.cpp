@@ -453,5 +453,34 @@ namespace jw
                 : "edi", "esi", "memory", "cc");
             check_error(ax, __PRETTY_FUNCTION__);
         }
+
+        std::tuple<std::uint32_t, std::uint32_t> vbe::get_display_start()
+        {
+            dpmi::realmode_registers reg { };
+            reg.ax = 0x4f07;
+            reg.bx = 1;
+            reg.call_int(0x10);
+            check_error(reg.ax, __PRETTY_FUNCTION__);
+            std::uint16_t first_pixel = reg.cx;
+            std::uint16_t first_scanline = reg.dx;
+            return { first_pixel, first_scanline };
+        }
+
+        std::tuple<std::uint32_t, std::uint32_t> vbe3::get_display_start()
+        {
+            if (!vbe3_pm) return vbe2::get_display_start();
+
+            std::uint16_t ax, first_pixel, first_scanline;
+            asm volatile(
+                "call fword ptr [vbe3_call];"
+                : "=a" (ax)
+                , "=c" (first_pixel)
+                , "=d" (first_scanline)
+                : "a" (0x4f07)
+                , "b" (1)
+                : "edi", "esi", "memory", "cc");
+            check_error(ax, __PRETTY_FUNCTION__);
+            return { first_pixel, first_scanline };
+        }
     }
 }
