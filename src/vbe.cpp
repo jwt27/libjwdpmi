@@ -330,7 +330,16 @@ namespace jw
 
         std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> vbe::set_scanline_length(std::uint32_t width, bool width_in_pixels)
         {
-            return std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t>();
+            dpmi::realmode_registers reg { };
+            reg.ax = 0x4f06;
+            reg.bl = width_in_pixels ? 0 : 2;
+            reg.cx = width;
+            reg.call_int(0x10);
+            check_error(reg.ax, __PRETTY_FUNCTION__);
+            std::uint16_t pixels_per_scanline = reg.cx;
+            std::uint16_t bytes_per_scanline = reg.bx;
+            std::uint16_t max_scanlines = reg.dx;
+            return { pixels_per_scanline, bytes_per_scanline, max_scanlines };
         }
 
         std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> vbe3::set_scanline_length(std::uint32_t width, bool width_in_pixels)
