@@ -360,5 +360,18 @@ namespace jw
 
             return { pixels_per_scanline, bytes_per_scanline, max_scanlines };
         }
+
+        std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> vbe::get_scanline_length()
+        {
+            dpmi::realmode_registers reg { };
+            reg.ax = 0x4f06;
+            reg.bl = 1;
+            reg.call_int(0x10);
+            check_error(reg.ax, __PRETTY_FUNCTION__);
+            std::uint16_t pixels_per_scanline = reg.cx;
+            std::uint16_t bytes_per_scanline = reg.bx;
+            std::uint16_t max_scanlines = reg.dx;
+            return { pixels_per_scanline, bytes_per_scanline, max_scanlines };
+        }
     }
 }

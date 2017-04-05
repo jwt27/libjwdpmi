@@ -24,7 +24,7 @@ namespace jw
             const std::map<std::uint_fast16_t,vbe_mode_info>& get_modes() { get_vbe_info(); return modes; }
             virtual void set_mode(vbe_mode m, const crtc_info* crtc = nullptr) override;
             virtual std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> set_scanline_length(std::uint32_t width, bool width_in_pixels = true);
-            //virtual std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> get_scanline_length()
+            virtual std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> get_scanline_length();
 
         protected:
             void check_error(split_uint16_t ax, const char* function_name);
