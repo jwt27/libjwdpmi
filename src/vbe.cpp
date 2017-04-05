@@ -668,7 +668,9 @@ namespace jw
             reg.es = dos_data.get_dos_ptr().segment;
             reg.di = dos_data.get_dos_ptr().offset;
             reg.call_int(0x10);
-            check_error(reg.ax, __PRETTY_FUNCTION__);
+            if (info.vbe_version < 0x300) check_error(reg.ax, __PRETTY_FUNCTION__);
+            else try { check_error(reg.ax, __PRETTY_FUNCTION__); }
+            catch (const error&) { return vga::get_palette_data(); }
 
             std::vector<pixel_bgra> result;
             std::copy_n(dos_data.get_ptr(), 256, std::back_inserter(result));
