@@ -24,6 +24,8 @@ namespace jw
                 set_palette_data(data.cbegin(), data.cend(), first, wait_for_vsync);
             }
 
+            virtual std::vector<pixel_bgra> get_palette_data();
+
         protected:
             static constexpr io::in_port<bool> dac_state { 0x3c7 };
             static constexpr io::io_port<byte> dac_write_index { 0x3c8 };

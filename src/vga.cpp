@@ -31,5 +31,20 @@ namespace jw
                 dac_data.write(i->b);
             }
         }
+
+        std::vector<pixel_bgra> vga::get_palette_data()
+        {
+            std::vector<pixel_bgra> result { };
+            dac_read_index.write(0);
+            for (auto i = 0; i < 256; ++i)
+            {
+                pixel_bgra value { };
+                value.r = dac_data.read();
+                value.g = dac_data.read();
+                value.b = dac_data.read();
+                result.push_back(value);
+            }
+            return result;
+        }
     }
 }
