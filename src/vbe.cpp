@@ -594,7 +594,7 @@ namespace jw
             return reg.bh;
         }
 
-        void vbe2::set_palette_data(std::vector<pixel_bgra>::const_iterator begin, std::vector<pixel_bgra>::const_iterator end, std::uint8_t first, bool wait_for_vsync)
+        void vbe2::set_palette_data(std::vector<px32>::const_iterator begin, std::vector<px32>::const_iterator end, std::uint8_t first, bool wait_for_vsync)
         {
             if (vbe2_pm)
             {
@@ -619,7 +619,7 @@ namespace jw
             }
             else
             {
-                dpmi::dos_memory<pixel_bgra> dos_data { static_cast<std::size_t>(end - begin) };
+                dpmi::dos_memory<px32> dos_data { static_cast<std::size_t>(end - begin) };
                 std::copy_n(&*begin, end - begin, dos_data.get_ptr());
 
                 dpmi::realmode_registers reg { };
@@ -634,7 +634,7 @@ namespace jw
             }
         }
 
-        void vbe3::set_palette_data(std::vector<pixel_bgra>::const_iterator begin, std::vector<pixel_bgra>::const_iterator end, std::uint8_t first, bool wait_for_vsync)
+        void vbe3::set_palette_data(std::vector<px32>::const_iterator begin, std::vector<px32>::const_iterator end, std::uint8_t first, bool wait_for_vsync)
         {
             if (!vbe3_pm) return vbe2::set_palette_data(begin, end, first, wait_for_vsync);
 
@@ -656,9 +656,9 @@ namespace jw
             check_error(ax, __PRETTY_FUNCTION__);
         }
 
-        std::vector<pixel_bgra> vbe2::get_palette_data()
+        std::vector<px32> vbe2::get_palette_data()
         {
-            dpmi::dos_memory<pixel_bgra> dos_data { 256 };
+            dpmi::dos_memory<px32> dos_data { 256 };
 
             dpmi::realmode_registers reg { };
             reg.ax = 0x4f09;
@@ -672,7 +672,7 @@ namespace jw
             else try { check_error(reg.ax, __PRETTY_FUNCTION__); }
             catch (const error&) { return vga::get_palette_data(); }
 
-            std::vector<pixel_bgra> result;
+            std::vector<px32> result;
             std::copy_n(dos_data.get_ptr(), 256, std::back_inserter(result));
             return result;
         }

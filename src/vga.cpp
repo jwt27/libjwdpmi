@@ -22,7 +22,7 @@ namespace jw
             reg.call_int(0x10);
         }
 
-        void vga::set_palette_data(std::vector<pixel_bgra>::const_iterator begin, std::vector<pixel_bgra>::const_iterator end, std::uint8_t first, bool)
+        void vga::set_palette_data(std::vector<px32>::const_iterator begin, std::vector<px32>::const_iterator end, std::uint8_t first, bool)
         {
             dac_write_index.write(first);
             for (auto i = begin; i < end; ++i)
@@ -33,13 +33,13 @@ namespace jw
             }
         }
 
-        std::vector<pixel_bgra> vga::get_palette_data()
+        std::vector<px32> vga::get_palette_data()
         {
-            std::vector<pixel_bgra> result { };
+            std::vector<px32> result { };
             dac_read_index.write(0);
             for (auto i = 0; i < 256; ++i)
             {
-                pixel_bgra value { };
+                px32 value { };
                 value.r = dac_data.read();
                 value.g = dac_data.read();
                 value.b = dac_data.read();

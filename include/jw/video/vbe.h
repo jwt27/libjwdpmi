@@ -49,8 +49,8 @@ namespace jw
         {
             virtual void init() override;
             virtual void set_display_start(vector2i pos, bool wait_for_vsync = false) override;
-            virtual void set_palette_data(std::vector<pixel_bgra>::const_iterator begin, std::vector<pixel_bgra>::const_iterator end, std::uint8_t first = 0, bool wait_for_vsync = false) override;
-            virtual std::vector<pixel_bgra> get_palette_data() override;
+            virtual void set_palette_data(std::vector<px32>::const_iterator begin, std::vector<px32>::const_iterator end, std::uint8_t first = 0, bool wait_for_vsync = false) override;
+            virtual std::vector<px32> get_palette_data() override;
         };
 
         struct vbe3 : public vbe2
@@ -72,7 +72,7 @@ namespace jw
             //virtual void enable_stereo()
             //virtual void disable_stereo()
             virtual std::uint8_t set_dac_palette_format(std::uint8_t bits_per_channel) override;
-            virtual void set_palette_data(std::vector<pixel_bgra>::const_iterator begin, std::vector<pixel_bgra>::const_iterator end, std::uint8_t first = 0, bool wait_for_vsync = false) override;
+            virtual void set_palette_data(std::vector<px32>::const_iterator begin, std::vector<px32>::const_iterator end, std::uint8_t first = 0, bool wait_for_vsync = false) override;
             virtual std::uint32_t get_closest_pixel_clock(std::uint32_t desired_clock, std::uint16_t mode_num);
         };
 

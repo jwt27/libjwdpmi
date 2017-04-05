@@ -43,18 +43,18 @@ namespace jw
         };
         static_assert(sizeof(text_char) == 2 && alignof(text_char) == 2, "text_char has incorrect size or alignment.");
 
-        struct [[gnu::packed]] pixel_pal8
+        struct [[gnu::packed]] px8
         {
             byte value { };
-            constexpr pixel_pal8() noexcept = default;
-            constexpr pixel_pal8(byte v) : value(v) { }
-            constexpr pixel_pal8& operator=(byte p) { value = (p == 0 ? value : p); return *this; }
-            constexpr pixel_pal8& operator=(const pixel_pal8& p) { value = (p.value == 0 ? value : p.value); return *this; }
+            constexpr px8() noexcept = default;
+            constexpr px8(byte v) : value(v) { }
+            constexpr px8& operator=(byte p) { value = (p == 0 ? value : p); return *this; }
+            constexpr px8& operator=(const px8& p) { value = (p.value == 0 ? value : p.value); return *this; }
             constexpr operator byte() { return value; }
         };
-        static_assert(sizeof(pixel_pal8) == 1 , "pixel_pal8 has incorrect size.");
+        static_assert(sizeof(px8) == 1 , "px8 has incorrect size.");
 
-        struct alignas(4) [[gnu::packed]] pixel_bgra
+        struct alignas(4) [[gnu::packed]] px32
         {
             std::uint8_t b, g, r, a;
         };
