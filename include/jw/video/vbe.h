@@ -23,6 +23,7 @@ namespace jw
             const vbe_info& get_vbe_info();
             const std::map<std::uint_fast16_t,vbe_mode_info>& get_modes() { get_vbe_info(); return modes; }
             virtual void set_mode(vbe_mode m, const crtc_info* crtc = nullptr) override;
+            virtual std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> set_scanline_length(std::uint32_t width, bool width_in_pixels = true);
 
         protected:
             void check_error(split_uint16_t ax, const char* function_name);
@@ -35,6 +36,7 @@ namespace jw
         struct vbe2 : public vbe
         {
             virtual void init() override;
+            virtual std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> set_scanline_length(std::uint32_t width, bool width_in_pixels = true) override;
         };
 
         struct vbe3 : public vbe2
@@ -44,18 +46,18 @@ namespace jw
             //virtual vbe_mode get_current_mode()
             //virtual save_state()
             //virtual restore_state()
-            //virtual void set_window()
-            //virtual get_window()
-            //virtual set_scanline_length()
-            //virtual std::uint32_t get_scanline_length()
-            //virtual std::uint32_t get_max_scanline_length()
-            //virtual set_display_start(bool wait_for_vsync)
-            //virtual get_display_start()
-            //virtual schedule_display_start(bool wait_for_vsync)
-            //virtual schedule_stereo_display_start(bool wait_for_vsync)
-            //virtual get_scheduled_display_start_status()
-            //virtual enable_stereo()
-            //virtual disable_stereo()
+            //virtual std::uint32_t set_window()
+            //virtual std::uint32_t get_window()
+            virtual std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> set_scanline_length(std::uint32_t width, bool width_in_pixels = true) override;
+            //virtual std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> get_scanline_length()
+            //virtual std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> get_max_scanline_length()
+            //virtual void set_display_start(bool wait_for_vsync = false)
+            //virtual std::tuple<std::uint32_t, std::uint32_t> get_display_start()
+            //virtual void schedule_display_start(bool wait_for_vsync = false)
+            //virtual void schedule_stereo_display_start(bool wait_for_vsync = false)
+            //virtual bool get_scheduled_display_start_status()
+            //virtual void enable_stereo()
+            //virtual void disable_stereo()
             //virtual std::uint8_t set_dac_palette_format()
             //virtual std::uint8_t get_dac_palette_format()
             //virtual set_palette_data(bool wait_for_vsync)

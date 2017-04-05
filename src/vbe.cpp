@@ -312,6 +312,34 @@ namespace jw
             }
             else reg.call_int(0x10);
             check_error(reg.ax, __PRETTY_FUNCTION__);
+        } 
+
+        std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> vbe::set_scanline_length(std::uint32_t width, bool width_in_pixels)
+        {
+            return std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t>();
+        }
+
+        std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> vbe2::set_scanline_length(std::uint32_t width, bool width_in_pixels)
+        {
+            return std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t>();
+        }
+
+        std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> vbe3::set_scanline_length(std::uint32_t width, bool width_in_pixels)
+        {
+            if (!vbe3_pm) return vbe2::set_scanline_length(width, width_in_pixels);
+
+            std::uint16_t ax, pixels_per_scanline, bytes_per_scanline, max_scanlines;
+            asm volatile("call fword ptr [vbe3_call];"
+                         : "=a" (ax)
+                         , "=b" (bytes_per_scanline)
+                         , "=c" (pixels_per_scanline)
+                         , "=d" (max_scanlines)
+                         : "a" (0x4f06)
+                         , "b" (width_in_pixels ? 0 : 2)
+                         , "c" (width));
+            check_error(ax, __PRETTY_FUNCTION__);
+
+            return { pixels_per_scanline, bytes_per_scanline, max_scanlines };
         }
     }
 }
