@@ -391,16 +391,42 @@ namespace jw
             if (!vbe3_pm) return vbe2::get_max_scanline_length();
 
             std::uint16_t ax, pixels_per_scanline, bytes_per_scanline, max_scanlines;
-            asm volatile("call fword ptr [vbe3_call];"
-                         : "=a" (ax)
-                         , "=b" (bytes_per_scanline)
-                         , "=c" (pixels_per_scanline)
-                         , "=d" (max_scanlines)
-                         : "a" (0x4f06)
-                         , "b" (3)
-                         : "edi", "esi", "memory", "cc");
+            asm("call fword ptr [vbe3_call];"
+                : "=a" (ax)
+                , "=b" (bytes_per_scanline)
+                , "=c" (pixels_per_scanline)
+                , "=d" (max_scanlines)
+                : "a" (0x4f06)
+                , "b" (3)
+                : "edi", "esi", "memory", "cc");
             check_error(ax, __PRETTY_FUNCTION__);
             return { pixels_per_scanline, bytes_per_scanline, max_scanlines };
+        }
+
+        void vbe::set_display_start(std::uint32_t first_pixel, std::uint32_t first_scanline, bool wait_for_vsync)
+        {
+            dpmi::realmode_registers reg { };
+            reg.ax = 0x4f07;
+            reg.bx = wait_for_vsync ? 0x80 : 0;
+            reg.cx = first_pixel;
+            reg.dx = first_scanline;
+            reg.call_int(0x10);
+            check_error(reg.ax, __PRETTY_FUNCTION__);
+        }
+
+        void vbe3::set_display_start(std::uint32_t first_pixel, std::uint32_t first_scanline, bool wait_for_vsync)
+        {
+            if (!vbe3_pm) return vbe2::set_display_start(first_pixel, first_scanline, wait_for_vsync);
+
+            std::uint16_t ax;
+            asm volatile("call fword ptr [vbe3_call];"
+                         : "=a" (ax)
+                         : "a" (0x4f07)
+                         , "b" (wait_for_vsync ? 0x80 : 0)
+                         , "c" (first_pixel)
+                         , "d" (first_scanline)
+                         : "edi", "esi", "memory", "cc");
+            check_error(ax, __PRETTY_FUNCTION__);
         }
     }
 }
