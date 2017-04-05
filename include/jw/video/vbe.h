@@ -39,7 +39,7 @@ namespace jw
         struct vbe2 : public vbe
         {
             virtual void init() override;
-            //virtual void set_display_start(std::uint32_t first_pixel, std::uint32_t first_scanline, bool wait_for_vsync = false) override;
+            virtual void set_display_start(std::uint32_t first_pixel, std::uint32_t first_scanline, bool wait_for_vsync = false) override;
         };
 
         struct vbe3 : public vbe2

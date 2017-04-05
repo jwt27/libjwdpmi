@@ -347,15 +347,16 @@ namespace jw
             if (!vbe3_pm) return vbe2::set_scanline_length(width, width_in_pixels);
 
             std::uint16_t ax, pixels_per_scanline, bytes_per_scanline, max_scanlines;
-            asm volatile("call fword ptr [vbe3_call];"
-                         : "=a" (ax)
-                         , "=b" (bytes_per_scanline)
-                         , "=c" (pixels_per_scanline)
-                         , "=d" (max_scanlines)
-                         : "a" (0x4f06)
-                         , "b" (width_in_pixels ? 0 : 2)
-                         , "c" (width)
-                         : "edi", "esi", "memory", "cc");
+            asm volatile(
+                "call fword ptr [vbe3_call];"
+                : "=a" (ax)
+                , "=b" (bytes_per_scanline)
+                , "=c" (pixels_per_scanline)
+                , "=d" (max_scanlines)
+                : "a" (0x4f06)
+                , "b" (width_in_pixels ? 0 : 2)
+                , "c" (width)
+                : "edi", "esi", "memory", "cc");
             check_error(ax, __PRETTY_FUNCTION__);
             return { pixels_per_scanline, bytes_per_scanline, max_scanlines };
         }
@@ -414,18 +415,42 @@ namespace jw
             check_error(reg.ax, __PRETTY_FUNCTION__);
         }
 
+        void vbe2::set_display_start(std::uint32_t first_pixel, std::uint32_t first_scanline, bool wait_for_vsync)
+        {
+            //if (!vbe2_pm) 
+            return vbe2::set_display_start(first_pixel, first_scanline, wait_for_vsync);
+
+            dpmi::selector mmio = vbe2_mmio ? vbe2_mmio->get_selector() : dpmi::get_ds();
+            std::uint16_t ax;
+            asm volatile(
+                "push es;"
+                "mov es, %2;"
+                "call %1;"
+                "pop es;"
+                : "=a" (ax)
+                : "rm" (vbe2_call_set_display_start)
+                , "rm" (mmio)
+                , "a" (0x4f07)
+                , "b" (wait_for_vsync ? 0x80 : 0)
+                , "c" (0)   // TODO
+                , "d" (0)
+                : "edi", "esi", "memory", "cc");
+            check_error(ax, __PRETTY_FUNCTION__);
+        }
+
         void vbe3::set_display_start(std::uint32_t first_pixel, std::uint32_t first_scanline, bool wait_for_vsync)
         {
             if (!vbe3_pm) return vbe2::set_display_start(first_pixel, first_scanline, wait_for_vsync);
 
             std::uint16_t ax;
-            asm volatile("call fword ptr [vbe3_call];"
-                         : "=a" (ax)
-                         : "a" (0x4f07)
-                         , "b" (wait_for_vsync ? 0x80 : 0)
-                         , "c" (first_pixel)
-                         , "d" (first_scanline)
-                         : "edi", "esi", "memory", "cc");
+            asm volatile(
+                "call fword ptr [vbe3_call];"
+                : "=a" (ax)
+                : "a" (0x4f07)
+                , "b" (wait_for_vsync ? 0x80 : 0)
+                , "c" (first_pixel)
+                , "d" (first_scanline)
+                : "edi", "esi", "memory", "cc");
             check_error(ax, __PRETTY_FUNCTION__);
         }
     }
