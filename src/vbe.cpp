@@ -656,6 +656,25 @@ namespace jw
             check_error(ax, __PRETTY_FUNCTION__);
         }
 
+        std::vector<pixel_bgra> vbe2::get_palette_data()
+        {
+            dpmi::dos_memory<pixel_bgra> dos_data { 256 };
+
+            dpmi::realmode_registers reg { };
+            reg.ax = 0x4f09;
+            reg.bx = 1;
+            reg.cx = 256;
+            reg.dx = 0;
+            reg.es = dos_data.get_dos_ptr().segment;
+            reg.di = dos_data.get_dos_ptr().offset;
+            reg.call_int(0x10);
+            check_error(reg.ax, __PRETTY_FUNCTION__);
+
+            std::vector<pixel_bgra> result;
+            std::copy_n(dos_data.get_ptr(), 256, std::back_inserter(result));
+            return result;
+        }
+
         std::uint32_t vbe3::get_closest_pixel_clock(std::uint32_t desired_clock, std::uint16_t mode_num)
         {
             if (vbe3_pm)
