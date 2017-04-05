@@ -494,12 +494,12 @@ namespace jw
             return { first_pixel, first_scanline };
         }
 
-        void vbe::schedule_display_start(vector2i pos, bool wait_for_vsync)
+        void vbe::schedule_display_start(vector2i pos)
         {
-            return set_display_start(pos, wait_for_vsync);
+            return set_display_start(pos, true);
         }
 
-        void vbe3::schedule_display_start(vector2i pos, bool wait_for_vsync)
+        void vbe3::schedule_display_start(vector2i pos)
         { 
             auto bps = mode.use_lfb_mode ? mode_info->linear_bytes_per_scanline : mode_info->bytes_per_scanline;
             auto start = pos.x + pos.y * bps;
@@ -511,7 +511,7 @@ namespace jw
                     "call fword ptr [vbe3_call];"
                     : "=a" (ax)
                     : "a" (0x4f07)
-                    , "b" (wait_for_vsync ? 0x82 : 2)
+                    , "b" (2)
                     , "c" (start)
                     : "edx", "edi", "esi", "cc");
                 check_error(ax, __PRETTY_FUNCTION__);
@@ -520,7 +520,7 @@ namespace jw
             {
                 dpmi::realmode_registers reg { };
                 reg.ax = 0x4f07;
-                reg.bx = wait_for_vsync ? 0x82 : 2;
+                reg.bx = 2;
                 reg.ecx = start;
                 reg.call_int(0x10);
                 check_error(reg.ax, __PRETTY_FUNCTION__);
