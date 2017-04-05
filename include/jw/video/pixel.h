@@ -53,5 +53,10 @@ namespace jw
             constexpr operator byte() { return value; }
         };
         static_assert(sizeof(pixel_pal8) == 1 , "pixel_pal8 has incorrect size.");
+
+        struct alignas(4) [[gnu::packed]] pixel_bgra
+        {
+            std::uint8_t b, g, r, a;
+        };
     }
 }
