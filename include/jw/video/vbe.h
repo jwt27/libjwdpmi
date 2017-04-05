@@ -25,6 +25,7 @@ namespace jw
             virtual void set_mode(vbe_mode m, const crtc_info* crtc = nullptr) override;
             virtual std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> set_scanline_length(std::uint32_t width, bool width_in_pixels = true);
             virtual std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> get_scanline_length();
+            virtual std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> get_max_scanline_length();
 
         protected:
             void check_error(split_uint16_t ax, const char* function_name);
@@ -49,7 +50,7 @@ namespace jw
             //virtual std::uint32_t set_window()
             //virtual std::uint32_t get_window()
             virtual std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> set_scanline_length(std::uint32_t width, bool width_in_pixels = true) override;
-            //virtual std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> get_max_scanline_length()
+            virtual std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> get_max_scanline_length() override;
             //virtual void set_display_start(bool wait_for_vsync = false)
             //virtual std::tuple<std::uint32_t, std::uint32_t> get_display_start()
             //virtual void schedule_display_start(bool wait_for_vsync = false)

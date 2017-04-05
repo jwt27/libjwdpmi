@@ -357,7 +357,6 @@ namespace jw
                          , "c" (width)
                          : "edi", "esi", "memory", "cc");
             check_error(ax, __PRETTY_FUNCTION__);
-
             return { pixels_per_scanline, bytes_per_scanline, max_scanlines };
         }
 
@@ -371,6 +370,36 @@ namespace jw
             std::uint16_t pixels_per_scanline = reg.cx;
             std::uint16_t bytes_per_scanline = reg.bx;
             std::uint16_t max_scanlines = reg.dx;
+            return { pixels_per_scanline, bytes_per_scanline, max_scanlines };
+        }
+
+        std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> vbe::get_max_scanline_length()
+        {
+            dpmi::realmode_registers reg { };
+            reg.ax = 0x4f06;
+            reg.bl = 3;
+            reg.call_int(0x10);
+            check_error(reg.ax, __PRETTY_FUNCTION__);
+            std::uint16_t pixels_per_scanline = reg.cx;
+            std::uint16_t bytes_per_scanline = reg.bx;
+            std::uint16_t max_scanlines = reg.dx;
+            return { pixels_per_scanline, bytes_per_scanline, max_scanlines };
+        }
+
+        std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> vbe3::get_max_scanline_length()
+        {
+            if (!vbe3_pm) return vbe2::get_max_scanline_length();
+
+            std::uint16_t ax, pixels_per_scanline, bytes_per_scanline, max_scanlines;
+            asm volatile("call fword ptr [vbe3_call];"
+                         : "=a" (ax)
+                         , "=b" (bytes_per_scanline)
+                         , "=c" (pixels_per_scanline)
+                         , "=d" (max_scanlines)
+                         : "a" (0x4f06)
+                         , "b" (3)
+                         : "edi", "esi", "memory", "cc");
+            check_error(ax, __PRETTY_FUNCTION__);
             return { pixels_per_scanline, bytes_per_scanline, max_scanlines };
         }
     }
