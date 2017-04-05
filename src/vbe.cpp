@@ -492,6 +492,11 @@ namespace jw
             return { first_pixel, first_scanline };
         }
 
+        void vbe::schedule_display_start(vector2i pos, bool wait_for_vsync)
+        {
+            return set_display_start(pos, wait_for_vsync);
+        }
+
         void vbe3::schedule_display_start(vector2i pos, bool wait_for_vsync)
         { 
             auto bps = mode.use_lfb_mode ? mode_info->linear_bytes_per_scanline : mode_info->bytes_per_scanline;
@@ -519,6 +524,12 @@ namespace jw
                 check_error(reg.ax, __PRETTY_FUNCTION__);
             }
         }
+
+        bool vbe::get_scheduled_display_start_status()
+        {
+            return true;
+        }
+
         bool vbe3::get_scheduled_display_start_status()
         {
             if (vbe3_pm)
