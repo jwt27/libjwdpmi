@@ -478,22 +478,6 @@ namespace jw
             return { first_pixel, first_scanline };
         }
 
-        vector2i vbe3::get_display_start()
-        {
-            if (!vbe3_pm) return vbe2::get_display_start();
-
-            std::uint16_t ax, first_pixel, first_scanline;
-            asm("call fword ptr [vbe3_call];"
-                : "=a" (ax)
-                , "=c" (first_pixel)
-                , "=d" (first_scanline)
-                : "a" (0x4f07)
-                , "b" (1)
-                : "edi", "esi", "cc");
-            check_error(ax, __PRETTY_FUNCTION__);
-            return { first_pixel, first_scanline };
-        }
-
         void vbe::schedule_display_start(vector2i pos)
         {
             return set_display_start(pos, true);

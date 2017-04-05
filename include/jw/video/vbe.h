@@ -65,7 +65,6 @@ namespace jw
             virtual std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> set_scanline_length(std::uint32_t width, bool width_in_pixels = true) override;
             virtual std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> get_max_scanline_length() override;
             virtual void set_display_start(vector2i pos, bool wait_for_vsync = false) override;
-            virtual vector2i get_display_start() override;
             virtual void schedule_display_start(vector2i pos) override;
             //virtual void schedule_stereo_display_start(bool wait_for_vsync = false)
             virtual bool get_scheduled_display_start_status() override;
