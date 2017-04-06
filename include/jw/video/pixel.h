@@ -192,9 +192,9 @@ namespace jw
             constexpr pixel& blend(const pixel<V>& src)
             {
                 auto copy = src.cast<P>();
-                this->b = src.b;
-                this->g = src.g;
-                this->r = src.r;
+                this->b = copy.b;
+                this->g = copy.g;
+                this->r = copy.r;
                 return *this;
             }
 
