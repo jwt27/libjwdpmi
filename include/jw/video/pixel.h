@@ -183,43 +183,37 @@ namespace jw
             constexpr pixel& operator=(const pixel& other) noexcept { return blend(other); }
             constexpr pixel& operator=(pixel&& o) noexcept = default;
 
-            
-
             template <typename U, std::enable_if_t<(std::is_integral<typename U::T>::value && std::is_integral<typename P::T>::value), bool> = { }> 
             static constexpr std::uint32_t max(auto max) noexcept { return max + 1; }
             template <typename U, std::enable_if_t<(std::is_floating_point<typename U::T>::value || std::is_floating_point<typename P::T>::value), bool> = { }> 
             static constexpr float max(auto max) noexcept { return max; }
 
-            template <typename U, typename V, std::enable_if_t<U::has_alpha && V::has_alpha && (std::is_floating_point<typename U::T>::value || std::is_floating_point<typename V::T>::value), bool> = { }>
-            constexpr pixel& blend(const pixel<V>& other)
+            template<typename V, std::enable_if_t<!V::has_alpha, bool> = { }>
+            constexpr pixel& blend(const pixel<V>& src)
             {
-                pixel<std::conditional_t<std::is_floating_point<V>::value, V, U>> src { other };
-                pixel<std::conditional_t<std::is_floating_point<V>::value, V, U>> dst { *this };
-                dst.b = src.b * src.a + dst.b * (src.ax - src.a);
-                dst.g = src.g * src.a + dst.g * (src.ax - src.a);
-                dst.r = src.r * src.a + dst.r * (src.ax - src.a);
-                dst.a = src.a * src.a + dst.a * (src.ax - src.a);
-                return *this = std::move(dst);
-            }
-
-            template <typename U, typename V, std::enable_if_t<!V::has_alpha, bool> = { }>
-            constexpr pixel& blend(const pixel<V>& other) 
-            {
-                auto src = other.cast<P>();
+                auto copy = src.cast<P>();
                 this->b = src.b;
                 this->g = src.g;
                 this->r = src.r;
                 return *this;
             }
 
-            template <typename U, typename V, std::enable_if_t<(U::has_alpha && V::has_alpha && std::is_integral<typename U::T>::value && std::is_integral<typename V::T>::value), bool> = { }> 
-            constexpr pixel& blend(const pixel<V>& other)
+            template<typename V, std::enable_if_t<!P::has_alpha && V::has_alpha, bool> = { }>
+            constexpr pixel& blend(const pixel<V>& src)
             {
-                auto src = other.cast<P>();
-                this->b = (src.b * src.a + this->b * (src.ax - src.a)) / (P::rx + 1);
-                this->g = (src.g * src.a + this->g * (src.ax - src.a)) / (P::gx + 1);
-                this->r = (src.r * src.a + this->r * (src.ax - src.a)) / (P::bx + 1);
-                this->a = (src.a * src.a + this->a * (src.ax - src.a)) / (P::ax + 1);
+                this->b = ((src.b * max<V>(P::bx) * src.a) / max<V>(V::bx) + this->b * (src.ax - src.a)) / max<V>(V::ax);
+                this->g = ((src.g * max<V>(P::gx) * src.a) / max<V>(V::gx) + this->g * (src.ax - src.a)) / max<V>(V::ax);
+                this->r = ((src.r * max<V>(P::rx) * src.a) / max<V>(V::rx) + this->r * (src.ax - src.a)) / max<V>(V::ax);
+                return *this;
+            }
+
+            template<typename V, std::enable_if_t<P::has_alpha && V::has_alpha, bool> = { }>
+            constexpr pixel& blend(const pixel<V>& src)
+            {
+                this->b = ((src.b * max<V>(P::bx) * src.a) / max<V>(V::bx) + this->b * (src.ax - src.a)) / max<V>(V::ax);
+                this->g = ((src.g * max<V>(P::gx) * src.a) / max<V>(V::gx) + this->g * (src.ax - src.a)) / max<V>(V::ax);
+                this->r = ((src.r * max<V>(P::rx) * src.a) / max<V>(V::rx) + this->r * (src.ax - src.a)) / max<V>(V::ax);
+                this->a = ((src.a * max<V>(P::ax) * src.a) / max<V>(V::ax) + this->a * (src.ax - src.a)) / max<V>(V::ax);
                 return *this;
             }
 
