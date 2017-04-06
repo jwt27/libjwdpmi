@@ -94,7 +94,7 @@ namespace jw
                     : "=@ccc" (c)
                     , "=a" (error)
                     : "a" (0x0001)
-                    , "c" (sel)
+                    , "b" (sel)
                     : "memory");
                 // if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
             }
