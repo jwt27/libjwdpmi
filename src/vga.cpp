@@ -25,11 +25,24 @@ namespace jw
         void vga::set_palette_data(std::vector<px32>::const_iterator begin, std::vector<px32>::const_iterator end, std::uint8_t first, bool)
         {
             dac_write_index.write(first);
-            for (auto i = begin; i < end; ++i)
+            if (dac_bits == 8)
             {
-                dac_data.write(i->r);
-                dac_data.write(i->g);
-                dac_data.write(i->b);
+                for (auto i = begin; i < end; ++i)
+                {
+                    dac_data.write(i->r);
+                    dac_data.write(i->g);
+                    dac_data.write(i->b);
+                }
+            }
+            else
+            {
+                for (auto i = begin; i < end; ++i)
+                {
+                    auto p = static_cast<const pxvga>(*i);
+                    dac_data.write(p.r);
+                    dac_data.write(p.g);
+                    dac_data.write(p.b);
+                }
             }
         }
 
@@ -37,14 +50,29 @@ namespace jw
         {
             std::vector<px32> result { };
             dac_read_index.write(0);
-            for (auto i = 0; i < 256; ++i)
+            if (dac_bits == 8)
             {
-                pxvga value { 0,0,0,255 };
-                value.r = dac_data.read();
-                value.g = dac_data.read();
-                value.b = dac_data.read();
-                result.push_back(value);
+                for (auto i = 0; i < 256; ++i)
+                {
+                    px32 value { 0,0,0,255 };
+                    value.r = dac_data.read();
+                    value.g = dac_data.read();
+                    value.b = dac_data.read();
+                    result.push_back(value);
+                }
             }
+            else
+            {
+                for (auto i = 0; i < 256; ++i)
+                {
+                    pxvga value { 0,0,0,255 };
+                    value.r = dac_data.read();
+                    value.g = dac_data.read();
+                    value.b = dac_data.read();
+                    result.push_back(value);
+                }
+            }
+            result[0].a = 0;
             return result;
         }
     }

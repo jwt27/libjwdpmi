@@ -579,6 +579,7 @@ namespace jw
             reg.bx = 1;
             reg.call_int(0x10);
             check_error(reg.ax, __PRETTY_FUNCTION__);
+            dac_bits = reg.bh;
             return reg.bh;
         }
 
@@ -686,7 +687,18 @@ namespace jw
             catch (const error&) { return vga::get_palette_data(); }
 
             std::vector<px32> result;
-            std::copy_n(dos_data.get_ptr(), 256, std::back_inserter(result));
+            result.reserve(256);
+            auto* ptr = dos_data.get_ptr();
+            if (dac_bits < 8)
+            {
+                for (auto i = 0; i < 256; ++i)
+                    result.push_back(reinterpret_cast<pxvga&>(ptr[i]));
+            }
+            else
+            {
+                for (auto i = 0; i < 256; ++i)
+                    result.push_back(ptr[i]);
+            }
             return result;
         }
 

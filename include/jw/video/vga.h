@@ -31,6 +31,8 @@ namespace jw
             static constexpr io::io_port<byte> dac_write_index { 0x3c8 };
             static constexpr io::out_port<byte> dac_read_index { 0x3c7 };
             static constexpr io::io_port<byte> dac_data { 0x3c9 };
+
+            std::size_t dac_bits { 6 };
         };
     }
 }
