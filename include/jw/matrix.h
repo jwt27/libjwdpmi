@@ -55,8 +55,14 @@ namespace jw
         using iterator = matrix_iterator<matrix_range>;
         friend iterator;
 
-        constexpr matrix_range(M& matrix, const vector2i& position, const vector2i& dimensions) noexcept 
+        constexpr matrix_range(M* matrix, const vector2i& position, const vector2i& dimensions) noexcept 
             : m(matrix), pos(position), dim(dimensions) { }
+
+        constexpr matrix_range() noexcept = delete;
+        constexpr matrix_range(const matrix_range&) noexcept = default;
+        constexpr matrix_range(matrix_range&&) noexcept = default;
+        constexpr matrix_range& operator=(const matrix_range&) noexcept = delete;
+        constexpr matrix_range& operator=(matrix_range&&) noexcept = default;
 
         constexpr auto range(const vector2i& position, const vector2i& dimensions) const noexcept
         {
@@ -68,14 +74,14 @@ namespace jw
         constexpr auto range_abs(const vector2i& topleft, const vector2i& bottomright) const noexcept { return range(topleft, bottomright - topleft); }
 
         // bounds checking with automatic wrap-around
-        constexpr auto& operator()(vector2i p) noexcept { return get_wrap(p, m.data()); }
-        constexpr const auto& operator()(vector2i p) const noexcept { return get_wrap(p, m.data()); }
+        constexpr auto& operator()(vector2i p) noexcept { return get_wrap(p, m->data()); }
+        constexpr const auto& operator()(vector2i p) const noexcept { return get_wrap(p, m->data()); }
         constexpr const auto& operator()(std::ptrdiff_t x, std::ptrdiff_t y) const noexcept { return (*this)({ x, y }); }
         constexpr auto& operator()(std::ptrdiff_t x, std::ptrdiff_t y) noexcept { return (*this)({ x, y }); }
 
         // no bounds checking
-        constexpr const auto& get(vector2i p) const noexcept { return get(p, m.data()); }
-        constexpr auto& get(vector2i p) noexcept { return get(p, m.data()); }
+        constexpr const auto& get(vector2i p) const noexcept { return get(p, m->data()); }
+        constexpr auto& get(vector2i p) noexcept { return get(p, m->data()); }
         constexpr const auto& get(std::ptrdiff_t x, std::ptrdiff_t y) const noexcept { return get({ x, y }); }
         constexpr auto& get(std::ptrdiff_t x, std::ptrdiff_t y) noexcept { return get({ x, y }); }
 
@@ -97,6 +103,7 @@ namespace jw
         constexpr auto begin() noexcept { return iterator { *this, { 0, 0 }}; }
         constexpr auto end() noexcept { return iterator { *this, dim }; }
 
+        constexpr auto position() const noexcept { return pos; }
         constexpr auto size() const noexcept { return dim; }
         constexpr auto width() const noexcept { return size().x; }
         constexpr auto height() const noexcept { return size().y; }
@@ -109,23 +116,23 @@ namespace jw
             if (p.x < 0) p.x = dim.x + p.x;
             if (p.y < 0) p.y = dim.y + p.y;
             auto offset = pos + p;
-            return *(ptr + offset.x + m.size().x * offset.y);
+            return *(ptr + offset.x + m->size().x * offset.y);
         }
 
         constexpr auto& get(vector2i p, auto* ptr) const noexcept
         {
             auto offset = pos + p;
-            return *(ptr + offset.x + m.size().x * offset.y);
+            return *(ptr + offset.x + m->size().x * offset.y);
         }
 
-        M& m;
-        const vector2i pos, dim;
+        M* m;
+        vector2i pos, dim;
     };
 
     template<typename T>
     struct matrix : public matrix_range<matrix<T>>
     {
-        constexpr matrix(vector2i size, T* data) : matrix_range<matrix<T>>(*this, { 0, 0 }, size), p(data) { }
+        constexpr matrix(vector2i size, T* data) : matrix_range<matrix<T>>(this, { 0, 0 }, size), p(data) { }
         constexpr matrix(std::size_t w, std::size_t h, T* data) : matrix(vector2i { w, h }, data) { }
 
         constexpr auto* data() noexcept { return p; }
