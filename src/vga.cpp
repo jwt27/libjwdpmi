@@ -39,7 +39,7 @@ namespace jw
             dac_read_index.write(0);
             for (auto i = 0; i < 256; ++i)
             {
-                px32 value { };
+                pxvga value { 0,0,0,255 };
                 value.r = dac_data.read();
                 value.g = dac_data.read();
                 value.b = dac_data.read();

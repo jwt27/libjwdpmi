@@ -88,6 +88,24 @@ namespace jw
             static constexpr bool has_alpha = false;
         };
 
+        struct [[gnu::packed]] bgra_6668
+        {
+            using T = unsigned;
+            T b : 6, : 2;
+            T g : 6, : 2;
+            T r : 6, : 2;
+            T a : 8;
+
+            bgra_6668() noexcept = default;
+            constexpr bgra_6668(T cr, T cg, T cb, T ca) noexcept : b(cb), g(cg), r(cr), a(ca) { }
+
+            static constexpr T rx = 63;
+            static constexpr T gx = 63;
+            static constexpr T bx = 63;
+            static constexpr T ax = 255;
+            static constexpr bool has_alpha = true;
+        };
+
         struct alignas(2) [[gnu::packed]] bgra_5650
         {
             using T = unsigned;
@@ -123,8 +141,10 @@ namespace jw
             static constexpr bool has_alpha = true;
         };
 
+        struct px { };
+
         template<typename P>
-        struct alignas(P) [[gnu::packed]] pixel : P
+        struct alignas(P) [[gnu::packed]] pixel : public P, public px
         {
             using T = typename P::T;
 
@@ -206,5 +226,13 @@ namespace jw
         using px24 = pixel<bgra_8880>;
         using px16 = pixel<bgra_5650>;
         using px15 = pixel<bgra_5551>;
+        using pxvga = pixel<bgra_6668>;
+
+        static_assert(sizeof(pxf  ) == 16, "check sizeof pixel");
+        static_assert(sizeof(px32 ) ==  4, "check sizeof pixel");
+        static_assert(sizeof(px24 ) ==  3, "check sizeof pixel");
+        static_assert(sizeof(px16 ) ==  2, "check sizeof pixel");
+        static_assert(sizeof(px15 ) ==  2, "check sizeof pixel");
+        static_assert(sizeof(pxvga) ==  4, "check sizeof pixel");
     }
 }
