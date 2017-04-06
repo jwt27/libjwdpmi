@@ -615,7 +615,7 @@ namespace jw
             else
             {
                 dpmi::dos_memory<px32> dos_data { static_cast<std::size_t>(end - begin) };
-                std::copy_n(static_cast<const px32*>(ptr), end - begin, dos_data.get_ptr());
+                std::copy_n(reinterpret_cast<const px32*>(ptr), end - begin, dos_data.get_ptr());
 
                 dpmi::realmode_registers reg { };
                 reg.ax = 0x4f09;
