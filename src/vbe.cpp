@@ -584,15 +584,16 @@ namespace jw
 
         void vbe2::set_palette_data(std::vector<px32>::const_iterator begin, std::vector<px32>::const_iterator end, std::uint8_t first, bool wait_for_vsync)
         {
-            std::unique_ptr<std::vector<pxvga>> copy;
-            const px* ptr = &*begin;
-            if (dac_bits < 8)
-            {
-                copy = std::make_unique<std::vector<pxvga>>(begin, end);
-                ptr = copy->data();
-            }
             if (vbe2_pm)
             {
+                std::unique_ptr<std::vector<pxvga>> copy;
+                const px* ptr = &*begin;
+                if (dac_bits < 8)
+                {
+                    copy = std::make_unique<std::vector<pxvga>>(begin, end);
+                    ptr = copy->data();
+                }
+
                 dpmi::selector mmio = vbe2_mmio ? vbe2_mmio->get_selector() : dpmi::get_ds();
                 asm volatile(
                     "push ds;"
@@ -615,7 +616,16 @@ namespace jw
             else
             {
                 dpmi::dos_memory<px32> dos_data { static_cast<std::size_t>(end - begin) };
-                std::copy_n(reinterpret_cast<const px32*>(ptr), end - begin, dos_data.get_ptr());
+                if (dac_bits < 8)
+                {
+                    for (auto i = 0; i < (end - begin); ++i)
+                        new(reinterpret_cast<pxvga*>(dos_data.get_ptr() + i)) pxvga { begin[i] };
+                }
+                else
+                {
+                    for (auto i = 0; i < (end - begin); ++i)
+                        new(dos_data.get_ptr() + i) px32 { std::move(begin[i]) };
+                }
 
                 dpmi::realmode_registers reg { };
                 reg.ax = 0x4f09;
