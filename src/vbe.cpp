@@ -543,7 +543,7 @@ namespace jw
             }
         }
 
-        std::uint8_t vbe::set_dac_palette_format(std::uint8_t bits_per_channel)
+        std::uint8_t vbe::set_palette_format(std::uint8_t bits_per_channel)
         {
             dpmi::realmode_registers reg { };
             reg.ax = 0x4f08;
@@ -554,9 +554,9 @@ namespace jw
             return reg.bh;
         }
 
-        std::uint8_t vbe3::set_dac_palette_format(std::uint8_t bits_per_channel)
+        std::uint8_t vbe3::set_palette_format(std::uint8_t bits_per_channel)
         {
-            if (!vbe3_pm) return vbe2::set_dac_palette_format(bits_per_channel);
+            if (!vbe3_pm) return vbe2::set_palette_format(bits_per_channel);
 
             std::uint16_t ax;
             split_uint16_t bx;
@@ -572,7 +572,7 @@ namespace jw
             return bx.hi;
         }
 
-        std::uint8_t vbe::get_dac_palette_format()
+        std::uint8_t vbe::get_palette_format()
         {
             dpmi::realmode_registers reg { };
             reg.ax = 0x4f08;
@@ -583,8 +583,10 @@ namespace jw
             return reg.bh;
         }
 
-        void vbe2::set_palette_data(std::vector<px32>::const_iterator begin, std::vector<px32>::const_iterator end, std::uint8_t first, bool wait_for_vsync)
+        void vbe2::set_palette(std::vector<px32>::const_iterator begin, std::vector<px32>::const_iterator end, std::size_t first, bool wait_for_vsync)
         {
+            //return vga::set_palette(begin, end, first, wait_for_vsync);
+            auto size = std::min(static_cast<std::size_t>(end - begin), std::size_t { 256 });
             if (vbe2_pm)
             {
                 std::unique_ptr<std::vector<pxvga>> copy;
@@ -609,29 +611,29 @@ namespace jw
                     , "rm" (mmio)
                     , "a" (0x4f09)
                     , "b" (wait_for_vsync ? 0x80 : 0)
-                    , "c" (std::min(end - begin, std::ptrdiff_t { 256 }))
+                    , "c" (size)
                     , "d" (first)
                     , "D" (ptr)
                     : "esi", "esp", "cc");
             }
             else
             {
-                dpmi::dos_memory<px32> dos_data { static_cast<std::size_t>(end - begin) };
+                dpmi::dos_memory<px32> dos_data { size };
                 if (dac_bits < 8)
                 {
-                    for (auto i = 0; i < (end - begin); ++i)
+                    for (std::size_t i = 0; i < size; ++i)
                         new(reinterpret_cast<pxvga*>(dos_data.get_ptr() + i)) pxvga { begin[i] };
                 }
                 else
                 {
-                    for (auto i = 0; i < (end - begin); ++i)
+                    for (std::size_t i = 0; i < size; ++i)
                         new(dos_data.get_ptr() + i) px32 { std::move(begin[i]) };
                 }
 
                 dpmi::realmode_registers reg { };
                 reg.ax = 0x4f09;
                 reg.bx = wait_for_vsync ? 0x80 : 0;
-                reg.cx = std::min(end - begin, std::ptrdiff_t { 256 });
+                reg.cx = size;
                 reg.dx = first;
                 reg.es = dos_data.get_dos_ptr().segment;
                 reg.di = dos_data.get_dos_ptr().offset;
@@ -640,9 +642,9 @@ namespace jw
             }
         }
 
-        void vbe3::set_palette_data(std::vector<px32>::const_iterator begin, std::vector<px32>::const_iterator end, std::uint8_t first, bool wait_for_vsync)
+        void vbe3::set_palette(std::vector<px32>::const_iterator begin, std::vector<px32>::const_iterator end, std::size_t first, bool wait_for_vsync)
         {
-            if (!vbe3_pm) return vbe2::set_palette_data(begin, end, first, wait_for_vsync);
+            if (!vbe3_pm) return vbe2::set_palette(begin, end, first, wait_for_vsync);
 
             std::unique_ptr<std::vector<pxvga>> copy;
             const px* ptr = &*begin;
@@ -670,7 +672,7 @@ namespace jw
             check_error(ax, __PRETTY_FUNCTION__);
         }
 
-        std::vector<px32> vbe2::get_palette_data()
+        std::vector<px32> vbe2::get_palette()
         {
             dpmi::dos_memory<px32> dos_data { 256 };
 
@@ -684,7 +686,7 @@ namespace jw
             reg.call_int(0x10);
             if (info.vbe_version < 0x300) check_error(reg.ax, __PRETTY_FUNCTION__);
             else try { check_error(reg.ax, __PRETTY_FUNCTION__); }
-            catch (const error&) { return vga::get_palette_data(); }
+            catch (const error&) { return vga::get_palette(); }
 
             std::vector<px32> result;
             result.reserve(256);

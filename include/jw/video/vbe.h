@@ -21,6 +21,7 @@ namespace jw
             struct not_supported_in_current_hardware : public error { using error::error; };
             struct invalid_in_current_video_mode : public error { using error::error; };
 
+            using vga::set_palette;
             virtual void init();
             const vbe_info& get_vbe_info();
             const std::map<std::uint_fast16_t,vbe_mode_info>& get_modes() { get_vbe_info(); return modes; }
@@ -32,8 +33,8 @@ namespace jw
             virtual vector2i get_display_start();
             virtual void schedule_display_start(vector2i pos);
             virtual bool get_scheduled_display_start_status();
-            virtual std::uint8_t set_dac_palette_format(std::uint8_t bits_per_channel);
-            virtual std::uint8_t get_dac_palette_format();
+            virtual std::uint8_t set_palette_format(std::uint8_t bits_per_channel);
+            virtual std::uint8_t get_palette_format();
 
         protected:
             void check_error(split_uint16_t ax, const char* function_name);
@@ -47,14 +48,16 @@ namespace jw
 
         struct vbe2 : public vbe
         {
+            using vbe::set_palette;
             virtual void init() override;
             virtual void set_display_start(vector2i pos, bool wait_for_vsync = false) override;
-            virtual void set_palette_data(std::vector<px32>::const_iterator begin, std::vector<px32>::const_iterator end, std::uint8_t first = 0, bool wait_for_vsync = false) override;
-            virtual std::vector<px32> get_palette_data() override;
+            virtual void set_palette(std::vector<px32>::const_iterator begin, std::vector<px32>::const_iterator end, std::size_t first = 0, bool wait_for_vsync = false) override;
+            virtual std::vector<px32> get_palette() override;
         };
 
         struct vbe3 : public vbe2
         {
+            using vbe2::set_palette;
             virtual void init() override;
             virtual void set_mode(vbe_mode m, const crtc_info* crtc = nullptr) override;
             //virtual vbe_mode get_current_mode()
@@ -70,8 +73,8 @@ namespace jw
             virtual bool get_scheduled_display_start_status() override;
             //virtual void enable_stereo()
             //virtual void disable_stereo()
-            virtual std::uint8_t set_dac_palette_format(std::uint8_t bits_per_channel) override;
-            virtual void set_palette_data(std::vector<px32>::const_iterator begin, std::vector<px32>::const_iterator end, std::uint8_t first = 0, bool wait_for_vsync = false) override;
+            virtual std::uint8_t set_palette_format(std::uint8_t bits_per_channel) override;
+            virtual void set_palette(std::vector<px32>::const_iterator begin, std::vector<px32>::const_iterator end, std::size_t first = 0, bool wait_for_vsync = false) override;
             virtual std::uint32_t get_closest_pixel_clock(std::uint32_t desired_clock, std::uint16_t mode_num);
         };
 

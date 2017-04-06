@@ -22,7 +22,7 @@ namespace jw
             reg.call_int(0x10);
         }
 
-        void vga::set_palette_data(std::vector<px32>::const_iterator begin, std::vector<px32>::const_iterator end, std::uint8_t first, bool)
+        void vga::set_palette(std::vector<px32>::const_iterator begin, std::vector<px32>::const_iterator end, std::size_t first, bool)
         {
             dac_write_index.write(first);
             if (dac_bits == 8)
@@ -46,7 +46,7 @@ namespace jw
             }
         }
 
-        std::vector<px32> vga::get_palette_data()
+        std::vector<px32> vga::get_palette()
         {
             std::vector<px32> result { };
             dac_read_index.write(0);
