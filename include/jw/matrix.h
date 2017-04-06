@@ -73,17 +73,17 @@ namespace jw
 
         constexpr auto range_abs(const vector2i& topleft, const vector2i& bottomright) const noexcept { return range(topleft, bottomright - topleft); }
 
-        // bounds checking with automatic wrap-around
-        constexpr auto& operator()(vector2i p) noexcept { return get_wrap(p, m->data()); }
-        constexpr const auto& operator()(vector2i p) const noexcept { return get_wrap(p, m->data()); }
+        // no bounds checking
+        constexpr auto& operator()(vector2i p) noexcept { return get(p, m->data()); }
+        constexpr const auto& operator()(vector2i p) const noexcept { return get(p, m->data()); }
         constexpr const auto& operator()(std::ptrdiff_t x, std::ptrdiff_t y) const noexcept { return (*this)({ x, y }); }
         constexpr auto& operator()(std::ptrdiff_t x, std::ptrdiff_t y) noexcept { return (*this)({ x, y }); }
 
-        // no bounds checking
-        constexpr const auto& get(vector2i p) const noexcept { return get(p, m->data()); }
-        constexpr auto& get(vector2i p) noexcept { return get(p, m->data()); }
-        constexpr const auto& get(std::ptrdiff_t x, std::ptrdiff_t y) const noexcept { return get({ x, y }); }
-        constexpr auto& get(std::ptrdiff_t x, std::ptrdiff_t y) noexcept { return get({ x, y }); }
+        // bounds checking with automatic wrap-around
+        constexpr const auto& at(vector2i p) const noexcept { return get_wrap(p, m->data()); }
+        constexpr auto& at(vector2i p) noexcept { return get_wrap(p, m->data()); }
+        constexpr const auto& at(std::ptrdiff_t x, std::ptrdiff_t y) const noexcept { return at({ x, y }); }
+        constexpr auto& at(std::ptrdiff_t x, std::ptrdiff_t y) noexcept { return at({ x, y }); }
 
         friend constexpr bool operator==(const matrix_range& lhs, const matrix_range& rhs) noexcept { return lhs.m.data() == rhs.m.data() && lhs.pos == rhs.pos && lhs.dim == rhs.dim; }
         friend constexpr bool operator!=(const matrix_range& lhs, const matrix_range& rhs) noexcept { return !(lhs == rhs); }
@@ -91,13 +91,13 @@ namespace jw
         constexpr void fill(const auto& fill) noexcept
         {
             for (auto y = 0; y < height(); ++y)
-                std::fill_n(&(*this).get(0, y), width(), fill);
+                std::fill_n(&(*this)(0, y), width(), fill);
         }
 
         constexpr void assign(const auto& copy) noexcept
         {
             for (auto y = 0; y < std::min(height(), copy.height()); ++y)
-                std::copy_n(&copy.get(0, y), std::min(width(), copy.width()), &(*this).get(0, y));
+                std::copy_n(&copy.get(0, y), std::min(width(), copy.width()), &(*this)(0, y));
         }
 
         constexpr auto begin() noexcept { return iterator { *this, { 0, 0 }}; }
