@@ -18,10 +18,10 @@ namespace jw
 
         struct vga : public bios
         {
-            virtual void set_palette(std::vector<px32>::const_iterator begin, std::vector<px32>::const_iterator end, std::size_t first = 0, bool wait_for_vsync = false);
+            virtual void set_palette(const px32* begin, const px32* end, std::size_t first = 0, bool wait_for_vsync = false);
             virtual void set_palette(const std::vector<px32>& data, std::size_t first = 0, bool wait_for_vsync = false)
             {
-                set_palette(data.cbegin(), data.cend(), first, wait_for_vsync);
+                set_palette(&data.front(), &data.back(), first, wait_for_vsync);
             }
 
             virtual std::vector<px32> get_palette();

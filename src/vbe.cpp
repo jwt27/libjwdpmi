@@ -583,7 +583,7 @@ namespace jw
             return reg.bh;
         }
 
-        void vbe2::set_palette(std::vector<px32>::const_iterator begin, std::vector<px32>::const_iterator end, std::size_t first, bool wait_for_vsync)
+        void vbe2::set_palette(const px32* begin, const px32* end, std::size_t first, bool wait_for_vsync)
         {
             //return vga::set_palette(begin, end, first, wait_for_vsync);
             auto size = std::min(static_cast<std::size_t>(end - begin), std::size_t { 256 });
@@ -642,7 +642,7 @@ namespace jw
             }
         }
 
-        void vbe3::set_palette(std::vector<px32>::const_iterator begin, std::vector<px32>::const_iterator end, std::size_t first, bool wait_for_vsync)
+        void vbe3::set_palette(const px32* begin, const px32* end, std::size_t first, bool wait_for_vsync)
         {
             if (!vbe3_pm) return vbe2::set_palette(begin, end, first, wait_for_vsync);
 
