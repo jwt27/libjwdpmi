@@ -430,7 +430,7 @@ namespace jw
             if (!vbe2_pm) return vbe::set_display_start(pos, wait_for_vsync);
 
             auto bps = (mode.use_lfb_mode && info.vbe_version >= 0x300) ? mode_info->linear_bytes_per_scanline : mode_info->bytes_per_scanline;
-            auto start = pos.x + pos.y * bps;
+            auto start = pos.x * (mode_info->bits_per_pixel / 8) + pos.y * bps;
             if (mode_info->bits_per_pixel >= 8) start = ((start & 3) << 30 | (start >> 2)); 
             split_uint32_t split_start { start };
 
@@ -482,13 +482,13 @@ namespace jw
 
         void vbe::schedule_display_start(vector2i pos)
         {
-            return set_display_start(pos, true);
+            return set_display_start(pos, false);
         }
 
         void vbe3::schedule_display_start(vector2i pos)
         { 
             auto bps = mode.use_lfb_mode ? mode_info->linear_bytes_per_scanline : mode_info->bytes_per_scanline;
-            auto start = pos.x + pos.y * bps;
+            auto start = pos.x * (mode_info->bits_per_pixel / 8) + pos.y * bps;
 
             if (vbe3_pm)
             {
