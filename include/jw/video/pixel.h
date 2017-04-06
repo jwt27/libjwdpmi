@@ -179,33 +179,51 @@ namespace jw
             template <typename U> constexpr operator pixel<U>() const noexcept { return cast<U>(); }
 
             template <typename U> constexpr pixel& operator=(const pixel<U>& other) noexcept { return blend(other); }
+            template <typename U> constexpr pixel& operator=(pixel<U>&& other) noexcept { return *this = std::move(other.cast<P>()); }
             constexpr pixel& operator=(const pixel& other) noexcept { return blend(other); }
-            template <typename U> constexpr pixel& operator=(pixel<U>&& other) noexcept { return *this = static_cast<pixel&&>(other); }
-            constexpr pixel& operator=(pixel&& o) noexcept = default;// { new(this) pixel { std::move(o) }; }
+            constexpr pixel& operator=(pixel&& o) noexcept = default;
+
+            
 
             template <typename U, std::enable_if_t<(std::is_integral<typename U::T>::value && std::is_integral<typename P::T>::value), bool> = { }> 
             static constexpr std::uint32_t max(auto max) noexcept { return max + 1; }
             template <typename U, std::enable_if_t<(std::is_floating_point<typename U::T>::value || std::is_floating_point<typename P::T>::value), bool> = { }> 
             static constexpr float max(auto max) noexcept { return max; }
 
-            template <typename U, std::enable_if_t<(std::is_floating_point<typename U::T>::value || std::is_floating_point<typename P::T>::value), bool> = { }>
-            constexpr pixel& blend(const pixel<U>& other)
+            template <typename U, typename V, std::enable_if_t<U::has_alpha && V::has_alpha && (std::is_floating_point<typename U::T>::value || std::is_floating_point<typename V::T>::value), bool> = { }>
+            constexpr pixel& blend(const pixel<V>& other)
             {
-                pixel<std::conditional_t<std::is_floating_point<U>::value, U, P>> src { other };
-                pixel<std::conditional_t<std::is_floating_point<P>::value, P, U>> dst { *this };
-                //auto ta = src.a + dst.a * (1 - src.a);
-                //dst.b = (src.b * src.a + dst.b * dst.a * (1 - src.a)) / ta;
-                //dst.g = (src.g * src.a + dst.g * dst.a * (1 - src.a)) / ta;
-                //dst.r = (src.r * src.a + dst.r * dst.a * (1 - src.a)) / ta;
-                //dst.a = ta;
-                return *this = std::move(src);
+                pixel<std::conditional_t<std::is_floating_point<V>::value, V, U>> src { other };
+                pixel<std::conditional_t<std::is_floating_point<V>::value, V, U>> dst { *this };
+                dst.b = src.b * src.a + dst.b * (src.ax - src.a);
+                dst.g = src.g * src.a + dst.g * (src.ax - src.a);
+                dst.r = src.r * src.a + dst.r * (src.ax - src.a);
+                dst.a = src.a * src.a + dst.a * (src.ax - src.a);
+                return *this = std::move(dst);
             }
 
-            template <typename U, std::enable_if_t<(std::is_integral<typename U::T>::value && std::is_integral<typename P::T>::value), bool> = { }> 
-            constexpr pixel& blend(const pixel<U>& o)
+            template <typename U, typename V, std::enable_if_t<!V::has_alpha, bool> = { }>
+            constexpr pixel& blend(const pixel<V>& other) 
             {
-                return *this = std::move(o);
+                auto src = other.cast<P>();
+                this->b = src.b;
+                this->g = src.g;
+                this->r = src.r;
+                return *this;
             }
+
+            template <typename U, typename V, std::enable_if_t<(U::has_alpha && V::has_alpha && std::is_integral<typename U::T>::value && std::is_integral<typename V::T>::value), bool> = { }> 
+            constexpr pixel& blend(const pixel<V>& other)
+            {
+                auto src = other.cast<P>();
+                this->b = (src.b * src.a + this->b * (src.ax - src.a)) / (P::rx + 1);
+                this->g = (src.g * src.a + this->g * (src.ax - src.a)) / (P::gx + 1);
+                this->r = (src.r * src.a + this->r * (src.ax - src.a)) / (P::bx + 1);
+                this->a = (src.a * src.a + this->a * (src.ax - src.a)) / (P::ax + 1);
+                return *this;
+            }
+
+            constexpr pixel& blend(const auto& other) { return blend<P>(other); }
         };
 
         struct [[gnu::packed]] px8
