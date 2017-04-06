@@ -158,10 +158,10 @@ namespace jw
             { 
                 return pixel<U> 
                 { 
-                    static_cast<typename U::T>(P::r * max<U, P>(U::rx) / max<U, P>(P::rx)),
-                    static_cast<typename U::T>(P::g * max<U, P>(U::gx) / max<U, P>(P::gx)),
-                    static_cast<typename U::T>(P::b * max<U, P>(U::bx) / max<U, P>(P::bx)),
-                    static_cast<typename U::T>(P::a * max<U, P>(U::ax) / max<U, P>(P::ax))
+                    static_cast<typename U::T>(this->r * max<U>(U::rx) / max<U>(P::rx)),
+                    static_cast<typename U::T>(this->g * max<U>(U::gx) / max<U>(P::gx)),
+                    static_cast<typename U::T>(this->b * max<U>(U::bx) / max<U>(P::bx)),
+                    static_cast<typename U::T>(this->a * max<U>(U::ax) / max<U>(P::ax))
                 };
             };
 
@@ -169,9 +169,9 @@ namespace jw
             { 
                 return pixel<U> 
                 { 
-                    static_cast<typename U::T>(P::r * max<U, P>(U::rx) / max<U, P>(P::rx)),
-                    static_cast<typename U::T>(P::g * max<U, P>(U::gx) / max<U, P>(P::gx)),
-                    static_cast<typename U::T>(P::b * max<U, P>(U::bx) / max<U, P>(P::bx))
+                    static_cast<typename U::T>(this->r * max<U>(U::rx) / max<U>(P::rx)),
+                    static_cast<typename U::T>(this->g * max<U>(U::gx) / max<U>(P::gx)),
+                    static_cast<typename U::T>(this->b * max<U>(U::bx) / max<U>(P::bx))
                 };
             };
 
@@ -183,9 +183,9 @@ namespace jw
             template <typename U> constexpr pixel& operator=(pixel<U>&& other) noexcept { return *this = static_cast<pixel&&>(other); }
             constexpr pixel& operator=(pixel&& o) noexcept = default;// { new(this) pixel { std::move(o) }; }
 
-            template <typename U, typename V, std::enable_if_t<(std::is_integral<typename U::T>::value && std::is_integral<typename V::T>::value), bool> = { }> 
+            template <typename U, std::enable_if_t<(std::is_integral<typename U::T>::value && std::is_integral<typename P::T>::value), bool> = { }> 
             static constexpr std::uint32_t max(auto max) noexcept { return max + 1; }
-            template <typename U, typename V, std::enable_if_t<(std::is_floating_point<typename U::T>::value || std::is_floating_point<typename V::T>::value), bool> = { }> 
+            template <typename U, std::enable_if_t<(std::is_floating_point<typename U::T>::value || std::is_floating_point<typename P::T>::value), bool> = { }> 
             static constexpr float max(auto max) noexcept { return max; }
 
             template <typename U, std::enable_if_t<(std::is_floating_point<typename U::T>::value || std::is_floating_point<typename P::T>::value), bool> = { }>
