@@ -486,7 +486,9 @@ namespace jw
         }
 
         void vbe3::schedule_display_start(vector2i pos)
-        { 
+        {
+            if (!mode_info->attr.triple_buffering_supported) return vbe2::schedule_display_start(pos);
+
             auto bps = mode.use_lfb_mode ? mode_info->linear_bytes_per_scanline : mode_info->bytes_per_scanline;
             auto start = pos.x * (mode_info->bits_per_pixel / 8) + pos.y * bps;
 
