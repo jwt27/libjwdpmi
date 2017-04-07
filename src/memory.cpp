@@ -164,6 +164,8 @@ namespace jw
             auto addr_start = round_down_to_page_size(physical_address);
             auto offset = physical_address - addr_start;
             auto pages = round_up_to_page_size(size) / get_page_size();
+            auto offset_in_block = round_up_to_page_size(addr) - addr;
+            offset += offset_in_block;
             addr += offset;
             size -= offset;
             dpmi_error_code error;
@@ -173,7 +175,7 @@ namespace jw
                 : "=@ccc" (c)
                 , "=a" (error)
                 : "a" (0x0508)
-                , "b" (0)
+                , "b" (offset_in_block)
                 , "c" (pages)
                 , "d" (addr_start)
                 , "S" (handle)
@@ -186,8 +188,9 @@ namespace jw
             auto addr_start = round_down_to_page_size(dos_linear_address);
             offset = dos_linear_address - addr_start;
             auto pages = round_up_to_page_size(size) / get_page_size();
-            addr += offset;
-            size -= offset;
+            auto offset_in_block = round_up_to_page_size(addr) - addr;
+            addr += offset + offset_in_block;
+            size -= offset + offset_in_block;
             dpmi_error_code error;
             bool c;
             asm volatile(
@@ -195,7 +198,7 @@ namespace jw
                 : "=@ccc" (c)
                 , "=a" (error)
                 : "a" (0x0509)
-                , "b" (0)
+                , "b" (offset_in_block)
                 , "c" (pages)
                 , "d" (addr_start)
                 , "S" (handle)
