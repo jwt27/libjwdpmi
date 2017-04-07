@@ -101,9 +101,9 @@ namespace jw
 
             auto get_selector() const noexcept { return sel; }
             void set_base(auto b) { set_base(sel, b); }
-            auto [[gnu::pure]] get_base() const { return get_base(sel); }
+            [[gnu::pure]] auto get_base() const { return get_base(sel); }
             void set_limit(auto l) { set_limit(sel, l); }
-            auto [[gnu::pure]] get_limit() const { return get_limit(sel); }
+            [[gnu::pure]] auto get_limit() const { return get_limit(sel); }
             ldt_access_rights get_access_rights();
             void set_access_rights(const auto& r) { r.set(sel); }
             
