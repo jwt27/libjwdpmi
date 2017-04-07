@@ -232,11 +232,27 @@ namespace jw
             }
 
             template<typename V, std::enable_if_t<!P::has_alpha && V::has_alpha, bool> = { }>
-            constexpr pixel& blend(const pixel<V>& src)
+            constexpr pixel& blend(const pixel<V>& other)
             {
-                this->b = ((src.b * max<V>(P::bx) * src.a) / max<V>(V::bx) + this->b * (src.ax - src.a)) / max<V>(V::ax);
-                this->g = ((src.g * max<V>(P::gx) * src.a) / max<V>(V::gx) + this->g * (src.ax - src.a)) / max<V>(V::ax);
-                this->r = ((src.r * max<V>(P::rx) * src.a) / max<V>(V::rx) + this->r * (src.ax - src.a)) / max<V>(V::ax);
+                using vec = vector<decltype(max<V>(P::ax))>;
+                vec maxp { max<V>(P::rx), max<V>(P::gx), max<V>(P::bx), 0 };
+                vec maxv { max<V>(V::rx), max<V>(V::gx), max<V>(V::bx), max<V>(V::ax) };
+                vec maxa { max<V>(V::ax), max<V>(V::ax), max<V>(V::ax), max<V>(V::ax) };
+                vec ax { V::ax, V::ax, V::ax, V::ax };
+
+                vec src { other.r, other.g, other.b, other.a };
+                vec dest { this->r, this->g, this->b, 0 };
+                vec srca { src.a, src.a, src.a, src.a };
+
+                src.v *= maxp.v;
+                src.v *= srca.v;
+                src.v /= maxv.v;
+                ax.v -= srca.v;
+                dest.v *= ax.v;
+                dest.v += src.v;
+                dest.v /= maxa.v;
+                return *this = pixel { dest.r, dest.g, dest.b };
+
                 return *this;
             }
 
