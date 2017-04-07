@@ -585,7 +585,6 @@ namespace jw
             {
                 try
                 {
-                    if (!new_alloc_supported) device_map_supported = false;
                     if (device_map_supported)
                     {
                         capabilities c { };
@@ -593,13 +592,9 @@ namespace jw
                     }
                     if (device_map_supported)
                     {
-                        base::allocate(false, true);
-                        if (new_alloc_supported)
-                        {
-                            new_alloc(physical_address);
-                            return;
-                        }
-                        else device_map_supported = false;
+                        base::allocate(false, false);
+                        new_alloc(physical_address);
+                        return;
                     }
                     old_alloc(physical_address);
                 }
@@ -698,7 +693,6 @@ namespace jw
             {
                 try
                 {
-                    if (!new_alloc_supported) dos_map_supported = false;
                     if (dos_map_supported)
                     {
                         capabilities c { };
@@ -706,13 +700,9 @@ namespace jw
                     }
                     if (dos_map_supported)
                     {
-                        base::allocate(false, true);
-                        if (new_alloc_supported)
-                        {
-                            new_alloc(dos_linear_address);
-                            return;
-                        } 
-                        else dos_map_supported = false;
+                        base::allocate(false, false);
+                        new_alloc(dos_linear_address);
+                        return;
                     }
                     addr = dos_linear_address;
                 }
