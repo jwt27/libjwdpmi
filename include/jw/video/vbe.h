@@ -38,8 +38,9 @@ namespace jw
 
             std::size_t get_bits_per_pixel()
             {
-                auto l = get_scanline_length();
-                //std::size_t;
+                std::size_t pixels, bytes;
+                std::tie(pixels, bytes, std::ignore) = get_scanline_length();
+                return (bytes / pixels) * 8;
             }
 
         protected:
