@@ -11,7 +11,8 @@ namespace jw
     template<typename U> constexpr inline auto remainder(double a, U b) { return __builtin_remainder(a, b); }
     template<typename U> constexpr inline auto remainder(float a, U b) { return __builtin_remainderf(a, b); }
 
-    template<typename T, typename U> constexpr auto copysign(T a, U b) { return std::signbit(a) != std::signbit(b)? -a : a; }
+    //template<typename T, typename U> constexpr auto copysign(T a, U b) { return std::signbit(a) != std::signbit(b)? -a : a; }
+    template<typename T, typename U> constexpr auto copysign(T a, U b) { return (a > 0) != (b > 0) ? -a : a; }
     template<typename U> constexpr inline auto copysign(long double a, U b) { return __builtin_copysignl(a, b); }
     template<typename U> constexpr inline auto copysign(double a, U b) { return __builtin_copysign(a, b); }
     template<typename U> constexpr inline auto copysign(float a, U b) { return __builtin_copysignf(a, b); }

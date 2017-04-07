@@ -63,7 +63,7 @@ namespace jw
         template<typename U> constexpr auto angle(const vector2<U>& other) const noexcept { return std::acos((*this * other) / (magnitude() * other.magnitude())); }
         constexpr auto angle() const noexcept { return angle(right()); }
 
-        template<typename U> constexpr auto& scale(const vector2<U>& other) noexcept { x *= other.x; y *= other.y; return *this; }
+        template<typename U> constexpr auto& scale(const vector2<U>& other) noexcept { auto lhs = upcast<U>(); lhs.v *= other.upcast<U>().v; return *this = lhs; }
         template<typename U> constexpr auto scaled(const vector2<U>& other) const noexcept { return upcast<U>().scale(other); }
 
         constexpr auto& normalize() noexcept { return *this /= magnitude(); }
@@ -112,8 +112,7 @@ namespace jw
 
         template<typename U> constexpr auto& copysign(const vector2<U>& other) noexcept 
         {
-            x = jw::copysign(x, static_cast<T>(other.x));
-            y = jw::copysign(y, static_cast<T>(other.y));
+            v = jw::copysign(upcast<U>().v, other.upcast<U>().v);
             return *this;
         }
 

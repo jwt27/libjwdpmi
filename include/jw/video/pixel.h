@@ -239,7 +239,7 @@ namespace jw
             }
 
             template<typename V, std::enable_if_t<P::has_alpha && V::has_alpha, bool> = { }>
-            pixel& blend(const pixel<V>& other)
+            constexpr pixel& blend(const pixel<V>& other)
             {
                 using vec = vector<decltype(max<V>(V::ax))>;
                 vec maxp { max<V>(P::rx), max<V>(P::gx), max<V>(P::bx), max<V>(P::ax) };
