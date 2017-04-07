@@ -46,12 +46,7 @@ namespace jw
         struct alignas(0x10) bgra_ffff
         {
             using T = float;
-            using V [[gnu::vector_size(4 * sizeof(T)), gnu::may_alias]] = T;
-            union
-            {
-                V vector;
-                struct { T b, g, r, a; };
-            };
+            T b, g, r, a;
 
             bgra_ffff() noexcept = default;
             constexpr bgra_ffff(T cr, T cg, T cb, T ca) noexcept : b(cb), g(cg), r(cr), a(ca) { }
@@ -67,12 +62,7 @@ namespace jw
         struct alignas(4) bgra_8888
         {
             using T = std::uint8_t;
-            using V [[gnu::vector_size(4 * sizeof(T)), gnu::may_alias]] = T;
-            union
-            {
-                V vector;
-                struct { T b, g, r, a; };
-            };
+            T b, g, r, a;
 
             bgra_8888() noexcept = default;
             constexpr bgra_8888(T cr, T cg, T cb, T ca) noexcept : b(cb), g(cg), r(cr), a(ca) { }
@@ -82,7 +72,6 @@ namespace jw
             static constexpr T bx = 255;
             static constexpr T ax = 255;
             static constexpr bool has_alpha = true;
-            static constexpr bool has_vector = true;
         };
 
         struct [[gnu::packed]] bgra_8880
@@ -98,24 +87,15 @@ namespace jw
             static constexpr T bx = 255;
             static constexpr T ax = 0;
             static constexpr bool has_alpha = false;
-            static constexpr bool has_vector = false;
         };
 
-        struct bgra_6668
+        struct [[gnu::packed]] bgra_6668
         {
             using T = unsigned;
-            using V [[gnu::vector_size(4), gnu::may_alias]] = std::uint8_t;
-            union
-            {
-                V vector;
-                struct [[gnu::packed]]
-                {
-                    T b : 6, : 2;
-                    T g : 6, : 2;
-                    T r : 6, : 2;
-                    T a : 8;
-                };
-            };
+            T b : 6, : 2;
+            T g : 6, : 2;
+            T r : 6, : 2;
+            T a : 8;
 
             bgra_6668() noexcept = default;
             constexpr bgra_6668(T cr, T cg, T cb, T ca) noexcept : b(cb), g(cg), r(cr), a(ca) { }
@@ -125,7 +105,6 @@ namespace jw
             static constexpr T bx = 63;
             static constexpr T ax = 255;
             static constexpr bool has_alpha = true;
-            static constexpr bool has_vector = true;
         };
 
         struct alignas(2) [[gnu::packed]] bgra_5650
@@ -143,7 +122,6 @@ namespace jw
             static constexpr T bx = 31;
             static constexpr T ax = 0;
             static constexpr bool has_alpha = false;
-            static constexpr bool has_vector = false;
         };
 
         struct alignas(2) [[gnu::packed]] bgra_5551
@@ -162,7 +140,6 @@ namespace jw
             static constexpr T bx = 31;
             static constexpr T ax = 1;
             static constexpr bool has_alpha = true;
-            static constexpr bool has_vector = false;
         };
 
         struct px { };
