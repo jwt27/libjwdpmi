@@ -178,7 +178,7 @@ namespace jw
                 using V [[gnu::vector_size(4 * sizeof(T))]] = T;
                 V v;
                 struct { T b, g, r, a; };
-                constexpr vector(T cr, T cg, T cb, T ca) noexcept : b(cb), g(cg), r(cr), a(ca) { }
+                constexpr vector(auto cr, auto cg, auto cb, auto ca) noexcept : b(cb), g(cg), r(cr), a(ca) { }
             };
 
             constexpr pixel() noexcept = default;
@@ -188,24 +188,29 @@ namespace jw
             constexpr pixel(pixel&& p) noexcept = default;
 
             template <typename U> constexpr pixel<U> cast(std::true_type) const noexcept
-            { 
-                return pixel<U> 
-                { 
-                    static_cast<typename U::T>(this->r * max<U>(U::rx) / max<U>(P::rx)),
-                    static_cast<typename U::T>(this->g * max<U>(U::gx) / max<U>(P::gx)),
-                    static_cast<typename U::T>(this->b * max<U>(U::bx) / max<U>(P::bx)),
-                    static_cast<typename U::T>(this->a * max<U>(U::ax) / max<U>(P::ax))
-                };
+            {
+                using vec = vector<decltype(max<U>(U::ax))>;
+                vec maxp { max<U>(P::rx), max<U>(P::gx), max<U>(P::bx), max<U>(P::ax) };
+                vec maxu { max<U>(U::rx), max<U>(U::gx), max<U>(U::bx), max<U>(U::ax) };
+                vec src { this->r, this->g, this->b, this->a };
+                src.v *= maxu.v;
+                src.v /= maxp.v;
+
+                using UT = typename U::T;
+                return pixel<U> { static_cast<UT>(src.r), static_cast<UT>(src.g), static_cast<UT>(src.b), static_cast<UT>(src.a) };
             };
 
             template <typename U> constexpr pixel<U> cast(std::false_type) const noexcept
             { 
-                return pixel<U> 
-                { 
-                    static_cast<typename U::T>(this->r * max<U>(U::rx) / max<U>(P::rx)),
-                    static_cast<typename U::T>(this->g * max<U>(U::gx) / max<U>(P::gx)),
-                    static_cast<typename U::T>(this->b * max<U>(U::bx) / max<U>(P::bx))
-                };
+                using vec = vector<decltype(max<U>(U::ax))>;
+                vec maxp { max<U>(P::rx), max<U>(P::gx), max<U>(P::bx), 1 };
+                vec maxu { max<U>(U::rx), max<U>(U::gx), max<U>(U::bx), 0 };
+                vec src { this->r, this->g, this->b, 0 };
+                src.v *= maxu.v;
+                src.v /= maxp.v;
+
+                using UT = typename U::T;
+                return pixel<U> { static_cast<UT>(src.r), static_cast<UT>(src.g), static_cast<UT>(src.b) };
             };
 
             template <typename U> constexpr pixel<U> cast() const noexcept { return cast<U>(std::is_void<std::conditional_t<P::has_alpha, void, bool>> { }); }
@@ -234,7 +239,7 @@ namespace jw
             template<typename V, std::enable_if_t<!P::has_alpha && V::has_alpha, bool> = { }>
             constexpr pixel& blend(const pixel<V>& other)
             {
-                using vec = vector<decltype(max<V>(P::ax))>;
+                using vec = vector<decltype(max<V>(V::ax))>;
                 vec maxp { max<V>(P::rx), max<V>(P::gx), max<V>(P::bx), 0 };
                 vec maxv { max<V>(V::rx), max<V>(V::gx), max<V>(V::bx), max<V>(V::ax) };
                 vec maxa { max<V>(V::ax), max<V>(V::ax), max<V>(V::ax), max<V>(V::ax) };
@@ -259,7 +264,7 @@ namespace jw
             template<typename V, std::enable_if_t<P::has_alpha && V::has_alpha, bool> = { }>
             pixel& blend(const pixel<V>& other)
             {
-                using vec = vector<decltype(max<V>(P::ax))>;
+                using vec = vector<decltype(max<V>(V::ax))>;
                 vec maxp { max<V>(P::rx), max<V>(P::gx), max<V>(P::bx), max<V>(P::ax) };
                 vec maxv { max<V>(V::rx), max<V>(V::gx), max<V>(V::bx), max<V>(V::ax) };
                 vec maxa { max<V>(V::ax), max<V>(V::ax), max<V>(V::ax), max<V>(V::ax) };
