@@ -54,10 +54,10 @@ namespace jw
                 static const auto& get_threads() { return threads; }
 
             private:
-                [[gnu::noinline, gnu::noclone, gnu::no_stack_limit, gnu::hot]] static void context_switch() noexcept;
-                [[gnu::hot]] static void thread_switch(thread_ptr = nullptr);
-                [[gnu::noinline, hot]] static void set_next_thread() noexcept;
-                [[gnu::hot]] static void check_exception();                      
+                [[gnu::noinline, gnu::noclone, gnu::no_stack_limit]] static void context_switch() noexcept;
+                static void thread_switch(thread_ptr = nullptr);
+                [[gnu::noinline]] static void set_next_thread() noexcept;
+                static void check_exception();
 
                 [[gnu::used]] static void run_thread() noexcept;
 
