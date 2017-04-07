@@ -180,19 +180,20 @@ namespace jw
                 vbe2_call_set_window = reinterpret_cast<std::uintptr_t>(ptr) + *reinterpret_cast<std::uint16_t*>(ptr + 0);
                 vbe2_call_set_display_start = reinterpret_cast<std::uintptr_t>(ptr) + *reinterpret_cast<std::uint16_t*>(ptr + 2);
                 vbe2_call_set_palette = reinterpret_cast<std::uintptr_t>(ptr) + *reinterpret_cast<std::uint16_t*>(ptr + 4);
-            }
 
-            auto* io_list = reinterpret_cast<std::uint16_t*>(vbe2_pm_interface.data());
-            if (*io_list != 0)
-            {
-                while (*io_list != 0xffff) ++io_list;
-                if (*++io_list != 0xffff)
+                auto io_list_ptr = reinterpret_cast<std::uintptr_t>(ptr) + *reinterpret_cast<std::uint16_t*>(ptr + 0);
+                auto* io_list = reinterpret_cast<std::uint16_t*>(io_list_ptr);
+                if (*io_list != 0)
                 {
-                    auto* addr = reinterpret_cast<std::uintptr_t*>(io_list);
-                    auto* size = io_list + 2;
-                    vbe2_mmio = std::make_unique<dpmi::device_memory<byte>>(*size, *addr);
-                    auto ar = dpmi::ldt_access_rights { dpmi::get_ds() };
-                    vbe2_mmio->get_ldt_entry().lock()->set_access_rights(ar);
+                    while (*io_list != 0xffff) ++io_list;
+                    if (*++io_list != 0xffff)
+                    {
+                        auto* addr = reinterpret_cast<std::uintptr_t*>(io_list);
+                        auto* size = io_list + 2;
+                        vbe2_mmio = std::make_unique<dpmi::device_memory<byte>>(*size, *addr);
+                        auto ar = dpmi::ldt_access_rights { dpmi::get_ds() };
+                        vbe2_mmio->get_ldt_entry().lock()->set_access_rights(ar);
+                    }
                 }
             }
             vbe2_pm = true;
