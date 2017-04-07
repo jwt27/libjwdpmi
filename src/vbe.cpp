@@ -176,13 +176,12 @@ namespace jw
                 dpmi::ldt_entry::set_limit(dpmi::get_cs(), cs_limit);
 
             {
-                auto* ptr = vbe2_pm_interface.data();
-                vbe2_call_set_window = reinterpret_cast<std::uintptr_t>(ptr) + *reinterpret_cast<std::uint16_t*>(ptr + 0);
-                vbe2_call_set_display_start = reinterpret_cast<std::uintptr_t>(ptr) + *reinterpret_cast<std::uint16_t*>(ptr + 2);
-                vbe2_call_set_palette = reinterpret_cast<std::uintptr_t>(ptr) + *reinterpret_cast<std::uint16_t*>(ptr + 4);
+                auto* ptr = reinterpret_cast<std::uint16_t*>(vbe2_pm_interface.data());
+                vbe2_call_set_window = reinterpret_cast<std::uintptr_t>(ptr) + *(ptr + 0);
+                vbe2_call_set_display_start = reinterpret_cast<std::uintptr_t>(ptr) + *(ptr + 1);
+                vbe2_call_set_palette = reinterpret_cast<std::uintptr_t>(ptr) + *(ptr + 2);
 
-                auto io_list_ptr = reinterpret_cast<std::uintptr_t>(ptr) + *reinterpret_cast<std::uint16_t*>(ptr + 0);
-                auto* io_list = reinterpret_cast<std::uint16_t*>(io_list_ptr);
+                auto* io_list = reinterpret_cast<std::uint16_t*>(reinterpret_cast<std::uintptr_t>(ptr) + *(ptr + 3));
                 if (*io_list != 0)
                 {
                     while (*io_list != 0xffff) ++io_list;
