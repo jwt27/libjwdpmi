@@ -522,6 +522,8 @@ namespace jw
 
         bool vbe3::get_scheduled_display_start_status()
         {
+            if (!mode_info->attr.triple_buffering_supported) return vbe2::get_scheduled_display_start_status();
+
             if (vbe3_pm)
             {
                 std::uint16_t ax, cx;
