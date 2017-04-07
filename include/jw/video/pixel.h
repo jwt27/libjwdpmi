@@ -46,7 +46,7 @@ namespace jw
         struct alignas(0x10) bgra_ffff
         {
             using T = float;
-            using V [[gnu::vector_size(4 * sizeof(T))]] = T;
+            using V [[gnu::vector_size(4 * sizeof(T)), gnu::may_alias]] = T;
             union
             {
                 V vector;
@@ -66,7 +66,7 @@ namespace jw
         struct alignas(4) bgra_8888
         {
             using T = std::uint8_t;
-            using V [[gnu::vector_size(4 * sizeof(T))]] = T;
+            using V [[gnu::vector_size(4 * sizeof(T)), gnu::may_alias]] = T;
             union
             {
                 V vector;
@@ -101,7 +101,7 @@ namespace jw
         struct bgra_6668
         {
             using T = unsigned;
-            using V [[gnu::vector_size(4)]] = std::uint8_t;
+            using V [[gnu::vector_size(4), gnu::may_alias]] = std::uint8_t;
             union
             {
                 V vector;
