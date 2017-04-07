@@ -40,7 +40,7 @@ namespace jw
             {
                 std::size_t pixels, bytes;
                 std::tie(pixels, bytes, std::ignore) = get_scanline_length();
-                return (bytes / pixels) * 8;
+                return bytes * 8 / pixels;
             }
 
             std::size_t get_lfb_size_in_pixels()
