@@ -251,7 +251,7 @@ namespace jw
                 dest.v *= ax.v;
                 dest.v += src.v;
                 dest.v /= maxa.v;
-                return *this = pixel { dest.r, dest.g, dest.b };
+                return *this = pixel { static_cast<T>(dest.r), static_cast<T>(dest.g), static_cast<T>(dest.b) };
 
                 return *this;
             }
@@ -276,7 +276,7 @@ namespace jw
                 dest.v *= ax.v;
                 dest.v += src.v;
                 dest.v /= maxa.v;
-                return *this = pixel { dest.r, dest.b, dest.g, dest.a };
+                return *this = pixel { static_cast<T>(dest.r), static_cast<T>(dest.g), static_cast<T>(dest.b), static_cast<T>(dest.a) };
             }
 
             constexpr pixel& blend(const auto& other) { return blend<P>(other); }
