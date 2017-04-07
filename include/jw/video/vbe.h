@@ -26,15 +26,21 @@ namespace jw
             const vbe_info& get_vbe_info();
             const std::map<std::uint_fast16_t,vbe_mode_info>& get_modes() { get_vbe_info(); return modes; }
             virtual void set_mode(vbe_mode m, const crtc_info* crtc = nullptr) override;
-            virtual std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> set_scanline_length(std::uint32_t width, bool width_in_pixels = true);
-            virtual std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> get_scanline_length();
-            virtual std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> get_max_scanline_length();
+            virtual std::tuple<std::size_t, std::size_t, std::size_t> set_scanline_length(std::size_t width, bool width_in_pixels = true);
+            virtual std::tuple<std::size_t, std::size_t, std::size_t> get_scanline_length();
+            virtual std::tuple<std::size_t, std::size_t, std::size_t> get_max_scanline_length();
             virtual void set_display_start(vector2i pos, bool wait_for_vsync = false);
             virtual vector2i get_display_start();
             virtual void schedule_display_start(vector2i pos);
             virtual bool get_scheduled_display_start_status();
             virtual std::uint8_t set_palette_format(std::uint8_t bits_per_channel);
             virtual std::uint8_t get_palette_format();
+
+            std::size_t get_bits_per_pixel()
+            {
+                auto l = get_scanline_length();
+                //std::size_t;
+            }
 
         protected:
             void check_error(split_uint16_t ax, const char* function_name);
@@ -65,8 +71,8 @@ namespace jw
             //virtual restore_state()
             //virtual std::uint32_t set_window()
             //virtual std::uint32_t get_window()
-            virtual std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> set_scanline_length(std::uint32_t width, bool width_in_pixels = true) override;
-            virtual std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> get_max_scanline_length() override;
+            virtual std::tuple<std::size_t, std::size_t, std::size_t> set_scanline_length(std::size_t width, bool width_in_pixels = true) override;
+            virtual std::tuple<std::size_t, std::size_t, std::size_t> get_max_scanline_length() override;
             virtual void set_display_start(vector2i pos, bool wait_for_vsync = false) override;
             virtual void schedule_display_start(vector2i pos) override;
             //virtual void schedule_stereo_display_start(bool wait_for_vsync = false)

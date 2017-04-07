@@ -338,7 +338,7 @@ namespace jw
             dac_bits = 6;
         } 
 
-        std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> vbe::set_scanline_length(std::uint32_t width, bool width_in_pixels)
+        std::tuple<std::size_t, std::size_t, std::size_t> vbe::set_scanline_length(std::size_t width, bool width_in_pixels)
         {
             dpmi::realmode_registers reg { };
             reg.ax = 0x4f06;
@@ -352,7 +352,7 @@ namespace jw
             return { pixels_per_scanline, bytes_per_scanline, max_scanlines };
         }
 
-        std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> vbe3::set_scanline_length(std::uint32_t width, bool width_in_pixels)
+        std::tuple<std::size_t, std::size_t, std::size_t> vbe3::set_scanline_length(std::size_t width, bool width_in_pixels)
         {
             if (!vbe3_pm) return vbe2::set_scanline_length(width, width_in_pixels);
 
@@ -371,7 +371,7 @@ namespace jw
             return { pixels_per_scanline, bytes_per_scanline, max_scanlines };
         }
 
-        std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> vbe::get_scanline_length()
+        std::tuple<std::size_t, std::size_t, std::size_t> vbe::get_scanline_length()
         {
             dpmi::realmode_registers reg { };
             reg.ax = 0x4f06;
@@ -384,7 +384,7 @@ namespace jw
             return { pixels_per_scanline, bytes_per_scanline, max_scanlines };
         }
 
-        std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> vbe::get_max_scanline_length()
+        std::tuple<std::size_t, std::size_t, std::size_t> vbe::get_max_scanline_length()
         {
             dpmi::realmode_registers reg { };
             reg.ax = 0x4f06;
@@ -397,7 +397,7 @@ namespace jw
             return { pixels_per_scanline, bytes_per_scanline, max_scanlines };
         }
 
-        std::tuple<std::uint32_t, std::uintptr_t, std::uint32_t> vbe3::get_max_scanline_length()
+        std::tuple<std::size_t, std::size_t, std::size_t> vbe3::get_max_scanline_length()
         {
             if (!vbe3_pm) return vbe2::get_max_scanline_length();
 
