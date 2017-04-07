@@ -43,6 +43,13 @@ namespace jw
                 return (bytes / pixels) * 8;
             }
 
+            std::size_t get_lfb_size_in_pixels()
+            {
+                std::size_t line_size;
+                std::tie(line_size, std::ignore, std::ignore) = get_scanline_length();
+                return line_size * mode_info->resolution_y * mode_info->linear_num_image_pages;
+            }
+
         protected:
             void check_error(split_uint16_t ax, const char* function_name);
             void populate_mode_list(dpmi::far_ptr16 list_ptr);
