@@ -61,6 +61,7 @@ namespace jw
             static constexpr T bx = 1.0f;
             static constexpr T ax = 1.0f;
             static constexpr bool has_alpha = true;
+            static constexpr bool has_vector = true;
         };
 
         struct alignas(4) bgra_8888
@@ -81,6 +82,7 @@ namespace jw
             static constexpr T bx = 255;
             static constexpr T ax = 255;
             static constexpr bool has_alpha = true;
+            static constexpr bool has_vector = true;
         };
 
         struct [[gnu::packed]] bgra_8880
@@ -96,6 +98,7 @@ namespace jw
             static constexpr T bx = 255;
             static constexpr T ax = 0;
             static constexpr bool has_alpha = false;
+            static constexpr bool has_vector = false;
         };
 
         struct bgra_6668
@@ -122,6 +125,7 @@ namespace jw
             static constexpr T bx = 63;
             static constexpr T ax = 255;
             static constexpr bool has_alpha = true;
+            static constexpr bool has_vector = true;
         };
 
         struct alignas(2) [[gnu::packed]] bgra_5650
@@ -139,6 +143,7 @@ namespace jw
             static constexpr T bx = 31;
             static constexpr T ax = 0;
             static constexpr bool has_alpha = false;
+            static constexpr bool has_vector = false;
         };
 
         struct alignas(2) [[gnu::packed]] bgra_5551
@@ -157,6 +162,7 @@ namespace jw
             static constexpr T bx = 31;
             static constexpr T ax = 1;
             static constexpr bool has_alpha = true;
+            static constexpr bool has_vector = false;
         };
 
         struct px { };
@@ -202,7 +208,7 @@ namespace jw
             constexpr pixel& operator=(pixel&& o) noexcept = default;
 
             template <typename U, std::enable_if_t<(std::is_integral<typename U::T>::value && std::is_integral<typename P::T>::value), bool> = { }> 
-            static constexpr std::uint32_t max(auto max) noexcept { return max + 1; }
+            static constexpr std::int16_t max(auto max) noexcept { return max + 1; }
             template <typename U, std::enable_if_t<(std::is_floating_point<typename U::T>::value || std::is_floating_point<typename P::T>::value), bool> = { }> 
             static constexpr float max(auto max) noexcept { return max; }
 
@@ -225,7 +231,7 @@ namespace jw
                 return *this;
             }
 
-            template<typename V, std::enable_if_t<P::has_alpha && V::has_alpha, bool> = { }>
+            template<typename V, std::enable_if_t<P::has_alpha && V::has_alpha && (!P::has_vector || !V::has_vector || !std::is_same<P,V>::value), bool> = { }>
             constexpr pixel& blend(const pixel<V>& src)
             {
                 this->b = ((src.b * max<V>(P::bx) * src.a) / max<V>(V::bx) + this->b * (src.ax - src.a)) / max<V>(V::ax);
@@ -233,6 +239,36 @@ namespace jw
                 this->r = ((src.r * max<V>(P::rx) * src.a) / max<V>(V::rx) + this->r * (src.ax - src.a)) / max<V>(V::ax);
                 this->a = ((src.a * max<V>(P::ax) * src.a) / max<V>(V::ax) + this->a * (src.ax - src.a)) / max<V>(V::ax);
                 return *this;
+            }
+
+            template<typename V, std::enable_if_t<P::has_alpha && V::has_alpha && P::has_vector && V::has_vector && std::is_same<P,V>::value, bool> = { }>
+            pixel& blend(const pixel<V>& other)
+            {
+                using max_T = decltype(max<V>(P::ax));
+                using max_V [[gnu::vector_size(4 * sizeof(max_T))]] = max_T;
+                union vector
+                {
+                    max_V v;
+                    struct { max_T b, g, r, a; };
+                    constexpr vector(max_T cr, max_T cg, max_T cb, max_T ca) noexcept : b(cb), g(cg), r(cr), a(ca) { }
+                };
+                vector maxp { max<V>(P::rx), max<V>(P::gx), max<V>(P::bx), max<V>(P::ax) };
+                vector maxv { max<V>(V::rx), max<V>(V::gx), max<V>(V::bx), max<V>(V::ax) };
+                vector maxa { max<V>(V::ax), max<V>(V::ax), max<V>(V::ax), max<V>(V::ax) };
+                vector ax { V::ax, V::ax, V::ax, V::ax };
+
+                vector src { other.r, other.g, other.b, other.a };
+                vector dest { this->r, this->g, this->b, this->a };
+                vector srca { src.a, src.a, src.a, src.a };
+
+                src.v *= maxp.v;
+                src.v *= srca.v;
+                src.v /= maxv.v;
+                ax.v -= srca.v;
+                dest.v *= ax.v;
+                dest.v += src.v;
+                dest.v /= maxa.v;
+                return *this = pixel { dest.r, dest.b, dest.g, dest.a };
             }
 
             constexpr pixel& blend(const auto& other) { return blend<P>(other); }
