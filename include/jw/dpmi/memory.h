@@ -556,10 +556,10 @@ namespace jw
         {
             using base = memory_base;
 
-            device_memory_base(std::size_t num_bytes, std::uintptr_t physical_address)
+            device_memory_base(std::size_t num_bytes, std::uintptr_t physical_address, bool use_old_alloc = false)
                 : base(no_alloc_tag { }, round_up_to_page_size(num_bytes) + get_page_size())
             {
-                allocate(physical_address);
+                allocate(physical_address, use_old_alloc);
             }
 
             device_memory_base(const base&) = delete;
@@ -581,20 +581,23 @@ namespace jw
         protected:
             static bool device_map_supported;
 
-            void allocate(std::uintptr_t physical_address)
+            void allocate(std::uintptr_t physical_address, bool use_old_alloc)
             {
                 try
                 {
-                    if (device_map_supported)
+                    if (!use_old_alloc)
                     {
-                        capabilities c { };
-                        if (!c.supported || !c.flags.device_mapping) device_map_supported = false;
-                    }
-                    if (device_map_supported)
-                    {
-                        base::allocate(false, false);
-                        new_alloc(physical_address);
-                        return;
+                        if (device_map_supported)
+                        {
+                            capabilities c { };
+                            if (!c.supported || !c.flags.device_mapping) device_map_supported = false;
+                        }
+                        if (device_map_supported)
+                        {
+                            base::allocate(false, false);
+                            new_alloc(physical_address);
+                            return;
+                        }
                     }
                     old_alloc(physical_address);
                 }
