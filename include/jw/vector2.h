@@ -29,24 +29,24 @@ namespace jw
 
         template <typename U> constexpr vector2(const vector2<U>& c) noexcept : x(static_cast<T>(c.x)), y(static_cast<T>(c.y)) { }
         template <typename U> constexpr vector2(vector2<U>&& m) noexcept : x(static_cast<T&&>(m.x)), y(static_cast<T&&>(m.y)) { }
-        template <typename U> constexpr vector2& operator=(const vector2<U>& rhs) noexcept { auto lhs = upcast<U>(); lhs.v = rhs.upcast<U>().v; return *this = lhs; };
-        template <typename U> constexpr vector2& operator=(vector2<U>&& rhs) noexcept { auto lhs = upcast<U>(); lhs.v = rhs.upcast<U>().v; return *this = lhs; };
+        template <typename U> constexpr vector2& operator=(const vector2<U>& rhs) noexcept { auto lhs = promoted<U>(); lhs.v = rhs.promoted<T>().v; return *this = lhs; };
+        template <typename U> constexpr vector2& operator=(vector2<U>&& rhs) noexcept { auto lhs = promoted<U>(); lhs.v = rhs.promoted<T>().v; return *this = lhs; };
 
         template <typename U> constexpr explicit operator vector2<U>() const noexcept { return vector2<U>{ std::is_integral<U>::value ? (*this).rounded() : *this }; }
-        template <typename U> constexpr auto upcast() const noexcept { return vector2<decltype(std::declval<T>() + std::declval<U>())> { *this }; }
+        template <typename U> constexpr auto promoted() const noexcept { return vector2<decltype(std::declval<T>() * std::declval<U>())> { *this }; }
 
-        template <typename U> constexpr auto& operator+=(const vector2<U>& rhs) noexcept { auto lhs = upcast<U>(); lhs.v += rhs.upcast<U>().v; return *this = lhs; }
+        template <typename U> constexpr auto& operator+=(const vector2<U>& rhs) noexcept { auto lhs = promoted<U>(); lhs.v += rhs.promoted<T>().v; return *this = lhs; }
         template <typename U> constexpr auto& operator-=(const vector2<U>& rhs) noexcept { return *this += -rhs; }
 
-        template <typename U> constexpr vector2& operator*=(const U& rhs) noexcept { auto lhs = upcast<U>(); lhs.v *= vector2<U>{ rhs, rhs }.upcast<U>().v; return *this = lhs; }
-        template <typename U> constexpr vector2& operator/=(const U& rhs) noexcept { auto lhs = upcast<U>(); lhs.v /= vector2<U>{ rhs, rhs }.upcast<U>().v; return *this = lhs; }
+        template <typename U> constexpr vector2& operator*=(const U& rhs) noexcept { auto lhs = promoted<U>(); lhs.v *= vector2<U>{ rhs, rhs }.promoted<T>().v; return *this = lhs; }
+        template <typename U> constexpr vector2& operator/=(const U& rhs) noexcept { auto lhs = promoted<U>(); lhs.v /= vector2<U>{ rhs, rhs }.promoted<T>().v; return *this = lhs; }
 
         template <typename U> friend constexpr auto operator*(const vector2& lhs, const vector2<U>& rhs) { return lhs.x * rhs.x + lhs.y * rhs.y; }
 
-        template <typename U> friend constexpr auto operator+(const vector2& lhs, const vector2<U>& rhs) noexcept { return lhs.upcast<U>() += rhs; }
-        template <typename U> friend constexpr auto operator-(const vector2& lhs, const vector2<U>& rhs) noexcept { return lhs.upcast<U>() -= rhs; }
-        template <typename U> friend constexpr auto operator*(const vector2& lhs, const U& rhs) noexcept { return lhs.upcast<U>() *= rhs; }
-        template <typename U> friend constexpr auto operator/(const vector2& lhs, const U& rhs) noexcept { return lhs.upcast<U>() /= rhs; }
+        template <typename U> friend constexpr auto operator+(const vector2& lhs, const vector2<U>& rhs) noexcept { return lhs.promoted<U>() += rhs; }
+        template <typename U> friend constexpr auto operator-(const vector2& lhs, const vector2<U>& rhs) noexcept { return lhs.promoted<U>() -= rhs; }
+        template <typename U> friend constexpr auto operator*(const vector2& lhs, const U& rhs) noexcept { return lhs.promoted<U>() *= rhs; }
+        template <typename U> friend constexpr auto operator/(const vector2& lhs, const U& rhs) noexcept { return lhs.promoted<U>() /= rhs; }
         template <typename U> friend constexpr auto operator*(const U& lhs, const vector2& rhs) noexcept { return rhs * lhs; }
         template <typename U> friend constexpr auto operator/(const U& lhs, const vector2& rhs) noexcept { return rhs / lhs; }
         constexpr auto operator-() const noexcept { return vector2 { -x, -y }; }
@@ -63,8 +63,8 @@ namespace jw
         template<typename U> constexpr auto angle(const vector2<U>& other) const noexcept { return std::acos((*this * other) / (magnitude() * other.magnitude())); }
         constexpr auto angle() const noexcept { return angle(right()); }
 
-        template<typename U> constexpr auto& scale(const vector2<U>& other) noexcept { auto lhs = upcast<U>(); lhs.v *= other.upcast<U>().v; return *this = lhs; }
-        template<typename U> constexpr auto scaled(const vector2<U>& other) const noexcept { return upcast<U>().scale(other); }
+        template<typename U> constexpr auto& scale(const vector2<U>& other) noexcept { auto lhs = promoted<U>(); lhs.v *= other.promoted<T>().v; return *this = lhs; }
+        template<typename U> constexpr auto scaled(const vector2<U>& other) const noexcept { return promoted<U>().scale(other); }
 
         constexpr auto& normalize() noexcept { return *this /= magnitude(); }
         constexpr auto normalized() const noexcept { return vector2<decltype(std::declval<T>() / std::declval<decltype(magnitude())>())> { *this }.normalize(); }
@@ -112,7 +112,7 @@ namespace jw
 
         template<typename U> constexpr auto& copysign(const vector2<U>& other) noexcept 
         {
-            v = jw::copysign(upcast<U>().v, other.upcast<U>().v);
+            v = jw::copysign(promoted<U>().v, other.promoted<T>().v);
             return *this;
         }
 

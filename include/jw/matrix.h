@@ -97,7 +97,7 @@ namespace jw
         constexpr void assign(const auto& copy) noexcept
         {
             for (auto y = 0; y < std::min(height(), copy.height()); ++y)
-                std::copy_n(&copy.get(0, y), std::min(width(), copy.width()), &(*this)(0, y));
+                std::copy_n(&copy(0, y), std::min(width(), copy.width()), &(*this)(0, y));
         }
 
         constexpr auto begin() noexcept { return iterator { *this, { 0, 0 }}; }
@@ -111,8 +111,7 @@ namespace jw
     protected:
         constexpr auto& get_wrap(vector2i p, auto* ptr) const noexcept
         {
-            p.x %= dim.x;
-            p.y %= dim.y;
+            p.v %= dim.v;
             if (p.x < 0) p.x = dim.x + p.x;
             if (p.y < 0) p.y = dim.y + p.y;
             auto offset = pos + p;
