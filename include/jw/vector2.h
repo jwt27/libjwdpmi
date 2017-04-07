@@ -12,7 +12,13 @@ namespace jw
     template <typename T>
     struct vector2
     {
-        T x, y;
+        using V [[gnu::vector_size(2 * sizeof(T))]] = T;
+        union
+        {
+            V v;
+            struct { T x, y; };
+        };
+
         constexpr vector2(const auto& _x, const auto& _y) noexcept : x(_x), y(_y) { }
 
         constexpr vector2() noexcept = default;
@@ -22,24 +28,25 @@ namespace jw
         constexpr vector2& operator=(vector2&&) noexcept = default;
 
         template <typename U> constexpr vector2(const vector2<U>& c) noexcept : x(static_cast<T>(c.x)), y(static_cast<T>(c.y)) { }
-        template <typename U> constexpr vector2(vector2<U>&& m) noexcept : x(static_cast<T&&>(std::move(m.x))), y(static_cast<T&&>(std::move(m.y))) { }
-        template <typename U> constexpr vector2& operator=(const vector2<U>& c) noexcept { x = static_cast<T>(c.y); y = static_cast<T>(c.y); return *this; };
-        template <typename U> constexpr vector2& operator=(vector2<U>&& m) noexcept { x = static_cast<T&&>(std::move(m.x)); y = static_cast<T&&>(std::move(m.y)); return *this; }
+        template <typename U> constexpr vector2(vector2<U>&& m) noexcept : x(static_cast<T&&>(m.x)), y(static_cast<T&&>(m.y)) { }
+        template <typename U> constexpr vector2& operator=(const vector2<U>& rhs) noexcept { auto lhs = upcast<U>(); lhs.v = rhs.upcast<U>().v; return *this = lhs; };
+        template <typename U> constexpr vector2& operator=(vector2<U>&& rhs) noexcept { auto lhs = upcast<U>(); lhs.v = rhs.upcast<U>().v; return *this = lhs; };
 
-        template <typename U> constexpr operator vector2<U>() const noexcept { return vector2<U>{ std::is_integral<U>::value ? (*this).rounded() : *this }; }
+        template <typename U> constexpr explicit operator vector2<U>() const noexcept { return vector2<U>{ std::is_integral<U>::value ? (*this).rounded() : *this }; }
+        template <typename U> constexpr auto upcast() const noexcept { return vector2<decltype(std::declval<T>() + std::declval<U>())> { *this }; }
 
-        template <typename U> constexpr auto& operator+=(const vector2<U>& rhs) noexcept { x += rhs.x; y += rhs.y; return *this; }
-        template <typename U> constexpr auto& operator-=(const vector2<U>& rhs) noexcept { x -= rhs.x; y -= rhs.y; return *this; }
+        template <typename U> constexpr auto& operator+=(const vector2<U>& rhs) noexcept { auto lhs = upcast<U>(); lhs.v += rhs.upcast<U>().v; return *this = lhs; }
+        template <typename U> constexpr auto& operator-=(const vector2<U>& rhs) noexcept { return *this += -rhs; }
 
-        constexpr vector2& operator*=(const auto& rhs) noexcept { x *= rhs; y *= rhs; return *this; }
-        constexpr vector2& operator/=(const auto& rhs) noexcept { x /= rhs; y /= rhs; return *this; }
+        template <typename U> constexpr vector2& operator*=(const U& rhs) noexcept { auto lhs = upcast<U>(); lhs.v *= vector2<U>{ rhs, rhs }.upcast<U>().v; return *this = lhs; }
+        template <typename U> constexpr vector2& operator/=(const U& rhs) noexcept { auto lhs = upcast<U>(); lhs.v /= vector2<U>{ rhs, rhs }.upcast<U>().v; return *this = lhs; }
 
         template <typename U> friend constexpr auto operator*(const vector2& lhs, const vector2<U>& rhs) { return lhs.x * rhs.x + lhs.y * rhs.y; }
 
-        template <typename U> friend constexpr auto operator+(const vector2& lhs, const vector2<U>& rhs) noexcept { return vector2<decltype(std::declval<T>() + std::declval<U>())> { lhs } += rhs; }
-        template <typename U> friend constexpr auto operator-(const vector2& lhs, const vector2<U>& rhs) noexcept { return vector2<decltype(std::declval<T>() - std::declval<U>())> { lhs } -= rhs; }
-        template <typename U> friend constexpr auto operator*(const vector2& lhs, const U& rhs) noexcept { return vector2<decltype(std::declval<T>() * std::declval<U>())> { lhs } *= rhs; }
-        template <typename U> friend constexpr auto operator/(const vector2& lhs, const U& rhs) noexcept { return vector2<decltype(std::declval<T>() / std::declval<U>())> { lhs } /= rhs; }
+        template <typename U> friend constexpr auto operator+(const vector2& lhs, const vector2<U>& rhs) noexcept { return lhs.upcast<U>() += rhs; }
+        template <typename U> friend constexpr auto operator-(const vector2& lhs, const vector2<U>& rhs) noexcept { return lhs.upcast<U>() -= rhs; }
+        template <typename U> friend constexpr auto operator*(const vector2& lhs, const U& rhs) noexcept { return lhs.upcast<U>() *= rhs; }
+        template <typename U> friend constexpr auto operator/(const vector2& lhs, const U& rhs) noexcept { return lhs.upcast<U>() /= rhs; }
         template <typename U> friend constexpr auto operator*(const U& lhs, const vector2& rhs) noexcept { return rhs * lhs; }
         template <typename U> friend constexpr auto operator/(const U& lhs, const vector2& rhs) noexcept { return rhs / lhs; }
         constexpr auto operator-() const noexcept { return vector2 { -x, -y }; }
@@ -57,13 +64,13 @@ namespace jw
         constexpr auto angle() const noexcept { return angle(right()); }
 
         template<typename U> constexpr auto& scale(const vector2<U>& other) noexcept { x *= other.x; y *= other.y; return *this; }
-        template<typename U> constexpr auto scaled(const vector2<U>& other) const noexcept { return vector2<decltype(std::declval<T>() * std::declval<U>())> { *this }.scale(other); }
+        template<typename U> constexpr auto scaled(const vector2<U>& other) const noexcept { return upcast<U>().scale(other); }
 
         constexpr auto& normalize() noexcept { return *this /= magnitude(); }
         constexpr auto normalized() const noexcept { return vector2<decltype(std::declval<T>() / std::declval<decltype(magnitude())>())> { *this }.normalize(); }
 
-        constexpr auto& round() noexcept { x = jw::round(x); y = jw::round(y); return *this; }
-        constexpr auto rounded() const noexcept { return vector2 { jw::round(x),  jw::round(y) }; }
+        constexpr auto& round() noexcept { v = jw::round(v); return *this; }
+        constexpr auto rounded() const noexcept { return vector2 { *this }.round(); }
 
         constexpr auto distance_from(const auto& other) const noexcept { return (*this - other).magnitude(); }
 
