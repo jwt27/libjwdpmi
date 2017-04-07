@@ -199,7 +199,7 @@ namespace jw
             constexpr pixel& operator=(pixel&& o) noexcept = default;
 
             template <typename U, std::enable_if_t<(std::is_integral<typename U::T>::value && std::is_integral<typename P::T>::value), bool> = { }> 
-            static constexpr std::int16_t max(auto max) noexcept { return max + 1; }
+            static constexpr std::int32_t max(auto max) noexcept { return max + 1; }
             template <typename U, std::enable_if_t<(std::is_floating_point<typename U::T>::value || std::is_floating_point<typename P::T>::value), bool> = { }> 
             static constexpr float max(auto max) noexcept { return max; }
 
