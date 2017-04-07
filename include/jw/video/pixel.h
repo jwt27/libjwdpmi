@@ -172,6 +172,15 @@ namespace jw
         {
             using T = typename P::T;
 
+            template<typename T>
+            union vector
+            {
+                using V [[gnu::vector_size(4 * sizeof(T))]] = T;
+                V v;
+                struct { T b, g, r, a; };
+                constexpr vector(T cr, T cg, T cb, T ca) noexcept : b(cb), g(cg), r(cr), a(ca) { }
+            };
+
             constexpr pixel() noexcept = default;
             constexpr pixel(T cr, T cg, T cb, T ca) noexcept : P(cr, cg, cb, ca) { }
             constexpr pixel(T cr, T cg, T cb) noexcept : P(cr, cg, cb, P::ax) { }
@@ -231,35 +240,18 @@ namespace jw
                 return *this;
             }
 
-            template<typename V, std::enable_if_t<P::has_alpha && V::has_alpha && (!P::has_vector || !V::has_vector || !std::is_same<P,V>::value), bool> = { }>
-            constexpr pixel& blend(const pixel<V>& src)
-            {
-                this->b = ((src.b * max<V>(P::bx) * src.a) / max<V>(V::bx) + this->b * (src.ax - src.a)) / max<V>(V::ax);
-                this->g = ((src.g * max<V>(P::gx) * src.a) / max<V>(V::gx) + this->g * (src.ax - src.a)) / max<V>(V::ax);
-                this->r = ((src.r * max<V>(P::rx) * src.a) / max<V>(V::rx) + this->r * (src.ax - src.a)) / max<V>(V::ax);
-                this->a = ((src.a * max<V>(P::ax) * src.a) / max<V>(V::ax) + this->a * (src.ax - src.a)) / max<V>(V::ax);
-                return *this;
-            }
-
-            template<typename V, std::enable_if_t<P::has_alpha && V::has_alpha && P::has_vector && V::has_vector && std::is_same<P,V>::value, bool> = { }>
+            template<typename V, std::enable_if_t<P::has_alpha && V::has_alpha, bool> = { }>
             pixel& blend(const pixel<V>& other)
             {
-                using max_T = decltype(max<V>(P::ax));
-                using max_V [[gnu::vector_size(4 * sizeof(max_T))]] = max_T;
-                union vector
-                {
-                    max_V v;
-                    struct { max_T b, g, r, a; };
-                    constexpr vector(max_T cr, max_T cg, max_T cb, max_T ca) noexcept : b(cb), g(cg), r(cr), a(ca) { }
-                };
-                vector maxp { max<V>(P::rx), max<V>(P::gx), max<V>(P::bx), max<V>(P::ax) };
-                vector maxv { max<V>(V::rx), max<V>(V::gx), max<V>(V::bx), max<V>(V::ax) };
-                vector maxa { max<V>(V::ax), max<V>(V::ax), max<V>(V::ax), max<V>(V::ax) };
-                vector ax { V::ax, V::ax, V::ax, V::ax };
+                using vec = vector<decltype(max<V>(P::ax))>;
+                vec maxp { max<V>(P::rx), max<V>(P::gx), max<V>(P::bx), max<V>(P::ax) };
+                vec maxv { max<V>(V::rx), max<V>(V::gx), max<V>(V::bx), max<V>(V::ax) };
+                vec maxa { max<V>(V::ax), max<V>(V::ax), max<V>(V::ax), max<V>(V::ax) };
+                vec ax { V::ax, V::ax, V::ax, V::ax };
 
-                vector src { other.r, other.g, other.b, other.a };
-                vector dest { this->r, this->g, this->b, this->a };
-                vector srca { src.a, src.a, src.a, src.a };
+                vec src { other.r, other.g, other.b, other.a };
+                vec dest { this->r, this->g, this->b, this->a };
+                vec srca { src.a, src.a, src.a, src.a };
 
                 src.v *= maxp.v;
                 src.v *= srca.v;
