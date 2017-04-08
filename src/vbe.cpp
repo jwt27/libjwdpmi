@@ -591,7 +591,7 @@ namespace jw
         {
             //return vga::set_palette(begin, end, first, wait_for_vsync);
             auto size = std::min(static_cast<std::size_t>(end - begin), std::size_t { 256 });
-            if (vbe2_pm)
+            if (false) //(vbe2_pm)
             {
                 std::unique_ptr<std::vector<pxvga>> copy;
                 const px* ptr = &*begin;
