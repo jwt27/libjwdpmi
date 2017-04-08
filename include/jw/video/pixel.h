@@ -166,28 +166,55 @@ namespace jw
 
             template <typename U> constexpr pixel<U> cast(std::true_type) const noexcept
             {
-                using vec = vector<decltype(max<U>(U::ax))>;
-                vec maxp { max<U>(P::rx), max<U>(P::gx), max<U>(P::bx), max<U>(P::ax) };
-                vec maxu { max<U>(U::rx), max<U>(U::gx), max<U>(U::bx), max<U>(U::ax) };
-                vec src { this->r, this->g, this->b, this->a };
-                src.v *= maxu.v;
-                src.v /= maxp.v;
+                using max_T = decltype(max<U>(U::ax));
+                if (std::is_floating_point<max_T>::value)
+                {
+                    using vec = vector<max_T>;
+                    vec maxp { max<U>(P::rx), max<U>(P::gx), max<U>(P::bx), max<U>(P::ax) };
+                    vec maxu { max<U>(U::rx), max<U>(U::gx), max<U>(U::bx), max<U>(U::ax) };
+                    vec src { this->r, this->g, this->b, this->a };
+                    src.v *= maxu.v;
+                    src.v /= maxp.v;
 
-                using UT = typename U::T;
-                return pixel<U> { static_cast<UT>(src.r), static_cast<UT>(src.g), static_cast<UT>(src.b), static_cast<UT>(src.a) };
+                    using UT = typename U::T;
+                    return pixel<U> { static_cast<UT>(src.r), static_cast<UT>(src.g), static_cast<UT>(src.b), static_cast<UT>(src.a) };
+                }
+                else
+                {
+                    using UT = typename U::T;
+                    pixel<U> result { };
+                    result.b = static_cast<UT>(this->b * max<U>(U::bx) / max<U>(P::bx));
+                    result.g = static_cast<UT>(this->g * max<U>(U::gx) / max<U>(P::gx));
+                    result.r = static_cast<UT>(this->r * max<U>(U::rx) / max<U>(P::rx));
+                    result.a = static_cast<UT>(this->a * max<U>(U::ax) / max<U>(P::ax));
+                    return result;
+                }
             };
 
             template <typename U> constexpr pixel<U> cast(std::false_type) const noexcept
             { 
-                using vec = vector<decltype(max<U>(U::ax))>;
-                vec maxp { max<U>(P::rx), max<U>(P::gx), max<U>(P::bx), 1 };
-                vec maxu { max<U>(U::rx), max<U>(U::gx), max<U>(U::bx), 0 };
-                vec src { this->r, this->g, this->b, 0 };
-                src.v *= maxu.v;
-                src.v /= maxp.v;
+                using max_T = decltype(max<U>(U::ax));
+                if (std::is_floating_point<max_T>::value)
+                {
+                    using vec = vector<max_T>;
+                    vec maxp { max<U>(P::rx), max<U>(P::gx), max<U>(P::bx), 1 };
+                    vec maxu { max<U>(U::rx), max<U>(U::gx), max<U>(U::bx), 0 };
+                    vec src { this->r, this->g, this->b, 0 };
+                    src.v *= maxu.v;
+                    src.v /= maxp.v;
 
-                using UT = typename U::T;
-                return pixel<U> { static_cast<UT>(src.r), static_cast<UT>(src.g), static_cast<UT>(src.b) };
+                    using UT = typename U::T;
+                    return pixel<U> { static_cast<UT>(src.r), static_cast<UT>(src.g), static_cast<UT>(src.b) };
+                }
+                else
+                {
+                    using UT = typename U::T;
+                    pixel<U> result { };
+                    result.b = static_cast<UT>(this->b * max<U>(U::bx) / max<U>(P::bx));
+                    result.g = static_cast<UT>(this->g * max<U>(U::gx) / max<U>(P::gx));
+                    result.r = static_cast<UT>(this->r * max<U>(U::rx) / max<U>(P::rx));
+                    return result;
+                }
             };
 
             template <typename U> constexpr pixel<U> cast() const noexcept { return cast<U>(std::is_void<std::conditional_t<P::has_alpha, void, bool>> { }); }
@@ -199,12 +226,12 @@ namespace jw
             constexpr pixel& operator=(pixel&& o) noexcept = default;
 
             template <typename U, std::enable_if_t<(std::is_integral<typename U::T>::value && std::is_integral<typename P::T>::value), bool> = { }> 
-            static constexpr std::int32_t max(auto max) noexcept { return max + 1; }
+            static constexpr std::uint16_t max(auto max) noexcept { return max + 1; }
             template <typename U, std::enable_if_t<(std::is_floating_point<typename U::T>::value || std::is_floating_point<typename P::T>::value), bool> = { }> 
             static constexpr float max(auto max) noexcept { return max; }
 
-            template<typename V, std::enable_if_t<!V::has_alpha, bool> = { }>
-            constexpr pixel& blend(const pixel<V>& src)
+            template<typename U, std::enable_if_t<!U::has_alpha, bool> = { }>
+            constexpr pixel& blend(const pixel<U>& src)
             {
                 auto copy = src.cast<P>();
                 this->b = copy.b;
@@ -213,52 +240,144 @@ namespace jw
                 return *this;
             }
 
-            template<typename V, std::enable_if_t<!P::has_alpha && V::has_alpha, bool> = { }>
-            constexpr pixel& blend(const pixel<V>& other)
+            template<typename U, std::enable_if_t<!P::has_alpha && U::has_alpha, bool> = { }>
+            constexpr pixel& blend(const pixel<U>& other)
             {
-                using vec = vector<decltype(max<V>(V::ax))>;
-                vec maxp { max<V>(P::rx), max<V>(P::gx), max<V>(P::bx), 0 };
-                vec maxv { max<V>(V::rx), max<V>(V::gx), max<V>(V::bx), max<V>(V::ax) };
-                vec maxa { max<V>(V::ax), max<V>(V::ax), max<V>(V::ax), max<V>(V::ax) };
-                vec ax { V::ax, V::ax, V::ax, V::ax };
+                using max_T = decltype(max<U>(U::ax));
+                if (std::is_integral<max_T>::value)
+                {
+                #ifdef __SSE__
+                    using vec = vector<float>;
+                #else
+                    using vec = vector<max_T>;
+                #endif
+                    if (std::is_same<P, U>::value)
+                    {
+                        using vec = vector<max_T>;
+                        vec maxa { max<U>(U::ax), max<U>(U::ax), max<U>(U::ax), max<U>(U::ax) };
+                        vec ax { U::ax, U::ax, U::ax, U::ax };
 
-                vec src { other.r, other.g, other.b, other.a };
-                vec dest { this->r, this->g, this->b, 0 };
-                vec srca { src.a, src.a, src.a, src.a };
+                        vec src { other.r, other.g, other.b, other.a };
+                        vec dest { this->r, this->g, this->b, 0 };
+                        vec srca { src.a, src.a, src.a, src.a };
 
-                src.v *= maxp.v;
-                src.v *= srca.v;
-                src.v /= maxv.v;
-                ax.v -= srca.v;
-                dest.v *= ax.v;
-                dest.v += src.v;
-                dest.v /= maxa.v;
-                return *this = pixel { static_cast<T>(dest.r), static_cast<T>(dest.g), static_cast<T>(dest.b) };
+                        src.v *= srca.v;
+                        ax.v -= srca.v;
+                        dest.v *= ax.v;
+                        dest.v += src.v;
+                        dest.v /= maxa.v;
+                        return *this = pixel { static_cast<T>(dest.r), static_cast<T>(dest.g), static_cast<T>(dest.b) };
+                    }
+                    else
+                    {
+                        vec maxu { max<U>(U::rx), max<U>(U::gx), max<U>(U::bx), max<U>(U::ax) };
+                        vec maxa { max<U>(U::ax), max<U>(U::ax), max<U>(U::ax), max<U>(U::ax) };
+                        vec ax { U::ax, U::ax, U::ax, U::ax };
 
-                return *this;
+                        vec src { other.r * max<U>(P::rx), other.g * max<U>(P::gx), other.b * max<U>(P::bx), other.a };
+                        vec dest { this->r, this->g, this->b, 0 };
+                        vec srca { src.a, src.a, src.a, src.a };
+
+                        src.v *= srca.v;
+                        src.v /= maxu.v;
+                        ax.v -= srca.v;
+                        dest.v *= ax.v;
+                        dest.v += src.v;
+                        dest.v /= maxa.v;
+                        return *this = pixel { static_cast<T>(dest.r), static_cast<T>(dest.g), static_cast<T>(dest.b) };
+                    }
+                }
+                else
+                {
+                    using vec = vector<max_T>;
+                    vec maxp { max<U>(P::rx), max<U>(P::gx), max<U>(P::bx), 0 };
+                    vec maxu { max<U>(U::rx), max<U>(U::gx), max<U>(U::bx), max<U>(U::ax) };
+                    vec maxa { max<U>(U::ax), max<U>(U::ax), max<U>(U::ax), max<U>(U::ax) };
+                    vec ax { U::ax, U::ax, U::ax, U::ax };
+
+                    vec src { other.r, other.g, other.b, other.a };
+                    vec dest { this->r, this->g, this->b, 0 };
+                    vec srca { src.a, src.a, src.a, src.a };
+
+                    if (!std::is_same<P, U>::value) src.v *= maxp.v;
+                    src.v *= srca.v;
+                    if (!std::is_same<P, U>::value) src.v /= maxu.v;
+                    ax.v -= srca.v;
+                    dest.v *= ax.v;
+                    dest.v += src.v;
+                    dest.v /= maxa.v;
+                    return *this = pixel { static_cast<T>(dest.r), static_cast<T>(dest.g), static_cast<T>(dest.b) };
+                }
             }
 
-            template<typename V, std::enable_if_t<P::has_alpha && V::has_alpha, bool> = { }>
-            constexpr pixel& blend(const pixel<V>& other)
+            template<typename U, std::enable_if_t<P::has_alpha && U::has_alpha, bool> = { }>
+            constexpr pixel& blend(const pixel<U>& other)
             {
-                using vec = vector<decltype(max<V>(V::ax))>;
-                vec maxp { max<V>(P::rx), max<V>(P::gx), max<V>(P::bx), max<V>(P::ax) };
-                vec maxv { max<V>(V::rx), max<V>(V::gx), max<V>(V::bx), max<V>(V::ax) };
-                vec maxa { max<V>(V::ax), max<V>(V::ax), max<V>(V::ax), max<V>(V::ax) };
-                vec ax { V::ax, V::ax, V::ax, V::ax };
+                using max_T = decltype(max<U>(U::ax));
+                if (std::is_integral<max_T>::value)
+                {
+                #ifdef __SSE__
+                    using vec = vector<float>;
+                #else
+                    using vec = vector<max_T>;
+                #endif
+                    if (std::is_same<P, U>::value)
+                    {
+                        using vec = vector<max_T>;
+                        vec maxa { max<U>(U::ax), max<U>(U::ax), max<U>(U::ax), max<U>(U::ax) };
+                        vec ax { U::ax, U::ax, U::ax, U::ax };
 
-                vec src { other.r, other.g, other.b, other.a };
-                vec dest { this->r, this->g, this->b, this->a };
-                vec srca { src.a, src.a, src.a, src.a };
+                        vec src { other.r, other.g, other.b, other.a };
+                        vec dest { this->r, this->g, this->b, this->a };
+                        vec srca { src.a, src.a, src.a, src.a };
 
-                src.v *= maxp.v;
-                src.v *= srca.v;
-                src.v /= maxv.v;
-                ax.v -= srca.v;
-                dest.v *= ax.v;
-                dest.v += src.v;
-                dest.v /= maxa.v;
-                return *this = pixel { static_cast<T>(dest.r), static_cast<T>(dest.g), static_cast<T>(dest.b), static_cast<T>(dest.a) };
+                        src.v *= srca.v;
+                        ax.v -= srca.v;
+                        dest.v *= ax.v;
+                        dest.v += src.v;
+                        dest.v /= maxa.v;
+                        return *this = pixel { static_cast<T>(dest.r), static_cast<T>(dest.g), static_cast<T>(dest.b), static_cast<T>(dest.a) };
+                    }
+                    else
+                    {
+                        vec maxu { max<U>(U::rx), max<U>(U::gx), max<U>(U::bx), max<U>(U::ax) };
+                        vec maxa { max<U>(U::ax), max<U>(U::ax), max<U>(U::ax), max<U>(U::ax) };
+                        vec ax { U::ax, U::ax, U::ax, U::ax };
+
+                        vec src { other.r * max<U>(P::rx), other.g * max<U>(P::gx), other.b * max<U>(P::bx), other.a * max<U>(P::ax) };
+                        vec dest { this->r, this->g, this->b, this->a };
+                        vec srca { src.a, src.a, src.a, src.a };
+
+                        src.v *= srca.v;
+                        src.v /= maxu.v;
+                        ax.v -= srca.v;
+                        dest.v *= ax.v;
+                        dest.v += src.v;
+                        dest.v /= maxa.v;
+                        return *this = pixel { static_cast<T>(dest.r), static_cast<T>(dest.g), static_cast<T>(dest.b), static_cast<T>(dest.a) };
+                    }
+                }
+                else
+                {
+                    using vec = vector<max_T>;
+                    vec maxp { max<U>(P::rx), max<U>(P::gx), max<U>(P::bx), max<U>(P::ax) };
+                    vec maxu { max<U>(U::rx), max<U>(U::gx), max<U>(U::bx), max<U>(U::ax) };
+                    vec maxa { max<U>(U::ax), max<U>(U::ax), max<U>(U::ax), max<U>(U::ax) };
+                    vec ax { U::ax, U::ax, U::ax, U::ax };
+
+                    vec src { other.r, other.g, other.b, other.a };
+                    vec dest { this->r, this->g, this->b, this->a };
+                    vec srca { src.a, src.a, src.a, src.a };
+
+                    if (!std::is_same<P, U>::value) src.v *= maxp.v;
+                    src.v *= srca.v;
+                    if (!std::is_same<P, U>::value) src.v /= maxu.v;
+                    ax.v -= srca.v;
+                    dest.v *= ax.v;
+                    dest.v += src.v;
+                    dest.v /= maxa.v;
+                    return *this = pixel { static_cast<T>(dest.r), static_cast<T>(dest.g), static_cast<T>(dest.b), static_cast<T>(dest.a) };
+                }
             }
 
             constexpr pixel& blend(const auto& other) { return blend<P>(other); }
