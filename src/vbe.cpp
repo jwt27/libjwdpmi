@@ -591,7 +591,7 @@ namespace jw
         {
             //return vga::set_palette(begin, end, first, wait_for_vsync);
             auto size = std::min(static_cast<std::size_t>(end - begin), std::size_t { 256 });
-            if (false) //(vbe2_pm)
+            if (vbe2_pm)
             {
                 std::unique_ptr<std::vector<pxvga>> copy;
                 const px* ptr = &*begin;
@@ -607,12 +607,12 @@ namespace jw
                     "push es;"
                     "push ds;"
                     "pop es;"
-                    "mov ds, %w1;"
-                    "call %0;"
+                    "mov ds, es:%w1;"
+                    "call es:%0;"
                     "pop es;"
                     "pop ds;"
-                    :: "rm" (vbe2_call_set_palette)
-                    , "rm" (mmio)
+                    :: "m" (vbe2_call_set_palette)
+                    , "m" (mmio)
                     , "a" (0x4f09)
                     , "b" (wait_for_vsync ? 0x80 : 0)
                     , "c" (size)
