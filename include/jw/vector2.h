@@ -29,10 +29,12 @@ namespace jw
 
         template <typename U> constexpr vector2(const vector2<U>& c) noexcept : x(static_cast<T>(c.x)), y(static_cast<T>(c.y)) { }
         template <typename U> constexpr vector2(vector2<U>&& m) noexcept : x(static_cast<T&&>(m.x)), y(static_cast<T&&>(m.y)) { }
-        template <typename U> constexpr vector2& operator=(const vector2<U>& rhs) noexcept { auto lhs = promoted<U>(); lhs.v = rhs.promoted<T>().v; return *this = lhs; };
-        template <typename U> constexpr vector2& operator=(vector2<U>&& rhs) noexcept { auto lhs = promoted<U>(); lhs.v = rhs.promoted<T>().v; return *this = lhs; };
+        template <typename U> constexpr vector2& operator=(const vector2<U>& rhs) noexcept { return *this = rhs.cast<T>(); };
+        template <typename U> constexpr vector2& operator=(vector2<U>&& rhs) noexcept { return *this = rhs.cast<T>(); };
 
-        template <typename U> constexpr explicit operator vector2<U>() const noexcept { return vector2<U>{ std::is_integral<U>::value ? (*this).rounded() : *this }; }
+        template <typename U> constexpr vector2<U> cast() const noexcept { return vector2<U>{ std::is_integral<U>::value ? (*this).rounded() : *this }; }
+        template <typename U> constexpr explicit operator vector2<U>() const noexcept { return cast<U>(); }
+
         template <typename U> constexpr auto promoted() const noexcept { return vector2<decltype(std::declval<T>() * std::declval<U>())> { *this }; }
 
         template <typename U> constexpr auto& operator+=(const vector2<U>& rhs) noexcept { auto lhs = promoted<U>(); lhs.v += rhs.promoted<T>().v; return *this = lhs; }
