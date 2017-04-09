@@ -257,31 +257,6 @@ namespace jw
                 }
             };
 
-            template <typename V, typename U, std::enable_if_t<!V::has_alpha || !U::has_alpha, bool> = { }>
-            constexpr pixel<U> cast() const noexcept
-            { 
-                using max_T = decltype(max<U>(U::ax));
-                if (std::is_floating_point<max_T>::value)
-                {
-                    using vec = vector<max_T>;
-                    vec maxp { max<U>(V::rx), max<U>(V::gx), max<U>(V::bx), 1 };
-                    vec maxu { max<U>(U::rx), max<U>(U::gx), max<U>(U::bx), 0 };
-                    vec src { this->r, this->g, this->b, 0 };
-                    src.v *= maxu.v;
-                    src.v /= maxp.v;
-                    return pixel<U> { }.assign_round<U>(src);
-                }
-                else
-                {
-                    using UT = typename U::T;
-                    pixel<U> result { };
-                    result.b = static_cast<UT>(this->b * max<U>(U::bx) / max<U>(V::bx));
-                    result.g = static_cast<UT>(this->g * max<U>(U::gx) / max<U>(V::gx));
-                    result.r = static_cast<UT>(this->r * max<U>(U::rx) / max<U>(V::rx));
-                    return result;
-                }
-            };
-
             template <typename V, typename U, std::enable_if_t<!V::has_alpha && U::has_alpha, bool> = { }>
             constexpr pixel<U> cast() const noexcept
             { 
@@ -304,6 +279,31 @@ namespace jw
                     result.g = static_cast<UT>(this->g * max<U>(U::gx) / max<U>(V::gx));
                     result.r = static_cast<UT>(this->r * max<U>(U::rx) / max<U>(V::rx));
                     result.a = U::ax;
+                    return result;
+                }
+            };
+
+            template <typename V, typename U, std::enable_if_t<!U::has_alpha, bool> = { }>
+            constexpr pixel<U> cast() const noexcept
+            { 
+                using max_T = decltype(max<U>(U::ax));
+                if (std::is_floating_point<max_T>::value)
+                {
+                    using vec = vector<max_T>;
+                    vec maxp { max<U>(V::rx), max<U>(V::gx), max<U>(V::bx), 1 };
+                    vec maxu { max<U>(U::rx), max<U>(U::gx), max<U>(U::bx), 0 };
+                    vec src { this->r, this->g, this->b, 0 };
+                    src.v *= maxu.v;
+                    src.v /= maxp.v;
+                    return pixel<U> { }.assign_round<U>(src);
+                }
+                else
+                {
+                    using UT = typename U::T;
+                    pixel<U> result { };
+                    result.b = static_cast<UT>(this->b * max<U>(U::bx) / max<U>(V::bx));
+                    result.g = static_cast<UT>(this->g * max<U>(U::gx) / max<U>(V::gx));
+                    result.r = static_cast<UT>(this->r * max<U>(U::rx) / max<U>(V::rx));
                     return result;
                 }
             };
