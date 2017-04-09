@@ -31,12 +31,17 @@ namespace jw
 
             struct ref
             {
-                constexpr ref(auto& matrix, vector2i pos) : m(matrix), p(pos) { }
-                operator float() { return to_float(m(p.x / vs, p.y).t[p.x % vs]); }
-                ref& operator=(float value) { m(p.x / vs, p.y).t[p.x % vs] = value; return *this; }
+                constexpr ref(auto* matrix, auto* image, vector2i pos) : m(matrix), i(image), p(pos) { }
+                operator float() { return to_float((*m)(p.x / vs, p.y).t[p.x % vs]); }
+                ref& operator=(float value) { (*m)(p.x / vs, p.y).t[p.x % vs] = from_float(value); return *this; }
 
-                matrix_container<vector>& m;
+            private:
+                matrix_container<vector>* m;
+                I* i;
                 vector2i p;
+
+                static constexpr float to_float(T v) { if (std::is_floating_point<T>::value) return v; return v / static_cast<float>(std::numeric_limits<T>::max()); }
+                static constexpr float from_float(T v) { if (std::is_floating_point<T>::value) return v; return v * static_cast<float>(std::numeric_limits<T>::max()); }
             };
 
             constexpr image_range(I* image, const vector2i& position, const vector2i& dimensions) noexcept 
@@ -57,10 +62,10 @@ namespace jw
 
             constexpr auto range_abs(const vector2i& topleft, const vector2i& bottomright) const noexcept { return range(topleft, bottomright - topleft); }
 
-            auto r(vector2i p) { return ref { i->rm, p }; }
-            auto g(vector2i p) { return ref { i->gm, p }; }
-            auto b(vector2i p) { return ref { i->bm, p }; }
-            auto a(vector2i p) { return ref { i->am, p }; }
+            auto r(vector2i p) { return ref { &i->rm, i, p }; }
+            auto g(vector2i p) { return ref { &i->gm, i, p }; }
+            auto b(vector2i p) { return ref { &i->bm, i, p }; }
+            auto a(vector2i p) { return ref { &i->am, i, p }; }
 
             auto r(std::ptrdiff_t x, std::ptrdiff_t y) { return r(vector2i { x, y }); }
             auto g(std::ptrdiff_t x, std::ptrdiff_t y) { return g(vector2i { x, y }); }
@@ -97,8 +102,6 @@ namespace jw
             constexpr auto height() const noexcept { return size().y; }
 
         protected:
-            static constexpr float to_float(T v) { if (std::is_floating_point<T>::value) return v; return v / static_cast<float>(std::numeric_limits<T>::max()); }
-
             constexpr pxf get(vector2i p) noexcept
             {
                 return pxf { r(pos + p), g(pos + p), b(pos + p), a(pos + p) };
