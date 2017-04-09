@@ -32,7 +32,7 @@ namespace jw
             struct ref
             {
                 constexpr ref(auto* matrix, auto* image, vector2i pos) : m(matrix), i(image), p(pos) { }
-                operator float() { return to_float((*m)(p.x / vs, p.y).t[p.x % vs]); }
+                operator float() const { return to_float((*m)(p.x / vs, p.y).t[p.x % vs]); }
                 ref& operator=(float value) { (*m)(p.x / vs, p.y).t[p.x % vs] = from_float(value); return *this; }
 
             private:
@@ -62,15 +62,25 @@ namespace jw
 
             constexpr auto range_abs(const vector2i& topleft, const vector2i& bottomright) const noexcept { return range(topleft, bottomright - topleft); }
 
-            auto r(vector2i p) { return ref { &i->rm, i, p }; }
-            auto g(vector2i p) { return ref { &i->gm, i, p }; }
-            auto b(vector2i p) { return ref { &i->bm, i, p }; }
-            auto a(vector2i p) { return ref { &i->am, i, p }; }
+            auto r(vector2i p) noexcept { return ref { &i->rm, i, p }; }
+            auto g(vector2i p) noexcept { return ref { &i->gm, i, p }; }
+            auto b(vector2i p) noexcept { return ref { &i->bm, i, p }; }
+            auto a(vector2i p) noexcept { return ref { &i->am, i, p }; }
 
-            auto r(std::ptrdiff_t x, std::ptrdiff_t y) { return r(vector2i { x, y }); }
-            auto g(std::ptrdiff_t x, std::ptrdiff_t y) { return g(vector2i { x, y }); }
-            auto b(std::ptrdiff_t x, std::ptrdiff_t y) { return b(vector2i { x, y }); }
-            auto a(std::ptrdiff_t x, std::ptrdiff_t y) { return a(vector2i { x, y }); }
+            auto r(std::ptrdiff_t x, std::ptrdiff_t y) noexcept { return r(vector2i { x, y }); }
+            auto g(std::ptrdiff_t x, std::ptrdiff_t y) noexcept { return g(vector2i { x, y }); }
+            auto b(std::ptrdiff_t x, std::ptrdiff_t y) noexcept { return b(vector2i { x, y }); }
+            auto a(std::ptrdiff_t x, std::ptrdiff_t y) noexcept { return a(vector2i { x, y }); }
+
+            auto r(vector2i p) const noexcept { return ref { &i->rm, i, p }; }
+            auto g(vector2i p) const noexcept { return ref { &i->gm, i, p }; }
+            auto b(vector2i p) const noexcept { return ref { &i->bm, i, p }; }
+            auto a(vector2i p) const noexcept { return ref { &i->am, i, p }; }
+
+            auto r(std::ptrdiff_t x, std::ptrdiff_t y) const noexcept { return r(vector2i { x, y }); }
+            auto g(std::ptrdiff_t x, std::ptrdiff_t y) const noexcept { return g(vector2i { x, y }); }
+            auto b(std::ptrdiff_t x, std::ptrdiff_t y) const noexcept { return b(vector2i { x, y }); }
+            auto a(std::ptrdiff_t x, std::ptrdiff_t y) const noexcept { return a(vector2i { x, y }); }
 
             // no bounds checking
             constexpr auto operator()(vector2i p) noexcept { return get(p); }
@@ -102,10 +112,8 @@ namespace jw
             constexpr auto height() const noexcept { return size().y; }
 
         protected:
-            constexpr pxf get(vector2i p) noexcept
-            {
-                return pxf { r(pos + p), g(pos + p), b(pos + p), a(pos + p) };
-            }
+            constexpr pxf get(vector2i p) noexcept { return pxf { r(pos + p), g(pos + p), b(pos + p), a(pos + p) }; }
+            constexpr pxf get(vector2i p) const noexcept { return pxf { r(pos + p), g(pos + p), b(pos + p), a(pos + p) }; }
 
             I* i;
             vector2i pos, dim;
