@@ -230,36 +230,36 @@ namespace jw
             template <typename U, std::enable_if_t<(std::is_floating_point<typename U::T>::value || std::is_floating_point<typename P::T>::value), bool> = { }> 
             static constexpr float max(auto max) noexcept { return max; }
 
-            template<typename U, std::enable_if_t<!U::has_alpha, bool> = { }>
+            template<typename V, typename U, std::enable_if_t<!U::has_alpha, bool> = { }>
             constexpr pixel& blend(const pixel<U>& src)
             {
-                auto copy = src.cast<P>();
+                auto copy = src.cast<V>();
                 this->b = copy.b;
                 this->g = copy.g;
                 this->r = copy.r;
                 return *this;
             }
 
-            template<typename U, std::enable_if_t<!P::has_alpha && U::has_alpha, bool> = { }>
+            template<typename V, typename U, std::enable_if_t<!V::has_alpha && U::has_alpha, bool> = { }>
             constexpr pixel& blend(const pixel<U>& other)
             {
                 using max_T = decltype(max<U>(U::ax));
                 if (std::is_integral<max_T>::value)
                 {
-                #ifdef __SSE__
-                    using vec = vector<float>;
-                #else
-                    using vec = vector<max_T>;
+                #ifndef __SSE__
+                    this->b = ((other.b * max<U>(V::bx) * other.a) / max<U>(U::bx) + this->b * (other.ax - other.a)) / max<U>(U::ax);
+                    this->g = ((other.g * max<U>(V::gx) * other.a) / max<U>(U::gx) + this->g * (other.ax - other.a)) / max<U>(U::ax);
+                    this->r = ((other.r * max<U>(V::rx) * other.a) / max<U>(U::rx) + this->r * (other.ax - other.a)) / max<U>(U::ax);
+                    return *this;
                 #endif
-                    if (std::is_same<P, U>::value)
+                    using vec = vector<float>;
+                    vec maxa { max<U>(U::ax), max<U>(U::ax), max<U>(U::ax), max<U>(U::ax) };
+                    vec ax { U::ax, U::ax, U::ax, U::ax };
+                    vec dest { this->r, this->g, this->b, 0 };
+                    vec srca { other.a, other.a, other.a, other.a };
+                    if (std::is_same<V, U>::value)
                     {
-                        using vec = vector<max_T>;
-                        vec maxa { max<U>(U::ax), max<U>(U::ax), max<U>(U::ax), max<U>(U::ax) };
-                        vec ax { U::ax, U::ax, U::ax, U::ax };
-
                         vec src { other.r, other.g, other.b, other.a };
-                        vec dest { this->r, this->g, this->b, 0 };
-                        vec srca { src.a, src.a, src.a, src.a };
 
                         src.v *= srca.v;
                         ax.v -= srca.v;
@@ -271,12 +271,7 @@ namespace jw
                     else
                     {
                         vec maxu { max<U>(U::rx), max<U>(U::gx), max<U>(U::bx), max<U>(U::ax) };
-                        vec maxa { max<U>(U::ax), max<U>(U::ax), max<U>(U::ax), max<U>(U::ax) };
-                        vec ax { U::ax, U::ax, U::ax, U::ax };
-
-                        vec src { other.r * max<U>(P::rx), other.g * max<U>(P::gx), other.b * max<U>(P::bx), other.a };
-                        vec dest { this->r, this->g, this->b, 0 };
-                        vec srca { src.a, src.a, src.a, src.a };
+                        vec src { other.r * max<U>(V::rx), other.g * max<U>(V::gx), other.b * max<U>(V::bx), other.a };
 
                         src.v *= srca.v;
                         src.v /= maxu.v;
@@ -290,7 +285,7 @@ namespace jw
                 else
                 {
                     using vec = vector<max_T>;
-                    vec maxp { max<U>(P::rx), max<U>(P::gx), max<U>(P::bx), 0 };
+                    vec maxp { max<U>(V::rx), max<U>(V::gx), max<U>(V::bx), 0 };
                     vec maxu { max<U>(U::rx), max<U>(U::gx), max<U>(U::bx), max<U>(U::ax) };
                     vec maxa { max<U>(U::ax), max<U>(U::ax), max<U>(U::ax), max<U>(U::ax) };
                     vec ax { U::ax, U::ax, U::ax, U::ax };
@@ -299,9 +294,9 @@ namespace jw
                     vec dest { this->r, this->g, this->b, 0 };
                     vec srca { src.a, src.a, src.a, src.a };
 
-                    if (!std::is_same<P, U>::value) src.v *= maxp.v;
+                    if (!std::is_same<V, U>::value) src.v *= maxp.v;
                     src.v *= srca.v;
-                    if (!std::is_same<P, U>::value) src.v /= maxu.v;
+                    if (!std::is_same<V, U>::value) src.v /= maxu.v;
                     ax.v -= srca.v;
                     dest.v *= ax.v;
                     dest.v += src.v;
@@ -310,26 +305,27 @@ namespace jw
                 }
             }
 
-            template<typename U, std::enable_if_t<P::has_alpha && U::has_alpha, bool> = { }>
+            template<typename V, typename U, std::enable_if_t<V::has_alpha && U::has_alpha, bool> = { }>
             constexpr pixel& blend(const pixel<U>& other)
             {
                 using max_T = decltype(max<U>(U::ax));
                 if (std::is_integral<max_T>::value)
                 {
-                #ifdef __SSE__
-                    using vec = vector<float>;
-                #else
-                    using vec = vector<max_T>;
+                #ifndef __SSE__
+                    this->b = ((other.b * max<U>(V::bx) * other.a) / max<U>(U::bx) + this->b * (other.ax - other.a)) / max<U>(U::ax);
+                    this->g = ((other.g * max<U>(V::gx) * other.a) / max<U>(U::gx) + this->g * (other.ax - other.a)) / max<U>(U::ax);
+                    this->r = ((other.r * max<U>(V::rx) * other.a) / max<U>(U::rx) + this->r * (other.ax - other.a)) / max<U>(U::ax);
+                    this->a = ((other.a * max<U>(V::ax) * other.a) / max<U>(U::ax) + this->a * (other.ax - other.a)) / max<U>(U::ax);
+                    return *this;
                 #endif
+                    using vec = vector<float>;
+                    vec maxa { max<U>(U::ax), max<U>(U::ax), max<U>(U::ax), max<U>(U::ax) };
+                    vec ax { U::ax, U::ax, U::ax, U::ax };
+                    vec dest { this->r, this->g, this->b, this->a };
+                    vec srca { other.a, other.a, other.a, other.a };
                     if (std::is_same<P, U>::value)
                     {
-                        using vec = vector<max_T>;
-                        vec maxa { max<U>(U::ax), max<U>(U::ax), max<U>(U::ax), max<U>(U::ax) };
-                        vec ax { U::ax, U::ax, U::ax, U::ax };
-
                         vec src { other.r, other.g, other.b, other.a };
-                        vec dest { this->r, this->g, this->b, this->a };
-                        vec srca { src.a, src.a, src.a, src.a };
 
                         src.v *= srca.v;
                         ax.v -= srca.v;
@@ -341,12 +337,7 @@ namespace jw
                     else
                     {
                         vec maxu { max<U>(U::rx), max<U>(U::gx), max<U>(U::bx), max<U>(U::ax) };
-                        vec maxa { max<U>(U::ax), max<U>(U::ax), max<U>(U::ax), max<U>(U::ax) };
-                        vec ax { U::ax, U::ax, U::ax, U::ax };
-
-                        vec src { other.r * max<U>(P::rx), other.g * max<U>(P::gx), other.b * max<U>(P::bx), other.a * max<U>(P::ax) };
-                        vec dest { this->r, this->g, this->b, this->a };
-                        vec srca { src.a, src.a, src.a, src.a };
+                        vec src { other.r * max<U>(V::rx), other.g * max<U>(V::gx), other.b * max<U>(V::bx), other.a * max<U>(V::ax) };
 
                         src.v *= srca.v;
                         src.v /= maxu.v;
@@ -360,7 +351,7 @@ namespace jw
                 else
                 {
                     using vec = vector<max_T>;
-                    vec maxp { max<U>(P::rx), max<U>(P::gx), max<U>(P::bx), max<U>(P::ax) };
+                    vec maxp { max<U>(V::rx), max<U>(V::gx), max<U>(V::bx), max<U>(V::ax) };
                     vec maxu { max<U>(U::rx), max<U>(U::gx), max<U>(U::bx), max<U>(U::ax) };
                     vec maxa { max<U>(U::ax), max<U>(U::ax), max<U>(U::ax), max<U>(U::ax) };
                     vec ax { U::ax, U::ax, U::ax, U::ax };
@@ -369,9 +360,9 @@ namespace jw
                     vec dest { this->r, this->g, this->b, this->a };
                     vec srca { src.a, src.a, src.a, src.a };
 
-                    if (!std::is_same<P, U>::value) src.v *= maxp.v;
+                    if (!std::is_same<V, U>::value) src.v *= maxp.v;
                     src.v *= srca.v;
-                    if (!std::is_same<P, U>::value) src.v /= maxu.v;
+                    if (!std::is_same<V, U>::value) src.v /= maxu.v;
                     ax.v -= srca.v;
                     dest.v *= ax.v;
                     dest.v += src.v;
