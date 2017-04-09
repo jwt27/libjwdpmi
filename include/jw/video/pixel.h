@@ -78,10 +78,25 @@ namespace jw
         struct [[gnu::packed]] bgra_8880
         {
             using T = std::uint8_t;
-            T b, g, r;
+            T b, g, r, a;
 
             bgra_8880() noexcept = default;
-            constexpr bgra_8880(T cr, T cg, T cb, T) noexcept : b(cb), g(cg), r(cr) { }
+            constexpr bgra_8880(T cr, T cg, T cb, T) noexcept : b(cb), g(cg), r(cr), a(0) { }
+
+            static constexpr T rx = 255;
+            static constexpr T gx = 255;
+            static constexpr T bx = 255;
+            static constexpr T ax = 0;
+            static constexpr bool has_alpha = false;
+        };
+
+        struct [[gnu::packed]] bgr_8880
+        {
+            using T = std::uint8_t;
+            T b, g, r;
+
+            bgr_8880() noexcept = default;
+            constexpr bgr_8880(T cr, T cg, T cb, T) noexcept : b(cb), g(cg), r(cr) { }
 
             static constexpr T rx = 255;
             static constexpr T gx = 255;
@@ -108,15 +123,15 @@ namespace jw
             static constexpr bool has_alpha = true;
         };
 
-        struct alignas(2) [[gnu::packed]] bgra_5650
+        struct alignas(2) [[gnu::packed]] bgr_5650
         {
             using T = unsigned;
             T b : 5;
             T g : 6;
             T r : 5;
 
-            bgra_5650() noexcept = default;
-            constexpr bgra_5650(T cr, T cg, T cb, T) noexcept : b(cb), g(cg), r(cr) { }
+            bgr_5650() noexcept = default;
+            constexpr bgr_5650(T cr, T cg, T cb, T) noexcept : b(cb), g(cg), r(cr) { }
 
             static constexpr T rx = 31;
             static constexpr T gx = 63;
@@ -141,6 +156,24 @@ namespace jw
             static constexpr T bx = 31;
             static constexpr T ax = 1;
             static constexpr bool has_alpha = true;
+        };
+
+        struct alignas(2) [[gnu::packed]] bgra_5550
+        {
+            using T = unsigned;
+            T b : 5;
+            T g : 5;
+            T r : 5;
+            T a : 1;
+
+            bgra_5550() noexcept = default;
+            constexpr bgra_5550(T cr, T cg, T cb, T) noexcept : b(cb), g(cg), r(cr), a(0) { }
+
+            static constexpr T rx = 31;
+            static constexpr T gx = 31;
+            static constexpr T bx = 31;
+            static constexpr T ax = 0;
+            static constexpr bool has_alpha = false;
         };
 
         struct px { };
@@ -259,7 +292,7 @@ namespace jw
             constexpr pixel& operator=(pixel&& o) noexcept = default;
 
             template <typename U, std::enable_if_t<(std::is_integral<typename U::T>::value && std::is_integral<typename P::T>::value), bool> = { }> 
-            static constexpr std::uint16_t max(auto max) noexcept { return max + 1; }
+            static constexpr std::int16_t max(auto max) noexcept { return max + 1; }
             template <typename U, std::enable_if_t<(std::is_floating_point<typename U::T>::value || std::is_floating_point<typename P::T>::value), bool> = { }> 
             static constexpr float max(auto max) noexcept { return max; }
 
@@ -419,17 +452,21 @@ namespace jw
         };
 
         using pxf = pixel<bgra_ffff>;
-        using px32 = pixel<bgra_8888>;
-        using px24 = pixel<bgra_8880>;
-        using px16 = pixel<bgra_5650>;
-        using px15 = pixel<bgra_5551>;
+        using px32a = pixel<bgra_8888>;
+        using px32n = pixel<bgra_8880>;
+        using px24 = pixel<bgr_8880>;
+        using px16 = pixel<bgr_5650>;
+        using px16a = pixel<bgra_5551>;
+        using px16n = pixel<bgra_5551>;
         using pxvga = pixel<bgra_6668>;
 
         static_assert(sizeof(pxf  ) == 16, "check sizeof pixel");
-        static_assert(sizeof(px32 ) ==  4, "check sizeof pixel");
+        static_assert(sizeof(px32a) ==  4, "check sizeof pixel");
+        static_assert(sizeof(px32n) ==  4, "check sizeof pixel");
         static_assert(sizeof(px24 ) ==  3, "check sizeof pixel");
         static_assert(sizeof(px16 ) ==  2, "check sizeof pixel");
-        static_assert(sizeof(px15 ) ==  2, "check sizeof pixel");
+        static_assert(sizeof(px16a) ==  2, "check sizeof pixel");
+        static_assert(sizeof(px16n) ==  2, "check sizeof pixel");
         static_assert(sizeof(pxvga) ==  4, "check sizeof pixel");
     }
 }
