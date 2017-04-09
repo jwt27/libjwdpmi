@@ -91,17 +91,32 @@ namespace jw
             friend constexpr bool operator==(const image_range& lhs, const image_range& rhs) noexcept { return lhs.m.data() == rhs.m.data() && lhs.pos == rhs.pos && lhs.dim == rhs.dim; }
             friend constexpr bool operator!=(const image_range& lhs, const image_range& rhs) noexcept { return !(lhs == rhs); }
 
-            constexpr image_range& fill(const auto& fill) noexcept
+            constexpr image_range& fill(const auto& value) noexcept
+            {
+                pxf c { value };
+                vector blue  { c.b, c.b, c.b, c.b };
+                vector green { c.g, c.g, c.g, c.g };
+                vector red   { c.r, c.r, c.r, c.r };
+                vector alpha { c.a, c.a, c.a, c.a };
+                for (auto y = 0; y < height(); ++y)
+                    for (auto x = 0; x < width(); x += 4)
+                    {
+                        auto p = pos + vector2i { x,y };
+                        p.x /= vs;
+                        i->rm(p).v = red.v;
+                        i->gm(p).v = green.v;
+                        i->bm(p).v = blue.v;
+                        i->am(p).v = alpha.v;
+                    }
+                return *this;
+            }
+
+            constexpr image_range& assign(const auto& other) noexcept
             {
                 return *this;
             }
 
-            constexpr image_range& assign(const auto& copy) noexcept
-            {
-                return *this;
-            }
-
-            constexpr image_range& blend(const auto& copy) noexcept
+            constexpr image_range& blend(const auto& other) noexcept
             {
                 return *this;
             }
