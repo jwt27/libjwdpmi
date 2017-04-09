@@ -88,16 +88,18 @@ namespace jw
         friend constexpr bool operator==(const matrix_range& lhs, const matrix_range& rhs) noexcept { return lhs.m.data() == rhs.m.data() && lhs.pos == rhs.pos && lhs.dim == rhs.dim; }
         friend constexpr bool operator!=(const matrix_range& lhs, const matrix_range& rhs) noexcept { return !(lhs == rhs); }
 
-        constexpr void fill(const auto& fill) noexcept
+        constexpr auto& fill(const auto& fill) noexcept
         {
             for (auto y = 0; y < height(); ++y)
                 std::fill_n(&(*this)(0, y), width(), fill);
+            return *this;
         }
 
-        constexpr void assign(const auto& copy) noexcept
+        constexpr auto& assign(const auto& copy) noexcept
         {
             for (auto y = 0; y < std::min(height(), copy.height()); ++y)
                 std::copy_n(&copy(0, y), std::min(width(), copy.width()), &(*this)(0, y));
+            return *this;
         }
 
         constexpr auto begin() noexcept { return iterator { *this, { 0, 0 }}; }
