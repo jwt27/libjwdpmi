@@ -57,7 +57,6 @@ namespace jw
             static constexpr T bx = 1.0f;
             static constexpr T ax = 1.0f;
             static constexpr bool has_alpha = true;
-            static constexpr bool has_vector = true;
         };
 
         struct alignas(4) bgra_8888
