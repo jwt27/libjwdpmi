@@ -3,6 +3,7 @@
 
 #pragma once
 #include <jw/common.h>
+#include <jw/math.h>
 
 namespace jw
 {
@@ -164,64 +165,96 @@ namespace jw
             constexpr pixel(const pixel& p) noexcept = default;
             constexpr pixel(pixel&& p) noexcept = default;
 
-            template <typename U> constexpr pixel<U> cast(std::true_type) const noexcept
+            template<typename V, std::enable_if_t<V::has_alpha, bool> = { }>
+            constexpr pixel& assign_round(const auto& v) noexcept
+            { 
+                if (std::is_integral<typename V::T>::value)
+                {
+                    this->b = jw::round(v.b);
+                    this->g = jw::round(v.g);
+                    this->r = jw::round(v.r);
+                    this->a = jw::round(v.a);
+                    return *this;
+                }
+                this->b = v.b;
+                this->g = v.g;
+                this->r = v.r;
+                this->a = v.a;
+                return *this;
+            };
+
+            template<typename V, std::enable_if_t<!V::has_alpha, bool> = { }>
+            constexpr pixel& assign_round(const auto& v) noexcept
+            { 
+                if (std::is_integral<typename V::T>::value)
+                {
+                    this->b = jw::round(v.b);
+                    this->g = jw::round(v.g);
+                    this->r = jw::round(v.r);
+                    return *this;
+                }
+                this->b = v.b;
+                this->g = v.g;
+                this->r = v.r;
+                return *this;
+            };
+
+            template <typename V, typename U, std::enable_if_t<V::has_alpha && U::has_alpha, bool> = { }>
+            constexpr pixel<U> cast() const noexcept
             {
                 using max_T = decltype(max<U>(U::ax));
                 if (std::is_floating_point<max_T>::value)
                 {
                     using vec = vector<max_T>;
-                    vec maxp { max<U>(P::rx), max<U>(P::gx), max<U>(P::bx), max<U>(P::ax) };
+                    vec maxp { max<U>(V::rx), max<U>(V::gx), max<U>(V::bx), max<U>(V::ax) };
                     vec maxu { max<U>(U::rx), max<U>(U::gx), max<U>(U::bx), max<U>(U::ax) };
                     vec src { this->r, this->g, this->b, this->a };
                     src.v *= maxu.v;
                     src.v /= maxp.v;
-
-                    using UT = typename U::T;
-                    return pixel<U> { static_cast<UT>(src.r), static_cast<UT>(src.g), static_cast<UT>(src.b), static_cast<UT>(src.a) };
+                    return pixel<U> { }.assign_round<U>(src);
                 }
                 else
                 {
                     using UT = typename U::T;
                     pixel<U> result { };
-                    result.b = static_cast<UT>(this->b * max<U>(U::bx) / max<U>(P::bx));
-                    result.g = static_cast<UT>(this->g * max<U>(U::gx) / max<U>(P::gx));
-                    result.r = static_cast<UT>(this->r * max<U>(U::rx) / max<U>(P::rx));
-                    result.a = static_cast<UT>(this->a * max<U>(U::ax) / max<U>(P::ax));
+                    result.b = static_cast<UT>(this->b * max<U>(U::bx) / max<U>(V::bx));
+                    result.g = static_cast<UT>(this->g * max<U>(U::gx) / max<U>(V::gx));
+                    result.r = static_cast<UT>(this->r * max<U>(U::rx) / max<U>(V::rx));
+                    result.a = static_cast<UT>(this->a * max<U>(U::ax) / max<U>(V::ax));
                     return result;
                 }
             };
 
-            template <typename U> constexpr pixel<U> cast(std::false_type) const noexcept
+            template <typename V, typename U, std::enable_if_t<!V::has_alpha || !U::has_alpha, bool> = { }>
+            constexpr pixel<U> cast() const noexcept
             { 
                 using max_T = decltype(max<U>(U::ax));
                 if (std::is_floating_point<max_T>::value)
                 {
                     using vec = vector<max_T>;
-                    vec maxp { max<U>(P::rx), max<U>(P::gx), max<U>(P::bx), 1 };
+                    vec maxp { max<U>(V::rx), max<U>(V::gx), max<U>(V::bx), 1 };
                     vec maxu { max<U>(U::rx), max<U>(U::gx), max<U>(U::bx), 0 };
                     vec src { this->r, this->g, this->b, 0 };
                     src.v *= maxu.v;
                     src.v /= maxp.v;
-
-                    using UT = typename U::T;
-                    return pixel<U> { static_cast<UT>(src.r), static_cast<UT>(src.g), static_cast<UT>(src.b) };
+                    return pixel<U> { }.assign_round<U>(src);
                 }
                 else
                 {
                     using UT = typename U::T;
                     pixel<U> result { };
-                    result.b = static_cast<UT>(this->b * max<U>(U::bx) / max<U>(P::bx));
-                    result.g = static_cast<UT>(this->g * max<U>(U::gx) / max<U>(P::gx));
-                    result.r = static_cast<UT>(this->r * max<U>(U::rx) / max<U>(P::rx));
+                    result.b = static_cast<UT>(this->b * max<U>(U::bx) / max<U>(V::bx));
+                    result.g = static_cast<UT>(this->g * max<U>(U::gx) / max<U>(V::gx));
+                    result.r = static_cast<UT>(this->r * max<U>(U::rx) / max<U>(V::rx));
                     return result;
                 }
             };
 
-            template <typename U> constexpr pixel<U> cast() const noexcept { return cast<U>(std::is_void<std::conditional_t<P::has_alpha, void, bool>> { }); }
-            template <typename U> constexpr operator pixel<U>() const noexcept { return cast<U>(); }
+            template <typename U> constexpr pixel<U> cast_to() const noexcept { return cast<P, U>(); }
+            template <typename U> constexpr operator pixel<U>() const noexcept { return cast_to<U>(); }
 
             template <typename U> constexpr pixel& operator=(const pixel<U>& other) noexcept { return blend(other); }
-            template <typename U> constexpr pixel& operator=(pixel<U>&& other) noexcept { return *this = std::move(other.cast<P>()); }
+            template <typename U> constexpr pixel& operator=(pixel<U>&& other) noexcept { return *this = std::move(other.cast_to<P>()); }
             constexpr pixel& operator=(const pixel& other) noexcept { return blend(other); }
             constexpr pixel& operator=(pixel&& o) noexcept = default;
 
@@ -233,17 +266,15 @@ namespace jw
             template<typename V, typename U, std::enable_if_t<!U::has_alpha, bool> = { }>
             constexpr pixel& blend(const pixel<U>& src)
             {
-                auto copy = src.cast<V>();
-                this->b = copy.b;
-                this->g = copy.g;
-                this->r = copy.r;
-                return *this;
+                auto copy = src.cast_to<V>();
+                return assign_round<V>(copy);
             }
 
             template<typename V, typename U, std::enable_if_t<!V::has_alpha && U::has_alpha, bool> = { }>
             constexpr pixel& blend(const pixel<U>& other)
             {
                 using max_T = decltype(max<U>(U::ax));
+
                 if (std::is_integral<max_T>::value)
                 {
                 #ifndef __SSE__
@@ -266,7 +297,7 @@ namespace jw
                         dest.v *= ax.v;
                         dest.v += src.v;
                         dest.v /= maxa.v;
-                        return *this = pixel { static_cast<T>(dest.r), static_cast<T>(dest.g), static_cast<T>(dest.b) };
+                        return assign_round<V>(dest);
                     }
                     else
                     {
@@ -279,7 +310,7 @@ namespace jw
                         dest.v *= ax.v;
                         dest.v += src.v;
                         dest.v /= maxa.v;
-                        return *this = pixel { static_cast<T>(dest.r), static_cast<T>(dest.g), static_cast<T>(dest.b) };
+                        return assign_round<V>(dest);
                     }
                 }
                 else
@@ -301,7 +332,7 @@ namespace jw
                     dest.v *= ax.v;
                     dest.v += src.v;
                     dest.v /= maxa.v;
-                    return *this = pixel { static_cast<T>(dest.r), static_cast<T>(dest.g), static_cast<T>(dest.b) };
+                    return assign_round<V>(dest);
                 }
             }
 
@@ -332,7 +363,7 @@ namespace jw
                         dest.v *= ax.v;
                         dest.v += src.v;
                         dest.v /= maxa.v;
-                        return *this = pixel { static_cast<T>(dest.r), static_cast<T>(dest.g), static_cast<T>(dest.b), static_cast<T>(dest.a) };
+                        return assign_round<V>(dest);
                     }
                     else
                     {
@@ -345,7 +376,7 @@ namespace jw
                         dest.v *= ax.v;
                         dest.v += src.v;
                         dest.v /= maxa.v;
-                        return *this = pixel { static_cast<T>(dest.r), static_cast<T>(dest.g), static_cast<T>(dest.b), static_cast<T>(dest.a) };
+                        return assign_round<V>(dest);
                     }
                 }
                 else
@@ -367,7 +398,7 @@ namespace jw
                     dest.v *= ax.v;
                     dest.v += src.v;
                     dest.v /= maxa.v;
-                    return *this = pixel { static_cast<T>(dest.r), static_cast<T>(dest.g), static_cast<T>(dest.b), static_cast<T>(dest.a) };
+                    return assign_round<V>(dest);
                 }
             }
 
