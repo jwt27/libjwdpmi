@@ -155,8 +155,8 @@ namespace jw
             std::uint8_t linear_green_field_pos;
             std::uint8_t linear_blue_mask_size;
             std::uint8_t linear_blue_field_pos;
-            std::uint8_t reserved_linear_mask_size;
-            std::uint8_t reserved_linear_field_pos;
+            std::uint8_t linear_reserved_mask_size;
+            std::uint8_t linear_reserved_field_pos;
             std::uint32_t max_pixel_clock;
             byte _reserved[190]; // HACK: should be 189?
         };
