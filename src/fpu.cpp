@@ -62,10 +62,10 @@ namespace jw
             }
             
             fpu_context_switcher_t fpu_context_switcher;
-            std::unique_ptr<exception_handler> exc07_handler;
+            std::unique_ptr<exception_handler> exc07_handler, exc06_handler;
 
             fpu_context_switcher_t::fpu_context_switcher_t()
-            {                          
+            {
                 cr0_t cr0 { };
                 cr0.native_exceptions = true;
                 cr0.monitor_fpu = true;
@@ -98,19 +98,37 @@ namespace jw
                 default_irq_context.save();
                 contexts.emplace_back(nullptr);
 
-                init = true;
-                if (!test_cr0_access() || cr0.fpu_emulation) return;
-                
-                exc07_handler = std::make_unique<exception_handler>(0x07, [this](cpu_registers*, exception_frame*, bool) INTERRUPT
+                set_fpu_emulation(false, true);
+                if (test_cr0_access()) use_ts_bit = true;
+                else
                 {
-                    cr0_t cr0 { };
-                    cr0.task_switched = false;
-                    cr0.set();
+                    use_ts_bit = false;
+                    exc06_handler = std::make_unique<exception_handler>(exception_num::invalid_opcode, [this](cpu_registers*, exception_frame*, bool) INTERRUPT
+                    {
+                        if (!get_fpu_emulation().em) return false;
+                        set_fpu_emulation(false);
+                        switch_context();
+                        return true;
+                    });
+                }
+
+                exc07_handler = std::make_unique<exception_handler>(exception_num::device_not_available, [this](cpu_registers*, exception_frame*, bool) INTERRUPT
+                {
+                    if (use_ts_bit)
+                    {
+                        cr0_t cr0 { };
+                        cr0.task_switched = false;
+                        cr0.set();
+                    }
+                    else
+                    {
+                        set_fpu_emulation(false);
+                    }
                     switch_context();
                     return true;
                 });
 
-                lazy_switching = true;
+                init = true;
             }
 
             fpu_context_switcher_t::~fpu_context_switcher_t()

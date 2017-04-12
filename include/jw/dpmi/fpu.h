@@ -149,7 +149,7 @@ namespace jw
                     asm volatile(
                         "int 0x31;"
                         : "=a" (status)
-                        : "a" (0x0E01)
+                        : "a" (0x0E00)
                         : "cc");
                     return status;
                 }
@@ -177,10 +177,13 @@ namespace jw
                 {
                     if (!init) return;
                     contexts.push_back(nullptr);
-                    if (!use_ts_bit) switch_context();
-                    cr0_t cr0 { };
-                    cr0.task_switched = true;
-                    cr0.set();
+                    if (!use_ts_bit) set_fpu_emulation(true);
+                    else
+                    {
+                        cr0_t cr0 { };
+                        cr0.task_switched = true;
+                        cr0.set();
+                    }
                 }
 
                 INTERRUPT void leave() noexcept
@@ -188,10 +191,14 @@ namespace jw
                     if (!init) return;
                     if (contexts.back() != nullptr) alloc.deallocate(contexts.back(), 1);
                     contexts.pop_back();
-                    if (!use_ts_bit) switch_context();
-                    cr0_t cr0 { };
-                    cr0.task_switched = (last_restored != contexts.size() - 1);
-                    cr0.set();
+                    bool switch_required = last_restored != (contexts.size() - 1);
+                    if (!use_ts_bit) set_fpu_emulation(switch_required);
+                    else
+                    {
+                        cr0_t cr0 { };
+                        cr0.task_switched = switch_required;
+                        cr0.set();
+                    }
                 }
 
                 fpu_context* get_last_context()
