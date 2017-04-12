@@ -1,19 +1,5 @@
-/******************************* libjwdpmi **********************************
-Copyright (C) 2016-2017  J.W. Jagersma
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/
+/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
 #include <array>
@@ -123,9 +109,50 @@ namespace jw
                 std::deque<fpu_context*, locked_pool_allocator<>> contexts { alloc };
                 
                 fpu_context default_irq_context;
-                bool lazy_switching { false };
+                bool use_ts_bit { false };
                 bool init { false };
                 std::uint32_t last_restored { 0 };
+
+                struct fpu_emulation_status
+                {
+                    bool mp : 1;
+                    bool em : 1;
+                    bool host_mp : 1;
+                    bool host_em : 1;
+                    enum
+                    {
+                        fpu_none = 0,
+                        fpu_286 = 2,
+                        fpu_387,
+                        fpu_486
+                    } fpu_type : 4;
+                    unsigned : 8;
+                };
+
+                void set_fpu_emulation(bool em, bool mp = true)
+                {
+                    dpmi_error_code error;
+                    bool c;
+                    asm volatile(
+                        "int 0x31;"
+                        : "=@ccc" (c)
+                        , "=a" (error)
+                        : "a" (0x0E01)
+                        , "b" (mp | (em << 1))
+                        : "cc");
+                    if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+                }
+
+                fpu_emulation_status get_fpu_emulation()
+                {
+                    fpu_emulation_status status;
+                    asm volatile(
+                        "int 0x31;"
+                        : "=a" (status)
+                        : "a" (0x0E01)
+                        : "cc");
+                    return status;
+                }
                 
                 INTERRUPT void switch_context()
                 {
@@ -150,7 +177,7 @@ namespace jw
                 {
                     if (!init) return;
                     contexts.push_back(nullptr);
-                    if (!lazy_switching) switch_context();
+                    if (!use_ts_bit) switch_context();
                     cr0_t cr0 { };
                     cr0.task_switched = true;
                     cr0.set();
@@ -161,7 +188,7 @@ namespace jw
                     if (!init) return;
                     if (contexts.back() != nullptr) alloc.deallocate(contexts.back(), 1);
                     contexts.pop_back();
-                    if (!lazy_switching) switch_context();
+                    if (!use_ts_bit) switch_context();
                     cr0_t cr0 { };
                     cr0.task_switched = (last_restored != contexts.size() - 1);
                     cr0.set();
