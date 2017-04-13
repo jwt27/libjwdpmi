@@ -76,41 +76,41 @@ namespace jw
                 static constexpr io_port<T> data { 0xcfc };
             };
 
-            struct reg_id { std::uint16_t vendor, device; };
+            struct [[gnu::packed]] reg_command
+            {
+                bool io_access : 1;
+                bool memory_access : 1;
+                bool bus_master : 1;
+                bool respond_to_special_cycle : 1;
+                bool enable_memory_write_and_invalidate : 1;
+                bool vga_palette_snoop : 1;
+                bool respond_to_parity_error : 1;
+                bool enable_stepping : 1;               // not used since PCI 3.0
+                bool enable_system_error : 1;
+                bool enable_fast_back_to_back : 1;
+                bool disable_interrupt : 1;
+                unsigned : 5;
+            } command;
             struct [[gnu::packed]] reg_status
             {
-                struct [[gnu::packed]]
-                {
-                    bool io_access : 1;
-                    bool memory_access : 1;
-                    bool bus_master : 1;
-                    bool respond_to_special_cycle : 1;
-                    bool enable_memory_write_and_invalidate : 1;
-                    bool vga_palette_snoop : 1;
-                    bool respond_to_parity_error : 1;
-                    bool enable_stepping : 1;               // not used since PCI 3.0
-                    bool enable_system_error : 1;
-                    bool enable_fast_back_to_back : 1;
-                    bool disable_interrupt : 1;
-                    unsigned : 5;
-                } command;
-                struct [[gnu::packed]]
-                {
-                    unsigned : 3;
-                    bool interrupt : 1;
-                    bool has_capabilities_list : 1;
-                    bool is_66mhz_capable : 1;
-                    bool user_definable_configuration : 1;   // not used since PCI 2.2
-                    bool is_fast_back_to_back_capable : 1;
-                    bool master_parity_error : 1;
-                    enum { fast, medium, slow } devsel_timing : 2;
-                    bool sent_target_abort : 1;
-                    bool received_target_abort : 1;
-                    bool received_master_abort : 1;
-                    bool sent_system_error : 1;
-                    bool parity_error : 1;
-                } status;
-            };
+                unsigned : 3;
+                bool interrupt : 1;
+                bool has_capabilities_list : 1;
+                bool is_66mhz_capable : 1;
+                bool user_definable_configuration : 1;   // not used since PCI 2.2
+                bool is_fast_back_to_back_capable : 1;
+                bool master_parity_error : 1;
+                enum { fast, medium, slow } devsel_timing : 2;
+                bool sent_target_abort : 1;
+                bool received_target_abort : 1;
+                bool received_master_abort : 1;
+                bool sent_system_error : 1;
+                bool parity_error : 1;
+            } status;
+
+            struct reg_id { std::uint16_t vendor, device; };
+            
+            struct [[gnu::packed]] reg_command_and_status { reg_command command; reg_status status; };
             struct reg_type { std::uint8_t revision, prog_interface, subclass, class_code; };
             struct [[gnu::packed]] reg_misc
             {
@@ -131,10 +131,25 @@ namespace jw
             };
 
             pci_register<reg_id> id { this, 0x00 };
-            pci_register<reg_status> status { this, 0x04 };
+            pci_register<reg_command_and_status> command_and_status { this, 0x04 };
             pci_register<reg_type> type { this, 0x08 };
             pci_register<reg_misc> misc { this, 0x0C };
             pci_register<std::uintptr_t> base0 { this, 0x10 };
+
+            auto read_status() { return command_and_status.read().status; }
+            void clear_status(reg_status clear_bits) 
+            {
+                auto s = command_and_status.read();
+                s.status = clear_bits;
+                command_and_status.write(s);
+            }
+
+            void send_command(reg_command cmd) 
+            {
+                reg_command_and_status r { };
+                r.command = cmd;
+                command_and_status.write(r);
+            }
 
         private:
             std::uint16_t index;
