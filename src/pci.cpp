@@ -9,7 +9,7 @@ namespace jw
     {
         pci_device::map_type* pci_device::device_map;
 
-        pci_device::pci_device(std::uint16_t vendor, std::initializer_list<std::uint16_t> devices, std::uint8_t function)
+        pci_device::pci_device(std::uint16_t vendor, std::initializer_list<std::uint16_t> devices, std::uint8_t function_id)
         {
             dpmi::realmode_registers reg { };
             reg.ax = 0xb101;
@@ -35,9 +35,10 @@ namespace jw
                     if (reg.ah == 0x86) throw device_not_found { "PCI Device not found." };
                     if (reg.ah == 0x83) throw device_not_found { "Bad vendor ID." };
                     if (reg.flags.carry) throw error { "Unknown PCI error." };
-                    if (function != 0xff && (reg.bl & 0b111) != function) continue;
+                    if (function_id != 0xff && (reg.bl & 0b111) != function_id) continue;
                     bus = reg.bh;
                     bus_device = reg.bl >> 3;
+                    function = reg.bl & 0b111;
                     (*device_map)[vendor_id][device_id][index] = this;
                     return;
                 }
