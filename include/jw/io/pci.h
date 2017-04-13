@@ -25,7 +25,7 @@ namespace jw
             template<typename T, std::uint8_t reg>
             struct pci_register
             {
-                static_assert(sizeof(T) == 4 && (reg % 4) == 0, "PCI registers must be 4 bytes wide.");
+                static_assert(sizeof(T) == 4 && (reg % 4) == 0, "PCI registers must be 32 bits wide.");
                 constexpr pci_register(pci_device* device) : dev(*device) { }
 
                 auto read()
@@ -69,12 +69,32 @@ namespace jw
                 static constexpr io_port<T> data { 0xcfc };
             };
 
-            struct id_reg
+            struct reg_id { std::uint16_t vendor, device; };
+            struct reg_status { std::uint16_t command, status; };
+            struct reg_type { std::uint8_t revision, prog_interface, subclass, class_code; };
+            struct [[gnu::packed]] reg_misc
             {
-                std::uint16_t device, vendor;
+                std::uint8_t cache_line_size;
+                std::uint8_t latency_timer;
+                struct [[gnu::packed]]
+                {
+                    unsigned header_type : 7;
+                    bool multifunction : 1;
+                };
+                struct [[gnu::packed]]
+                {
+                    unsigned result : 4;
+                    unsigned : 2;
+                    bool start : 1;
+                    bool capable : 1;
+                } self_test;
             };
 
-            pci_register<id_reg, 0> id { this };
+            pci_register<reg_id, 0x00> id { this };
+            pci_register<reg_status, 0x04> status { this };
+            pci_register<reg_type, 0x08> type { this };
+            pci_register<reg_misc, 0x0C> misc { this };
+            pci_register<std::uintptr_t, 0x10> base_0 { this };
 
         private:
             std::uint16_t device_id, vendor_id;
