@@ -175,7 +175,7 @@ namespace jw
 
                 INTERRUPT void enter() noexcept
                 {
-                    if (!init) return;
+                    if (__builtin_expect(!init, false)) return;
                     contexts.push_back(nullptr);
                     if (!use_ts_bit) set_fpu_emulation(true);
                     else
@@ -188,7 +188,7 @@ namespace jw
 
                 INTERRUPT void leave() noexcept
                 {
-                    if (!init) return;
+                    if (__builtin_expect(!init, false)) return;
                     if (contexts.back() != nullptr) alloc.deallocate(contexts.back(), 1);
                     contexts.pop_back();
                     bool switch_required = last_restored != (contexts.size() - 1);

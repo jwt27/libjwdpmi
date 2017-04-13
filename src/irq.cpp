@@ -24,7 +24,7 @@ namespace jw
                 fpu_context_switcher.enter();
                 
                 byte* esp; asm("mov %0, esp;":"=rm"(esp));
-                if (static_cast<std::size_t>(esp - data->stack.data()) <= config::interrupt_minimum_stack_size)
+                if (__builtin_expect(static_cast<std::size_t>(esp - data->stack.data()) <= config::interrupt_minimum_stack_size, false))
                 {
                     data->increase_stack_size->start();
                 }

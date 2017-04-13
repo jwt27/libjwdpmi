@@ -1,21 +1,6 @@
-/******************************* libjwdpmi **********************************
-Copyright (C) 2016-2017  J.W. Jagersma
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/
-
-// Custom allocators for use in STL containers.
+/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
+/* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
 #include <memory>
@@ -54,7 +39,7 @@ namespace jw
             auto allocate(std::size_t n)
             {
                 throw_if_irq();
-                if (map == nullptr) map = new std::map<void*, data_lock> { };
+                if (__builtin_expect(map == nullptr, false)) map = new std::map<void*, data_lock> { };
                 n *= sizeof(T);
                 auto* p = ::operator new(n);
                 map->emplace(p, data_lock { p, n });
@@ -81,13 +66,13 @@ namespace jw
             ~locking_allocator()
             {
                 if (map == nullptr) return;
-                if (!map->empty()) return;
+                if (__builtin_expect(!map->empty(), true)) return;
                 delete map;
                 map = nullptr;
             }
 
-            template <typename U> constexpr friend bool operator == (const locking_allocator&, const locking_allocator<U>&) noexcept { return true; }
-            template <typename U> constexpr friend bool operator != (const locking_allocator& a, const locking_allocator<U>& b) noexcept { return !(a == b); }
+            template <typename U> constexpr friend bool operator== (const locking_allocator&, const locking_allocator<U>&) noexcept { return true; }
+            template <typename U> constexpr friend bool operator!= (const locking_allocator& a, const locking_allocator<U>& b) noexcept { return !(a == b); }
         };
 
 

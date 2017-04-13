@@ -15,7 +15,7 @@ namespace jw
             bool cr0_access_known { false };
             bool test_cr0_access()
             {
-                if (!cr0_access_known)
+                if (__builtin_expect(!cr0_access_known, false))
                 {
                     volatile bool test { true };
                     dpmi::exception_handler exc { 0x0d, [&test](auto*, exception_frame* frame, bool)
@@ -40,7 +40,7 @@ namespace jw
             bool cr4_access_known { false };
             bool test_cr4_access()
             {
-                if (!cr4_access_known)
+                if (__builtin_expect(!cr4_access_known, false))
                 {
                     volatile bool test { true };
                     dpmi::exception_handler exc { 0x0d, [&test](auto*, exception_frame* frame, bool)
@@ -114,7 +114,7 @@ namespace jw
 
                 exc07_handler = std::make_unique<exception_handler>(exception_num::device_not_available, [this](cpu_registers*, exception_frame*, bool) INTERRUPT
                 {
-                    if (use_ts_bit)
+                    if (__builtin_expect(use_ts_bit, true))
                     {
                         cr0_t cr0 { };
                         cr0.task_switched = false;
