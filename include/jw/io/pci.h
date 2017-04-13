@@ -144,6 +144,7 @@ namespace jw
                 command_and_status.write(s);
             }
 
+            auto current_command() { return command_and_status.read().command; }
             void send_command(reg_command cmd) 
             {
                 reg_command_and_status r { };
