@@ -22,11 +22,14 @@ namespace jw
             pci_device(std::uint16_t vendor, std::initializer_list<std::uint16_t> devices, std::uint8_t function = 0xff);
             virtual ~pci_device();
 
-            template<typename T, std::uint8_t reg>
+            template<typename T>
             struct pci_register
             {
-                static_assert(sizeof(T) == 4 && (reg % 4) == 0, "PCI registers must be 32 bits wide.");
-                constexpr pci_register(pci_device* device) : dev(*device) { }
+                static_assert(sizeof(T) == 4, "PCI registers must be 32 bits wide.");
+                constexpr pci_register(pci_device* device, std::uint8_t register_num) : dev(*device), reg(register_num)
+                {
+                    if (reg % 4 != 0) throw bad_register { "PCI registers must be aligned to a 32-bit boundary." };
+                }
 
                 auto read()
                 {
@@ -41,7 +44,7 @@ namespace jw
                 }
 
             private:
-                std::uint32_t get_regnum()
+                std::uint32_t get_regnum() const
                 {
                     union
                     {
@@ -64,7 +67,8 @@ namespace jw
                     return x.value;
                 }
 
-                pci_device& dev { };
+                const pci_device& dev { };
+                const std::uint8_t reg;
                 static constexpr out_port<std::uint32_t> index { 0xcf8 };
                 static constexpr io_port<T> data { 0xcfc };
             };
@@ -123,11 +127,11 @@ namespace jw
                 } self_test;
             };
 
-            pci_register<reg_id, 0x00> id { this };
-            pci_register<reg_status, 0x04> status { this };
-            pci_register<reg_type, 0x08> type { this };
-            pci_register<reg_misc, 0x0C> misc { this };
-            pci_register<std::uintptr_t, 0x10> base0 { this };
+            pci_register<reg_id> id { this, 0x00 };
+            pci_register<reg_status> status { this, 0x04 };
+            pci_register<reg_type> type { this, 0x08 };
+            pci_register<reg_misc> misc { this, 0x0C };
+            pci_register<std::uintptr_t> base0 { this, 0x10 };
 
         private:
             std::uint16_t index;
