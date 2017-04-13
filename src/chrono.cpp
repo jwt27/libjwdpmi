@@ -4,7 +4,6 @@
 #include <jw/chrono/chrono.h>
 #include <jw/io/ioport.h>
 #include <jw/dpmi/irq_mask.h>
-#include <libc/farptrgs.h>
 
 namespace jw
 {
@@ -36,7 +35,7 @@ namespace jw
             auto tsc = rdtsc();
             std::uint32_t diff = tsc - last_tsc;
             last_tsc = tsc;
-            if (tsc_resync) { tsc_resync = false; return; }
+            if (__builtin_expect(tsc_resync, false)) { tsc_resync = false; return; }
             tsc_total += diff;
             ++tsc_sample_size;
             while (tsc_sample_size > tsc_max_sample_size)

@@ -4,7 +4,7 @@
 #pragma once
 #include <initializer_list>
 #include <unordered_map>
-#include <jw/dpmi/realmode.h>
+#include <jw/io/ioport.h>
 #include <jw/common.h>
 
 namespace jw
@@ -91,6 +91,7 @@ namespace jw
                 bool disable_interrupt : 1;
                 unsigned : 5;
             } command;
+
             struct [[gnu::packed]] reg_status
             {
                 unsigned : 3;

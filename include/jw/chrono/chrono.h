@@ -98,7 +98,7 @@ namespace jw
             static constexpr bool is_steady { false };
             static time_point now() noexcept
             {
-                if (!chrono::pit_irq.is_enabled())
+                if (__builtin_expect(!chrono::pit_irq.is_enabled(), false))
                 {
                     auto t = std::chrono::duration_cast<duration>(std::chrono::steady_clock::now().time_since_epoch());
                     return time_point { t };
@@ -117,7 +117,7 @@ namespace jw
             static constexpr bool is_steady { false };
             static time_point now() noexcept
             {
-                if (!chrono::rtc_irq.is_enabled() && !chrono::pit_irq.is_enabled())
+                if (__builtin_expect(!chrono::rtc_irq.is_enabled() && !chrono::pit_irq.is_enabled(), false))
                 {
                     auto t = std::chrono::duration_cast<duration>(std::chrono::high_resolution_clock::now().time_since_epoch());
                     return time_point { t };
