@@ -69,7 +69,7 @@ namespace jw
                 if (__builtin_expect(t != nullptr, false))
                 {
                     dpmi::interrupt_mask no_interrupts_please { };
-                    threads.erase(remove_if(threads.begin(), threads.end(), [&](const auto& i) { return i == t; }), threads.end());
+                    threads.erase(remove_if(threads.begin(), threads.end(), [t](const auto& i) { return i == t; }), threads.end());
                     threads.push_front(t);
                 }
                 if (dpmi::in_irq_context()) return;
@@ -112,13 +112,14 @@ namespace jw
             // Throws abort_thread if task->abort() is called, or orphaned_thread if task is orphaned.
             void scheduler::check_exception()
             {
-                if (current_thread->awaiting && current_thread->awaiting->pending_exceptions() > 0)
+                if (__builtin_expect(current_thread->awaiting && current_thread->awaiting->pending_exceptions() > 0, false))
                 {
                     auto exc = current_thread->awaiting->exceptions.front();
                     current_thread->awaiting->exceptions.pop_front();
                     try { std::rethrow_exception(exc); }
                     catch (...) { std::throw_with_nested(thread_exception { current_thread }); }
                 }
+                if (__builtin_expect(current_thread->pending_exceptions() > 0, false))
                 for (auto exc : current_thread->exceptions)
                 {
                     try { std::rethrow_exception(exc); }
@@ -138,11 +139,11 @@ namespace jw
                     catch (...) { }
                 }
                 
-                if (current_thread != main_thread && *reinterpret_cast<std::uint32_t*>(current_thread->stack_ptr) != 0xDEADBEEF)
+                if (__builtin_expect(current_thread != main_thread && *reinterpret_cast<std::uint32_t*>(current_thread->stack_ptr) != 0xDEADBEEF, false))
                     throw std::runtime_error("Stack overflow!");
 
-                if (current_thread->state == terminating) throw abort_thread();
-                if (current_thread.unique() && !current_thread->allow_orphan && current_thread->is_running()) throw orphaned_thread();
+                if (__builtin_expect(current_thread->state == terminating, false)) throw abort_thread();
+                if (__builtin_expect(current_thread.unique() && !current_thread->allow_orphan && current_thread->is_running(), false)) throw orphaned_thread();
             }
 
             // Selects a new current_thread.
@@ -167,9 +168,9 @@ namespace jw
                         *current_thread->context = *current_thread->parent->context;                // clone parent's context to new stack
                     }
 
-                    if (current_thread->pending_exceptions() != 0) break;
-                    if (current_thread->awaiting && current_thread->awaiting->pending_exceptions() != 0) break;
-                } while (current_thread->state == suspended);
+                    if (__builtin_expect(current_thread->pending_exceptions() != 0, false)) break;
+                    if (__builtin_expect(current_thread->awaiting && current_thread->awaiting->pending_exceptions() != 0, false)) break;
+                } while (__builtin_expect(current_thread->state == suspended, false));
             }
         }
     }

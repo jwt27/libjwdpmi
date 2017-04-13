@@ -1,36 +1,18 @@
-/******************************* libjwdpmi **********************************
-Copyright (C) 2016-2017  J.W. Jagersma
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/
-
-// Interrupt and IRQ masking classes. 
+/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
+/* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
 #include <iostream>
 #include <unordered_map>
 #include <atomic>
-
 #include <jw/io/ioport.h>
 #include <jw/dpmi/dpmi.h>
-//#include "debug.h"
 
 namespace jw
 {
     namespace dpmi
     {
-        //TODO: lock()/unlock() for use with std::lock_guard ?
         using irq_level = std::uint8_t;
 
         // Disables the interrupt flag
@@ -63,8 +45,8 @@ namespace jw
             // Restores the interrupt flag to previous state
             static void sti() noexcept
             {
-                if (count == 0) return;
-                if (--count == 0 && initial_state) asm("sti");
+                if (__builtin_expect(count == 0, false)) return;
+                if (__builtin_expect(--count == 0 && initial_state, true)) asm("sti");
             }
 
             static volatile int count;
@@ -87,8 +69,7 @@ namespace jw
             {
                 std::uint32_t state;
 
-                asm volatile (
-                    "int 0x31;"
+                asm("int 0x31;"
                     : "=a" (state)
                     : "a" (0x0902)
                     : "cc");
