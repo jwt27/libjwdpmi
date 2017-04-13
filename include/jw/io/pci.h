@@ -43,7 +43,25 @@ namespace jw
             private:
                 std::uint32_t get_regnum()
                 {
-                    return 0x80000000 | (dev.bus << 16) | (dev.bus_device << 11) | (dev.function << 8) | reg;
+                    union
+                    {
+                        struct
+                        {
+                            unsigned register_num : 8;
+                            unsigned function : 3;
+                            unsigned device : 5;
+                            unsigned bus : 8;
+                            unsigned : 7;
+                            bool enable_config : 1;
+                        };
+                        std::uint32_t value { };
+                    } x;
+                    x.register_num = reg;
+                    x.function = dev.function;
+                    x.device = dev.bus_device;
+                    x.bus = dev.bus;
+                    x.enable_config = true;
+                    return x.value;
                 }
 
                 pci_device& dev { };
