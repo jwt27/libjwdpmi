@@ -19,14 +19,17 @@ namespace jw
             struct device_not_found : public error { using error::error; };
 
         protected:
-            pci_device(std::uint16_t vendor, std::initializer_list<std::uint16_t> devices, std::uint8_t function = 0xff);
+            struct device_tag { };
+            struct class_tag { };
+            pci_device(device_tag, std::uint16_t vendor, std::initializer_list<std::uint16_t> devices, std::uint8_t function = 0xff);
+            pci_device(class_tag, std::uint8_t class_code, std::initializer_list<std::uint8_t> subclass_codes, std::uint8_t interface_type);
             virtual ~pci_device();
 
             template<typename T>
             struct pci_register
             {
                 static_assert(sizeof(T) == 4, "PCI registers must be 32 bits wide.");
-                constexpr pci_register(pci_device* device, std::uint8_t register_num) : dev(*device), reg(register_num)
+                constexpr pci_register(const pci_device* device, std::uint8_t register_num) : dev(*device), reg(register_num)
                 {
                     if (reg % 4 != 0) throw bad_register { "PCI registers must be aligned to a 32-bit boundary." };
                 }
@@ -140,6 +143,7 @@ namespace jw
             using map_type = std::unordered_map<std::uint16_t, std::unordered_map<std::uint16_t, std::unordered_map<std::uint16_t, const pci_device*>>>;
             // map indexed by: bus->device->function
             static map_type* device_map;
+            static void init();
         };
     }
 }
