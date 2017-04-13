@@ -1,19 +1,5 @@
-/******************************* libjwdpmi **********************************
-Copyright (C) 2016-2017  J.W. Jagersma
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/
+/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #include <array>
 #include <cstring>
@@ -774,7 +760,7 @@ namespace jw
             {
                 if (debugmsg) std::clog << "entering exception 0x" << std::hex << exc << "\n";
 
-                if (reentry)
+                if (__builtin_expect(reentry, false))
                 {
                     if (exc == 0x01)    // watchpoint trap, ignore
                     {
@@ -802,7 +788,7 @@ namespace jw
                 {
                     reentry = true;
                     populate_thread_list();
-                    if (exc == 0x01 || exc == 0x03)
+                    if (__builtin_expect(exc == 0x01 || exc == 0x03, true))
                     {
                         if (thread::detail::thread_details::trap_is_masked(current_thread->thread.lock()))
                         {
