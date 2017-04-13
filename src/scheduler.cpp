@@ -1,19 +1,6 @@
-/******************************* libjwdpmi **********************************
-    Copyright (C) 2016-2017  J.W. Jagersma
-
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-                                                                            */
+/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
+/* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
 #include <algorithm>
 #include <jw/dpmi/irq_mask.h>
@@ -79,7 +66,7 @@ namespace jw
             void scheduler::thread_switch(thread_ptr t)
             {
                 dpmi::trap_mask dont_trace_here { };
-                if (t)
+                if (__builtin_expect(t != nullptr, false))
                 {
                     dpmi::interrupt_mask no_interrupts_please { };
                     threads.erase(remove_if(threads.begin(), threads.end(), [&](const auto& i) { return i == t; }), threads.end());
@@ -165,12 +152,12 @@ namespace jw
                 dpmi::interrupt_mask no_interrupts_please { };
                 do
                 {
-                    if (current_thread->is_running()) threads.push_back(current_thread);
+                    if (__builtin_expect(current_thread->is_running(), true)) threads.push_back(current_thread);
 
                     current_thread = threads.front();
                     threads.pop_front();
 
-                    if (current_thread->state == starting) // new task, initialize new context on stack
+                    if (__builtin_expect(current_thread->state == starting, false)) // new task, initialize new context on stack
                     {
                         byte* esp = (current_thread->stack_ptr + current_thread->stack_size - 4) - sizeof(thread_context);
                         *reinterpret_cast<std::uint32_t*>(current_thread->stack_ptr) = 0xDEADBEEF;  // stack overflow protection

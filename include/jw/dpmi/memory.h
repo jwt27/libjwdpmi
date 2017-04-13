@@ -14,7 +14,7 @@ namespace jw
         [[gnu::pure]] inline std::size_t get_page_size()
         {
             static std::size_t page_size { 0 };
-            if (page_size > 0) return page_size;
+            if (__builtin_expect(page_size > 0, true)) return page_size;
 
             dpmi_error_code error;
             split_uint32_t size;

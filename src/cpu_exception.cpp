@@ -247,7 +247,7 @@ namespace jw
             void setup_exception_throwers()
             {
                 if (!config::enable_throwing_from_cpu_exceptions) return;
-                if (exception_throwers_setup) return;
+                if (__builtin_expect(exception_throwers_setup, true)) return;
                 exception_throwers_setup = true;
 
                 exception_throwers[0x00] = std::make_unique<exception_handler>(0x00, [](cpu_registers* r, exception_frame* f, bool t) { return simulate_call(0x00, r, f, t, throw_cpu_exception); });
@@ -279,4 +279,3 @@ namespace jw
         }
     }
 }
-

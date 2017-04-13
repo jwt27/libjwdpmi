@@ -1,19 +1,6 @@
-/******************************* libjwdpmi **********************************
-Copyright (C) 2016-2017  J.W. Jagersma
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/
+/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
+/* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
 
@@ -99,7 +86,7 @@ namespace jw
 
             static void get() noexcept
             {
-                if (init) return;
+                if (__builtin_expect(init, true)) return;
                 asm("int 0x31;"
                     : "=a" (ax)
                     , "=b" (bx)
@@ -165,7 +152,7 @@ namespace jw
             static bool get_supported() noexcept { get(); return sup; }
             static void get() noexcept
             {
-                if (init || !sup) return;
+                if (__builtin_expect(init || !sup, true)) return;
                 bool c;
                 asm("push es;"
                     "mov es, %w2;"

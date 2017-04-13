@@ -1,19 +1,5 @@
-/******************************* libjwdpmi **********************************
-Copyright (C) 2016-2017  J.W. Jagersma
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/
+/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
 #include <jw/dpmi/memory.h>
@@ -87,10 +73,10 @@ namespace jw
                     : "memory");
                 if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
 
-                if (new_reg != this || new_reg_ds != get_ds())   // copy back if location changed.
+                if (__builtin_expect(new_reg != this || new_reg_ds != get_ds(), false))   // copy back if location changed.
                 {
                     auto ptr = linear_memory { new_reg_ds, new_reg };
-                    if (ptr.requires_new_selector())
+                    if (__builtin_expect(ptr.requires_new_selector(), false))
                     {
                         asm("push es;"
                             "push ds;"
