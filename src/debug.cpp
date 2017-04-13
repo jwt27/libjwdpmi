@@ -23,11 +23,6 @@ namespace jw
     #ifndef NDEBUG
         namespace detail
         {
-            bool gdb_interface_setup { false };
-        }
-
-        namespace gdb
-        {
             const bool debugmsg = config::enable_gdb_debug_messages;
 
             locked_pool_allocator<> alloc { 1_MB };
@@ -39,7 +34,7 @@ namespace jw
             std::array<std::unique_ptr<exception_handler>, 0x20> exception_handlers;
             std::unique_ptr<std::iostream, allocator_delete<jw::dpmi::locking_allocator<std::iostream>>> gdb;
 
-            volatile bool reentry { false };
+            volatile bool debugger_reentry { false };
 
             struct packet_string : public std::string
             {
@@ -760,7 +755,7 @@ namespace jw
             {
                 if (debugmsg) std::clog << "entering exception 0x" << std::hex << exc << "\n";
 
-                if (__builtin_expect(reentry, false))
+                if (__builtin_expect(debugger_reentry, false))
                 {
                     if (exc == 0x01)    // watchpoint trap, ignore
                     {
@@ -786,7 +781,7 @@ namespace jw
                 }
                 else
                 {
-                    reentry = true;
+                    debugger_reentry = true;
                     populate_thread_list();
                     if (__builtin_expect(exc == 0x01 || exc == 0x03, true))
                     {
@@ -795,7 +790,7 @@ namespace jw
                             current_thread->use_sigcont = true;
                             thread::detail::thread_details::set_trap(current_thread->thread.lock());
                             f->flags.trap = false;
-                            reentry = false;
+                            debugger_reentry = false;
                             current_thread->last_eip = f->fault_address.offset;
                             if (debugmsg) std::clog << "trap masked at 0x" << std::hex << f->fault_address.offset << ", resuming with SIGCONT.\n";
                             return true;
@@ -804,7 +799,7 @@ namespace jw
                             f->fault_address.offset >= current_thread->step_range_begin &&
                             f->fault_address.offset <= current_thread->step_range_end)
                         {
-                            reentry = false;
+                            debugger_reentry = false;
                             current_thread->last_eip = f->fault_address.offset;
                             if (debugmsg) std::clog << "range step until 0x" << std::hex << current_thread->step_range_end;
                             if (debugmsg) std::clog << ", now at 0x" << f->fault_address.offset << '\n';
@@ -841,16 +836,17 @@ namespace jw
                 else *static_cast<old_exception_frame*>(f) = current_thread->frame;
                 *r = current_thread->reg;
                 current_thread->last_eip = current_thread->frame.fault_address.offset;
-                reentry = false;
+                debugger_reentry = false;
 
                 if (debugmsg) std::clog << "leaving exception 0x" << std::hex << exc << "\n";
                 return result;
             }
 
-            void setup(auto&& stream)
+            bool gdb_interface_setup { false };
+            void setup_gdb_interface(std::unique_ptr<std::iostream, allocator_delete<jw::dpmi::locking_allocator<std::iostream>>>&& stream)
             {
-                if (jw::dpmi::detail::gdb_interface_setup) return;
-                jw::dpmi::detail::gdb_interface_setup = true;
+                if (gdb_interface_setup) return;
+                gdb_interface_setup = true;
 
                 gdb = std::move(stream);
 
@@ -883,17 +879,12 @@ namespace jw
             }
         }
 
-        namespace detail
-        {
-            void setup_gdb_interface(std::unique_ptr<std::iostream, allocator_delete<jw::dpmi::locking_allocator<std::iostream>>>&& s) { jw::dpmi::gdb::setup(s); }
-        }
-
         bool debug() noexcept { return detail::gdb_interface_setup; }
 
         trap_mask::trap_mask() noexcept // TODO: ideally this should treat interrupts as separate 'threads'
         {
             if (!debug()) return;
-            if (gdb::reentry) return;
+            if (detail::debugger_reentry) return;
             auto t = jw::thread::detail::scheduler::get_current_thread().lock();
             if (t) thread::detail::thread_details::trap_mask(t);
             else fail = true;
@@ -903,7 +894,7 @@ namespace jw
         {
             if (fail) return;
             if (!debug()) return;
-            if (gdb::reentry) return;
+            if (detail::debugger_reentry) return;
             auto t = jw::thread::detail::scheduler::get_current_thread().lock();
             if (thread::detail::thread_details::trap_unmask(t) && thread::detail::thread_details::trap_state(t)) asm("int 3");
         }
