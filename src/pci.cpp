@@ -18,17 +18,14 @@ namespace jw
             if (reg.flags.carry || reg.ah != 0 || reg.edx != 0x20494350) throw unsupported_function { "PCI BIOS not detected." };
             if (device_map == nullptr) device_map = new map_type { };
 
-            vendor_id = vendor;
-            for (auto device : devices)
+            for (auto d : devices)
             {
-                device_id = device;
                 for (auto i = 0;; ++i)
                 {
-                    if ((*device_map)[vendor_id][device_id].count(i)) continue;
                     reg = { };
                     reg.ax = 0xb102;
-                    reg.cx = device_id;
-                    reg.dx = vendor_id;
+                    reg.cx = d;
+                    reg.dx = vendor;
                     reg.si = i;
                     reg.call_int(0x1a);
                     if (reg.ah == 0x81) throw unsupported_function { "Function \"find PCI device\" not supported." };
@@ -37,9 +34,12 @@ namespace jw
                     if (reg.flags.carry) throw error { "Unknown PCI BIOS error." };
                     if (function_id != 0xff && (reg.bl & 0b111) != function_id) continue;
                     bus = reg.bh;
-                    bus_device = reg.bl >> 3;
+                    device = reg.bl >> 3;
                     function = reg.bl & 0b111;
-                    (*device_map)[vendor_id][device_id][index] = this;
+                    if ((*device_map).count(bus) &&
+                        (*device_map)[bus].count(device) &&
+                        (*device_map)[bus][device].count(function)) continue;
+                    (*device_map)[bus][device][function] = this;
                     return;
                 }
             }
@@ -47,9 +47,9 @@ namespace jw
 
         pci_device::~pci_device()
         {
-            device_map[vendor_id][device_id].erase(index);
-            if ((*device_map)[vendor_id][device_id].empty()) device_map[vendor_id].erase(device_id);
-            if ((*device_map)[vendor_id].empty()) device_map->erase(vendor_id);
+            device_map[bus][device].erase(function);
+            if ((*device_map)[bus][device].empty()) device_map[bus].erase(device);
+            if ((*device_map)[bus].empty()) device_map->erase(device);
             if (device_map->empty()) delete device_map;
         }
     }

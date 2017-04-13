@@ -58,7 +58,7 @@ namespace jw
                     } x;
                     x.register_num = reg;
                     x.function = dev.function;
-                    x.device = dev.bus_device;
+                    x.device = dev.device;
                     x.bus = dev.bus;
                     x.enable_config = true;
                     return x.value;
@@ -127,16 +127,14 @@ namespace jw
             pci_register<reg_status, 0x04> status { this };
             pci_register<reg_type, 0x08> type { this };
             pci_register<reg_misc, 0x0C> misc { this };
-            pci_register<std::uintptr_t, 0x10> base_0 { this };
+            pci_register<std::uintptr_t, 0x10> base0 { this };
 
         private:
-            std::uint16_t device_id, vendor_id;
-            std::uint8_t bus, bus_device;
             std::uint16_t index;
-            std::uint8_t function;
+            std::uint8_t bus, device, function;
 
-            using map_type = std::unordered_map<std::uint16_t, std::unordered_map<std::uint16_t, std::unordered_map<std::uint16_t, pci_device*>>>;
-            // map indexed by: vendor->device->index
+            using map_type = std::unordered_map<std::uint16_t, std::unordered_map<std::uint16_t, std::unordered_map<std::uint16_t, const pci_device*>>>;
+            // map indexed by: bus->device->function
             static map_type* device_map;
         };
     }
