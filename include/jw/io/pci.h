@@ -108,10 +108,10 @@ namespace jw
                 bool parity_error : 1;
             } status;
 
-            struct reg_id { std::uint16_t vendor, device; };
-            
+            struct [[gnu::packed]] reg_id { std::uint16_t vendor, device; };
             struct [[gnu::packed]] reg_command_and_status { reg_command command; reg_status status; };
-            struct reg_type { std::uint8_t revision, prog_interface, subclass, class_code; };
+            struct [[gnu::packed]] reg_type { std::uint8_t revision, prog_interface, subclass, class_code; };
+            struct [[gnu::packed]] reg_bus_info { std::uint8_t irq, interrupt_pin, min_grant, max_latency; };
             struct [[gnu::packed]] reg_misc
             {
                 std::uint8_t cache_line_size;
@@ -135,6 +135,16 @@ namespace jw
             pci_register<reg_type> type { this, 0x08 };
             pci_register<reg_misc> misc { this, 0x0C };
             pci_register<std::uintptr_t> base0 { this, 0x10 };
+            pci_register<std::uintptr_t> base1 { this, 0x14 };
+            pci_register<std::uintptr_t> base2 { this, 0x18 };
+            pci_register<std::uintptr_t> base3 { this, 0x1C };
+            pci_register<std::uintptr_t> base4 { this, 0x20 };
+            pci_register<std::uintptr_t> base5 { this, 0x24 };
+            pci_register<std::uintptr_t> cardbus_info { this, 0x28 };
+            pci_register<reg_id> subsystem_id { this, 0x2C };
+            pci_register<std::uintptr_t> expansion_rom_base { this, 0x30 };
+            pci_register<std::uint32_t> capabilities_list { this, 0x34 };
+            pci_register<reg_bus_info> bus_info { this, 0x3C };
 
             auto read_status() { return command_and_status.read().status; }
             void clear_status(reg_status clear_bits) 
