@@ -97,7 +97,7 @@ namespace jw
         pci_device::~pci_device()
         {
             (*device_map)[bus][device].erase(function);
-            if ((*device_map)[bus][device].empty()) device_map[bus].erase(device);
+            if ((*device_map)[bus][device].empty()) (*device_map)[bus].erase(device);
             if ((*device_map)[bus].empty()) device_map->erase(bus);
             if (device_map->empty())
             {
