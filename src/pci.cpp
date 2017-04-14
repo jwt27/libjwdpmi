@@ -34,8 +34,8 @@ namespace jw
                     reg.si = i;
                     reg.call_int(0x1a);
                     if (reg.ah == 0x81) throw unsupported_function { "Function \"find PCI device\" not supported." };
-                    if (reg.ah == 0x86) throw device_not_found { "PCI Device not found." };
                     if (reg.ah == 0x83) throw device_not_found { "Bad vendor ID." };
+                    if (reg.ah == 0x86) break;
                     if (reg.flags.carry) throw error { "Unknown PCI BIOS error." };
                     bus = reg.bh;
                     device = reg.bl >> 3;
@@ -48,6 +48,7 @@ namespace jw
                     return;
                 }
             }
+            throw device_not_found { "PCI Device not found." };
         }
 
         pci_device::pci_device(class_tag, std::uint8_t class_code, std::initializer_list<std::uint8_t> subclass_codes, std::uint8_t interface_type)
@@ -78,7 +79,7 @@ namespace jw
                     reg.si = i;
                     reg.ecx = ecx.value;
                     reg.call_int(0x1a);
-                    if (reg.ah == 0x86) throw device_not_found { "PCI Device not found." };
+                    if (reg.ah == 0x86) break;
                     if (reg.flags.carry) throw error { "Unknown PCI BIOS error." };
                     bus = reg.bh;
                     device = reg.bl >> 3;
@@ -90,14 +91,19 @@ namespace jw
                     return;
                 }
             }
+            throw device_not_found { "PCI Device not found." };
         }
 
         pci_device::~pci_device()
         {
-            device_map[bus][device].erase(function);
+            (*device_map)[bus][device].erase(function);
             if ((*device_map)[bus][device].empty()) device_map[bus].erase(device);
-            if ((*device_map)[bus].empty()) device_map->erase(device);
-            if (device_map->empty()) delete device_map;
+            if ((*device_map)[bus].empty()) device_map->erase(bus);
+            if (device_map->empty())
+            {
+                delete device_map;
+                device_map = nullptr;
+            }
         }
     }
 }
