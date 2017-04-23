@@ -4,6 +4,7 @@
 #pragma once
 #include <jw/dpmi/memory.h>
 #include <jw/dpmi/irq.h>
+#include <function.h>
 
 namespace jw
 {
@@ -99,6 +100,9 @@ namespace jw
 
         static_assert(sizeof(realmode_registers) == 0x32, "check sizeof struct dpmi::realmode_registers");
 
+        // Reference for writing real-mode callback functions:
+        // http://www.delorie.com/djgpp/doc/dpmi/ch4.6.html
+
         struct realmode_callback_base
         {
             virtual ~realmode_callback_base() { free(); }
@@ -120,9 +124,22 @@ namespace jw
             void free();
         };
 
-        struct realmode_callback : public realmode_callback_base
+        struct realmode_callback : public realmode_callback_base, class_lock<realmode_callback>
         {
+            template<typename F>
+            realmode_callback(F&& function) : realmode_callback_base(code.data()), function_ptr(std::allocator_arg, locking_allocator<> { }, std::forward<F>(function)) { init_code(); }
 
+        private:
+            static void entry_point(realmode_callback* self, realmode_registers* reg_copy) noexcept;
+            void init_code() noexcept;
+
+            func::function<void(realmode_registers*)> function_ptr;
+            std::array<byte, 16_KB> stack;
+
+            decltype(&entry_point) entry_ptr { &entry_point };
+            std::uintptr_t stack_ptr { reinterpret_cast<std::uintptr_t>(stack.data() + stack.size() - 4) & -0x10 };
+            realmode_callback* self { this };
+            std::array<byte, 0x100> code;
         };
     }
 }
