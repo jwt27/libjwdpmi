@@ -97,6 +97,32 @@ namespace jw
             }
         };
 
-        static_assert(sizeof( realmode_registers) == 0x32, "check sizeof struct dpmi::realmode_registers");
+        static_assert(sizeof(realmode_registers) == 0x32, "check sizeof struct dpmi::realmode_registers");
+
+        struct realmode_callback_base
+        {
+            virtual ~realmode_callback_base() { free(); }
+
+            realmode_callback_base(const realmode_callback_base&) = delete;
+            realmode_callback_base(realmode_callback_base&&) = delete;
+            realmode_callback_base& operator=(const realmode_callback_base&) = delete;
+            realmode_callback_base& operator=(realmode_callback_base&&) = delete;
+
+            far_ptr16 get_ptr() const noexcept { return ptr; }
+
+        protected:
+            realmode_callback_base(auto* function_ptr) { alloc(reinterpret_cast<void*>(function_ptr)); }
+            realmode_registers reg;
+
+        private:
+            far_ptr16 ptr;
+            void alloc(void* function_ptr);
+            void free();
+        };
+
+        struct realmode_callback : public realmode_callback_base
+        {
+
+        };
     }
 }
