@@ -12,11 +12,13 @@ namespace jw
             dpmi::dpmi_error_code error;
             bool c;
             asm volatile(
-                "push es;"
                 "push ds;"
-                "pop es;"
+                "push es;"
+                "push ds; pop es;"
+                "push cs; pop ds;"
                 "int 0x31;"
                 "pop es;"
+                "pop ds;"
                 : "=@ccc" (c)
                 , "=a" (error)
                 , "=c" (ptr.segment)
@@ -32,13 +34,7 @@ namespace jw
             dpmi::dpmi_error_code error;
             bool c;
             asm volatile(
-                "push ds;"
-                "push es;"
-                "push ds; pop es;"
-                "push cs; pop ds;"
                 "int 0x31;"
-                "pop es;"
-                "pop ds;"
                 : "=@ccc" (c)
                 , "=a" (error)
                 : "a" (0x0304)
