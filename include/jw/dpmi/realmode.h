@@ -141,6 +141,8 @@ namespace jw
             locked_pool_allocator<> alloc;
             std::vector<realmode_registers, locked_pool_allocator<>> reg_pool;
 
+            [[gnu::packed]] selector fs;                                            // [eax-0x19]
+            [[gnu::packed]] selector gs;                                            // [eax-0x17]
             [[gnu::packed]] decltype(&entry_point) entry_ptr { &entry_point };      // [eax-0x15]
             [[gnu::packed]] byte* stack_ptr { stack.data() + stack.size() - 4 };    // [eax-0x11]
             [[gnu::packed]] realmode_registers* reg_ptr;                            // [eax-0x0D]

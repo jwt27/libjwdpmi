@@ -97,6 +97,8 @@ namespace jw
                 "mov dx, ds;"
                 "movzx edx, dx;"
                 "push es; pop ds;"
+                "mov fs, word ptr cs:[eax-0x19];"
+                "mov gs, word ptr cs:[eax-0x17];"
                 "mov ebp, esp;"
                 "mov bx, ss;"
                 "mov cx, ds;"
@@ -133,6 +135,12 @@ namespace jw
 
             reg_pool.push_back({ });
             reg_ptr = &reg_pool.back();
+
+            asm volatile (
+                "mov %w0, fs;"
+                "mov %w1, gs;"
+                : "=m" (fs)
+                , "=m" (gs));
         }
     }
 }
