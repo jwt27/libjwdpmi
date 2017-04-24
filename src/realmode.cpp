@@ -111,11 +111,7 @@ namespace jw
                 "push edx;"                     // Real-mode stack selector
                 "push cs:[eax-0x09];"           // Pointer to self
                 "call cs:[eax-0x15];"           // Call the entry point
-                "mov cx, ds;"
-                "cmp bx, cx;"
-                "je ret_same_stack%=;"
                 "mov ss, bx;"
-                "ret_same_stack%=:"
                 "mov esp, ebp;"
                 "iret;"
 
