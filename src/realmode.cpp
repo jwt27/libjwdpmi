@@ -87,12 +87,13 @@ namespace jw
                 // DS:ESI = real-mode stack pointer
                 // ES:EDI = real-mode registers struct
                 "call get_eip%=;"  // call near/relative (E8)   // 5 bytes
-                "get_eip%=: pop eax;"
+                "get_eip%=: pop ebx;"
                 "lodsw;"
                 "mov word ptr es:[edi+0x2a], ax;"   // real-mode return IP
                 "lodsw;"
                 "mov word ptr es:[edi+0x2c], ax;"   // real-mode return CS
                 "add word ptr es:[edi+0x2e], 4;"    // remove CS/IP from real-mode stack
+                "mov eax, ebx;"
                 "mov dx, ds;"
                 "movzx edx, dx;"
                 "push es; pop ds;"
