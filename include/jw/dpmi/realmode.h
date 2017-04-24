@@ -145,7 +145,7 @@ namespace jw
             [[gnu::packed]] byte* stack_ptr { stack.data() + stack.size() - 4 };    // [eax-0x11]
             [[gnu::packed]] realmode_registers* reg_ptr;                            // [eax-0x0D]
             [[gnu::packed]] realmode_callback* self { this };                       // [eax-0x09]
-            std::array<byte, 0x40> code;                                            // [eax-0x05]
+            std::array<byte, 0x50> code;                                            // [eax-0x05]
         };
     }
 }
