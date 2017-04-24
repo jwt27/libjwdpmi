@@ -56,7 +56,7 @@ namespace jw
             auto fail = [reg, self]
             {
                 std::cerr << "Caught exception in real-mode callback handler!\n";
-                std::cerr << "Callback pointer: " << self->get_ptr();
+                std::cerr << "Callback pointer: " << self->get_ptr() << '\n';
                 std::cerr << "Exception: ";
                 reg->flags.carry = true;
             };
