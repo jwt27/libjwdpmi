@@ -49,7 +49,9 @@ namespace jw
             self->reg_pool.push_back({ });
             self->reg_ptr = &self->reg_pool.back();
             *reg = self->reg;
-            if (reg->flags.interrupt) interrupt_mask::sti();
+            bool is_irq = !reg->flags.interrupt;
+            if (is_irq) ++detail::interrupt_count;
+            else interrupt_mask::sti();
 
             try
             {
@@ -58,6 +60,7 @@ namespace jw
             catch (...) { } // TODO
 
             asm("cli");
+            if (is_irq) --detail::interrupt_count;
             self->reg_pool.pop_back();
             self->reg_ptr = &self->reg_pool.back();
         }
