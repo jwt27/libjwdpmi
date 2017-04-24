@@ -127,19 +127,25 @@ namespace jw
         struct realmode_callback : public realmode_callback_base, class_lock<realmode_callback>
         {
             template<typename F>
-            realmode_callback(F&& function) : realmode_callback_base(code.data()), function_ptr(std::allocator_arg, locking_allocator<> { }, std::forward<F>(function)) { init_code(); }
+            realmode_callback(F&& function, std::size_t pool_size = 1_KB) 
+                : realmode_callback_base(code.data())
+                , function_ptr(std::allocator_arg, locking_allocator<> { }, std::forward<F>(function))
+                , alloc(pool_size), reg_pool(alloc) { init_code(); }
 
         private:
-            static void entry_point(realmode_callback* self, realmode_registers* reg_copy) noexcept;
+            static void entry_point(realmode_callback* self, std::uint32_t rm_stack_selector, std::uint32_t rm_stack_offset) noexcept;
             void init_code() noexcept;
 
-            func::function<void(realmode_registers*)> function_ptr;
-            std::array<byte, 16_KB> stack;
+            func::function<void(realmode_registers*, far_ptr32)> function_ptr;
+            std::array<byte, 16_KB> stack;  // TODO: adjustable size
+            locked_pool_allocator<> alloc;
+            std::vector<realmode_registers, locked_pool_allocator<>> reg_pool;
 
-            decltype(&entry_point) entry_ptr { &entry_point };
-            std::uintptr_t stack_ptr { reinterpret_cast<std::uintptr_t>(stack.data() + stack.size() - 4) & -0x10 };
-            realmode_callback* self { this };
-            std::array<byte, 0x100> code;
+            [[gnu::packed]] decltype(&entry_point) entry_ptr { &entry_point };      // [eax-0x15]
+            [[gnu::packed]] byte* stack_ptr { stack.data() + stack.size() - 4 };    // [eax-0x11]
+            [[gnu::packed]] realmode_registers* reg_ptr;                            // [eax-0x0D]
+            [[gnu::packed]] realmode_callback* self { this };                       // [eax-0x09]
+            std::array<byte, 0x40> code;                                            // [eax-0x05]
         };
     }
 }

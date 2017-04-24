@@ -18,7 +18,7 @@ namespace jw
         std::array<exception_handler*, 0x20> exception_handler::last { };
         std::array<byte, config::exception_stack_size> exception_handler::stack;
 
-        bool exception_handler::call_handler(exception_handler * self, raw_exception_frame * frame) noexcept
+        bool exception_handler::call_handler(exception_handler* self, raw_exception_frame* frame) noexcept
         {
             ++detail::exception_count;
             if (self->exc != exception_num::device_not_available) detail::fpu_context_switcher.enter();
