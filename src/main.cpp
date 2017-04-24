@@ -5,9 +5,9 @@
 #include <string>
 #include <deque>
 #include <crt0.h>
+#include <jw/alloc.h>
 #include <jw/dpmi/debug.h>
 #include <jw/dpmi/cpu_exception.h>
-#include <jw/dpmi/detail/debug.h>
 #include <jw/dpmi/detail/alloc.h>
 #include <jw/io/rs232.h>
 #include <../jwdpmi_config.h>
@@ -63,6 +63,14 @@ namespace jw
     {
         throw terminate_exception { };
     }
+
+    namespace dpmi
+    {
+        namespace detail
+        {
+            void setup_gdb_interface(std::unique_ptr<std::iostream, allocator_delete<jw::dpmi::locking_allocator<std::iostream>>>&&);
+        }
+    }
 }
 
 int main(int argc, char** argv)
@@ -88,6 +96,10 @@ int main(int argc, char** argv)
                 cfg.set_com_port(io::com1);
                 dpmi::locking_allocator<> alloc;
                 dpmi::detail::setup_gdb_interface(allocate_unique<io::rs232_stream>(alloc, cfg));
+            }
+            else if (stricmp(argv[i], "--ext-debug") == 0)
+            {
+                dpmi::detail::debug_mode = true;
             }
             else
         #endif

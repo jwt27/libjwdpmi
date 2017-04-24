@@ -9,11 +9,16 @@ namespace jw
 {
     namespace dpmi
     {
-        // Returns true if in debug mode.
     #ifndef NDEBUG
-        bool debug() noexcept;
+        namespace detail
+        {
+            extern bool debug_mode;
+        }
+
+        // Returns true if in debug mode.
+        inline bool debug() noexcept { return detail::debug_mode; }
     #else
-        constexpr bool debug() noexcept { return false; }
+        constexpr inline bool debug() noexcept { return false; }
     #endif
 
         // Set a breakpoint

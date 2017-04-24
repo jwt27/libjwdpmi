@@ -25,6 +25,8 @@ namespace jw
         {
             const bool debugmsg = config::enable_gdb_debug_messages;
 
+            bool debug_mode { false };
+
             locked_pool_allocator<> alloc { 1_MB };
             std::deque<std::string, locked_pool_allocator<>> sent { alloc };
             std::map<std::string, std::string, std::less<std::string>, locked_pool_allocator<>> supported { alloc };
@@ -34,7 +36,7 @@ namespace jw
             std::array<std::unique_ptr<exception_handler>, 0x20> exception_handlers;
             std::unique_ptr<std::iostream, allocator_delete<jw::dpmi::locking_allocator<std::iostream>>> gdb;
 
-            volatile bool debugger_reentry { false };
+            volatile bool debugger_reentry { true };
 
             struct packet_string : public std::string
             {
@@ -842,11 +844,11 @@ namespace jw
                 return result;
             }
 
-            bool gdb_interface_setup { false };
             void setup_gdb_interface(std::unique_ptr<std::iostream, allocator_delete<jw::dpmi::locking_allocator<std::iostream>>>&& stream)
             {
-                if (gdb_interface_setup) return;
-                gdb_interface_setup = true;
+                if (debug_mode) return;
+                debug_mode = true;
+                debugger_reentry = false;
 
                 gdb = std::move(stream);
 
@@ -878,8 +880,6 @@ namespace jw
                 exception_handlers[0x1e] = std::make_unique<exception_handler>(0x1e, [](auto* r, auto* f, bool t) { return handle_exception(0x1e, r, f, t); });
             }
         }
-
-        bool debug() noexcept { return detail::gdb_interface_setup; }
 
         trap_mask::trap_mask() noexcept // TODO: ideally this should treat interrupts as separate 'threads'
         {
