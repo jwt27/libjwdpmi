@@ -20,7 +20,7 @@ namespace jw
         {
         public:
             interrupt_mask() noexcept { cli(); }
-            ~interrupt_mask() { sti(); }
+            ~interrupt_mask() { if (__builtin_expect(--count == 0 && initial_state, true)) sti(); }
             
             interrupt_mask(const interrupt_mask&) = delete;
             interrupt_mask(interrupt_mask&&) = delete;
@@ -34,19 +34,19 @@ namespace jw
                 return get_interrupt_state();
             }
 
+            // Enables the interrupt flag
+            static void sti() noexcept
+            {
+                if (count > 0) return;
+                asm("sti");
+            }
+
         private:
             // Disables the interrupt flag
             static void cli() noexcept
             {
                 auto state = get_and_set_interrupt_state(false);
                 if (count++ == 0) initial_state = state;
-            }
-
-            // Restores the interrupt flag to previous state
-            static void sti() noexcept
-            {
-                if (__builtin_expect(count == 0, false)) return;
-                if (__builtin_expect(--count == 0 && initial_state, true)) asm("sti");
             }
 
             static volatile int count;
