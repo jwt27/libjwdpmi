@@ -53,11 +53,20 @@ namespace jw
             if (is_irq) ++detail::interrupt_count;
             else interrupt_mask::sti();
 
+            auto fail = [reg, self]
+            {
+                std::cerr << "Caught exception in real-mode callback handler!\n";
+                std::cerr << "Callback pointer: " << self->get_ptr();
+                std::cerr << "Exception: ";
+                reg->flags.carry = true;
+            };
+
             try
             {
                 self->function_ptr(reg, far_ptr32 { static_cast<selector>(rm_stack_selector), rm_stack_offset });
             }
-            catch (...) { } // TODO
+            catch (const std::exception& e) { fail(); std::cerr << e.what() << '\n'; }
+            catch (...) { fail(); std::cerr << "Unknown exception.\n"; }
 
             asm("cli");
             if (is_irq) --detail::interrupt_count;
