@@ -89,8 +89,8 @@ namespace jw
                     : "a" (dpmi_function)
                     , "b" (interrupt)
                     , "D" (this)
-                    , "c" (0)   // TODO: stack?
-                    : "memory");
+                    , "c" (0)
+                    : "esp", "memory");
                 if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
                 copy_from(new_reg_ds, new_reg);
             }
@@ -113,7 +113,7 @@ namespace jw
                         , "c" (sizeof(realmode_registers))
                         , "S" (new_reg)
                         , "D" (this)
-                        : "memory");
+                        : "esp", "memory");
                 }
                 else *this = *(ptr.get_ptr<realmode_registers>());
             }
