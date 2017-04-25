@@ -36,8 +36,8 @@ namespace jw
                 } flags;
             };
             std::uint16_t es, ds, fs, gs;
-            std::uint16_t ip, cs; // not used in call_int()
-            std::uint16_t sp, ss; // not required for call_int()
+            std::uint16_t ip, cs; // not used in call_int().
+            std::uint16_t sp, ss; // used in call functions to pass arguments on the stack. set to 0 if not used.
 
             auto& print(std::ostream& out) const
             {
@@ -51,24 +51,25 @@ namespace jw
             friend auto& operator<<(std::ostream& out, const realmode_registers& in) { return in.print(out); }
 
             // Call a real-mode interrupt
-            void call_int(int_vector interrupt) { call(interrupt, 0x0300); }
+            void call_int(int_vector interrupt) { call<0x0300>(interrupt); }
 
-            // Call a real-mode procedure that returns with RETF
+            // Call a real-mode procedure which returns with RETF
             // Function address given by CS:IP fields
-            void call_far() { call(0, 0x0301); }
+            void call_far() { call<0x0301>(0); }
 
-            // Call a real-mode procedure that returns with IRET
+            // Call a real-mode procedure which returns with IRET
             // Function address given by CS:IP fields
-            void call_far_iret() { call(0, 0x0302); }
+            void call_far_iret() { call<0x0302>(0); }
 
-            // Call a real-mode procedure that returns with RETF
+            // Call a real-mode procedure which returns with RETF
             void call_far(far_ptr16 ptr) { ip = ptr.offset; cs = ptr.segment; call_far(); }
 
-            // Call a real-mode procedure that returns with IRET
+            // Call a real-mode procedure which returns with IRET
             void call_far_iret(far_ptr16 ptr) { ip = ptr.offset; cs = ptr.segment; call_far_iret(); }
 
         private:
-            void call(int_vector interrupt, std::uint16_t dpmi_function)
+            template <std::uint16_t dpmi_function>
+            void call(int_vector interrupt)
             {
                 selector new_reg_ds = get_ds();
                 realmode_registers* new_reg;
