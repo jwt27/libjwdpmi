@@ -43,7 +43,7 @@ namespace jw
             if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
         }
 
-        void realmode_callback::entry_point(realmode_callback* self, std::uint32_t rm_stack_selector, std::uint32_t rm_stack_offset) noexcept
+        void realmode_callback::entry_point(realmode_callback* self, std::uint32_t, std::uint32_t) noexcept
         {
             auto* reg = self->reg_ptr;
             self->reg_pool.push_back({ });
@@ -63,7 +63,7 @@ namespace jw
 
             try
             {
-                self->function_ptr(reg, far_ptr32 { static_cast<selector>(rm_stack_selector), rm_stack_offset });
+                self->function_ptr(reg);
             }
             catch (const std::exception& e) { fail(); std::cerr << e.what() << '\n'; }
             catch (...) { fail(); std::cerr << "Unknown exception.\n"; }
