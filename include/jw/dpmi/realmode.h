@@ -50,7 +50,25 @@ namespace jw
             }
             friend auto& operator<<(std::ostream& out, const realmode_registers& in) { return in.print(out); }
 
-            void call_int(int_vector interrupt)
+            // Call a real-mode interrupt
+            void call_int(int_vector interrupt) { call(interrupt, 0x0300); }
+
+            // Call a real-mode procedure that returns with RETF
+            // Function address given by CS:IP fields
+            void call_far() { call(0, 0x0301); }
+
+            // Call a real-mode procedure that returns with IRET
+            // Function address given by CS:IP fields
+            void call_far_iret() { call(0, 0x0302); }
+
+            // Call a real-mode procedure that returns with RETF
+            void call_far(far_ptr16 ptr) { ip = ptr.offset; cs = ptr.segment; call_far(); }
+
+            // Call a real-mode procedure that returns with IRET
+            void call_far_iret(far_ptr16 ptr) { ip = ptr.offset; cs = ptr.segment; call_far_iret(); }
+
+        private:
+            void call(int_vector interrupt, std::uint16_t dpmi_function)
             {
                 selector new_reg_ds = get_ds();
                 realmode_registers* new_reg;
@@ -67,34 +85,36 @@ namespace jw
                     , "=a" (error)
                     , "+rm" (new_reg_ds)
                     , "=D" (new_reg)
-                    : "a" (0x0300)
+                    : "a" (dpmi_function)
                     , "b" (interrupt)
                     , "D" (this)
                     , "c" (0)   // TODO: stack?
                     : "memory");
                 if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+                copy_from(new_reg_ds, new_reg);
+            }
 
-                if (__builtin_expect(new_reg != this || new_reg_ds != get_ds(), false))   // copy back if location changed.
+            void copy_from(selector new_reg_ds, realmode_registers* new_reg)
+            {
+                if (__builtin_expect(new_reg == this && new_reg_ds == get_ds(), true)) return;
+                auto ptr = linear_memory { new_reg_ds, new_reg };
+                if (__builtin_expect(ptr.requires_new_selector(), false))
                 {
-                    auto ptr = linear_memory { new_reg_ds, new_reg };
-                    if (__builtin_expect(ptr.requires_new_selector(), false))
-                    {
-                        asm("push es;"
-                            "push ds;"
-                            "pop es;"
-                            "mov ds, %w0;"
-                            "rep movsb;"
-                            "push es;"
-                            "pop ds;"
-                            "pop es;"
-                            :: "rm" (new_reg_ds)
-                            , "c" (sizeof(realmode_registers))
-                            , "S" (new_reg)
-                            , "D" (this)
-                            : "memory");
-                    }
-                    else *this = *(ptr.get_ptr<realmode_registers>());
+                    asm("push es;"
+                        "push ds;"
+                        "pop es;"
+                        "mov ds, %w0;"
+                        "rep movsb;"
+                        "push es;"
+                        "pop ds;"
+                        "pop es;"
+                        :: "rm" (new_reg_ds)
+                        , "c" (sizeof(realmode_registers))
+                        , "S" (new_reg)
+                        , "D" (this)
+                        : "memory");
                 }
+                else *this = *(ptr.get_ptr<realmode_registers>());
             }
         };
 
