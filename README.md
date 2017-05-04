@@ -1,6 +1,6 @@
 # libjwdpmi
 Because I can't come up with any better names.  
-This library aims to be a complete development framework for DPMI (32-bit DOS) applications, written in C++14.  
+This library aims to be a complete development framework for DPMI (32-bit DOS) applications, written in C++17.  
 It's still in the experimental stage. Anything may change at any time.
 
 ## Features
@@ -32,7 +32,7 @@ The easiest way is to use Andrew Wu's build script, found here: https://github.c
 ```
     export CXX CXXFLAGS  
     libjwdpmi:  
-        $(MAKE) -C lib/libjwdpmi/  
+        +$(MAKE) -C lib/libjwdpmi/  
 ```
 * Add the `include/` directory to your global include path (`-I`) and link your program with `libjwdpmi.a`, found in the `bin/` directory.
 ```

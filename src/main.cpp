@@ -2,7 +2,7 @@
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #include <cstring>
-#include <string>
+#include <string_view>
 #include <deque>
 #include <crt0.h>
 #include <jw/alloc.h>
@@ -21,7 +21,7 @@ int _crt0_startup_flags = 0
 | _CRT0_FLAG_NONMOVE_SBRK
 | _CRT0_FLAG_LOCK_MEMORY;
 
-int jwdpmi_main(std::deque<std::string>);
+int jwdpmi_main(std::deque<std::string_view>);
 
 inline namespace __cxxabiv1
 {
@@ -73,7 +73,7 @@ namespace jw
     }
 }
 
-int main(int argc, char** argv)
+int main(int argc, const char** argv)
 {
     patch__cxa_allocate_exception(init_malloc);
     try { throw std::array<byte, 512> { }; } catch (...) { }
@@ -86,7 +86,7 @@ int main(int argc, char** argv)
     {   
         dpmi::detail::setup_exception_throwers();
     
-        std::deque<std::string> args { };   // TODO: std::string_view when it's available
+        std::deque<std::string_view> args { };
         for (auto i = 0; i < argc; ++i)
         {
         #ifndef NDEBUG
