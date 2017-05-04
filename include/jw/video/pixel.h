@@ -243,7 +243,7 @@ namespace jw
                     vec src { this->r, this->g, this->b, this->a };
                     src.v *= maxu.v;
                     src.v /= maxp.v;
-                    return pixel<U> { }.assign_round<U>(src);
+                    return pixel<U> { }.template assign_round<U>(src);
                 }
                 else
                 {
@@ -269,7 +269,7 @@ namespace jw
                     vec src { this->r, this->g, this->b, 1 };
                     src.v *= maxu.v;
                     src.v /= maxp.v;
-                    return pixel<U> { }.assign_round<U>(src);
+                    return pixel<U> { }.template assign_round<U>(src);
                 }
                 else
                 {
@@ -295,7 +295,7 @@ namespace jw
                     vec src { this->r, this->g, this->b, 0 };
                     src.v *= maxu.v;
                     src.v /= maxp.v;
-                    return pixel<U> { }.assign_round<U>(src);
+                    return pixel<U> { }.template assign_round<U>(src);
                 }
                 else
                 {
@@ -312,7 +312,7 @@ namespace jw
             template <typename U> constexpr operator pixel<U>() const noexcept { return cast_to<U>(); }
 
             template <typename U> constexpr pixel& operator=(const pixel<U>& other) noexcept { return blend(other); }
-            template <typename U> constexpr pixel& operator=(pixel<U>&& other) noexcept { return *this = std::move(other.cast_to<P>()); }
+            template <typename U> constexpr pixel& operator=(pixel<U>&& other) noexcept { return *this = std::move(other.template cast_to<P>()); }
             constexpr pixel& operator=(const pixel& other) noexcept { return blend(other); }
             constexpr pixel& operator=(pixel&& o) noexcept = default;
 
@@ -324,7 +324,7 @@ namespace jw
             template<typename V, typename U, std::enable_if_t<!U::has_alpha, bool> = { }>
             constexpr pixel& blend(const pixel<U>& src)
             {
-                auto copy = src.cast_to<V>();
+                auto copy = src.template cast_to<V>();
                 return assign_round<V>(copy);
             }
 
