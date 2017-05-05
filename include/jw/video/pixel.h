@@ -200,7 +200,7 @@ namespace jw
             template<typename V, std::enable_if_t<V::has_alpha, bool> = { }>
             constexpr pixel& assign_round(const auto& v) noexcept
             { 
-                if (std::is_integral<typename V::T>::value)
+                if constexpr (std::is_integral<typename V::T>::value)
                 {
                     this->b = jw::round(v.b);
                     this->g = jw::round(v.g);
@@ -218,7 +218,7 @@ namespace jw
             template<typename V, std::enable_if_t<!V::has_alpha, bool> = { }>
             constexpr pixel& assign_round(const auto& v) noexcept
             { 
-                if (std::is_integral<typename V::T>::value)
+                if constexpr (std::is_integral<typename V::T>::value)
                 {
                     this->b = jw::round(v.b);
                     this->g = jw::round(v.g);
@@ -235,7 +235,7 @@ namespace jw
             constexpr pixel<U> cast() const noexcept
             {
                 using max_T = decltype(max<U>(U::ax));
-                if (std::is_floating_point<max_T>::value)
+                if constexpr (std::is_floating_point<max_T>::value)
                 {
                     using vec = vector<max_T>;
                     vec maxp { max<U>(V::rx), max<U>(V::gx), max<U>(V::bx), max<U>(V::ax) };
@@ -245,7 +245,7 @@ namespace jw
                     src.v /= maxp.v;
                     return pixel<U> { }.template assign_round<U>(src);
                 }
-                else
+                else 
                 {
                     using UT = typename U::T;
                     pixel<U> result { };
@@ -261,7 +261,7 @@ namespace jw
             constexpr pixel<U> cast() const noexcept
             { 
                 using max_T = decltype(max<U>(U::ax));
-                if (std::is_floating_point<max_T>::value)
+                if constexpr (std::is_floating_point<max_T>::value)
                 {
                     using vec = vector<max_T>;
                     vec maxp { max<U>(V::rx), max<U>(V::gx), max<U>(V::bx), 1 };
@@ -287,7 +287,7 @@ namespace jw
             constexpr pixel<U> cast() const noexcept
             { 
                 using max_T = decltype(max<U>(U::ax));
-                if (std::is_floating_point<max_T>::value)
+                if constexpr (std::is_floating_point<max_T>::value)
                 {
                     using vec = vector<max_T>;
                     vec maxp { max<U>(V::rx), max<U>(V::gx), max<U>(V::bx), 1 };
@@ -333,7 +333,7 @@ namespace jw
             {
                 using max_T = decltype(max<U>(U::ax));
 
-                if (std::is_integral<max_T>::value)
+                if constexpr (std::is_integral<max_T>::value)
                 {
                 #ifndef __SSE__
                     this->b = ((other.b * max<U>(V::bx) * other.a) / max<U>(U::bx) + this->b * (other.ax - other.a)) / max<U>(U::ax);
@@ -346,7 +346,7 @@ namespace jw
                     vec ax { U::ax, U::ax, U::ax, U::ax };
                     vec dest { this->r, this->g, this->b, 0 };
                     vec srca { other.a, other.a, other.a, other.a };
-                    if (std::is_same<V, U>::value)
+                    if constexpr (std::is_same<V, U>::value)
                     {
                         vec src { other.r, other.g, other.b, other.a };
 
@@ -398,7 +398,7 @@ namespace jw
             constexpr pixel& blend(const pixel<U>& other)
             {
                 using max_T = decltype(max<U>(U::ax));
-                if (std::is_integral<max_T>::value)
+                if constexpr (std::is_integral<max_T>::value)
                 {
                 #ifndef __SSE__
                     this->b = ((other.b * max<U>(V::bx) * other.a) / max<U>(U::bx) + this->b * (other.ax - other.a)) / max<U>(U::ax);
@@ -412,7 +412,7 @@ namespace jw
                     vec ax { U::ax, U::ax, U::ax, U::ax };
                     vec dest { this->r, this->g, this->b, this->a };
                     vec srca { other.a, other.a, other.a, other.a };
-                    if (std::is_same<P, U>::value)
+                    if constexpr (std::is_same<P, U>::value)
                     {
                         vec src { other.r, other.g, other.b, other.a };
 

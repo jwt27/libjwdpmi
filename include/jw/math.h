@@ -17,7 +17,7 @@ namespace jw
     template<typename U> constexpr inline auto copysign(double a, U b) { return __builtin_copysign(a, b); }
     template<typename U> constexpr inline auto copysign(float a, U b) { return __builtin_copysignf(a, b); }
 
-    template<typename T> constexpr inline auto round(T a) { if (std::is_integral<T>::value) return a; }
+    template<typename T> constexpr inline auto round(T a) { if constexpr (std::is_integral<T>::value) return a; }
     template<> constexpr inline auto round(long double a) { return __builtin_roundl(a); }
     template<> constexpr inline auto round(double a) { return __builtin_round(a); }
     template<> constexpr inline auto round(float a) { return __builtin_roundf(a); }
