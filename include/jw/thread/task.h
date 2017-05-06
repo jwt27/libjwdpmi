@@ -110,9 +110,6 @@ namespace jw
                     else result = std::make_unique<R>(f());
                 }
 
-                auto get_result(std::true_type) { }
-                auto get_result(std::false_type) { return std::move(*result); }
-
             public:
                 // Start the task using the specified arguments.
                 constexpr void start(A... args)
@@ -145,7 +142,7 @@ namespace jw
                     if (!try_await()) throw illegal_await(this->shared_from_this());
 
                     this->state = initialized;
-                    return get_result(std::is_void<R> { });
+                    if constexpr (!std::is_void_v<R>) return std::move(*result);
                 }
 
                 task_impl(std::function<R(A...)> f) : function(f) { }   // TODO: allocator support!
