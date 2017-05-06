@@ -104,10 +104,9 @@ namespace jw
                 std::unique_ptr<typename std::conditional<std::is_void<R>::value, int, R>::type> result; // std::experimental::optional ?
 
                 // std::experimental::apply ?
-                virtual void call() override { call(std::is_void<R>(), std::index_sequence_for<A...>()); }                                          // Determine if R is void
-                template <std::size_t... i> void call(std::true_type, std::index_sequence<i...> seq) { call(seq); }                                 // Void, discard non-existent result.
-                template <std::size_t... i> void call(std::false_type, std::index_sequence<i...> seq) { result = std::make_unique<R>(call(seq)); }  // Not void, save result.
-                template <std::size_t... i> auto call(std::index_sequence<i...>) { return function(std::get<i>(std::move(*arguments))...); }
+                virtual void call() override { call(std::is_void<R>()); }
+                void call(std::true_type) { std::apply(function, *arguments); }
+                void call(std::false_type) { result = std::make_unique<R>(std::apply(function, *arguments)); }
 
                 auto get_result(std::true_type) { }
                 auto get_result(std::false_type) { return std::move(*result); }
