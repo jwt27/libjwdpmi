@@ -103,10 +103,12 @@ namespace jw
                 std::unique_ptr<std::tuple<A...>> arguments;
                 std::unique_ptr<typename std::conditional<std::is_void<R>::value, int, R>::type> result; // std::experimental::optional ?
 
-                // std::experimental::apply ?
-                virtual void call() override { call(std::is_void<R>()); }
-                void call(std::true_type) { std::apply(function, *arguments); }
-                void call(std::false_type) { result = std::make_unique<R>(std::apply(function, *arguments)); }
+                virtual void call() override
+                {
+                    auto f = [this] { return std::apply(function, *arguments); };
+                    if constexpr (std::is_void_v<R>) f();
+                    else result = std::make_unique<R>(f());
+                }
 
                 auto get_result(std::true_type) { }
                 auto get_result(std::false_type) { return std::move(*result); }
