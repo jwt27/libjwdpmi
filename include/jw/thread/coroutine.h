@@ -75,18 +75,20 @@ namespace jw
                     if (!try_await()) throw illegal_await(this->shared_from_this());
 
                     result_available = false;
+                    this->state = running;
                     return std::move(*result);
                 }
 
                 // Called by the coroutine thread to yield a result.
                 // This suspends the coroutine until the result is obtained by calling await().
-                template <typename T>
-                void yield(T&& value)
+                template <typename... T>
+                void yield(T&&... value)
                 {
                     if (!scheduler::is_current_thread(this)) return; // or throw?
 
-                    result = std::make_optional<R>(std::forward<T>(value));
+                    result = std::make_optional<R>(std::forward<T>(value)...);
                     result_available = true;
+                    this->state = suspended;
                     ::jw::thread::yield_while([this] { return result_available; });
                     result.reset();
                 }
