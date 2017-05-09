@@ -37,6 +37,7 @@ namespace jw
                 std::function<void(this_t&, A...)> function;
                 std::unique_ptr<std::tuple<this_t&, A...>> arguments;
                 std::unique_ptr<R> result;
+                bool result_available { false };
 
             protected:
                 virtual void call() override { std::apply(function, *arguments); }
@@ -60,9 +61,8 @@ namespace jw
                     dpmi::throw_if_irq();
                     if (scheduler::is_current_thread(this)) return false;
 
-                    this->try_await_while([this]() { return this->state == running || (this->state == suspended && !result); });
+                    this->try_await_while([this]() { return not result_available; });
 
-                    if (this->state != suspended) return false;
                     if (!result) return false;
                     return true;
                 }
@@ -74,7 +74,7 @@ namespace jw
                 {
                     if (!try_await()) throw illegal_await(this->shared_from_this());
 
-                    this->state = running;
+                    result_available = false;
                     return std::move(*result);
                 }
 
@@ -86,8 +86,8 @@ namespace jw
                     if (!scheduler::is_current_thread(this)) return; // or throw?
 
                     result = std::make_unique<R>(std::forward<T>(value));
-                    this->state = suspended;
-                    ::jw::thread::yield();
+                    result_available = true;
+                    ::jw::thread::yield_while([this] { return result_available; });
                     result.reset();
                 }
 
