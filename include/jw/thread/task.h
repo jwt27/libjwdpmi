@@ -176,7 +176,7 @@ namespace jw
             constexpr task() = default;
         };
 
-        template<std::size_t stack_bytes, typename... T>
-        auto allocate_task(T&&... args) { return task<void(), stack_bytes> { args... }; }
+        template<typename sig, std::size_t stack_bytes, typename... T>
+        auto allocate_task(T&&... args) { return task<sig, stack_bytes> { std::allocator_arg, std::forward<T>(args)... }; }
     }
 }
