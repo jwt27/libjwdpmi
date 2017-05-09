@@ -36,7 +36,7 @@ namespace jw
 
                 std::function<void(this_t&, A...)> function;
                 std::unique_ptr<std::tuple<this_t&, A...>> arguments;
-                std::unique_ptr<R> result;
+                std::optional<R> result;
                 bool result_available { false };
 
             protected:
@@ -85,7 +85,7 @@ namespace jw
                 {
                     if (!scheduler::is_current_thread(this)) return; // or throw?
 
-                    result = std::make_unique<R>(std::forward<T>(value));
+                    result = std::make_optional<R>(std::forward<T>(value));
                     result_available = true;
                     ::jw::thread::yield_while([this] { return result_available; });
                     result.reset();

@@ -101,13 +101,13 @@ namespace jw
             protected:
                 std::function<R(A...)> function;
                 std::unique_ptr<std::tuple<A...>> arguments;
-                std::unique_ptr<typename std::conditional<std::is_void<R>::value, int, R>::type> result; // std::experimental::optional ?
+                std::optional<typename std::conditional<std::is_void<R>::value, int, R>::type> result; // std::experimental::optional ?
 
                 virtual void call() override
                 {
                     auto f = [this] { return std::apply(function, *arguments); };
                     if constexpr (std::is_void_v<R>) f();
-                    else result = std::make_unique<R>(f());
+                    else result = std::make_optional<R>(f());
                 }
 
             public:
