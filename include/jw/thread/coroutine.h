@@ -31,23 +31,23 @@ namespace jw
             class coroutine_impl<R(A...), stack_bytes> : public task_base<stack_bytes>
             {
                 template<typename, std::size_t> friend class coroutine;
-                using function_sig = void(coroutine_impl<R(A...), stack_bytes>&, A...);
+                using this_t = coroutine_impl<R(A...), stack_bytes>;
                 using base = task_base<stack_bytes>;
 
-                std::function<function_sig> function;
-                std::unique_ptr<std::tuple<A...>> arguments;
+                std::function<void(this_t&, A...)> function;
+                std::unique_ptr<std::tuple<this_t&, A...>> arguments;
                 std::unique_ptr<R> result;
 
             protected:
-                virtual void call() override { call(std::index_sequence_for<A...>()); }
-                template <std::size_t... i> void call(std::index_sequence<i...>) { function(*this, std::get<i>(std::move(*arguments))...); }
+                virtual void call() override { std::apply(function, *arguments); }
 
             public:
                 // Start the coroutine thread using the specified arguments.
-                constexpr void start(A... args)
+                template <typename... Args>
+                constexpr void start(Args&&... args)
                 {
                     if (this->is_running()) return; // or throw...?
-                    arguments = std::make_unique<std::tuple<A...>>(std::forward<A>(args)...);
+                    arguments = std::make_unique<std::tuple<this_t&, A...>>(*this, std::forward<Args>(args)...);
                     result.reset();
                     base::start();
                 }
@@ -80,17 +80,19 @@ namespace jw
 
                 // Called by the coroutine thread to yield a result.
                 // This suspends the coroutine until the result is obtained by calling await().
-                void yield(auto value)
+                template <typename T>
+                void yield(T&& value)
                 {
                     if (!scheduler::is_current_thread(this)) return; // or throw?
 
-                    result = std::make_unique<R>(std::move(value));
+                    result = std::make_unique<R>(std::forward<T>(value));
                     this->state = suspended;
                     ::jw::thread::yield();
                     result.reset();
                 }
 
-                coroutine_impl(std::function<function_sig> f) : function(f) { }
+                template <typename F>
+                coroutine_impl(F&& f) : function { std::forward<F>(f) } { }
             };
         }
 

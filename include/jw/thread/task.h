@@ -112,10 +112,11 @@ namespace jw
 
             public:
                 // Start the task using the specified arguments.
-                constexpr void start(A... args)
+                template <typename... Args>
+                constexpr void start(Args&&... args)
                 {
                     if (this->is_running()) return;
-                    arguments = std::make_unique<std::tuple<A...>>(std::forward<A>(args)...);
+                    arguments = std::make_unique<std::tuple<A...>>(std::forward<Args>(args)...);
                     result.reset();
                     base::start();
                 }
@@ -145,7 +146,8 @@ namespace jw
                     if constexpr (!std::is_void_v<R>) return std::move(*result);
                 }
 
-                task_impl(std::function<R(A...)> f) : function(f) { }   // TODO: allocator support!
+                template <typename F>
+                task_impl(F&& f) : function(std::forward<F>(f)) { }   // TODO: allocator support!
             };
         }
 
