@@ -117,7 +117,7 @@ namespace jw
                     if (thread::detail::thread_details::trap_state(t) && t->id() != current_thread_id) use_sigcont = true;
                 }
 
-                bool do_action()
+                bool do_action() const
                 {
                     switch (action)
                     {
@@ -465,12 +465,11 @@ namespace jw
 
             [[gnu::hot]] bool handle_packet(exception_num, cpu_registers* r, exception_frame* f, bool t)
             {
-                using namespace std;
                 std::deque<packet_string> packet { };
                 while (true)
                 {
                     std::stringstream s { };
-                    s << hex << setfill('0');
+                    s << std::hex << std::setfill('0');
                     if (current_thread->action != thread_info::none)
                     {
                         stop_reply();
