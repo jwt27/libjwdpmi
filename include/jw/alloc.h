@@ -1,19 +1,5 @@
-/******************************* libjwdpmi **********************************
-Copyright (C) 2016-2017  J.W. Jagersma
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/
+/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
 #include <memory>
@@ -23,7 +9,8 @@ namespace jw
     template<typename Alloc>
     struct allocator_delete : public Alloc
     {
-        using Alloc::Alloc;
+        constexpr allocator_delete() { }
+        constexpr allocator_delete(const auto& other) : Alloc(other) { }
         using traits = std::allocator_traits<Alloc>;
         void operator()(auto*& p)
         {
@@ -42,7 +29,7 @@ namespace jw
         using traits = std::allocator_traits<rebind>;
         using deleter = allocator_delete<rebind>;
 
-        auto d = deleter { rebind { alloc } };
+        deleter d { rebind { alloc } };
         auto* p = traits::allocate(d, 1);
         try { p = new(p) T { std::forward<Args>(args)... }; }
         catch (...) { traits::deallocate(d, p, 1); throw; }
