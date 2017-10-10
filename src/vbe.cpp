@@ -207,15 +207,17 @@ namespace jw
 
             try
             {
+                std::size_t bios_size;
                 {
-                    mapped_dos_memory<byte> video_bios_ptr { 64_KB, far_ptr16 { 0xC000, 0 } };
-                    auto* ptr = video_bios_ptr.get_ptr();
-                    video_bios = std::make_unique<memory<byte>>(64_KB);
-                    std::copy_n(ptr, 64_KB, video_bios->get_ptr());
+                    mapped_dos_memory<byte> video_bios_ptr { 128_KB, far_ptr16 { 0xC000, 0 } };
+                    byte* ptr = video_bios_ptr.get_ptr();
+                    bios_size = *(ptr + 2) * 512;
+                    video_bios = std::make_unique<memory<byte>>(bios_size);
+                    std::copy_n(ptr, bios_size, video_bios->get_ptr());
                 }
                 char* search_ptr = reinterpret_cast<char*>(video_bios->get_ptr());
                 const char* search_value = "PMID";
-                search_ptr = std::search(search_ptr, search_ptr + 64_KB, search_value, search_value + 4);
+                search_ptr = std::search(search_ptr, search_ptr + bios_size, search_value, search_value + 4);
                 if (std::strncmp(search_ptr, search_value, 4) != 0) return;
                 pmid = reinterpret_cast<detail::vbe3_pm_info*>(search_ptr);
                 if (checksum8(*pmid) != 0) return;
@@ -235,7 +237,7 @@ namespace jw
                 pmid->b000_selector = b000->get_selector();
                 pmid->b800_selector = b800->get_selector();
 
-                video_bios_code = { video_bios->get_address(), 64_KB };
+                video_bios_code = { video_bios->get_address(), bios_size };
                 video_bios->get_ldt_entry().lock()->set_access_rights(ar);
                 ar = ldt_access_rights { get_cs() };
                 ar.is_32_bit = false;
