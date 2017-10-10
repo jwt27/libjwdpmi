@@ -131,7 +131,7 @@ namespace jw
 
                     this->try_await_while([this]() { return this->is_running(); });
 
-                    if (this->state == initialized) return false;
+                    if constexpr (!std::is_void_v<R>) if (this->state == initialized) return false;
                     return true;
                 }
 
