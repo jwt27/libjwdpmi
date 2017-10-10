@@ -1,22 +1,9 @@
-/******************************* libjwdpmi **********************************
-Copyright (C) 2016-2017  J.W. Jagersma
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/
+/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
+/* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
-#include <string>    
+#include <string>
 #include <unordered_map>
 #include <jw/enum_struct.h>
 
@@ -46,9 +33,9 @@ namespace jw
                 del, end, page_down,
                 up, left, down, right,
 
-                num_lock, num_div, num_mult, num_sub,
-                num_7, num_8, num_9, num_add,
-                num_4, num_5, num_6,
+                num_lock, num_div, num_mul, num_sub,
+                num_7, num_8, num_9,
+                num_4, num_5, num_6, num_add,
                 num_1, num_2, num_3,
                 num_0, num_dot, num_enter,
 

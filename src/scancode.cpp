@@ -250,7 +250,7 @@ namespace jw
                 //{ 0x7B, key:: },
                 { 0x7C, key::num_add },
                 { 0x7D, key::num_9 },
-                { 0x7E, key::num_mult },
+                { 0x7E, key::num_mul },
                 { 0x7F, key::pwr_sleep },
                 //{ 0x80, key:: },
                 //{ 0x81, key:: },

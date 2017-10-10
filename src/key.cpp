@@ -1,19 +1,6 @@
-/******************************* libjwdpmi **********************************
-Copyright (C) 2016-2017  J.W. Jagersma
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/
+/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
+/* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
 #include <jw/io/key.h>
 #include <jw/io/keyboard.h>
@@ -93,7 +80,7 @@ namespace jw
             { key::n8, '8' },
             { key::n9, '9' },
             { key::num_div, '/' },
-            { key::num_mult, '*' },
+            { key::num_mul, '*' },
             { key::num_sub, '-' },
             { key::num_add, '+' },
             { key::num_enter, '\n' },
@@ -232,7 +219,7 @@ namespace jw
             { key::left, "Left" },
             { key::right, "Right" },
             { key::num_div, "Numpad /" },
-            { key::num_mult, "Numpad *" },
+            { key::num_mul, "Numpad *" },
             { key::num_sub, "Numpad -" },
             { key::num_add, "Numpad +" },
             { key::num_dot, "Numpad ." },
