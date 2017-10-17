@@ -1,19 +1,5 @@
-/******************************* libjwdpmi **********************************
-Copyright (C) 2016-2017  J.W. Jagersma
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/
+/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
 #include <cstdint>
@@ -33,7 +19,7 @@ namespace jw
             split_int<unsigned, (size >> 1)> lo;
             split_int<T, (size >> 1)> hi;
         };
-        std::conditional_t<std::is_signed<T>::value, std::int64_t, std::uint64_t> value : size;
+        std::conditional_t<std::is_signed_v<T>, std::int64_t, std::uint64_t> value : size;
         constexpr split_int() noexcept { }
         constexpr split_int(auto v) noexcept : value(v) { };
         constexpr operator auto() const noexcept { return value; }
@@ -47,7 +33,7 @@ namespace jw
              unsigned lo : size >> 1;
              T hi : size >> 1;
         };
-        std::conditional_t<std::is_signed<T>::value, std::int64_t, std::uint64_t> value : size;
+        std::conditional_t<std::is_signed_v<T>, std::int64_t, std::uint64_t> value : size;
         constexpr split_int() noexcept { }
         constexpr split_int(auto v) noexcept : value(v) { };
         constexpr operator auto() const noexcept { return value; }
