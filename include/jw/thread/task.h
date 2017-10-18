@@ -138,8 +138,7 @@ namespace jw
             };
         }
 
-        template<typename sig, std::size_t stack_bytes = config::thread_default_stack_size>
-        class task;
+        template<typename, std::size_t = config::thread_default_stack_size> class task;
 
         template<typename R, typename... A, std::size_t stack_bytes>
         class task<R(A...), stack_bytes>
@@ -163,7 +162,13 @@ namespace jw
             constexpr task() = default;
         };
 
-        template<typename sig, std::size_t stack_bytes, typename... T>
-        auto allocate_task(T&&... args) { return task<sig, stack_bytes> { std::allocator_arg, std::forward<T>(args)... }; }
+        template<typename R, typename... A, std::size_t stack_bytes = config::thread_default_stack_size>
+        task(R(*)(A...)) -> task<R(A...), stack_bytes>;
+
+        template<typename F, typename Sig = typename std::__function_guide_helper<decltype(&F::operator())>::type, std::size_t stack_bytes = config::thread_default_stack_size>
+        task(F) -> task<Sig, stack_bytes>;
+
+        template<typename Sig, std::size_t stack_bytes, typename... T>
+        auto allocate_task(T&&... args) { return task<Sig, stack_bytes> { std::allocator_arg, std::forward<T>(args)... }; }
     }
 }
