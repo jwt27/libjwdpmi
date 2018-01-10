@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
@@ -46,7 +47,7 @@ namespace jw
                 template<std::size_t> friend class task_base;
                 friend class thread_details;
 
-                static std::uint32_t id_count;
+                static inline std::uint32_t id_count { 0 };
 
                 thread_context* context; // points to esp during context switch
                 const std::size_t stack_size;

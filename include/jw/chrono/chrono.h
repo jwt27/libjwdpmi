@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
@@ -37,12 +38,12 @@ namespace jw
             static void setup_tsc(std::size_t num_samples, tsc_reference ref = tsc_reference::none);
 
         private:
-            static std::atomic<std::uint32_t> tsc_ticks_per_irq;
-            static double ns_per_pit_tick;
-            static double ns_per_rtc_tick;
+            static inline std::atomic<std::uint32_t> tsc_ticks_per_irq { 0 };
+            static inline double ns_per_pit_tick;
+            static inline double ns_per_rtc_tick;
 
-            static volatile std::uint64_t pit_ticks;
-            static volatile std::uint_fast16_t rtc_ticks;
+            static inline volatile std::uint64_t pit_ticks;
+            static inline volatile std::uint_fast16_t rtc_ticks;
             
             static dpmi::irq_handler pit_irq;
             static dpmi::irq_handler rtc_irq;
@@ -52,7 +53,7 @@ namespace jw
             static void reset_rtc();
             static void reset_tsc();
 
-            static tsc_reference preferred_tsc_ref;
+            static inline tsc_reference preferred_tsc_ref { tsc_reference::pit };
             static tsc_reference current_tsc_ref()
             {
                 if (preferred_tsc_ref == tsc_reference::pit && chrono::pit_irq.is_enabled()) return preferred_tsc_ref;
@@ -61,8 +62,8 @@ namespace jw
                 else return tsc_reference::none;
             }
 
-            static constexpr io::out_port<byte> rtc_index { 0x70 };
-            static constexpr io::io_port<byte> rtc_data { 0x71 };
+            static inline constexpr io::out_port<byte> rtc_index { 0x70 };
+            static inline constexpr io::io_port<byte> rtc_data { 0x71 };
 
             struct reset_all { ~reset_all(); } static reset;
         };

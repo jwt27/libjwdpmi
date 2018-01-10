@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #include <jw/chrono/chrono.h>
@@ -12,18 +13,8 @@ namespace jw
         std::size_t tsc_max_sample_size { 1000 };
         std::size_t tsc_sample_size { 0 };
         std::uint64_t tsc_total { 0 };
-        tsc_reference chrono::preferred_tsc_ref { tsc_reference::pit };
         bool tsc_resync { true };
 
-        std::atomic<std::uint32_t> chrono::tsc_ticks_per_irq { 0 };
-        double chrono::ns_per_pit_tick;
-        double chrono::ns_per_rtc_tick;
-
-        volatile std::uint64_t chrono::pit_ticks;
-        volatile std::uint_fast16_t chrono::rtc_ticks;
-
-        constexpr io::out_port<byte> chrono::rtc_index;
-        constexpr io::io_port<byte> chrono::rtc_data;
         constexpr io::out_port<byte> pit_cmd { 0x43 };
         constexpr io::io_port<byte> pit0_data { 0x40 };
 

@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
@@ -29,10 +30,10 @@ namespace jw
                 template<std::size_t> friend class task_base;
                 friend void ::jw::thread::yield();
                 friend int ::main(int, const char**);
-                static dpmi::locked_pool_allocator<> alloc;
-                static std::deque<thread_ptr, dpmi::locked_pool_allocator<>> threads;
-                static thread_ptr current_thread;
-                static thread_ptr main_thread;
+                static inline dpmi::locked_pool_allocator<> alloc { 128_KB };
+                static inline std::deque<thread_ptr, dpmi::locked_pool_allocator<>> threads { alloc };
+                static inline thread_ptr current_thread;
+                static inline thread_ptr main_thread;
 
             public:
                 static bool is_current_thread(const thread* t) noexcept { return current_thread.get() == t; }
@@ -48,7 +49,7 @@ namespace jw
 
                 [[gnu::used]] static void run_thread() noexcept;
 
-                struct init_main { init_main(); } static initializer;
+                struct init_main { init_main(); } static inline initializer;
             };
         }
     }

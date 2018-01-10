@@ -49,8 +49,8 @@ namespace jw
                 if (count++ == 0) initial_state = state;
             }
 
-            static volatile int count;
-            static bool initial_state;
+            static inline volatile int count { 0 };
+            static inline bool initial_state;
 
             //DPMI 0.9 AX=090x
             static bool get_and_set_interrupt_state(bool state) noexcept
@@ -125,8 +125,8 @@ namespace jw
                 port.write(port.read() & ~mask);
             }
 
-            static constexpr io::io_port<byte> pic0_data { 0x21 };
-            static constexpr io::io_port<byte> pic1_data { 0xA1 };
+            static inline constexpr io::io_port<byte> pic0_data { 0x21 };
+            static inline constexpr io::io_port<byte> pic1_data { 0xA1 };
 
             struct mask_counter
             {

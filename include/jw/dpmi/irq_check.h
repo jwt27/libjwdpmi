@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
@@ -11,8 +12,8 @@ namespace jw
     {
         namespace detail
         {
-            extern volatile std::uint32_t interrupt_count;
-            extern volatile std::uint32_t exception_count;
+            inline volatile std::uint32_t interrupt_count { 0 };
+            inline volatile std::uint32_t exception_count { 0 };
         }
 
         struct bad_irq_function_call : public std::runtime_error

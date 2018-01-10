@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
@@ -206,7 +207,7 @@ namespace jw
                     if (contexts.back() == nullptr) switch_context();
                     return contexts[last_restored];
                 }
-            } extern fpu_context_switcher;
+            } inline fpu_context_switcher;
         }
     }
 }

@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
@@ -27,10 +28,10 @@ namespace jw
             virtual std::vector<px32a> get_palette();
 
         protected:
-            static constexpr io::in_port<bool> dac_state { 0x3c7 };
-            static constexpr io::io_port<byte> dac_write_index { 0x3c8 };
-            static constexpr io::out_port<byte> dac_read_index { 0x3c7 };
-            static constexpr io::io_port<byte> dac_data { 0x3c9 };
+            static inline constexpr io::in_port<bool> dac_state { 0x3c7 };
+            static inline constexpr io::io_port<byte> dac_write_index { 0x3c8 };
+            static inline constexpr io::out_port<byte> dac_read_index { 0x3c7 };
+            static inline constexpr io::io_port<byte> dac_data { 0x3c9 };
 
             std::size_t dac_bits { 6 };
         };

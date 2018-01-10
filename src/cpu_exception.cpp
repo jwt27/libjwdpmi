@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
@@ -10,14 +11,6 @@ namespace jw
 {
     namespace dpmi
     {
-        namespace detail
-        {
-            volatile std::uint32_t exception_count { 0 };
-        }
-
-        std::array<exception_handler*, 0x20> exception_handler::last { };
-        std::array<byte, config::exception_stack_size> exception_handler::stack;
-
         bool exception_handler::call_handler(exception_handler* self, raw_exception_frame* frame) noexcept
         {
             ++detail::exception_count;

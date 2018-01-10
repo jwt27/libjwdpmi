@@ -9,8 +9,8 @@ namespace jw
     template<typename Alloc>
     struct allocator_delete : public Alloc
     {
-        constexpr allocator_delete() { }
-        constexpr allocator_delete(const auto& other) : Alloc(other) { }
+        constexpr allocator_delete() = default;
+        constexpr allocator_delete(auto&& other) : Alloc(std::forward<decltype(other)>(other)) { }
         using traits = std::allocator_traits<Alloc>;
         void operator()(auto*& p)
         {
@@ -46,4 +46,6 @@ namespace jw
 
         return std::unique_ptr<T, deleter> { nullptr, deleter { rebind { alloc } } };
     }
+
+    //template <typename T> using pmr_unique_ptr = std::unique_ptr<T, allocator_delete<std::experimental::pmr::polymorphic_allocator<T>>>;
 }

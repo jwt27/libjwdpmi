@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
@@ -13,14 +14,6 @@ namespace jw
     {
         namespace detail
         {
-            std::uint32_t thread::id_count { 0 };
-
-            scheduler::init_main scheduler::initializer;
-            dpmi::locked_pool_allocator<> scheduler::alloc { 128_KB };
-            std::deque<thread_ptr, dpmi::locked_pool_allocator<>> scheduler::threads { alloc };
-            thread_ptr scheduler::current_thread;
-            thread_ptr scheduler::main_thread;
-
             scheduler::init_main::init_main()
             {
                 main_thread = std::shared_ptr<thread> { new thread(0, nullptr) };

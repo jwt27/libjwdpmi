@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #include <jw/video/vga.h>
@@ -8,11 +9,6 @@ namespace jw
 {
     namespace video
     {
-        constexpr io::in_port<bool>  vga::dac_state;
-        constexpr io::io_port<byte>  vga::dac_write_index;
-        constexpr io::out_port<byte> vga::dac_read_index;
-        constexpr io::io_port<byte>  vga::dac_data;
-
         void bios::set_mode(vbe_mode m, const crtc_info *)
         {
             if (m.dont_clear_video_memory) m.mode |= 0x80;

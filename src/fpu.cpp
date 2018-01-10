@@ -60,8 +60,7 @@ namespace jw
                 }
                 return cr4_allowed;
             }
-            
-            fpu_context_switcher_t fpu_context_switcher;
+
             std::unique_ptr<exception_handler> exc07_handler, exc06_handler;
 
             fpu_context_switcher_t::fpu_context_switcher_t()

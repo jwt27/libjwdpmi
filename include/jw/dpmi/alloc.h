@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
@@ -23,7 +24,7 @@ namespace jw
             class locking_allocator_base
             {
             protected:
-                static std::map<void*, data_lock>* map;
+                static inline std::map<void*, data_lock>* map;
             };
         }
 
@@ -262,7 +263,7 @@ namespace jw
                 ptr_with_lock(void* _p, std::size_t n) : p(_p), lock(p, n) { }
             };
 
-            static std::map<void*, ptr_with_lock>* map;
+            static inline std::map<void*, ptr_with_lock>* map { };
         };
 
         // TODO: locked_pool_resource

@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
@@ -187,8 +188,8 @@ namespace jw
             exception_num exc;
             exception_handler* next { nullptr };
             exception_handler* prev { nullptr };
-            static std::array<exception_handler*, 0x20> last;
-            static std::array<byte, config::exception_stack_size> stack; // TODO: allow nested exceptions
+            static inline std::array<exception_handler*, 0x20> last { };
+            static inline std::array<byte, config::exception_stack_size> stack; // TODO: allow nested exceptions
 
             static bool call_handler(exception_handler* self, raw_exception_frame* frame) noexcept;
                                                                 // sizeof   alignof     offset

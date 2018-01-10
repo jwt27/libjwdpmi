@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
@@ -72,10 +73,10 @@ namespace jw
                 , pic_master_base(get_dh()), pic_slave_base(get_dl()) { }
 
         private:
-            static split_uint16_t ax, dx;
-            static std::uint16_t bx;
-            static std::uint8_t cl;
-            static bool init;
+            static inline split_uint16_t ax, dx;
+            static inline std::uint16_t bx;
+            static inline std::uint8_t cl;
+            static inline bool init { false };
 
             static std::uint8_t get_al() noexcept { get(); return ax.lo; }
             static std::uint8_t get_ah() noexcept { get(); return ax.hi; }
@@ -142,10 +143,10 @@ namespace jw
                 , vendor_info(get_vendor_info()) { }
 
         private:
-            static bool init;
-            static bool sup;
-            static std::uint16_t raw_flags;
-            static std::array<byte, 128> raw_vendor_info;
+            static inline bool init { false };
+            static inline bool sup { true };
+            static inline std::uint16_t raw_flags;
+            static inline std::array<byte, 128> raw_vendor_info { };
 
             static std::uint16_t get_flags() noexcept { get(); return raw_flags; }
             static std::array<byte, 128> get_vendor_info() noexcept { get(); return raw_vendor_info; }

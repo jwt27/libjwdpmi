@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #include <algorithm>
@@ -12,11 +13,6 @@ namespace jw
     {
         namespace detail
         {
-            volatile std::uint32_t interrupt_count { 0 };
-            constexpr io::io_port<byte> irq_controller::pic0_cmd;
-            constexpr io::io_port<byte> irq_controller::pic1_cmd;
-            irq_controller::irq_controller_data* irq_controller::data { nullptr };
-
             void irq_controller::interrupt_entry_point(int_vector vec) noexcept
             {
                 ++interrupt_count;

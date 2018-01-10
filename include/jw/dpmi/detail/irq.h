@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #include <jw/thread/task.h>
@@ -182,7 +183,7 @@ namespace jw
                     std::map<int_vector, std::unique_ptr<irq_controller>, std::less<int_vector>, locking_allocator<>> entries { };
                     std::vector<byte, locking_allocator<>> stack { };
                     std::uint32_t stack_use_count { 0 };
-                } static * data;
+                } static inline * data { nullptr };
             };
         }
     }
