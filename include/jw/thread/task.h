@@ -88,7 +88,7 @@ namespace jw
             protected:
                 std::function<R(A...)> function;
                 std::unique_ptr<std::tuple<A...>> arguments;
-                std::optional<typename std::conditional<std::is_void<R>::value, int, R>::type> result; // std::experimental::optional ?
+                std::optional<typename std::conditional_t<std::is_void_v<R>, int, R>> result;
 
                 virtual void call() override
                 {
