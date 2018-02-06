@@ -98,5 +98,10 @@ namespace jw
             bool enabled { false };
             irq_level irq { };
         };
+
+        namespace irq
+        {
+            void ack() { detail::irq_controller::acknowledge(); }
+        }
     }
 }

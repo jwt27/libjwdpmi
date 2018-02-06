@@ -37,12 +37,10 @@ namespace jw
             struct irq_handler_base
             {   
                 template<typename F>
-                //irq_handler_base(F func, irq_config_flags f = { }) : handler_ptr(std::forward<F>(func)), flags(f) { }
                 irq_handler_base(F&& func, irq_config_flags f = { }) : handler_ptr(std::allocator_arg, locking_allocator<> { }, std::forward<F>(func)), flags(f) { }
                 irq_handler_base() = delete;
 
-                const func::function<void(ack_ptr)> handler_ptr; // TODO: figure out if the locking allocator is really necessary here.
-                //const std::function<void(ack_ptr)> handler_ptr;
+                const func::function<void()> handler_ptr; // TODO: figure out if the locking allocator is really necessary here.
                 const irq_config_flags flags;
             };
 
@@ -110,6 +108,13 @@ namespace jw
 
                 static irq_controller& get_irq(irq_level i) { return get(irq_to_vec(i)); }
 
+                INTERRUPT static void acknowledge() noexcept
+                {
+                    if (is_acknowledged()) return;
+                    send_eoi();
+                    data->current_int.back() = 0;
+                }
+
             private:
                 static int_vector irq_to_vec(irq_level i) noexcept
                 { 
@@ -127,13 +132,6 @@ namespace jw
 
                 static bool is_irq(int_vector v) { return vec_to_irq(v) != 0xff; }
                 static bool is_acknowledged() { return data->current_int.back() == 0; }
-
-                INTERRUPT static void acknowledge() noexcept
-                {
-                    if (is_acknowledged()) return;
-                    send_eoi();
-                    data->current_int.back() = 0;
-                }
 
                 INTERRUPT static auto in_service() noexcept
                 {

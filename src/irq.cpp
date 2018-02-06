@@ -53,7 +53,7 @@ namespace jw
                 {
                     try
                     {
-                        if (f->flags & always_call || !is_acknowledged()) f->handler_ptr(acknowledge);
+                        if (f->flags & always_call || !is_acknowledged()) f->handler_ptr();
                     }
                     catch (...) { std::cerr << "EXCEPTION OCCURED IN INTERRUPT HANDLER " << std::hex << vec << std::endl; } // TODO: exceptions
                 }
