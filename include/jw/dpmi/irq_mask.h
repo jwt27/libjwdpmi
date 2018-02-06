@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
@@ -131,9 +132,10 @@ namespace jw
             struct mask_counter
             {
                 volatile int count { 0 };
-                bool first; // true if initially masked
+                bool first { }; // true if initially masked
+                constexpr mask_counter() noexcept { }
             };
-            static std::array<mask_counter, 16> map;
+            static inline std::array<mask_counter, 16> map { };
 
             irq_level irq;
         };
