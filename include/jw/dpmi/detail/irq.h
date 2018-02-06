@@ -131,7 +131,7 @@ namespace jw
                 }
 
                 static bool is_irq(int_vector v) { return vec_to_irq(v) != 0xff; }
-                static bool is_acknowledged() { return data->current_int.back() == 0; }
+                static bool is_acknowledged() { return data->current_int.empty() or data->current_int.back() == 0; }
 
                 INTERRUPT static auto in_service() noexcept
                 {
