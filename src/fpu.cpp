@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #include <jw/dpmi/fpu.h>
