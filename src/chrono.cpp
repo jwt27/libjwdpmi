@@ -35,7 +35,7 @@ namespace jw
             tsc_ticks_per_irq = tsc_total / tsc_sample_size;
         }
 
-        dpmi::irq_handler setup::rtc_irq { [](auto* ack) INTERRUPT
+        dpmi::irq_handler setup::rtc_irq { []() INTERRUPT
         {
             static byte last_sec { 0 };
             dpmi::interrupt_mask no_irq { };
@@ -54,16 +54,16 @@ namespace jw
 
             if (current_tsc_ref() == tsc_reference::rtc) update_tsc();
 
-            ack();
+            dpmi::end_of_interrupt();
         }, dpmi::always_call | dpmi::no_interrupts };
 
-        dpmi::irq_handler setup::pit_irq { [](auto* ack) INTERRUPT
+        dpmi::irq_handler setup::pit_irq { []() INTERRUPT
         {
             ++pit_ticks;
 
             if (current_tsc_ref() == tsc_reference::pit) update_tsc();
 
-            ack();
+            dpmi::end_of_interrupt();
         }, dpmi::always_call | dpmi::no_auto_eoi };
 
         void setup::setup_pit(bool enable, std::uint32_t freq_divider)

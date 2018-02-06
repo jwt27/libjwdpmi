@@ -62,9 +62,9 @@ namespace jw
                     putting.clear();
                 }
 
-                dpmi::irq_handler irq_handler { [this](auto ack) INTERRUPT
+                dpmi::irq_handler irq_handler { [this]() INTERRUPT
                 {
-                    if (!status_port.read().no_data_available) ack();
+                    if (!status_port.read().no_data_available) dpmi::end_of_interrupt();
                     get();
                     put();
                 } };

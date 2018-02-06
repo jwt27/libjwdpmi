@@ -99,9 +99,7 @@ namespace jw
             irq_level irq { };
         };
 
-        namespace irq
-        {
-            void ack() { detail::irq_controller::acknowledge(); }
-        }
+        // Call this from your interrupt handler to send an EOI to the interrupt controller.
+        inline void end_of_interrupt() noexcept { detail::irq_controller::acknowledge(); }
     }
 }

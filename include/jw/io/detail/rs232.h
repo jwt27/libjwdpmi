@@ -167,7 +167,7 @@ namespace jw
                     return true;
                 }
 
-                dpmi::irq_handler irq_handler { [this](auto ack) INTERRUPT
+                dpmi::irq_handler irq_handler { [this]() INTERRUPT
                 {
                     auto id = irq_id.read();
                     if (!id.no_irq_pending)
@@ -184,7 +184,7 @@ namespace jw
                         case uart_irq_id_reg::modem_status:
                             put(); break;
                         }
-                        ack();
+                        dpmi::end_of_interrupt();
                     }
                     set_rts();
                 } };

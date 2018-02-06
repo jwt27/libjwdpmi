@@ -177,7 +177,7 @@ namespace jw
             dpmi::locked_pool_allocator<> alloc { 1_KB };
             std::deque<detail::raw_scancode, dpmi::locked_pool_allocator<>> scancode_queue { alloc };
 
-            dpmi::irq_handler irq_handler { [this](auto* ack) INTERRUPT
+            dpmi::irq_handler irq_handler { [this]() INTERRUPT
             {
                 if (get_status().data_available)
                 {
@@ -188,7 +188,7 @@ namespace jw
                         else scancode_queue.push_back(c);
                     } while (get_status().data_available);
                     if (keyboard_update_thread) keyboard_update_thread->start();
-                    ack();
+                    dpmi::end_of_interrupt();
                 }
             }, dpmi::no_auto_eoi };
         };
