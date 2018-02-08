@@ -14,15 +14,12 @@ namespace jw
     {
         namespace detail
         {
-            template<std::size_t stack_bytes>
-            class task_base : public detail::thread, public std::enable_shared_from_this<task_base<stack_bytes>>
+            class task_base : public detail::thread, public std::enable_shared_from_this<task_base>
             {
-                alignas(0x10) std::array<byte, stack_bytes> stack;
-
             protected:
-                constexpr task_base() : thread(stack_bytes, stack.data()) { }
+                task_base(std::size_t stack_bytes) : thread(stack_bytes) { }
 
-                constexpr void start()
+                void start()
                 {
                     if (this->is_running()) return;
 
@@ -76,14 +73,13 @@ namespace jw
                 }
             };
 
-            template<typename sig, std::size_t stack_bytes>
-            class task_impl;
+            template<typename> class task_impl;
 
-            template<typename R, typename... A, std::size_t stack_bytes>
-            class task_impl<R(A...), stack_bytes> : public task_base<stack_bytes>
+            template<typename R, typename... A>
+            class task_impl<R(A...)> : public task_base
             {
-                template<typename, std::size_t> friend class task;
-                using base = task_base<stack_bytes>;
+                template<typename> friend class task;
+                using base = task_base;
 
             protected:
                 std::function<R(A...)> function;
@@ -100,7 +96,7 @@ namespace jw
             public:
                 // Start the task using the specified arguments.
                 template <typename... Args>
-                constexpr void start(Args&&... args)
+                void start(Args&&... args)
                 {
                     if (this->is_running()) return;
                     arguments = std::make_unique<std::tuple<A...>>(std::forward<Args>(args)...);
@@ -134,16 +130,18 @@ namespace jw
                 }
 
                 template <typename F>
-                task_impl(F&& f) : function(std::forward<F>(f)) { }   // TODO: allocator support!
+                task_impl(F&& f, std::size_t stack_bytes = config::thread_default_stack_size) 
+                    : base { stack_bytes }
+                    , function { std::forward<F>(f) } { }   // TODO: allocator support!
             };
         }
 
-        template<typename, std::size_t = config::thread_default_stack_size> class task;
+        template<typename> class task;
 
-        template<typename R, typename... A, std::size_t stack_bytes>
-        class task<R(A...), stack_bytes>
+        template<typename R, typename... A>
+        class task<R(A...)>
         {
-            using task_type = detail::task_impl<R(A...), stack_bytes>;
+            using task_type = detail::task_impl<R(A...)>;
             std::shared_ptr<task_type> ptr;
 
         public:
@@ -152,8 +150,8 @@ namespace jw
             constexpr auto& operator*() const { return *ptr; }
             constexpr operator bool() const { return ptr.operator bool(); }
 
-            template<typename F>
-            constexpr task(F&& f) : ptr(std::make_shared<task_type>(std::forward<F>(f))) { }
+            template<typename... Args>
+            constexpr task(Args&&... a) : ptr(std::make_shared<task_type>(std::forward<Args>(a)...)) { }
             
             template<typename F, typename Alloc>
             constexpr task(std::allocator_arg_t, Alloc&& a, F&& f) : ptr(std::allocate_shared<task_type>(std::forward<Alloc>(a), std::forward<F>(f))) { }
@@ -162,13 +160,13 @@ namespace jw
             constexpr task() = default;
         };
 
-        template<typename R, typename... A, std::size_t stack_bytes = config::thread_default_stack_size>
-        task(R(*)(A...)) -> task<R(A...), stack_bytes>;
+        template<typename R, typename... A>
+        task(R(*)(A...)) -> task<R(A...)>;
 
-        template<typename F, typename Sig = typename std::__function_guide_helper<decltype(&F::operator())>::type, std::size_t stack_bytes = config::thread_default_stack_size>
-        task(F) -> task<Sig, stack_bytes>;
+        template<typename F, typename Sig = typename std::__function_guide_helper<decltype(&F::operator())>::type>
+        task(F) -> task<Sig>;
 
-        template<typename Sig, std::size_t stack_bytes, typename... T>
-        auto allocate_task(T&&... args) { return task<Sig, stack_bytes> { std::allocator_arg, std::forward<T>(args)... }; }
+        template<typename Sig, typename... T>
+        auto allocate_task(T&&... args) { return task<Sig> { std::allocator_arg, std::forward<T>(args)... }; }
     }
 }

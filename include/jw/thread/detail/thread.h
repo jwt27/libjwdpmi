@@ -44,14 +44,14 @@ namespace jw
             class thread
             {
                 friend class scheduler;
-                template<std::size_t> friend class task_base;
+                friend class task_base;
                 friend class thread_details;
 
                 static inline std::uint32_t id_count { 0 };
 
                 thread_context* context; // points to esp during context switch
                 const std::size_t stack_size;
-                byte* const stack_ptr;
+                std::unique_ptr<byte[]> stack;
                 std::deque<std::exception_ptr> exceptions { };
                 const std::uint32_t id_num;
                 std::uint32_t trap_masked { 0 };
@@ -67,7 +67,7 @@ namespace jw
                 auto& operator=(const thread&) = delete;
                 thread(const thread&) = delete;
 
-                thread(std::size_t bytes, byte* ptr) : stack_size(bytes), stack_ptr(ptr), id_num(++id_count) { }
+                thread(std::size_t bytes) : stack_size(bytes), stack(new byte[stack_size]), id_num(++id_count) { }
 
             public:
                 virtual void abort(bool = true)

@@ -11,15 +11,15 @@ namespace jw
     {
         namespace detail
         {
-            template<typename sig, std::size_t stack_bytes>
+            template<typename sig>
             class coroutine_impl;
 
-            template<typename R, typename... A, std::size_t stack_bytes>
-            class coroutine_impl<R(A...), stack_bytes> : public task_base<stack_bytes>
+            template<typename R, typename... A>
+            class coroutine_impl<R(A...)> : public task_base
             {
-                template<typename, std::size_t> friend class coroutine;
-                using this_t = coroutine_impl<R(A...), stack_bytes>;
-                using base = task_base<stack_bytes>;
+                template<typename> friend class coroutine;
+                using this_t = coroutine_impl<R(A...)>;
+                using base = task_base;
 
                 std::function<void(this_t&, A...)> function;
                 std::unique_ptr<std::tuple<this_t&, A...>> arguments;
@@ -81,17 +81,18 @@ namespace jw
                 }
 
                 template <typename F>
-                coroutine_impl(F&& f) : function { std::forward<F>(f) } { }
+                coroutine_impl(F&& f, std::size_t stack_bytes = config::thread_default_stack_size) 
+                    : base { stack_bytes }
+                    , function { std::forward<F>(f) } { }
             };
         }
 
-        template<typename sig, std::size_t stack_bytes = config::thread_default_stack_size>
-        class coroutine;
+        template<typename> class coroutine;
 
-        template<typename R, typename... A, std::size_t stack_bytes>
-        class coroutine<R(A...), stack_bytes>
+        template<typename R, typename... A>
+        class coroutine<R(A...)>
         {
-            using task_type = detail::coroutine_impl<R(A...), stack_bytes>;
+            using task_type = detail::coroutine_impl<R(A...)>;
             std::shared_ptr<task_type> ptr;
 
         public:

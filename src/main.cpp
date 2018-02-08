@@ -128,7 +128,7 @@ int main(int argc, const char** argv)
         {
             try
             {
-                static_cast<thread::detail::task_base<0>*>(t.get())->abort(true);
+                static_cast<thread::detail::task_base*>(t.get())->abort(true);
             }
             catch (const std::exception& e) { std::cerr << "Caught exception from thread!\n"; jw::print_exception(e); }
             catch (const jw::terminate_exception& e) { }

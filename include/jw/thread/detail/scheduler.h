@@ -27,7 +27,7 @@ namespace jw
         {
             class scheduler
             {
-                template<std::size_t> friend class task_base;
+                friend class task_base;
                 friend void ::jw::thread::yield();
                 friend int ::main(int, const char**);
                 static inline dpmi::locked_pool_allocator<> alloc { 128_KB };
