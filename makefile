@@ -32,8 +32,7 @@ $(OBJDIR):
 	mkdir -p $(OBJDIR)
 
 $(OUTDIR)/$(OUTPUT): $(OBJ) | $(OUTDIR)
-	ar cru $@ $(OBJ) $(LIBS)
-	ranlib $@
+	$(AR) scru $@ $(OBJ) $(LIBS)
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.cpp jwdpmi_config.h | $(OBJDIR)
 	$(CXX) $(CXXFLAGS) -MD -MP -MF $(@:.o=.d) -o $@ $(INCLUDE) -c $< $(PIPECMD)
