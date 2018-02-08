@@ -46,6 +46,16 @@ namespace jw
                 }
 
             public:
+                // --- Public functions and variables inherited from detail::thread:
+                // bool is_running() const noexcept;
+                // auto pending_exceptions() const noexcept;
+                // const auto& id() const noexcept;
+                // auto get_state() const noexcept;
+                // void suspend() noexcept;
+                // void resume() noexcept;
+                // std::string name;
+                // bool allow_orphan;
+
                 // Aborts the task.
                 // This throws an abort_thread exception on the thread, allowing the task to clean up and return normally.
                 // May rethrow unhandled exceptions!
