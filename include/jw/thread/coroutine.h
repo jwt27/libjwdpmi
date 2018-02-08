@@ -107,5 +107,11 @@ namespace jw
             constexpr coroutine(const coroutine&) = default;
             constexpr coroutine() = default;
         };
+
+        template<typename R, typename... A>
+        coroutine(R(*)(A...)) -> coroutine<R(A...)>;
+
+        template<typename F, typename Sig = typename std::__function_guide_helper<decltype(&F::operator())>::type>
+        coroutine(F) -> coroutine<Sig>;
     }
 }
