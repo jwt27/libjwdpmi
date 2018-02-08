@@ -142,7 +142,7 @@ namespace jw
                 template <typename F>
                 task_impl(F&& f, std::size_t stack_bytes = config::thread_default_stack_size) 
                     : base { stack_bytes }
-                    , function { std::forward<F>(f) } { }   // TODO: allocator support!
+                    , function { std::forward<F>(f) } { }
             };
         }
 
@@ -162,9 +162,6 @@ namespace jw
 
             template<typename... Args>
             constexpr task(Args&&... a) : ptr(std::make_shared<task_type>(std::forward<Args>(a)...)) { }
-            
-            template<typename F, typename Alloc>
-            constexpr task(std::allocator_arg_t, Alloc&& a, F&& f) : ptr(std::allocate_shared<task_type>(std::forward<Alloc>(a), std::forward<F>(f))) { }
 
             constexpr task(const task&) = default;
             constexpr task() = default;
@@ -175,8 +172,5 @@ namespace jw
 
         template<typename F, typename Sig = typename std::__function_guide_helper<decltype(&F::operator())>::type>
         task(F) -> task<Sig>;
-
-        template<typename Sig, typename... T>
-        auto allocate_task(T&&... args) { return task<Sig> { std::allocator_arg, std::forward<T>(args)... }; }
     }
 }
