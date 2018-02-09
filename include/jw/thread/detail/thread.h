@@ -76,14 +76,28 @@ namespace jw
                     this->state = terminating;
                 }
 
+                // Returns true if this thread is running.
                 bool is_running() const noexcept { return (state != initialized && state != finished); }
-                auto pending_exceptions() const noexcept { return __builtin_expect(exceptions.size(), 0); }
-                const auto& id() const noexcept { return id_num; }
-                auto get_state() const noexcept { return state; }
+
+                // Returns the number of pending exceptions on this thread.
+                std::size_t pending_exceptions() const noexcept { return __builtin_expect(exceptions.size(), 0); }
+
+                // Get the unique ID number for this thread.
+                const std::uint32_t& id() const noexcept { return id_num; }
+
+                // Get the current detail::thread_state (initialized, starting, running, suspended, terminating, finished)
+                thread_state get_state() const noexcept { return state; }
+
+                // Name of this thread, for use in exceptions and gdb.
                 std::string name { "anonymous thread" };
+
+                // Allow orphaning (losing the pointer to) this thread while it is still active.
                 bool allow_orphan { false };
 
+                // Suspend this thread, if it was previously running.
                 void suspend() noexcept { if (state == running) state = suspended; }
+
+                // Resume this thread, if it was previously suspended.
                 void resume() noexcept { if (state == suspended) state = running; }
                 
                 virtual ~thread()
