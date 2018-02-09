@@ -29,20 +29,15 @@ namespace jw
                     scheduler::thread_switch(this->shared_from_this());
                 }
 
-                template<typename F>
-                void try_await_while(F f)
+                void try_await_while(auto f)
                 {
-                    scheduler::current_thread->awaiting = this->shared_from_this();
-                    try
+                    struct await_lock
                     {
-                        do { yield(); } while (f());
-                    }
-                    catch (...)
-                    {
-                        scheduler::current_thread->awaiting.reset();
-                        throw;
-                    }
-                    scheduler::current_thread->awaiting.reset();
+                        await_lock(std::shared_ptr<task_base> me) { scheduler::current_thread->awaiting = me; }
+                        ~await_lock() { scheduler::current_thread->awaiting.reset(); }
+                    } lock { this->shared_from_this() };
+
+                    do { yield(); } while (f());
                 }
 
             public:
