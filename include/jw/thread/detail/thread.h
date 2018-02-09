@@ -53,7 +53,7 @@ namespace jw
                 const std::size_t stack_size;
                 std::unique_ptr<byte[]> stack;
                 std::deque<std::exception_ptr> exceptions { };
-                const std::uint32_t id_num;
+                const std::uint32_t id_num { ++id_count };
                 std::uint32_t trap_masked { 0 };
                 bool trap { false };
 
@@ -67,7 +67,7 @@ namespace jw
                 auto& operator=(const thread&) = delete;
                 thread(const thread&) = delete;
 
-                thread(std::size_t bytes) : stack_size(bytes), stack(new byte[stack_size]), id_num(++id_count) { }
+                thread(std::size_t bytes) : stack_size(bytes), stack(new byte[stack_size]) { }
 
             public:
                 virtual void abort(bool = true)
