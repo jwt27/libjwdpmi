@@ -279,7 +279,7 @@ namespace jw
             retry:
                 switch (gdb->get())
                 {
-                case '-': if (sent.size() > 0) send_packet(sent.front());
+                case '-': if (sent.size() > 0) send_packet(sent.front()); // intentional fallthrough
                 case '+': if (sent.size() > 0) sent.pop_front();
                 default: goto retry;
                 case '$': break;
@@ -375,7 +375,7 @@ namespace jw
                     encode_null(out, reglen[r]);
                     return;
                     if (r > mxcsr) return;
-                    auto fpu = detail::fpu_context_switcher.get_last_context();
+                    //auto fpu = detail::fpu_context_switcher.get_last_context();
                     switch (r)
                     {
                     default:; // TODO
@@ -406,7 +406,7 @@ namespace jw
                 case fs: if (new_type) { return reverse_decode(value, &new_frame->fs, reglen[r]); } return false;
                 case gs: if (new_type) { return reverse_decode(value, &new_frame->gs, reglen[r]); } return false;
                 default: if (r > mxcsr) return false;
-                    auto fpu = detail::fpu_context_switcher.get_last_context();
+                    //auto fpu = detail::fpu_context_switcher.get_last_context();
                     switch (r)
                     {
                     default: return false; // TODO
