@@ -9,6 +9,11 @@
 
 namespace jw
 {
+    namespace chrono
+    {
+        struct pit;
+    }
+
     namespace thread
     {
         // Thrown when task->abort() is called.
@@ -78,7 +83,7 @@ namespace jw
         };
 
         // Yields execution for the given duration.
-        template<typename C> inline void yield_for(typename C::duration duration)
+        template<typename C = chrono::pit> inline void yield_for(typename C::duration duration)
         { 
             if (dpmi::in_irq_context()) return;
             dpmi::trap_mask dont_trace_here { };
@@ -96,7 +101,7 @@ namespace jw
         };
 
         // Combination of yield_while() and yield_for(). Returns true on timeout.
-        template<typename C> inline bool yield_while_for(auto condition, typename C::duration duration) 
+        template<typename C = chrono::pit> inline bool yield_while_for(auto condition, typename C::duration duration) 
         { 
             if (dpmi::in_irq_context()) return condition();
             dpmi::trap_mask dont_trace_here { };
