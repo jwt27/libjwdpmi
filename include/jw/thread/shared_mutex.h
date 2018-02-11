@@ -24,7 +24,6 @@ namespace jw::thread
         void unlock() noexcept { locked.clear(); }
         bool try_lock() noexcept
         {
-            if (dpmi::in_irq_context()) return false;
             if (locked.test_and_set()) return false;
             if (shared_count == 0) return true;
             unlock();
@@ -39,7 +38,6 @@ namespace jw::thread
         void unlock_shared() noexcept { --shared_count; }
         bool try_lock_shared() noexcept
         {
-            if (dpmi::in_irq_context()) return false;
             if (locked.test_and_set()) return false;
             ++shared_count;
             unlock();

@@ -25,11 +25,7 @@ namespace jw
                 yield_while([&]() { return !try_lock(); }); 
             }
             void unlock() noexcept { locked.clear(); }
-            bool try_lock() noexcept 
-            { 
-                if (dpmi::in_irq_context()) return false;
-                return !locked.test_and_set(); 
-            }
+            bool try_lock() noexcept { return !locked.test_and_set(); }
         };
 
         class recursive_mutex
