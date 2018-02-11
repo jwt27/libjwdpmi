@@ -1,11 +1,10 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
 #include <atomic>
-#include <mutex>
-#include <shared_mutex>
 #include <jw/thread/thread.h>
 
 namespace jw
@@ -30,47 +29,6 @@ namespace jw
             { 
                 if (dpmi::in_irq_context()) return false;
                 return !locked.test_and_set(); 
-            }
-        };
-
-        class shared_mutex
-        {
-            std::atomic_flag locked { false };
-            std::atomic<std::uint32_t> shared_count { 0 };
-
-        public:
-            constexpr shared_mutex() noexcept = default;
-            shared_mutex(shared_mutex&&) = delete;
-            shared_mutex(const shared_mutex&) = delete;
-
-            void lock() 
-            { 
-                dpmi::throw_if_irq(); 
-                yield_while([&]() { return !try_lock(); }); 
-            }
-            void unlock() noexcept { locked.clear(); }
-            bool try_lock() noexcept
-            {
-                if (dpmi::in_irq_context()) return false;
-                if (locked.test_and_set()) return false;
-                if (shared_count == 0) return true;
-                unlock();
-                return false;
-            }
-
-            void lock_shared() 
-            { 
-                dpmi::throw_if_irq(); 
-                yield_while([&]() { return !try_lock_shared(); }); 
-            }
-            void unlock_shared() noexcept { --shared_count; }
-            bool try_lock_shared() noexcept
-            {
-                if (dpmi::in_irq_context()) return false;
-                if (locked.test_and_set()) return false;
-                ++shared_count;
-                unlock();
-                return true;
             }
         };
 
@@ -113,12 +71,3 @@ namespace jw
         };
     }
 }
-
-#ifndef _GLIBCXX_HAS_GTHREADS
-namespace std
-{
-    using mutex = jw::thread::mutex;
-    using shared_mutex = jw::thread::shared_mutex;
-    using recursive_mutex = jw::thread::recursive_mutex;
-}
-#endif
