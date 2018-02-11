@@ -6,6 +6,7 @@
 #pragma once
 #include <atomic>
 #include <jw/thread/thread.h>
+#include <jw/thread/detail/mutex.h>
 
 namespace jw
 {
@@ -19,10 +20,10 @@ namespace jw
             mutex(mutex&&) = delete;
             mutex(const mutex&) = delete;
 
-            void lock() 
-            { 
-                dpmi::throw_if_irq(); 
-                yield_while([&]() { return !try_lock(); }); 
+            void lock()
+            {
+                dpmi::throw_if_irq();
+                yield_while([&]() { return !try_lock(); });
             }
             void unlock() noexcept { locked.clear(); }
             bool try_lock() noexcept { return !locked.test_and_set(); }
@@ -38,10 +39,10 @@ namespace jw
             recursive_mutex(recursive_mutex&&) = delete;
             recursive_mutex(const recursive_mutex&) = delete;
 
-            void lock() 
-            { 
-                dpmi::throw_if_irq(); 
-                yield_while([&]() { return !try_lock(); }); 
+            void lock()
+            {
+                dpmi::throw_if_irq();
+                yield_while([&]() { return !try_lock(); });
             }
             void unlock() noexcept
             {
@@ -65,5 +66,8 @@ namespace jw
                 return false;
             }
         };
+
+        using timed_mutex = detail::timed_mutex_adapter<mutex>;
+        using recursive_timed_mutex = detail::timed_mutex_adapter<recursive_mutex>;
     }
 }

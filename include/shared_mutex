@@ -9,4 +9,5 @@
 namespace std
 {
     using shared_mutex = jw::thread::shared_mutex;
+    using shared_timed_mutex = jw::thread::shared_timed_mutex;
 }

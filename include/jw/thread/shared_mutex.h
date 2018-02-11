@@ -3,6 +3,7 @@
 
 #include <atomic>
 #include <jw/thread/thread.h>
+#include <jw/thread/detail/mutex.h>
 
 namespace jw::thread
 {
@@ -42,6 +43,21 @@ namespace jw::thread
             ++shared_count;
             unlock();
             return true;
+        }
+    };
+
+    struct shared_timed_mutex : public detail::timed_mutex_adapter<shared_mutex>
+    {
+        template <class Rep, class Period>
+        bool try_lock_shared_for(const std::chrono::duration<Rep, Period>& rel_time)
+        {
+            return not yield_while_for([this] { return not this->try_lock_shared(); }, rel_time);
+        }
+
+        template <class Clock, class Duration>
+        bool try_lock_shared_until(const std::chrono::time_point<Clock, Duration>& abs_time)
+        {
+            return not yield_while_until([this] { return not this->try_lock_shared(); }, abs_time);
         }
     };
 }
