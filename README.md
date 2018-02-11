@@ -1,5 +1,5 @@
 # libjwdpmi
-Because I can't come up with any better names.  
+(any suggestions for better names are welcome)
 This library aims to be a complete development framework for DPMI (32-bit DOS) applications, written in C++17.  
 It's still in the experimental stage. Anything may change at any time.
 
@@ -12,36 +12,41 @@ Current features include:
 * RS-232 serial communication using `std::iostream`.
 * Event-driven keyboard interface.
 * GDB remote debugging support.
-* Full implementation of PIT, RTC and RDTSC clocks using `std::chrono`.
+* Access to PIT, RTC and RDTSC clocks using `std::chrono`.
+* VESA VBE3 graphics interface.
 
 ## Installing
-* Build and install DJGPP (the DOS port of gcc)  
-The easiest way is to use Andrew Wu's build script, found here: https://github.com/andrewwutw/build-djgpp
+* Build and install gcc with `--target=i586-pc-msdosdjgpp`, and install the djgpp standard library.  
+The easiest way is to use Andrew Wu's build script, found here: https://github.com/andrewwutw/build-djgpp  
+Or use my fork, which currently has more features: https://github.com/jwt27/build-djgpp/tree/generic
 
-* Set your `PATH` and `GCC_EXEC_PREFIX` accordingly:  
+* Set your `PATH` accordingly:  
 ```
-    $ export PATH=/usr/local/djgpp/i586-pc-msdosdjgpp/bin:$PATH  
-    $ export GCC_EXEC_PREFIX=/usr/local/djgpp/lib/gcc/  
+$ export PATH=/usr/local/cross/bin:$PATH
 ```
 * Add this repository as a submodule in your own project  
 ```
-    $ git submodule add https://github.com/jwt27/libjwdpmi.git ./lib/libjwdpmi  
-    $ git submodule update --init
+$ git submodule add https://github.com/jwt27/libjwdpmi.git ./lib/libjwdpmi
+$ git submodule update --init
 ```
-* In your makefile, export your `CXX` and `CXXFLAGS`, and add a rule to build `libjwdpmi`:  
+* In your makefile, export your `AR`, `CXX` and `CXXFLAGS`, and add a rule to build `libjwdpmi`:  
 ```
-    export CXX CXXFLAGS  
-    libjwdpmi:  
-        +$(MAKE) -C lib/libjwdpmi/  
+AR:=i586-pc-msdosdjgpp-ar
+CXX:=i586-pc-msdosdjgpp-g++
+CXXFLAGS:=-std=gnu++17
+
+export AR CXX CXXFLAGS
+libjwdpmi:
+    $(MAKE) -C lib/libjwdpmi/
 ```
 * Add the `include/` directory to your global include path (`-I`) and link your program with `libjwdpmi.a`, found in the `bin/` directory.
 ```
-    bin/program.exe: $(OBJ) libjwdpmi
-        $(CXX) $(CXXFLAGS) -o $@ $(OBJ) -Llib/libjwdpmi/bin -ljwdpmi
+obj/%.o: src/%.cpp
+    $(CXX) $(CXXFLAGS) -o $@ -Ilib/libjwdpmi/include -c $<
 
-    obj/%.o: src/%.cpp
-        $(CXX) $(CXXFLAGS) -o $@ -Ilib/libjwdpmi/include -c $<
-``` 
+bin/program.exe: $(OBJ) libjwdpmi
+    $(CXX) $(CXXFLAGS) -o $@ $(OBJ) -Llib/libjwdpmi/bin -ljwdpmi
+```
 
 ## Using
 See the [wiki page](https://github.com/jwt27/libjwdpmi/wiki), where I'm slowly adding documentation.  
