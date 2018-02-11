@@ -1,0 +1,12 @@
+/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
+
+#pragma once
+
+#include <jw/thread/shared_mutex.h>
+#include_next <shared_mutex>
+
+namespace std
+{
+    using shared_mutex = jw::thread::shared_mutex;
+}
