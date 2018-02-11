@@ -18,9 +18,9 @@ namespace jw
         constexpr io::out_port<byte> pit_cmd { 0x43 };
         constexpr io::io_port<byte> pit0_data { 0x40 };
 
-        chrono::reset_all chrono::reset;
+        setup::reset_all setup::reset;
 
-        void chrono::update_tsc()
+        void setup::update_tsc()
         {
             static std::uint64_t last_tsc;
             auto tsc = rdtsc();
@@ -37,7 +37,7 @@ namespace jw
             tsc_ticks_per_irq = tsc_total / tsc_sample_size;
         }
 
-        dpmi::irq_handler chrono::rtc_irq { [](auto* ack) INTERRUPT
+        dpmi::irq_handler setup::rtc_irq { [](auto* ack) INTERRUPT
         {
             static byte last_sec { 0 };
             dpmi::interrupt_mask no_irq { };
@@ -59,7 +59,7 @@ namespace jw
             ack();
         }, dpmi::always_call | dpmi::no_interrupts };
 
-        dpmi::irq_handler chrono::pit_irq { [](auto* ack) INTERRUPT
+        dpmi::irq_handler setup::pit_irq { [](auto* ack) INTERRUPT
         {
             ++pit_ticks;
 
@@ -68,7 +68,7 @@ namespace jw
             ack();
         }, dpmi::always_call | dpmi::no_auto_eoi };
 
-        void chrono::setup_pit(bool enable, std::uint32_t freq_divider)
+        void setup::setup_pit(bool enable, std::uint32_t freq_divider)
         {
             dpmi::interrupt_mask no_irq { };
             reset_pit();
@@ -86,7 +86,7 @@ namespace jw
             pit0_data.write(div.hi);
         }
 
-        void chrono::setup_rtc(bool enable, std::uint8_t freq_shift)
+        void setup::setup_rtc(bool enable, std::uint8_t freq_shift)
         {
             dpmi::interrupt_mask no_irq { };
             reset_rtc();
@@ -112,7 +112,7 @@ namespace jw
             rtc_data.read();                        // read and discard data
         }
 
-        void chrono::setup_tsc(std::size_t sample_size, tsc_reference r)
+        void setup::setup_tsc(std::size_t sample_size, tsc_reference r)
         {
             if (sample_size != 0) tsc_max_sample_size = sample_size;
             if (r != tsc_reference::none && (r != current_tsc_ref() || current_tsc_ref() == tsc_reference::none))
@@ -123,7 +123,7 @@ namespace jw
             thread::yield_while([] { return tsc_ticks_per_irq == 0; });
         }
 
-        void chrono::reset_pit()
+        void setup::reset_pit()
         {
             dpmi::interrupt_mask no_irq { };
             if (current_tsc_ref() == tsc_reference::pit) reset_tsc();
@@ -134,7 +134,7 @@ namespace jw
             pit0_data.write(0);
         }
 
-        void chrono::reset_rtc()
+        void setup::reset_rtc()
         {
             dpmi::interrupt_mask no_irq { };
             if (current_tsc_ref() == tsc_reference::rtc) reset_tsc();
@@ -148,7 +148,7 @@ namespace jw
             rtc_data.read();                        // read and discard data
         }
 
-        void chrono::reset_tsc()
+        void setup::reset_tsc()
         {
             dpmi::interrupt_mask no_irq { };
             tsc_sample_size = 0;
@@ -157,7 +157,7 @@ namespace jw
             tsc_resync = true;
         }
 
-        chrono::reset_all::~reset_all()
+        setup::reset_all::~reset_all()
         {
             reset_pit();
             reset_rtc();
@@ -168,12 +168,12 @@ namespace jw
             dpmi::interrupt_mask no_irq { };
             auto read_bcd = []
             {
-                auto bcd = chrono::rtc_data.read();
+                auto bcd = setup::rtc_data.read();
                 return (bcd >> 4) * 10 + (bcd & 0xF);
             };
             auto set_index = [](byte i)
             {
-                chrono::rtc_index.write(i);
+                setup::rtc_index.write(i);
             };
 
             std::uint64_t sec { 0 };
@@ -191,7 +191,7 @@ namespace jw
             sec += read_bcd() * 60 * 60 * 24 * 365.2425;
             sec += 946684800;   // seconds from 1970 to 2000
             sec *= static_cast<std::uint64_t>(1e6);
-            sec += chrono::rtc_ticks * chrono::ns_per_rtc_tick / 1e3;
+            sec += setup::rtc_ticks * setup::ns_per_rtc_tick / 1e3;
             return time_point { duration { sec } };
         }
     }

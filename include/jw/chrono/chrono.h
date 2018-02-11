@@ -24,7 +24,7 @@ namespace jw
             none, rtc, pit
         };
 
-        struct chrono
+        struct setup
         {
             friend class rtc;
             friend class pit;
@@ -56,9 +56,9 @@ namespace jw
             static inline tsc_reference preferred_tsc_ref { tsc_reference::pit };
             static tsc_reference current_tsc_ref()
             {
-                if (preferred_tsc_ref == tsc_reference::pit && chrono::pit_irq.is_enabled()) return preferred_tsc_ref;
-                else if (chrono::rtc_irq.is_enabled()) return tsc_reference::rtc;
-                else if (chrono::pit_irq.is_enabled()) return tsc_reference::pit;
+                if (preferred_tsc_ref == tsc_reference::pit && setup::pit_irq.is_enabled()) return preferred_tsc_ref;
+                else if (setup::rtc_irq.is_enabled()) return tsc_reference::rtc;
+                else if (setup::pit_irq.is_enabled()) return tsc_reference::pit;
                 else return tsc_reference::none;
             }
 
@@ -99,12 +99,12 @@ namespace jw
             static constexpr bool is_steady { false };
             static time_point now() noexcept
             {
-                if (__builtin_expect(!chrono::pit_irq.is_enabled(), false))
+                if (__builtin_expect(!setup::pit_irq.is_enabled(), false))
                 {
                     auto t = std::chrono::duration_cast<duration>(std::chrono::steady_clock::now().time_since_epoch());
                     return time_point { t };
                 }
-                return time_point { duration { static_cast<std::int64_t>(chrono::ns_per_pit_tick * chrono::pit_ticks) } };
+                return time_point { duration { static_cast<std::int64_t>(setup::ns_per_pit_tick * setup::pit_ticks) } };
             }
         };
 
@@ -118,14 +118,14 @@ namespace jw
             static constexpr bool is_steady { false };
             static time_point now() noexcept
             {
-                if (__builtin_expect(!chrono::rtc_irq.is_enabled() && !chrono::pit_irq.is_enabled(), false))
+                if (__builtin_expect(!setup::rtc_irq.is_enabled() && !setup::pit_irq.is_enabled(), false))
                 {
                     auto t = std::chrono::duration_cast<duration>(std::chrono::high_resolution_clock::now().time_since_epoch());
                     return time_point { t };
                 }
-                double ns = (chrono::current_tsc_ref() == tsc_reference::rtc) ? chrono::ns_per_rtc_tick : chrono::ns_per_pit_tick;
+                double ns = (setup::current_tsc_ref() == tsc_reference::rtc) ? setup::ns_per_rtc_tick : setup::ns_per_pit_tick;
                 ns *= rdtsc();
-                ns /= chrono::tsc_ticks_per_irq;
+                ns /= setup::tsc_ticks_per_irq;
                 return time_point { duration { static_cast<std::int64_t>(ns) } };
             }
         };
