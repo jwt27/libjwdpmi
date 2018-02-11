@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
@@ -73,7 +74,7 @@ namespace jw
 
             byte read_from_keyboard()
             {
-                bool timeout = thread::yield_while_for<chrono::rtc>([this]
+                bool timeout = thread::yield_while_for([this]
                 {
                     auto s = get_status();
                     if (s.parity_error || s.timeout_error) throw keyboard_error { };

@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #include <jw/io/mpu401.h>
@@ -18,20 +19,20 @@ namespace jw
 
                 auto timeout = std::chrono::milliseconds { 100 };
 
-                if (thread::yield_while_for<chrono::pit>([this] { return status_port.read().dont_send_data; }, timeout))
+                if (thread::yield_while_for([this] { return status_port.read().dont_send_data; }, timeout))
                     throw std::runtime_error("Timeout while waiting for MPU401.");
 
                 while (!status_port.read().no_data_available) data_port.read();
 
                 cmd_port.write(0xFF);   // reset (this won't ACK if the MPU is in uart mode already)
-                if (!thread::yield_while_for<chrono::pit>([this] { return status_port.read().no_data_available; }, timeout))
+                if (!thread::yield_while_for([this] { return status_port.read().no_data_available; }, timeout))
                     if (data_port.read() != 0xFE) throw std::runtime_error("Expected ACK from MPU401.");
 
-                if (thread::yield_while_for<chrono::pit>([this] { return status_port.read().dont_send_data; }, timeout))
+                if (thread::yield_while_for([this] { return status_port.read().dont_send_data; }, timeout))
                     throw std::runtime_error("Timeout while waiting for MPU401.");
 
                 cmd_port.write(0x3F);   // set UART mode (should ACK, maybe some cheap cards won't)
-                if (!thread::yield_while_for<chrono::pit>([this] { return status_port.read().no_data_available; }, timeout))
+                if (!thread::yield_while_for([this] { return status_port.read().no_data_available; }, timeout))
                     if (data_port.read() != 0xFE) throw std::runtime_error("Expected ACK from MPU401.");
 
                 irq_handler.set_irq(cfg.irq);
