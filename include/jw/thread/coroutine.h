@@ -48,7 +48,7 @@ namespace jw
                     dpmi::throw_if_irq();
                     if (scheduler::is_current_thread(this)) return false;
 
-                    this->try_await_while([this]() { return not result_available; });
+                    this->try_await_while([this]() { return this->is_running() and not result_available ; });
 
                     if (!result) return false;
                     return true;
