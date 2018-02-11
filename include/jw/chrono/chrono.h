@@ -3,10 +3,21 @@
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
-#include <chrono>
+
 #include <atomic>
 #include <deque>
 #include <jw/dpmi/irq.h>
+
+// included by <chrono>
+#include <ratio>
+#include <type_traits>
+#include <limits>
+#include <ctime>
+#include <bits/parse_numbers.h>
+
+#define inline // eww
+#include_next <chrono>
+#undef inline
 
 namespace jw
 {
@@ -101,7 +112,7 @@ namespace jw
             {
                 if (__builtin_expect(!setup::pit_irq.is_enabled(), false))
                 {
-                    auto t = std::chrono::duration_cast<duration>(std::chrono::steady_clock::now().time_since_epoch());
+                    auto t = std::chrono::duration_cast<duration>(std::chrono::_V2::steady_clock::now().time_since_epoch());
                     return time_point { t };
                 }
                 return time_point { duration { static_cast<std::int64_t>(setup::ns_per_pit_tick * setup::pit_ticks) } };
@@ -120,7 +131,7 @@ namespace jw
             {
                 if (__builtin_expect(!setup::rtc_irq.is_enabled() && !setup::pit_irq.is_enabled(), false))
                 {
-                    auto t = std::chrono::duration_cast<duration>(std::chrono::high_resolution_clock::now().time_since_epoch());
+                    auto t = std::chrono::duration_cast<duration>(std::chrono::_V2::high_resolution_clock::now().time_since_epoch());
                     return time_point { t };
                 }
                 double ns = (setup::current_tsc_ref() == tsc_reference::rtc) ? setup::ns_per_rtc_tick : setup::ns_per_pit_tick;
@@ -130,4 +141,23 @@ namespace jw
             }
         };
     }
+}
+
+namespace std
+{
+    namespace chrono
+    {
+        inline namespace jw
+        {
+            using system_clock = ::jw::chrono::rtc;
+            using steady_clock = ::jw::chrono::pit;
+            using high_resolution_clock = ::jw::chrono::tsc;
+        }
+    }
+
+    inline namespace literals
+    {
+        using namespace chrono_literals;
+    }
+    using namespace literals;
 }
