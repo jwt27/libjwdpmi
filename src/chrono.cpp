@@ -18,8 +18,6 @@ namespace jw
         constexpr io::out_port<byte> pit_cmd { 0x43 };
         constexpr io::io_port<byte> pit0_data { 0x40 };
 
-        setup::reset_all setup::reset;
-
         void setup::update_tsc()
         {
             static std::uint64_t last_tsc;

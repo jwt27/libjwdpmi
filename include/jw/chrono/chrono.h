@@ -65,7 +65,7 @@ namespace jw
             static inline constexpr io::out_port<byte> rtc_index { 0x70 };
             static inline constexpr io::io_port<byte> rtc_data { 0x71 };
 
-            struct reset_all { ~reset_all(); } static reset;
+            struct reset_all { ~reset_all(); } static inline reset;
         };
 
         struct rtc  // Real-Time Clock
