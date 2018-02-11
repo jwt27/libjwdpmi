@@ -87,31 +87,12 @@ namespace jw
             };
         }
 
-        template<typename> class coroutine;
+        template<typename Sig> struct coroutine : public detail::task_ptr<detail::coroutine_impl<Sig>> { };
 
-        template<typename R, typename... A>
-        class coroutine<R(A...)>
-        {
-            using task_type = detail::coroutine_impl<R(A...)>;
-            std::shared_ptr<task_type> ptr;
-
-        public:
-            constexpr const auto get_ptr() const noexcept { return ptr; }
-            constexpr auto* operator->() const { return ptr.get(); }
-            constexpr auto& operator*() const { return *ptr; }
-            constexpr operator bool() const { return ptr.operator bool(); }
-
-            template<typename F>
-            constexpr coroutine(F&& f) : ptr(std::make_shared<task_type>(std::forward<F>(f))) { }
-
-            constexpr coroutine(const coroutine&) = default;
-            constexpr coroutine() = default;
-        };
-
-        template<typename R, typename... A>
-        coroutine(R(*)(A...)) -> coroutine<R(A...)>;
-
-        template<typename F, typename Sig = typename std::__function_guide_helper<decltype(&F::operator())>::type>
-        coroutine(F) -> coroutine<Sig>;
+        //template<typename R, typename... A>
+        //coroutine(R(*)(A...)) -> coroutine<R(A...)>;
+        //
+        //template<typename F, typename Sig = typename std::__function_guide_helper<decltype(&F::operator())>::type>
+        //coroutine(F) -> coroutine<Sig>;
     }
 }

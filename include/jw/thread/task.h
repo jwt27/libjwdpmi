@@ -135,32 +135,31 @@ namespace jw
                 }
 
                 template <typename F>
-                task_impl(F&& f, std::size_t stack_bytes = config::thread_default_stack_size) 
+                task_impl(F&& f, std::size_t stack_bytes = config::thread_default_stack_size)
                     : base { stack_bytes }
                     , function { std::forward<F>(f) } { }
             };
+
+            template<typename task_type>
+            class task_ptr
+            {
+                std::shared_ptr<task_type> ptr;
+
+            public:
+                constexpr const auto get_ptr() const noexcept { return ptr; }
+                constexpr auto* operator->() const { return ptr.get(); }
+                constexpr auto& operator*() const { return *ptr; }
+                constexpr operator bool() const { return static_cast<bool>(ptr); }
+
+                template<typename... Args>
+                constexpr task_ptr(Args&&... a) : ptr(std::make_shared<task_type>(std::forward<Args>(a)...)) { }
+
+                constexpr task_ptr(const task_ptr&) = default;
+                constexpr task_ptr() = default;
+            };
         }
 
-        template<typename> class task;
-
-        template<typename R, typename... A>
-        class task<R(A...)>
-        {
-            using task_type = detail::task_impl<R(A...)>;
-            std::shared_ptr<task_type> ptr;
-
-        public:
-            constexpr const auto get_ptr() const noexcept { return ptr; }
-            constexpr auto* operator->() const { return ptr.get(); }
-            constexpr auto& operator*() const { return *ptr; }
-            constexpr operator bool() const { return ptr.operator bool(); }
-
-            template<typename... Args>
-            constexpr task(Args&&... a) : ptr(std::make_shared<task_type>(std::forward<Args>(a)...)) { }
-
-            constexpr task(const task&) = default;
-            constexpr task() = default;
-        };
+        template<typename Sig> struct task : public detail::task_ptr<detail::task_impl<Sig>> { };
 
         template<typename R, typename... A>
         task(R(*)(A...)) -> task<R(A...)>;
