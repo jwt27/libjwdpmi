@@ -87,7 +87,16 @@ namespace jw
             };
         }
 
-        template<typename Sig> struct coroutine : public detail::task_ptr<detail::coroutine_impl<Sig>> { };
+        template<typename Sig> struct coroutine : public detail::task_ptr<detail::coroutine_impl<Sig>>
+        {
+            template <typename... T>
+            static void yield(T&&... value)
+            {
+                using namespace detail;
+                if (auto* p = dynamic_cast<coroutine_impl<Sig>>(scheduler::get_current_thread().lock().get()))
+                    p->yield(std::forward<T>(value)...);
+            }
+        };
 
         //template<typename R, typename... A>
         //coroutine(R(*)(A...)) -> coroutine<R(A...)>;
