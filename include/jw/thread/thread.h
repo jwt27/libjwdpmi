@@ -62,7 +62,7 @@ namespace jw
         }
 
         // Yields execution while the given condition evaluates to true.
-        template<typename F> inline void yield_while(F condition) 
+        inline void yield_while(auto condition) 
         { 
             if (dpmi::in_irq_context()) return;
             dpmi::trap_mask dont_trace_here { };
@@ -70,11 +70,11 @@ namespace jw
         };
 
         // Yields execution until the given time point.
-        template<typename T> inline void yield_until(T time_point)
+        template<typename P> inline void yield_until(P time_point)
         { 
             if (dpmi::in_irq_context()) return;
             dpmi::trap_mask dont_trace_here { };
-            yield_while([&time_point] { return T::clock::now() < time_point; });
+            yield_while([&time_point] { return P::clock::now() < time_point; });
         };
 
         // Yields execution for the given duration.
@@ -85,18 +85,18 @@ namespace jw
             yield_until(C::now() + duration);
         };
 
-        // Combination of yield_while() and yield_until(). Returns condition(), which is true on timeout.
-        template<typename T, typename F> inline bool yield_while_until(F condition, T time_point)
+        // Combination of yield_while() and yield_until(). Returns true on timeout.
+        template<typename P> inline bool yield_while_until(auto condition, P time_point)
         { 
             if (dpmi::in_irq_context()) return condition();
             dpmi::trap_mask dont_trace_here { };
             bool c;
-            yield_while([&] { return (c = condition()) && T::clock::now() < time_point; });
+            yield_while([&] { return (c = condition()) && P::clock::now() < time_point; });
             return c;
         };
 
-        // Combination of yield_while() and yield_for(). Returns condition(), which is true on timeout.
-        template<typename C, typename F> inline bool yield_while_for(F condition, typename C::duration duration) 
+        // Combination of yield_while() and yield_for(). Returns true on timeout.
+        template<typename C> inline bool yield_while_for(auto condition, typename C::duration duration) 
         { 
             if (dpmi::in_irq_context()) return condition();
             dpmi::trap_mask dont_trace_here { };
