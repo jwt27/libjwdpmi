@@ -59,7 +59,7 @@ namespace jw
         };
 
         // Yields execution to the next thread in the queue.
-        inline void yield() 
+        inline void yield()
         { 
             if (dpmi::in_irq_context()) return;
             dpmi::trap_mask dont_trace_here { };
@@ -67,7 +67,7 @@ namespace jw
         }
 
         // Yields execution while the given condition evaluates to true.
-        inline void yield_while(auto condition) 
+        inline void yield_while(auto&& condition)
         { 
             if (dpmi::in_irq_context()) return;
             dpmi::trap_mask dont_trace_here { };
@@ -75,7 +75,7 @@ namespace jw
         };
 
         // Yields execution until the given time point.
-        template<typename P> inline void yield_until(P time_point)
+        template<typename P> inline void yield_until(const P& time_point)
         { 
             if (dpmi::in_irq_context()) return;
             dpmi::trap_mask dont_trace_here { };
@@ -83,7 +83,7 @@ namespace jw
         };
 
         // Yields execution for the given duration.
-        template<typename C = chrono::pit> inline void yield_for(typename C::duration duration)
+        template<typename C = chrono::pit> inline void yield_for(const typename C::duration& duration)
         { 
             if (dpmi::in_irq_context()) return;
             dpmi::trap_mask dont_trace_here { };
@@ -91,7 +91,7 @@ namespace jw
         };
 
         // Combination of yield_while() and yield_until(). Returns true on timeout.
-        template<typename P> inline bool yield_while_until(auto condition, P time_point)
+        template<typename P> inline bool yield_while_until(auto&& condition, const P& time_point)
         { 
             if (dpmi::in_irq_context()) return condition();
             dpmi::trap_mask dont_trace_here { };
@@ -101,7 +101,7 @@ namespace jw
         };
 
         // Combination of yield_while() and yield_for(). Returns true on timeout.
-        template<typename C = chrono::pit> inline bool yield_while_for(auto condition, typename C::duration duration) 
+        template<typename C = chrono::pit> inline bool yield_while_for(auto&& condition, const typename C::duration& duration)
         { 
             if (dpmi::in_irq_context()) return condition();
             dpmi::trap_mask dont_trace_here { };
