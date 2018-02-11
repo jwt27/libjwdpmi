@@ -21,8 +21,8 @@ namespace jw
                 using this_t = coroutine_impl<R(A...)>;
                 using base = task_base;
 
-                std::function<void(this_t&, A...)> function;
-                std::unique_ptr<std::tuple<this_t&, A...>> arguments;
+                std::function<void(A...)> function;
+                std::unique_ptr<std::tuple<A...>> arguments;
                 std::optional<R> result;
                 bool result_available { false };
 
@@ -35,7 +35,7 @@ namespace jw
                 constexpr void start(Args&&... args)
                 {
                     if (this->is_running()) return; // or throw...?
-                    arguments = std::make_unique<std::tuple<this_t&, A...>>(*this, std::forward<Args>(args)...);
+                    arguments = std::make_unique<std::tuple<A...>>(std::forward<Args>(args)...);
                     result.reset();
                     base::start();
                 }
@@ -93,7 +93,7 @@ namespace jw
             static void yield(T&&... value)
             {
                 using namespace detail;
-                if (auto* p = dynamic_cast<coroutine_impl<Sig>>(scheduler::get_current_thread().lock().get()))
+                if (auto* p = dynamic_cast<coroutine_impl<Sig>*>(scheduler::get_current_thread().lock().get()))
                     p->yield(std::forward<T>(value)...);
             }
         };
