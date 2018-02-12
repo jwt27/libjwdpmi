@@ -287,12 +287,12 @@ namespace jw
 
                 std::string input;
                 std::getline(*gdb, input, '#');
+                if (debugmsg) std::clog << "recv <-- \"" << input << "\"\n";
                 std::string sum;
                 sum += gdb->get();
                 sum += gdb->get();
                 if (decode(sum) == checksum(input)) *gdb << '+' << std::flush;
                 else { *gdb << '-' << std::flush; goto retry; }
-                if (debugmsg) std::clog << "recv <-- \""<< input << "\"\n";
 
                 std::deque<packet_string> parsed_input { };
                 std::size_t pos { 1 };
@@ -826,10 +826,14 @@ namespace jw
                     result = handle_packet(current_thread->last_exception, &current_thread->reg, &current_thread->frame, t);
                     for (auto& w : watchpoints) w.second.reset();
                 }
+                catch (const std::exception& e)
+                {
+                    std::cerr << "Exception occured while communicating with GDB.\n";
+                    print_exception(e);
+                }
                 catch (...) 
                 { 
-                    std::cerr << "Exception occured while communicating with GDB.\n";
-                    //asm("int 3");
+                    std::cerr << "Unknown exception occured while communicating with GDB.\n";
                 }
                 asm("cli");
 
