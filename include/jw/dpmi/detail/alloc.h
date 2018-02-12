@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
@@ -18,8 +19,9 @@ namespace jw
                 auto allocate(std::size_t n)
                 {
                     dpmi::trap_mask dont_trap_here { };
-                    return reinterpret_cast<void*>(base::allocate(n));
+                    auto* p = reinterpret_cast<void*>(base::allocate(n));
                     minimum_chunk_size = base::max_size();
+                    return p;
                 }
 
                 auto deallocate(void* p)
