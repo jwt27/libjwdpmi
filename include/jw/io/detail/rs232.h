@@ -3,6 +3,7 @@
 
 #pragma once
 #include <jw/thread/thread.h>
+#include <mutex>
 
 namespace jw
 {
@@ -127,21 +128,21 @@ namespace jw
 
                 void get(bool entire_fifo = false) noexcept
                 {
-                    if (getting.test_and_set()) return;
+                    if (not getting.try_lock()) return;
                     auto end = rx_ptr + std::min(entire_fifo ? 14 : 1, rx_buf.end() - rx_ptr);
                     while (rx_ptr < end) *(rx_ptr++) = get_one();
                     setg(rx_buf.begin(), gptr(), end);
-                    getting.clear();
+                    getting.unlock();
                 }
 
                 void put() noexcept
                 {
                     //if (config.flow_control == rs232_config::xon_xoff && !cts) { put_one(xon); return; };
-                    if (putting.test_and_set()) return;
+                    if (not putting.try_lock()) return;
                     auto end = tx_ptr + std::min(line_status.read().tx_fifo_empty ? 16 : 1, pptr() - tx_ptr);
                     for (; tx_ptr < end; ++tx_ptr)
                         if (!put_one(*tx_ptr)) break;
-                    putting.clear();
+                    putting.unlock();
                 }
 
                 char_type get_one() noexcept
@@ -199,8 +200,7 @@ namespace jw
                 io_port <uart_modem_control_reg> modem_control;
                 in_port <uart_line_status_reg> line_status;
                 in_port <uart_modem_status_reg> modem_status;
-                std::atomic_flag getting { false };
-                std::atomic_flag putting { false };
+                std::mutex getting, putting;
                 bool cts { false };
 
                 std::array<char_type, 1_KB> rx_buf;
