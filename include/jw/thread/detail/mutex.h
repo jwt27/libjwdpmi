@@ -2,6 +2,7 @@
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
+#include <chrono>
 
 namespace jw::thread::detail
 {
