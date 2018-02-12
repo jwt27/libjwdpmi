@@ -30,7 +30,7 @@ inline namespace __cxxabiv1
 
 namespace jw
 {
-    void print_exception(const std::exception& e, int level = 0) noexcept
+    void print_exception(const std::exception& e, int level) noexcept
     {
         std::cerr << "Level " << std::dec << level << ": " << e.what() << '\n';
         try { std::rethrow_if_nested(e); }

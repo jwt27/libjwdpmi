@@ -14,6 +14,8 @@ constexpr std::uint64_t operator"" _TB(std::uint64_t n) { return n << 40; }
 
 namespace jw
 {
+    void print_exception(const std::exception& e, int level = 0) noexcept;
+
     struct terminate_exception
     {
         virtual const char* what() const noexcept { return "Terminating."; }
