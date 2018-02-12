@@ -79,7 +79,7 @@ namespace jw
                 // Awaits a result from the coroutine.
                 // Throws illegal_await if the coroutine ends without yielding a result.
                 // May rethrow unhandled exceptions!
-                auto await()
+                decltype(auto) await()
                 {
                     if (!try_await()) throw illegal_await(this->shared_from_this());
 
