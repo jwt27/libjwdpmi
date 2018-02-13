@@ -46,6 +46,7 @@ namespace jw
 
             class irq_controller
             {
+
                 std::deque<irq_handler_base*, locking_allocator<>> handler_chain { };
                 int_vector vec;
                 far_ptr32 old_handler { };
@@ -99,6 +100,33 @@ namespace jw
                     }
                 }
 
+                struct irq_controller_data : class_lock<irq_controller_data>
+                {
+                    irq_controller_data()
+                    {
+                        stack.resize(config::interrupt_initial_stack_size);
+                        increase_stack_size->name = "Increasing stack size for IRQ handlers";
+                        pic0_cmd.write(0x68);   // TODO: restore to defaults
+                        pic1_cmd.write(0x68);
+                    }
+
+                    thread::task<void()> increase_stack_size { [this]() { stack.resize(stack.size() * 2); } };
+                    locked_pool_allocator<> alloc { 4_KB };
+                    std::map<int_vector, std::unique_ptr<irq_controller>, std::less<int_vector>, locking_allocator<>> entries { };
+                    std::vector<byte, locking_allocator<>> stack { };
+                    std::uint32_t stack_use_count { 0 };
+                    std::uint64_t id_count { 0 };
+
+                    struct interrupt_id
+                    {
+                        std::uint64_t id;
+                        int_vector vector;
+                        bool acknowledged { false };
+                        constexpr interrupt_id(std::uint64_t i, int_vector v) : id(i), vector(v) { }
+                    };
+                    std::vector<std::shared_ptr<interrupt_id>, locked_pool_allocator<>> current_interrupt { alloc };
+                };
+
                 static irq_controller& get(int_vector v)
                 {
                     if (data == nullptr) data = new irq_controller_data { };
@@ -107,6 +135,14 @@ namespace jw
                 }
 
                 static irq_controller& get_irq(irq_level i) { return get(irq_to_vec(i)); }
+
+                static bool is_current_irq(const auto* p) noexcept { return p != nullptr and data->current_interrupt.back().get()->id == p->id; }
+                static auto get_current_irq() noexcept 
+                {
+                    using weak = std::weak_ptr<const irq_controller_data::interrupt_id>;
+                    if (data->current_interrupt.empty()) return weak { };
+                    return weak { data->current_interrupt.back() };
+                }
 
                 INTERRUPT static void acknowledge() noexcept
                 {
@@ -145,7 +181,7 @@ namespace jw
 
                 INTERRUPT static void send_eoi() noexcept
                 {
-                    auto v = data->current_int.back();
+                    auto v = data->current_interrupt.back()->vector;
                     if (data->entries.at(v)->flags & always_chain) return;
                     auto i = vec_to_irq(v);
                     if (i >= 16) return;
@@ -164,24 +200,7 @@ namespace jw
 
                 static constexpr io::io_port<byte> pic0_cmd { 0x20 };
                 static constexpr io::io_port<byte> pic1_cmd { 0xA0 };
-
-                struct irq_controller_data : class_lock<irq_controller_data>
-                {
-                    irq_controller_data()
-                    {
-                        stack.resize(config::interrupt_initial_stack_size);
-                        increase_stack_size->name = "Increasing stack size for IRQ handlers";
-                        pic0_cmd.write(0x68);   // TODO: restore to defaults
-                        pic1_cmd.write(0x68);
-                    }
-
-                    thread::task<void()> increase_stack_size { [this]() { stack.resize(stack.size() * 2); } };
-                    locked_pool_allocator<> alloc { 4_KB };
-                    std::vector<int_vector, locked_pool_allocator<>> current_int { alloc }; // Current interrupt vector. Set to 0 when acknowlegded.
-                    std::map<int_vector, std::unique_ptr<irq_controller>, std::less<int_vector>, locking_allocator<>> entries { };
-                    std::vector<byte, locking_allocator<>> stack { };
-                    std::uint32_t stack_use_count { 0 };
-                } static inline * data { nullptr };
+                static inline irq_controller_data* data { nullptr };
             };
         }
     }
