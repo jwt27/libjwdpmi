@@ -31,7 +31,7 @@ namespace jw
             bool try_lock() noexcept { return !locked.test_and_set(); }
         };
 
-        class recursive_mutex
+        class recursive_mutex   // TODO: cpu exception ownership
         {
             using thread_ptr = std::weak_ptr<const detail::thread>;
             using irq_ptr = std::weak_ptr<const dpmi::detail::irq_controller::irq_controller_data::interrupt_id>;
