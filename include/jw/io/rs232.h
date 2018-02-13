@@ -80,7 +80,7 @@ namespace jw
                     if (com_ports.requires_new_selector()) // DPMI 0.9 host
                     {
                         dpmi::gs_override gs { com_ports.get_selector() };
-                        asm("mov %0, gs:[%1*2];": "=rm"(port) : "r" (p));
+                        asm("mov %0, gs:[%1*2];": "=r"(port) : "ri" (p));
                     }
                     else port = com_ports[p];
                 }
