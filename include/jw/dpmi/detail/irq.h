@@ -148,7 +148,7 @@ namespace jw
                 {
                     if (is_acknowledged()) return;
                     send_eoi();
-                    data->current_int.back() = 0;
+                    data->current_interrupt.back()->acknowledged = true;
                 }
 
             private:
@@ -167,7 +167,7 @@ namespace jw
                 }
 
                 static bool is_irq(int_vector v) { return vec_to_irq(v) != 0xff; }
-                static bool is_acknowledged() { return data->current_int.empty() or data->current_int.back() == 0; }
+                static bool is_acknowledged() { return data->current_interrupt.back()->acknowledged; }
 
                 INTERRUPT static auto in_service() noexcept
                 {
