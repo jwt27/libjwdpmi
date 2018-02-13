@@ -54,7 +54,6 @@ namespace jw
                 rts_cts
             } flow_control { continuous };
             bool force_dtr_rts_high { false };
-            bool enable_aux_out2 { false };
             bool echo { false };
 
             void set_com_port(com_port p)

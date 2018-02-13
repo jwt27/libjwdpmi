@@ -45,7 +45,7 @@ namespace jw
                 mctrl.dtr = !config.force_dtr_rts_high; // note: dtr/rts are inverted
                 mctrl.rts = !config.force_dtr_rts_high;
                 mctrl.aux_out1 = true;
-                mctrl.aux_out2 = config.enable_aux_out2;
+                mctrl.aux_out2 = true;
                 modem_control.write(mctrl);
 
                 uart_fifo_control_reg fctrl { };
