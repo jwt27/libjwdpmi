@@ -64,7 +64,7 @@ namespace jw
 
                 dpmi::irq_handler irq_handler { [this]() INTERRUPT
                 {
-                    if (!status_port.read().no_data_available) dpmi::end_of_interrupt();
+                    if (!status_port.read().no_data_available) dpmi::irq_handler::acknowledge();
                     get();
                     put();
                 } };

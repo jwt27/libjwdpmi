@@ -54,7 +54,7 @@ namespace jw
 
             if (current_tsc_ref() == tsc_reference::rtc) update_tsc();
 
-            dpmi::end_of_interrupt();
+            dpmi::irq_handler::acknowledge();
         }, dpmi::always_call | dpmi::no_interrupts };
 
         dpmi::irq_handler setup::pit_irq { []() INTERRUPT
@@ -63,7 +63,7 @@ namespace jw
 
             if (current_tsc_ref() == tsc_reference::pit) update_tsc();
 
-            dpmi::end_of_interrupt();
+            dpmi::irq_handler::acknowledge();
         }, dpmi::always_call | dpmi::no_auto_eoi };
 
         void setup::setup_pit(bool enable, std::uint32_t freq_divider)

@@ -188,7 +188,7 @@ namespace jw
                         else scancode_queue.push_back(c);
                     } while (get_status().data_available);
                     if (keyboard_update_thread) keyboard_update_thread->start();
-                    dpmi::end_of_interrupt();
+                    dpmi::irq_handler::acknowledge();
                 }
             }, dpmi::no_auto_eoi };
         };

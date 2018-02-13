@@ -184,7 +184,7 @@ namespace jw
                         case uart_irq_id_reg::modem_status:
                             put(); break;
                         }
-                        dpmi::end_of_interrupt();
+                        dpmi::irq_handler::acknowledge();
                     }
                     set_rts();
                 } };

@@ -92,14 +92,14 @@ namespace jw
             void disable() { if (enabled) detail::irq_controller::get_irq(irq).remove(this); enabled = false; }
             bool is_enabled() const noexcept { return enabled; }
 
+            // Call this from your interrupt handler to signal that the IRQ has been successfully handled.
+            static void acknowledge() noexcept { detail::irq_controller::acknowledge(); }
+
         private:
             irq_handler(const irq_handler&) = delete;
             irq_handler(irq_handler&&) = delete;
             bool enabled { false };
             irq_level irq { };
         };
-
-        // Call this from your interrupt handler to send an EOI to the interrupt controller.
-        inline void end_of_interrupt() noexcept { detail::irq_controller::acknowledge(); }
     }
 }
