@@ -5,8 +5,10 @@
 
 #pragma once
 #include <atomic>
+#include <variant>
 #include <jw/thread/thread.h>
 #include <jw/thread/detail/mutex.h>
+#include <jw/dpmi/detail/irq.h>
 
 namespace jw
 {
@@ -31,8 +33,24 @@ namespace jw
 
         class recursive_mutex
         {
+            using thread_ptr = std::weak_ptr<const detail::thread>;
+            using irq_ptr = std::weak_ptr<const dpmi::detail::irq_controller::irq_controller_data::interrupt_id>;
+            std::variant<thread_ptr, irq_ptr, std::nullptr_t> owner;
             std::atomic<std::uint32_t> lock_count { 0 };
-            std::weak_ptr<const detail::thread> owner;
+
+            struct is_owner
+            {
+                bool operator()(const thread_ptr& p) const noexcept { return detail::scheduler::is_current_thread(p.lock().get()); }
+                bool operator()(const irq_ptr& p) const noexcept { return dpmi::detail::irq_controller::is_current_irq(p.lock().get()); }
+                bool operator()(const std::nullptr_t&) const noexcept { return false; }
+            };
+
+            struct has_owner
+            {
+                bool operator()(const thread_ptr& p) const noexcept { return not p.expired(); }
+                bool operator()(const irq_ptr& p) const noexcept { return not p.expired(); }
+                bool operator()(const std::nullptr_t&) const noexcept { return false; }
+            };
 
         public:
             constexpr recursive_mutex() noexcept = default;
@@ -44,21 +62,23 @@ namespace jw
                 dpmi::throw_if_irq();
                 yield_while([&]() { return !try_lock(); });
             }
+
             void unlock() noexcept
             {
-                if (detail::scheduler::is_current_thread(owner.lock().get())) --lock_count;
-                if (lock_count == 0) owner.reset();
+                if (std::visit(is_owner { }, owner)) --lock_count;
+                if (lock_count == 0) owner = nullptr;
             }
+
             bool try_lock() noexcept
             {
-                if (dpmi::in_irq_context()) return false;
-                if (!owner.lock())
+                if (not std::visit(has_owner { }, owner))
                 {
-                    owner = detail::scheduler::get_current_thread();
+                    if (dpmi::in_irq_context()) owner = dpmi::detail::irq_controller::get_current_irq(); // TODO: in_irq_context() also counts exceptions
+                    else owner = detail::scheduler::get_current_thread();
                     lock_count = 1;
                     return true;
                 }
-                else if (detail::scheduler::is_current_thread(owner.lock().get()))
+                else if (std::visit(is_owner { }, owner))
                 {
                     ++lock_count;
                     return true;
