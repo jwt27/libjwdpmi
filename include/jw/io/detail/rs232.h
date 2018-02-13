@@ -171,8 +171,9 @@ namespace jw
                 dpmi::irq_handler irq_handler { [this]() INTERRUPT
                 {
                     auto id = irq_id.read();
-                    if (!id.no_irq_pending)
+                    while (not id.no_irq_pending)
                     {
+                        dpmi::irq_handler::acknowledge();
                         switch (id.id)
                         {
                         case uart_irq_id_reg::data_available:
@@ -183,9 +184,10 @@ namespace jw
                             if (line_status.read().line_break) { cts = false; break; }
                             [[fallthrough]];
                         case uart_irq_id_reg::modem_status:
+                            modem_status.read();
                             put(); break;
                         }
-                        dpmi::irq_handler::acknowledge();
+                        id = irq_id.read();
                     }
                     set_rts();
                 } };

@@ -91,20 +91,24 @@ namespace jw
 
             std::streamsize rs232_streambuf::xsgetn(char_type * s, std::streamsize n)
             {
-                irq_disable no_irq { this };
                 std::streamsize max_n = 0;
                 while (max_n < n && underflow() != traits_type::eof()) max_n = std::min(rx_ptr - gptr(), n);
-                std::copy_n(gptr(), max_n, s);
-                setg(rx_buf.begin(), gptr() + max_n, rx_ptr);
+                {
+                    irq_disable no_irq { this };
+                    std::copy_n(gptr(), max_n, s);
+                    setg(rx_buf.begin(), gptr() + max_n, rx_ptr);
+                }
                 return max_n;
             }
 
             rs232_streambuf::int_type rs232_streambuf::underflow()
             {
-                irq_disable no_irq { this };
-                if (gptr() != rx_buf.begin()) std::copy(gptr(), rx_ptr, rx_buf.begin());
-                rx_ptr = rx_buf.begin() + (rx_ptr - gptr()); 
-                setg(rx_buf.begin(), rx_buf.begin(), rx_ptr);
+                {
+                    irq_disable no_irq { this };
+                    if (gptr() != rx_buf.begin()) std::copy(gptr(), rx_ptr, rx_buf.begin());
+                    rx_ptr = rx_buf.begin() + (rx_ptr - gptr());
+                    setg(rx_buf.begin(), rx_buf.begin(), rx_ptr);
+                }
                 do 
                 { 
                     get(); 
@@ -127,13 +131,15 @@ namespace jw
 
             rs232_streambuf::int_type rs232_streambuf::overflow(int_type c) 
             {
-                irq_disable no_irq { this };
                 do
                 {
                     put();
-                    if (tx_ptr != tx_buf.begin()) std::copy(tx_ptr, pptr(), tx_buf.begin());
-                    setp(tx_buf.begin() + (pptr() - tx_ptr), tx_buf.end());
-                    tx_ptr = tx_buf.begin();
+                    {
+                        irq_disable no_irq { this };
+                        if (tx_ptr != tx_buf.begin()) std::copy(tx_ptr, pptr(), tx_buf.begin());
+                        setp(tx_buf.begin() + (pptr() - tx_ptr), tx_buf.end());
+                        tx_ptr = tx_buf.begin();
+                    }
                     thread::yield();
                 } while (pptr() == epptr());
                 if (traits_type::not_eof(c)) sputc(c);
