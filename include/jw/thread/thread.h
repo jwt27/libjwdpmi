@@ -67,11 +67,10 @@ namespace jw
         }
 
         // Yields execution while the given condition evaluates to true.
-        inline bool yield_while(auto&& condition)
+        inline void yield_while(auto&& condition)
         {
             dpmi::trap_mask dont_trace_here { };
             while (condition()) yield();
-            return false;
         };
 
         // Yields execution until the given time point.
