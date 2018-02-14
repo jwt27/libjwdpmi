@@ -4,6 +4,7 @@
 #include <atomic>
 #include <jw/thread/thread.h>
 #include <jw/thread/detail/mutex.h>
+#include <jw/thread/mutex.h>
 
 namespace jw::thread
 {
@@ -19,8 +20,8 @@ namespace jw::thread
 
         void lock()
         {
-            dpmi::throw_if_irq();
-            yield_while([&]() { return !try_lock(); });
+            if (yield_while([this]() { return !try_lock(); }))
+                throw deadlock { };
         }
         void unlock() noexcept { locked.clear(); }
         bool try_lock() noexcept
@@ -33,8 +34,8 @@ namespace jw::thread
 
         void lock_shared()
         {
-            dpmi::throw_if_irq();
-            yield_while([&]() { return !try_lock_shared(); });
+            if (yield_while([this]() { return !try_lock_shared(); }))
+                throw deadlock { };
         }
         void unlock_shared() noexcept { --shared_count; }
         bool try_lock_shared() noexcept

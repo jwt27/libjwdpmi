@@ -14,6 +14,8 @@ namespace jw
 {
     namespace thread
     {
+        struct deadlock : public std::runtime_error { deadlock() : runtime_error("deadlock") { } };
+
         class mutex
         {
             std::atomic_flag locked { false };
@@ -24,8 +26,8 @@ namespace jw
 
             void lock()
             {
-                dpmi::throw_if_irq();
-                yield_while([&]() { return !try_lock(); });
+                if (yield_while([this]() { return !try_lock(); }))
+                    throw deadlock { };
             }
             void unlock() noexcept { locked.clear(); }
             bool try_lock() noexcept { return !locked.test_and_set(); }
@@ -59,8 +61,8 @@ namespace jw
 
             void lock()
             {
-                dpmi::throw_if_irq();
-                yield_while([&]() { return !try_lock(); });
+                if (yield_while([this]() { return !try_lock(); }))
+                    throw deadlock { };
             }
 
             void unlock() noexcept
