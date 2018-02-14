@@ -60,23 +60,24 @@ namespace jw
 
         // Yields execution to the next thread in the queue.
         inline void yield()
-        { 
+        {
             if (dpmi::in_irq_context()) return;
             dpmi::trap_mask dont_trace_here { };
             detail::scheduler::thread_switch(); 
         }
 
         // Yields execution while the given condition evaluates to true.
-        inline void yield_while(auto&& condition)
-        { 
-            if (dpmi::in_irq_context()) return;
+        inline bool yield_while(auto&& condition)
+        {
+            if (dpmi::in_irq_context()) return condition();
             dpmi::trap_mask dont_trace_here { };
             while (condition()) yield();
+            return false;
         };
 
         // Yields execution until the given time point.
         template<typename P> inline void yield_until(const P& time_point)
-        { 
+        {
             if (dpmi::in_irq_context()) return;
             dpmi::trap_mask dont_trace_here { };
             yield_while([&time_point] { return P::clock::now() < time_point; });
@@ -84,7 +85,7 @@ namespace jw
 
         // Yields execution for the given duration.
         template<typename C = chrono::pit> inline void yield_for(const typename C::duration& duration)
-        { 
+        {
             if (dpmi::in_irq_context()) return;
             dpmi::trap_mask dont_trace_here { };
             yield_until(C::now() + duration);
@@ -92,7 +93,7 @@ namespace jw
 
         // Combination of yield_while() and yield_until(). Returns true on timeout.
         template<typename P> inline bool yield_while_until(auto&& condition, const P& time_point)
-        { 
+        {
             if (dpmi::in_irq_context()) return condition();
             dpmi::trap_mask dont_trace_here { };
             bool c;
@@ -102,7 +103,7 @@ namespace jw
 
         // Combination of yield_while() and yield_for(). Returns true on timeout.
         template<typename C = chrono::pit> inline bool yield_while_for(auto&& condition, const typename C::duration& duration)
-        { 
+        {
             if (dpmi::in_irq_context()) return condition();
             dpmi::trap_mask dont_trace_here { };
             return yield_while_until(condition, C::now() + duration);
