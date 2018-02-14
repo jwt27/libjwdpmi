@@ -41,7 +41,7 @@ namespace jw
         {
             using thread_ptr = std::weak_ptr<const detail::thread>;
             using irq_ptr = std::weak_ptr<const dpmi::detail::irq_controller::irq_controller_data::interrupt_id>;
-            std::variant<thread_ptr, irq_ptr, std::nullptr_t> owner;
+            std::variant<thread_ptr, irq_ptr, std::nullptr_t> owner { nullptr };
             std::atomic<std::uint32_t> lock_count { 0 };
 
             struct is_owner
@@ -81,7 +81,7 @@ namespace jw
 
             bool try_lock() noexcept
             {
-                if (not std::visit(has_owner { }, owner))
+                if (owner.valueless_by_exception() or not std::visit(has_owner { }, owner))
                 {
                     if (dpmi::in_irq_context()) owner = dpmi::detail::irq_controller::get_current_irq(); // TODO: in_irq_context() also counts exceptions
                     else owner = detail::scheduler::get_current_thread();
