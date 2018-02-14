@@ -217,7 +217,24 @@ namespace jw
 
                 struct irq_disable  // TODO: disable get/put irqs separately
                 {
-                    irq_disable(auto* p) noexcept : owner(p), reg(p->irq_enable.read()) { owner->irq_enable.write({ }); }
+                    enum which 
+                    { 
+                        get = 0b1, 
+                        put = 0b10, 
+                        line = 0b100, 
+                        modem = 0b1000,
+                        all = 0b1111
+                    };
+
+                    irq_disable(auto* p, which type = all) noexcept : owner(p), reg(p->irq_enable.read())
+                    {
+                        uart_irq_enable_reg r { reg };
+                        r.data_available = not (type & get);
+                        r.transmitter_empty = not (type & put);
+                        r.line_status = not (type & line);
+                        r.modem_status = not (type & modem);
+                        owner->irq_enable.write(r);
+                    }
                     ~irq_disable() { owner->irq_enable.write(reg); }
 
                 protected:
