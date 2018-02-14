@@ -20,8 +20,12 @@ namespace jw::thread
 
         void lock()
         {
-            if (yield_while([this]() { return !try_lock(); }))
-                throw deadlock { };
+            if (dpmi::in_irq_context())
+            {
+                if (try_lock()) return;
+                else throw deadlock { };
+            }
+            yield_while([this]() { return !try_lock(); });
         }
         void unlock() noexcept { locked.clear(); }
         bool try_lock() noexcept
@@ -34,8 +38,12 @@ namespace jw::thread
 
         void lock_shared()
         {
-            if (yield_while([this]() { return !try_lock_shared(); }))
-                throw deadlock { };
+            if (dpmi::in_irq_context())
+            {
+                if (try_lock_shared()) return;
+                else throw deadlock { };
+            }
+            yield_while([this]() { return !try_lock_shared(); });
         }
         void unlock_shared() noexcept { --shared_count; }
         bool try_lock_shared() noexcept

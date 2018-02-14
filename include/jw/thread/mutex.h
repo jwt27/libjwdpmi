@@ -26,8 +26,12 @@ namespace jw
 
             void lock()
             {
-                if (yield_while([this]() { return !try_lock(); }))
-                    throw deadlock { };
+                if (dpmi::in_irq_context())
+                {
+                    if (try_lock()) return;
+                    else throw deadlock { };
+                }
+                yield_while([this]() { return !try_lock(); });
             }
             void unlock() noexcept { locked.clear(); }
             bool try_lock() noexcept { return !locked.test_and_set(); }
@@ -61,8 +65,12 @@ namespace jw
 
             void lock()
             {
-                if (yield_while([this]() { return !try_lock(); }))
-                    throw deadlock { };
+                if (dpmi::in_irq_context())
+                {
+                    if (try_lock()) return;
+                    else throw deadlock { };
+                }
+                yield_while([this]() { return !try_lock(); });
             }
 
             void unlock() noexcept
