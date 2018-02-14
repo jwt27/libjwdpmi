@@ -44,7 +44,7 @@ namespace jw
                 uart_modem_control_reg mctrl { };
                 mctrl.dtr = !config.force_dtr_rts_high; // note: dtr/rts are inverted
                 mctrl.rts = !config.force_dtr_rts_high;
-                mctrl.aux_out1 = true;
+                mctrl.aux_out1 = config.enable_aux_out1;
                 mctrl.aux_out2 = true;
                 modem_control.write(mctrl);
 

@@ -118,7 +118,7 @@ namespace jw
                     auto r = modem_control.read();
                     auto r2 = r;
                     r2.dtr = true;
-                    r2.rts = rx_ptr != rx_buf.end();
+                    r2.rts = rx_ptr != rx_buf.end() - 14;
                     if (r.rts != r2.rts)
                     {
                         modem_control.write(r2);
