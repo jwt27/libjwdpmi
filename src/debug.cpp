@@ -774,7 +774,7 @@ namespace jw
                         }
                         return true;
                     }
-                    if (current_thread->action == thread_info::none) send_packet("EEE"); // last command caused another exception
+                    if (current_thread->action == thread_info::none) send_packet("E04"); // last command caused another exception
                     if (debugmsg) std::clog << *static_cast<new_exception_frame*>(f) << *r;
                     current_thread->frame.info_bits.redirect_elsewhere = true;
                     detail::fpu_context_switcher.leave();
