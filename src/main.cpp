@@ -16,6 +16,9 @@ using namespace jw;
 
 int _crt0_startup_flags = 0
 | config::user_crt0_startup_flags
+#ifndef NDEBUG
+| _CRT0_FLAG_NULLOK
+#endif
 | _CRT0_FLAG_NMI_SIGNAL
 | _CRT0_DISABLE_SBRK_ADDRESS_WRAP
 | _CRT0_FLAG_NONMOVE_SBRK
