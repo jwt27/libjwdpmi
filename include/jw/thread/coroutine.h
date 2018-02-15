@@ -105,8 +105,6 @@ namespace jw
             if (auto* p = dynamic_cast<coroutine_base<R>*>(scheduler::get_current_thread().lock().get()))
                 p->yield(std::forward<T>(value)...);
         }
-        template <typename R>
-        static void coroutine_yield(R&& value) { return coroutine_yield<R>(std::forward<R>(value)); }
 
         //template<typename R, typename... A>
         //coroutine(void(*)(A...)) -> coroutine<R, void(A...)>;
