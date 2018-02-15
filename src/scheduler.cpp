@@ -132,7 +132,7 @@ namespace jw
                     catch (...) { }
                 }
                 
-                if (__builtin_expect(current_thread != main_thread && *reinterpret_cast<std::uint32_t*>(current_thread->stack.get()) != 0xDEADBEEF, false))
+                if (__builtin_expect(current_thread != main_thread && *reinterpret_cast<std::uint32_t*>(current_thread->stack.data()) != 0xDEADBEEF, false))
                     throw std::runtime_error("Stack overflow!");
 
                 if (__builtin_expect(current_thread->state == terminating, false)) throw abort_thread();
@@ -153,8 +153,8 @@ namespace jw
 
                     if (__builtin_expect(current_thread->state == starting, false)) // new task, initialize new context on stack
                     {
-                        byte* esp = (current_thread->stack.get() + current_thread->stack_size - 4) - sizeof(thread_context);
-                        *reinterpret_cast<std::uint32_t*>(current_thread->stack.get()) = 0xDEADBEEF;  // stack overflow protection
+                        byte* esp = (current_thread->stack.data() + current_thread->stack.size() - 4) - sizeof(thread_context);
+                        *reinterpret_cast<std::uint32_t*>(current_thread->stack.data()) = 0xDEADBEEF;  // stack overflow protection
 
                         current_thread->context = reinterpret_cast<thread_context*>(esp);           // *context points to top of stack
                         if (current_thread->parent == nullptr) current_thread->parent = main_thread;
