@@ -882,7 +882,7 @@ namespace jw
                 return result;
             }
 
-            void csignal(int signal)
+            extern "C" void csignal(int signal)
             {
                 auto call_next = [signal] { signal_handlers[signal](signal); };
                 if (killed) call_next();
