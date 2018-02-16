@@ -33,8 +33,16 @@ namespace jw
                 }
                 yield_while([this]() { return !try_lock(); });
             }
-            void unlock() noexcept { locked.clear(); }
-            bool try_lock() noexcept { return !locked.test_and_set(); }
+            void unlock() noexcept
+            {
+                if (dpmi::detail::exception_count > 0) return;
+                locked.clear();
+            }
+            bool try_lock() noexcept 
+            {
+                if (dpmi::detail::exception_count > 0) return true;
+                return !locked.test_and_set();
+            }
         };
 
         class recursive_mutex   // TODO: cpu exception ownership
@@ -75,15 +83,17 @@ namespace jw
 
             void unlock() noexcept
             {
+                if (dpmi::detail::exception_count > 0) return;
                 if (std::visit(is_owner { }, owner)) --lock_count;
                 if (lock_count == 0) owner = nullptr;
             }
 
             bool try_lock() noexcept
             {
+                if (dpmi::detail::exception_count > 0) return true;
                 if (owner.valueless_by_exception() or not std::visit(has_owner { }, owner))
                 {
-                    if (dpmi::in_irq_context()) owner = dpmi::detail::irq_controller::get_current_irq(); // TODO: in_irq_context() also counts exceptions
+                    if (dpmi::in_irq_context()) owner = dpmi::detail::irq_controller::get_current_irq();
                     else owner = detail::scheduler::get_current_thread();
                     lock_count = 1;
                     return true;
