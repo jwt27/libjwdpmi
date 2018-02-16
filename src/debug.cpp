@@ -758,7 +758,7 @@ namespace jw
             {
                 if (debugmsg) std::clog << "entering exception 0x" << std::hex << exc << "\n";
 
-                if (__builtin_expect(debugger_reentry, false))
+                if (__builtin_expect(debugger_reentry, false) and current_thread->action == thread_info::none)
                 {
                     if (exc == 0x01)    // watchpoint trap, ignore
                     {
@@ -776,7 +776,7 @@ namespace jw
                         }
                         return true;
                     }
-                    if (current_thread->action == thread_info::none) send_packet("E04"); // last command caused another exception
+                    send_packet("E04"); // last command caused another exception
                     if (debugmsg) std::clog << *static_cast<new_exception_frame*>(f) << *r;
                     current_thread->frame.info_bits.redirect_elsewhere = true;
                     detail::fpu_context_switcher.leave();
