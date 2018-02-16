@@ -770,15 +770,9 @@ namespace jw
                         if (debugmsg) std::clog << "reentry caused by watchpoint, ignoring.\n";
                         return true;
                     }
-                    if (exc == 0x03)    // breakpoint in debugger code, remove and ignore
+                    if (exc == 0x03)    // breakpoint in debugger code, ignore
                     {
                         if (debugmsg) std::clog << "reentry caused by breakpoint, ignoring.\n";
-                        if (breakpoints.count(f->fault_address.offset - 1))
-                        {
-                            f->fault_address.offset -= 1;
-                            *reinterpret_cast<byte*>(f->fault_address.offset) = breakpoints[f->fault_address.offset];
-                            if (debugmsg) std::clog << "breakpoint removed at 0x" << std::hex << f->fault_address.offset << "\n";
-                        }
                         return true;
                     }
                     send_packet("E04"); // last command caused another exception
