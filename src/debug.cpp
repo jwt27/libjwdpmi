@@ -504,7 +504,7 @@ namespace jw
                                     supported[str.substr(0, equals_sign)] = str.substr(equals_sign + 1);
                                 }
                             }
-                            send_packet("PacketSize=100000;swbreak+;hwbreak+");
+                            send_packet("PacketSize=399;swbreak+;hwbreak+");
                         }
                         else if (q == "Attached") send_packet("0");
                         else if (q == "C")
