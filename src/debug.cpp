@@ -275,8 +275,36 @@ namespace jw
             {
                 if (debugmsg) std::clog << "send --> \"" << output << "\"\n";
                 const auto sum = checksum(output);
-                *gdb << '$' << output << '#' << std::setfill('0') << std::hex << std::setw(2) << sum;
+                *gdb << '$';
+                std::stringstream s { };
+                for (auto i = output.cbegin(); i < output.cend();)
+                {
+                    auto j { i };
+                    while (*j == *i and j != output.cend()) ++j;
+                    auto count = j - i;
+                    if (count > 3)
+                    {
+                        auto rep { count - 1 };
+                        if (rep == 6) s << *i << '*' << static_cast<char>(29 + 5) << *i;               // (char)29+6 = '#'
+                        else if (rep == 7) s << *i << '*' << static_cast<char>(29 + 5) << *i << *i;    // (char)29+7 = '$'
+                        else if (rep > 97)    // non-printable
+                        {
+                            s << *i << '*' << static_cast<char>(29 + 97);
+                            for (std::ptrdiff_t k = 0; k < (rep - 97); ++k)
+                                s << *i;
+                        }
+                        else s << *i << '*' << static_cast<char>(rep + 29);
+                    }
+                    else
+                    {
+                        for (std::ptrdiff_t k = 0; k < count; ++k)
+                            s << *i;
+                    }
+                    i += count;
+                }
+                *gdb << s.str() << '#' << std::setfill('0') << std::hex << std::setw(2) << sum;
                 if (not config::enable_gdb_interrupts) *gdb << std::flush;
+                if (debugmsg) std::clog << "sent --> \"" << s.str() << "\"\n";
                 sent.push_back(output);
             }
 
