@@ -274,8 +274,7 @@ namespace jw
             void send_packet(const std::string& output)
             {
                 if (debugmsg) std::clog << "send --> \"" << output << "\"\n";
-                const auto sum = checksum(output);
-                *gdb << '$';
+
                 std::stringstream s { };
                 for (auto i = output.cbegin(); i < output.cend();)
                 {
@@ -302,7 +301,10 @@ namespace jw
                     }
                     i += count;
                 }
-                *gdb << s.str() << '#' << std::setfill('0') << std::hex << std::setw(2) << sum;
+                auto rle_output = s.str();
+
+                const auto sum = checksum(rle_output);
+                *gdb << '$' << rle_output << '#' << std::setfill('0') << std::hex << std::setw(2) << sum;
                 if (not config::enable_gdb_interrupts) *gdb << std::flush;
                 if (debugmsg) std::clog << "sent --> \"" << s.str() << "\"\n";
                 sent.push_back(output);
