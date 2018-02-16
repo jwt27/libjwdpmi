@@ -851,10 +851,30 @@ namespace jw
 
             void csignal(int signal)
             {
-                std::uintptr_t esp, ebp;
+                ++exception_count;  // avoid allocation
+                if (debugger_reentry) send_packet("E04");   // last command raised a signal
+                debugger_reentry = true;
+                std::uintptr_t esp, ebp, eip;
                 asm("mov %0, esp": "=rm" (esp));
                 asm("mov %0, ebp": "=rm" (ebp));
+                asm("call %=;%=: pop %0":"=rm" (eip));
                 std::deque<packet_string> packet { };
+
+                auto posix_signal = [signal]
+                {
+                    switch (signal)
+                    {
+                    case SIGHUP:  return 1;
+                    case SIGINT:  return 2;
+                    case SIGQUIT: return 3;
+                    case SIGILL:  return 4;
+                    case SIGABRT: return 6;
+                    case SIGKILL: return 9;
+                    case SIGTERM: return 15;
+                    default: return signal;
+                    }
+                };
+
                 char p { '?' };
                 while (true)
                 {
@@ -862,7 +882,7 @@ namespace jw
                     s << std::hex << std::setfill('0');
                     if (p == '?')
                     {
-                        s << "S" << std::setw(2) << signal;
+                        s << "S" << std::setw(2) << posix_signal();
                         send_packet(s.str());
                     }
                     else if (p == 'm')  // read memory
@@ -877,20 +897,38 @@ namespace jw
                         encode_null(s, 4 * 4);
                         encode(s, &esp);
                         encode(s, &ebp);
+                        encode_null(s, 2 * 4);
+                        encode(s, &eip);
                         send_packet(s.str());
                     }
+                    else if (p == 'P' or p == 'G' or p == 'm' 
+                        //or p == 'p'
+                        ) send_packet("E00");
                     else if (p == 'p')  // read one register
                     {
                         auto regn = static_cast<regnum>(decode(packet[0]));
-                        if (regn == esp) encode(s, &esp);
-                        if (regn == ebp) encode(s, &ebp);
+                        switch (regn)
+                        {
+                        case regnum::esp: encode(s, &esp); break;
+                        case regnum::ebp: encode(s, &ebp); break;
+                        case regnum::eip: encode(s, &eip); break;
+                        default:
+                            encode_null(s, reglen[regn]);
+                        }
                         send_packet(s.str());
                     }
-                    else if (p == 'k') break;
+                    else if (p == 'k')
+                    {
+                        s << "X" << std::setw(2) << posix_signal();
+                        send_packet(s.str());
+                        break;
+                    }
                     else send_packet("");
                     packet = recv_packet();
                     p = packet.front().delim;
                 }
+                debugger_reentry = false;
+                --exception_count;
                 signal_handlers[signal](signal);
             }
 
@@ -902,7 +940,7 @@ namespace jw
 
                 gdb = std::move(stream);
 
-                for (auto&& s : { SIGABRT, SIGTERM, SIGKILL, SIGQUIT, SIGILL, SIGINT })
+                for (auto&& s : { SIGHUP, SIGABRT, SIGTERM, SIGKILL, SIGQUIT, SIGILL, SIGINT })
                     signal_handlers[s] = std::signal(s, csignal);
 
                 auto install_exception_handler = [](auto&& e) { exception_handlers[e] = std::make_unique<exception_handler>(e, [e](auto* r, auto* f, bool t) { return handle_exception(e, r, f, t); }); };
