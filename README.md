@@ -11,7 +11,7 @@ Current features include:
 * Cooperative multi-threading and coroutines.
 * RS-232 serial communication using `std::iostream`.
 * Event-driven keyboard interface.
-* GDB remote debugging support.
+* Integrated GDB [remote debugging](https://i.imgur.com/HsREynj.png) backend.
 * Access to PIT, RTC and RDTSC clocks using `std::chrono`.
 * VESA VBE3 graphics interface.
 
