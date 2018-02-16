@@ -168,14 +168,16 @@ namespace jw
             };
             regnum& operator++(regnum& r) { return r = static_cast<regnum>(r + 1); }
 
-            const std::array<std::size_t, 40> reglen
+            constexpr std::array<std::size_t, 41> reglen
             {
                 4, 4, 4, 4,
                 4, 4, 4, 4,
                 4, 4,
                 2, 2, 2, 2, 2, 2,
-                10, 10, 10, 10, 10, 10, 10, 10
-                // TODO: fpu registers
+                10, 10, 10, 10, 10, 10, 10, 10,
+                4, 4, 4, 4, 4, 4, 4, 4,
+                16, 16, 16, 16, 16, 16, 16, 16,
+                4
             };
 
             inline auto signal_number(exception_num exc)
@@ -764,7 +766,7 @@ namespace jw
                 if (killed) return false;
 
                 if (__builtin_expect(debugger_reentry, false) and current_thread->action == thread_info::none)
-                {
+                {   // TODO: determine action based on last packet
                     if (exc == 0x01)    // watchpoint trap, ignore
                     {
                         if (debugmsg) std::clog << "reentry caused by watchpoint, ignoring.\n";
