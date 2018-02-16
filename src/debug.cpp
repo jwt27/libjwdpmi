@@ -275,7 +275,8 @@ namespace jw
             {
                 if (debugmsg) std::clog << "send --> \"" << output << "\"\n";
                 const auto sum = checksum(output);
-                *gdb << '$' << output << '#' << std::setfill('0') << std::hex << std::setw(2) << sum << std::flush;
+                *gdb << '$' << output << '#' << std::setfill('0') << std::hex << std::setw(2) << sum;
+                if (not config::enable_gdb_interrupts) *gdb << std::flush;
                 sent.push_back(output);
             }
 
