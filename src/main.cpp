@@ -73,6 +73,7 @@ namespace jw
         namespace detail
         {
             void setup_gdb_interface(std::unique_ptr<std::iostream, allocator_delete<jw::dpmi::locking_allocator<std::iostream>>>&&);
+            void notify_gdb_exit(byte result);
         }
     }
 }
@@ -140,7 +141,7 @@ int main(int argc, const char** argv)
         }
     }
 
-    if (jw::dpmi::debug()) raise(SIGHUP);
+    if (jw::dpmi::debug()) dpmi::detail::notify_gdb_exit(return_value);
 
     return return_value;
 }

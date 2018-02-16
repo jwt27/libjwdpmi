@@ -956,6 +956,14 @@ namespace jw
                 for (auto&& e : { 0x10, 0x11, 0x12, 0x13, 0x14, 0x1e })
                     install_exception_handler(e);
             }
+
+            void notify_gdb_exit(byte result)
+            {
+                std::stringstream s { };
+                s << std::hex << std::setfill('0');
+                s << "W" << std::setw(2) << static_cast<std::uint32_t>(result);
+                send_packet(s.str());
+            }
         }
 
         trap_mask::trap_mask() noexcept // TODO: ideally this should treat interrupts as separate 'threads'
