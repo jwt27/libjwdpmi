@@ -299,7 +299,6 @@ namespace jw
                 const auto sum = checksum(rle_output);
                 *gdb << '$' << rle_output << '#' << std::setfill('0') << std::hex << std::setw(2) << sum;
                 if (not config::enable_gdb_interrupts) *gdb << std::flush;
-                if (debugmsg) std::clog << "sent --> \"" << s.str() << "\"\n";
                 sent.push_back(output);
             }
 
