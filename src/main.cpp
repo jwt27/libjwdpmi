@@ -140,7 +140,7 @@ int main(int argc, const char** argv)
         }
     }
 
-    if (jw::dpmi::debug()) raise(SIGTERM);
+    if (jw::dpmi::debug()) raise(SIGHUP);
 
     return return_value;
 }
