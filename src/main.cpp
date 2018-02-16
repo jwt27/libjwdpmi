@@ -5,6 +5,7 @@
 #include <string_view>
 #include <deque>
 #include <crt0.h>
+#include <csignal>
 #include <jw/alloc.h>
 #include <jw/dpmi/debug.h>
 #include <jw/dpmi/cpu_exception.h>
@@ -138,6 +139,8 @@ int main(int argc, const char** argv)
             catch (...) { std::cerr << "Caught unknown exception from thread()!\n"; }
         }
     }
+
+    if (jw::dpmi::debug()) raise(SIGTERM);
 
     return return_value;
 }
