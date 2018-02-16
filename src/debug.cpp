@@ -850,6 +850,9 @@ namespace jw
 
             void csignal(int signal)
             {
+                std::uintptr_t esp, ebp;
+                asm("mov %0, esp": "=rm" (esp));
+                asm("mov %0, ebp": "=rm" (ebp));
                 std::deque<packet_string> packet { };
                 char p { '?' };
                 while (true)
@@ -866,6 +869,18 @@ namespace jw
                         auto* addr = reinterpret_cast<byte*>(decode(packet[0]));
                         std::size_t len = decode(packet[1]);
                         encode(s, addr, len);
+                        send_packet(s.str());
+                    }
+                    else if (p == 'g') // read registers
+                    {
+                        encode_null(s, 4 * 4);                        encode(s, &esp);
+                        encode(s, &ebp);
+                    }
+                    else if (p == 'p')  // read one register
+                    {
+                        auto regn = static_cast<regnum>(decode(packet[0]));
+                        if (regn == esp) encode(s, &esp);
+                        if (regn == ebp) encode(s, &ebp);
                         send_packet(s.str());
                     }
                     else if (p == 'k') break;
