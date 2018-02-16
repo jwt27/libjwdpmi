@@ -27,6 +27,7 @@ namespace jw
             const bool debugmsg = config::enable_gdb_debug_messages;
 
             bool debug_mode { false };
+            bool killed { false };
 
             locked_pool_allocator<> alloc { 1_MB };
             std::deque<std::string, locked_pool_allocator<>> sent { alloc };
@@ -741,12 +742,15 @@ namespace jw
                     }
                     else if (p == 'k')  // kill
                     {
+                        killed = true;
                         f->flags.trap = false;
                         f->stack.offset -= 4;                                                               // "sub esp, 4"
                         f->stack.offset &= -0x10;                                                           // "and esp, -0x10"
                         *reinterpret_cast<std::uintptr_t*>(f->stack.offset) = f->fault_address.offset;      // "mov [esp], eip"
                         f->fault_address.offset = reinterpret_cast<std::uintptr_t>(jw::terminate);          // "mov eip, func"
                         f->info_bits.redirect_elsewhere = true;
+                        s << "X" << std::setw(2) << signal_number(current_thread->last_exception);
+                        send_packet(s.str());
                         return true;
                     }
                     else send_packet("");   // unknown packet
@@ -757,6 +761,7 @@ namespace jw
             [[gnu::hot]] bool handle_exception(exception_num exc, cpu_registers* r, exception_frame* f, bool t)
             {
                 if (debugmsg) std::clog << "entering exception 0x" << std::hex << exc << "\n";
+                if (killed) return false;
 
                 if (__builtin_expect(debugger_reentry, false) and current_thread->action == thread_info::none)
                 {
@@ -851,6 +856,9 @@ namespace jw
 
             void csignal(int signal)
             {
+                auto call_next = [signal] { signal_handlers[signal](signal); };
+                if (killed) call_next();
+
                 ++exception_count;  // avoid allocation
                 if (debugger_reentry) send_packet("E04");   // last command raised a signal
                 debugger_reentry = true;
@@ -919,6 +927,7 @@ namespace jw
                     }
                     else if (p == 'k')
                     {
+                        killed = true;
                         s << "X" << std::setw(2) << posix_signal();
                         send_packet(s.str());
                         break;
@@ -929,7 +938,7 @@ namespace jw
                 }
                 debugger_reentry = false;
                 --exception_count;
-                signal_handlers[signal](signal);
+                call_next();
             }
 
             void setup_gdb_interface(std::unique_ptr<std::iostream, allocator_delete<jw::dpmi::locking_allocator<std::iostream>>>&& stream)
