@@ -6,6 +6,7 @@
 #include <sstream>
 #include <iomanip>
 #include <memory>
+#include <csignal>
 #include <jw/dpmi/fpu.h>
 #include <jw/dpmi/dpmi.h>
 #include <jw/dpmi/debug.h>
@@ -14,7 +15,7 @@
 #include <jw/alloc.h>
 #include <../jwdpmi_config.h>
 
-// TODO: terminate_handler and trap SIGABRT
+// TODO: terminate_handler
 
 namespace jw
 {
@@ -847,6 +848,33 @@ namespace jw
                 return result;
             }
 
+            void csignal(int signal)
+            {
+                std::deque<packet_string> packet { };
+                char p { '?' };
+                while (true)
+                {
+                    std::stringstream s { };
+                    s << std::hex << std::setfill('0');
+                    if (p == '?')
+                    {
+                        s << "S" << std::setw(2) << signal;
+                        send_packet(s.str());
+                    }
+                    else if (p == 'm')  // read memory
+                    {
+                        auto* addr = reinterpret_cast<byte*>(decode(packet[0]));
+                        std::size_t len = decode(packet[1]);
+                        encode(s, addr, len);
+                        send_packet(s.str());
+                    }
+                    else if (p == 'k') break;
+                    else send_packet("");
+                    packet = recv_packet();
+                    p = packet.front().delim;
+                }
+            }
+
             void setup_gdb_interface(std::unique_ptr<std::iostream, allocator_delete<jw::dpmi::locking_allocator<std::iostream>>>&& stream)
             {
                 if (debug_mode) return;
@@ -854,6 +882,8 @@ namespace jw
                 debugger_reentry = false;
 
                 gdb = std::move(stream);
+
+                std::signal(SIGABRT, csignal);
 
                 exception_handlers[0x00] = std::make_unique<exception_handler>(0x00, [](auto* r, auto* f, bool t) { return handle_exception(0x00, r, f, t); });
                 exception_handlers[0x01] = std::make_unique<exception_handler>(0x01, [](auto* r, auto* f, bool t) { return handle_exception(0x01, r, f, t); });
