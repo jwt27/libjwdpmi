@@ -28,6 +28,7 @@ namespace jw
             bool debug_mode { false };
             bool killed { false };
             int last_signal { };
+            bool thread_events_enabled { false };
 
             locked_pool_allocator<> alloc { 1_MB };
             std::deque<std::string, locked_pool_allocator<>> sent { alloc };
@@ -893,6 +894,11 @@ namespace jw
                 return result;
             }
 
+            void notify_gdb_thread_event(thread::detail::thread_event e)
+            {
+                if (thread_events_enabled) break_with_signal(e);
+            }
+
             void break_with_signal(int signal)
             {
                 last_signal = signal;
@@ -959,6 +965,7 @@ namespace jw
             if (thread::detail::thread_details::trap_unmask(t) && thread::detail::thread_details::trap_state(t)) asm("int 3");
         }
 #       else
+        void notify_gdb_thread_event(thread::detail::thread_event) { }
         void break_with_signal(int) { }
 #       endif
     }

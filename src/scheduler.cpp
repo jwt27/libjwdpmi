@@ -7,9 +7,15 @@
 #include <jw/dpmi/irq_mask.h>
 #include <jw/thread/detail/scheduler.h>
 #include <jw/thread/thread.h>
+#include <jw/dpmi/debug.h>
 
 namespace jw
 {
+    namespace dpmi::detail
+    {
+        void notify_gdb_thread_event(thread::detail::thread_event);
+    }
+
     namespace thread
     {
         namespace detail
@@ -58,16 +64,23 @@ namespace jw
             // Switches to the specified task, or the next task in queue if argument is nullptr.
             void scheduler::thread_switch(thread_ptr t)
             {
-                dpmi::trap_mask dont_trace_here { };
-                if (__builtin_expect(t != nullptr, false))
                 {
-                    dpmi::interrupt_mask no_interrupts_please { };
-                    threads.erase(remove_if(threads.begin(), threads.end(), [t](const auto& i) { return i == t; }), threads.end());
-                    threads.push_front(t);
+                    dpmi::trap_mask dont_trace_here { };
+                    if (__builtin_expect(t != nullptr, false))
+                    {
+                        dpmi::interrupt_mask no_interrupts_please { };
+                        threads.erase(remove_if(threads.begin(), threads.end(), [t](const auto& i) { return i == t; }), threads.end());
+                        threads.push_front(t);
+                    }
                 }
+
                 if (dpmi::in_irq_context()) return;
-                context_switch();   // switch to a new task context
-                check_exception();  // rethrow pending exception
+
+                {
+                    dpmi::trap_mask dont_trace_here { };
+                    context_switch();   // switch to a new task context
+                    check_exception();  // rethrow pending exception
+                }
             }
 
             // The actual thread.
@@ -78,6 +91,11 @@ namespace jw
                 try
                 {
                     current_thread->state = running;
+                    if (dpmi::debug())
+                    {
+                        dpmi::detail::notify_gdb_thread_event(started);
+                        if (current_thread->state != running) yield();
+                    }
                     current_thread->call();
                     current_thread->state = finished;
                 }
@@ -92,6 +110,7 @@ namespace jw
                 }
 
                 if (current_thread->state != finished) current_thread->state = initialized;
+                dpmi::detail::notify_gdb_thread_event(stopped);
 
                 while (true) try { yield(); }
                 catch (const abort_thread&) { }
