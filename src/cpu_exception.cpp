@@ -23,7 +23,7 @@ namespace jw
                 std::rethrow_exception(e);
             }
 
-            bool simulate_call(exception_frame* frame, bool new_type, auto* func) noexcept
+            bool simulate_call(exception_frame* frame, auto* func) noexcept
             {
                 frame->stack.offset -= 8;                                                               // "sub esp, 8"
                 frame->stack.offset &= -0x10;                                                           // "and esp, -0x10"
@@ -60,7 +60,7 @@ namespace jw
                 if (really_throw())
                 {
                     detail::pending_exception = std::current_exception();
-                    detail::simulate_call(f, self->new_type, detail::rethrow_cpu_exception);
+                    detail::simulate_call(f, detail::rethrow_cpu_exception);
                     success = true;
                 }
                 else std::cerr << "CAUGHT EXCEPTION IN CPU EXCEPTION HANDLER " << self->exc << std::endl; // HACK
