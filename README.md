@@ -53,4 +53,4 @@ See the [wiki page](https://github.com/jwt27/libjwdpmi/wiki), where I'm slowly a
 Read the header files in `include/`, most functions should be self-explanatory (I hope :)). The `detail` namespaces contain implementation details, you shouldn't need to use anything in it (file a feature request if you do).
 
 ## License
-It's GPLv3, for now.
+It's GPLv3, for now. I may decide to move to a different (less restrictive) license in the future. Therefore I am unable to accept code contributions at this time.
