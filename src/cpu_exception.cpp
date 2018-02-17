@@ -188,6 +188,8 @@ namespace jw
                 , "=m" (es)
                 , "=m" (fs)
                 , "=m" (gs));
+
+            ++detail::interrupt_id::get()->use_count;
         }
 
         exception_handler::~exception_handler()
@@ -202,6 +204,8 @@ namespace jw
                 last[exc] = prev;
                 detail::cpu_exception_handlers::set_pm_handler(exc, chain_to);
             }
+            --detail::interrupt_id::get()->use_count;
+            detail::interrupt_id::delete_if_possible();
         }
 
         std::string cpu_category::message(int ev) const
