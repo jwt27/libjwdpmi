@@ -77,25 +77,25 @@ namespace jw
             void break_with_signal(int);
         }
     }
-}
 
-void terminate_handler()
-{
-    static bool recursive_call { false };
-    jw::dpmi::detail::break_with_signal(SIGTERM);
-    if (not recursive_call)
+    void terminate_handler()
     {
-        recursive_call = true;
-        jw::terminate();
+        static bool recursive_call { false };
+        jw::dpmi::detail::break_with_signal(SIGTERM);
+        if (not recursive_call)
+        {
+            recursive_call = true;
+            jw::terminate();
+        }
+        else std::abort();
     }
-    else std::abort();
-}
 
-int return_value { -1 };
+    int return_value { -1 };
 
-void atexit_handler()
-{
-    if (jw::dpmi::debug()) dpmi::detail::notify_gdb_exit(return_value); // TODO: what if a static destructor faults?
+    void atexit_handler()
+    {
+        if (jw::dpmi::debug()) dpmi::detail::notify_gdb_exit(return_value);
+    }
 }
 
 int main(int argc, const char** argv)
@@ -109,8 +109,8 @@ int main(int argc, const char** argv)
     try 
     {   
         dpmi::detail::setup_exception_throwers();
-        std::set_terminate(terminate_handler);
-        std::atexit(atexit_handler);
+        std::set_terminate(jw::terminate_handler);
+        std::atexit(jw::atexit_handler);
     
         std::deque<std::string_view> args { };
         for (auto i = 0; i < argc; ++i)
@@ -140,7 +140,7 @@ int main(int argc, const char** argv)
             dpmi::breakpoint();
         }
     
-        return_value = jwdpmi_main(args); 
+        jw::return_value = jwdpmi_main(args); 
     }
     catch (const std::exception& e) { std::cerr << "Caught exception in main()!\n"; jw::print_exception(e); }
     catch (const jw::terminate_exception& e) { std::cerr << e.what() << '\n'; }
@@ -162,7 +162,7 @@ int main(int argc, const char** argv)
         }
     }
 
-    return return_value;
+    return jw::return_value;
 }
 
 namespace jw
