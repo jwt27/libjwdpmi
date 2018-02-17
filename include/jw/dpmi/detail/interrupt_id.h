@@ -17,8 +17,9 @@ namespace jw::dpmi::detail
         {
             std::uint64_t id;
             std::uint32_t vector;
-            bool acknowledged { false };
-            constexpr id_t(std::uint64_t i, ::uint32_t v) : id(i), vector(v) { }
+            enum { interrupt, exception } type;
+            bool acknowledged { type == exception };
+            constexpr id_t(std::uint64_t i, std::uint32_t v, auto t) : id(i), vector(v), type(t) { }
         };
         std::vector<std::shared_ptr<id_t>, locked_pool_allocator<>> current_interrupt { alloc };
 

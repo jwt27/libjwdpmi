@@ -16,7 +16,7 @@ namespace jw
             void irq_controller::interrupt_entry_point(int_vector vec) noexcept
             {
                 ++interrupt_count;
-                interrupt_id::push_back(vec);
+                interrupt_id::push_back(vec, interrupt_id::id_t::interrupt);
                 fpu_context_switcher.enter();
                 
                 byte* esp; asm("mov %0, esp;":"=rm"(esp));
