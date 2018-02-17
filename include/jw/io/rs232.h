@@ -110,10 +110,13 @@ namespace jw
     {
         struct rs232_stream : public std::iostream
         {
-            rs232_stream(rs232_config c) : std::iostream(&streambuf), streambuf(c) { }
+            // note: takes ownership of streambuf pointer.
+            rs232_stream(detail::rs232_streambuf* s) : std::iostream(s), streambuf(s) { }
 
         private:
-            detail::rs232_streambuf streambuf;
+            std::unique_ptr<detail::rs232_streambuf> streambuf;
         };
+
+        inline auto make_rs232_stream(rs232_config c) { return rs232_stream { new detail::rs232_streambuf { c } }; }
     }
 }

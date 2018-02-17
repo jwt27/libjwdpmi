@@ -38,7 +38,9 @@ namespace jw
             std::map<int, void(*)(int)> signal_handlers {  };
 
             std::array<std::unique_ptr<exception_handler>, 0x20> exception_handlers;
+            io::detail::rs232_streambuf* gdb_streambuf;
             std::unique_ptr<std::iostream, allocator_delete<jw::dpmi::locking_allocator<std::iostream>>> gdb;
+            std::unique_ptr<dpmi::irq_handler> serial_irq;
 
             volatile bool debugger_reentry { true };
 
@@ -952,7 +954,13 @@ namespace jw
                 debugger_reentry = false;
 
                 dpmi::locking_allocator<> stream_alloc;
-                gdb = allocate_unique<io::rs232_stream>(stream_alloc, cfg);
+                gdb_streambuf = new io::detail::rs232_streambuf { cfg };
+                gdb = allocate_unique<io::rs232_stream>(stream_alloc, gdb_streambuf);
+
+                serial_irq = std::make_unique<irq_handler>([&]
+                {
+
+                });
 
                 for (auto&& s : { SIGHUP, SIGABRT, SIGTERM, SIGKILL, SIGQUIT, SIGILL, SIGINT })
                     signal_handlers[s] = std::signal(s, csignal);
@@ -963,6 +971,9 @@ namespace jw
                     install_exception_handler(e);
                 if (!detail::test_cr0_access())
                     install_exception_handler(0x07);
+
+                serial_irq->set_irq(cfg.irq);
+                //serial_irq->enable();
 
                 capabilities c { };
                 if (!c.supported) return;
