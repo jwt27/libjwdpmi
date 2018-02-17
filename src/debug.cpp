@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #include <array>
@@ -795,18 +796,13 @@ namespace jw
                 if (debugmsg) std::clog << "entering exception 0x" << std::hex << exc << "\n";
                 if (killed) return false;
 
-                if (__builtin_expect(debugger_reentry, false) and current_thread->action == thread_info::none)
+                if (__builtin_expect(debugger_reentry, false) and (exc == 0x01 or exc == 0x03))
+                {   // breakpoint in debugger code, ignore
+                    if (debugmsg) std::clog << "reentry caused by breakpoint, ignoring.\n";
+                    return true;
+                }
+                else if (__builtin_expect(debugger_reentry, false) and current_thread->action == thread_info::none)
                 {   // TODO: determine action based on last packet
-                    if (exc == 0x01)    // watchpoint trap, ignore
-                    {
-                        if (debugmsg) std::clog << "reentry caused by watchpoint, ignoring.\n";
-                        return true;
-                    }
-                    if (exc == 0x03)    // breakpoint in debugger code, ignore
-                    {
-                        if (debugmsg) std::clog << "reentry caused by breakpoint, ignoring.\n";
-                        return true;
-                    }
                     send_packet("E04"); // last command caused another exception
                     if (debugmsg) std::clog << *static_cast<new_exception_frame*>(f) << *r;
                     current_thread->frame.info_bits.redirect_elsewhere = true;
