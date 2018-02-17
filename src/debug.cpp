@@ -880,6 +880,7 @@ namespace jw
                 if (killed) call_next();
 
                 ++exception_count;  // avoid allocation
+                trap_mask dont_trace_here { };
                 if (debugger_reentry) send_packet("E04");   // last command raised a signal
                 debugger_reentry = true;
                 std::uintptr_t esp, ebp, eip;
