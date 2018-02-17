@@ -20,7 +20,7 @@ namespace jw
 {
     namespace dpmi
     {
-    #ifndef NDEBUG
+#       ifndef NDEBUG
         namespace detail
         {
             const bool debugmsg = config::enable_gdb_debug_messages;
@@ -958,6 +958,8 @@ namespace jw
             auto t = jw::thread::detail::scheduler::get_current_thread().lock();
             if (thread::detail::thread_details::trap_unmask(t) && thread::detail::thread_details::trap_state(t)) asm("int 3");
         }
-    #endif
+#       else
+        void break_with_signal(int) { }
+#       endif
     }
 }

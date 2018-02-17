@@ -24,8 +24,8 @@ namespace jw
                     if (this->is_running()) return;
 
                     this->state = starting;
-                    this->parent = scheduler::current_thread;
                     if (dpmi::in_irq_context()) this->parent = scheduler::main_thread;
+                    else this->parent = scheduler::current_thread;
                     scheduler::thread_switch(this->shared_from_this());
                 }
 

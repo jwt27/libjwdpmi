@@ -9,20 +9,27 @@ namespace jw
 {
     namespace dpmi
     {
-    #ifndef NDEBUG
         namespace detail
         {
+            void break_with_signal(int);
+#           ifndef NDEBUG
             extern bool debug_mode;
+#           endif
         }
 
+#       ifndef NDEBUG
         // Returns true if in debug mode.
         inline bool debug() noexcept { return detail::debug_mode; }
-    #else
+#       else
         constexpr inline bool debug() noexcept { return false; }
-    #endif
+#       endif
 
         // Set a breakpoint
         inline void breakpoint() { if (debug()) asm("int 3"); }
+
+        // Set a breakpoint with specified signal.
+        // signal can be an exception number, C signal number, or any user-defined signal.
+        inline void break_with_signal(int signal) { detail::break_with_signal(signal); }
 
         // Disable the trap flag
         struct trap_mask
