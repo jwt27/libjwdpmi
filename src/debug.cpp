@@ -481,17 +481,16 @@ namespace jw
                     s << esp << ':'; reg(s, esp, r, f, t); s << ';';
                     s << ebp << ':'; reg(s, ebp, r, f, t); s << ';';
                     s << "thread:" << current_thread_id << ';';
-                    std::pair<const std::uintptr_t, watchpoint>* watchpoint_hit { nullptr };
-                    for (auto& w : watchpoints) if (w.second.get_state()) watchpoint_hit = &w;
-                    if (watchpoint_hit != nullptr)
+                    for (auto&& w : watchpoints) if (w.second.get_state())
                     {
-                        if (watchpoint_hit->second.get_type() == watchpoint::execute) s << "hwbreak:;";
+                        if (w.second.get_type() == watchpoint::execute) s << "hwbreak:;";
                         else
                         {
                             s << "watch:";
-                            encode(s, &watchpoint_hit->first);
+                            encode(s, &w.first);
                             s << ";";
                         }
+                        break;
                     }
                     else s << "swbreak:;";
                     if (async) send_notification(s.str());
