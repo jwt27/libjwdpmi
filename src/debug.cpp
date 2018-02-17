@@ -271,16 +271,17 @@ namespace jw
                 return r;
             }
 
+            // not used
             void send_notification(const std::string& output)
             {
-                if (debugmsg) std::clog << "send --> \"" << output << "\"\n";
+                if (config::enable_gdb_protocol_dump) std::clog << "send --> \"" << output << "\"\n";
                 const auto sum = checksum(output);
                 *gdb << '%' << output << '#' << std::setfill('0') << std::hex << std::setw(2) << sum << std::flush;
             }
             
             void send_packet(const std::string& output)
             {
-                if (debugmsg) std::clog << "send --> \"" << output << "\"\n";
+                if (config::enable_gdb_protocol_dump) std::clog << "send --> \"" << output << "\"\n";
 
                 std::stringstream s { };
                 for (auto i = output.cbegin(); i < output.cend();)
@@ -322,7 +323,7 @@ namespace jw
 
                 std::string input;
                 std::getline(*gdb, input, '#');
-                if (debugmsg) std::clog << "recv <-- \"" << input << "\"\n";
+                if (config::enable_gdb_protocol_dump) std::clog << "recv <-- \"" << input << "\"\n";
                 std::string sum;
                 sum += gdb->get();
                 sum += gdb->get();
