@@ -240,8 +240,18 @@ namespace jw
 
         struct cpu_exception : public std::system_error
         {
+            std::string create_exception_message(cpu_registers* reg, exception_frame* frame, bool new_type)
+            {
+                std::stringstream s;
+                if (new_type) s << *static_cast<new_exception_frame*>(frame);
+                else s << frame;
+                s << *reg;
+                return s.str();
+            }
+
             cpu_exception(exception_num n) : system_error(n, cpu_category { }) { }
             cpu_exception(exception_num n, const std::string& msg) : system_error(n, cpu_category { }, msg) { }
+            cpu_exception(exception_num n, cpu_registers* reg, exception_frame* frame, bool new_type) : cpu_exception(n, create_exception_message(reg, frame, new_type)) { }
         };
     }
 }

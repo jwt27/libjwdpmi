@@ -11,21 +11,60 @@ namespace jw
 {
     namespace dpmi
     {
+        namespace detail
+        {
+            std::exception_ptr pending_exception;
+
+            [[noreturn, gnu::used, gnu::optimize("no-omit-frame-pointer")]]
+            void rethrow_cpu_exception()
+            {
+                auto e = std::move(pending_exception);
+                pending_exception = nullptr;
+                std::rethrow_exception(e);
+            }
+
+            bool simulate_call(exception_frame* frame, bool new_type, auto* func) noexcept
+            {
+                frame->stack.offset -= 8;                                                               // "sub esp, 8"
+                frame->stack.offset &= -0x10;                                                           // "and esp, -0x10"
+                *reinterpret_cast<std::uintptr_t*>(frame->stack.offset) = frame->fault_address.offset;  // "mov [esp], eip"
+                frame->fault_address.offset = reinterpret_cast<std::uintptr_t>(func);                   // "mov eip, func"
+                frame->info_bits.redirect_elsewhere = true;
+                return true;
+            }
+        }
+
         bool exception_handler::call_handler(exception_handler* self, raw_exception_frame* frame) noexcept
         {
             ++detail::exception_count;
             if (self->exc != exception_num::device_not_available) detail::fpu_context_switcher.enter();
             *reinterpret_cast<volatile std::uint32_t*>(stack.begin()) = 0xDEADBEEF;
             bool success = false;
+            auto* f = self->new_type ? &frame->frame_10 : &frame->frame_09;
             try
             {
-                auto* f = self->new_type ? &frame->frame_10 : &frame->frame_09;
                 success = self->handler(&frame->reg, f, self->new_type);
             }
             catch (...)
             {
-                std::cerr << "CAUGHT EXCEPTION IN CPU EXCEPTION HANDLER " << self->exc << std::endl; // HACK
-            }                                                                                        // ... but what else can you do here?
+                auto really_throw = [&]
+                {
+                    if constexpr (not config::enable_throwing_from_cpu_exceptions) return false;    // Only throw if this option is enabled
+                    if (f->fault_address.segment != get_cs()) return false;                         // and exception happened in our code
+                    if (f->flags.v86mode) return false;                                             // and not in real mode (sanity check)
+                    if (self->new_type and f->info_bits.host_exception) return false;               // and not in the DPMI host (extra sanity check)
+                    if (detail::pending_exception) return false;                                    // and we're not recursing
+                    return true;
+                };
+
+                if (really_throw())
+                {
+                    detail::pending_exception = std::current_exception();
+                    detail::simulate_call(f, self->new_type, detail::rethrow_cpu_exception);
+                    success = true;
+                }
+                else std::cerr << "CAUGHT EXCEPTION IN CPU EXCEPTION HANDLER " << self->exc << std::endl; // HACK
+            }
             if (*reinterpret_cast<volatile std::uint32_t*>(stack.begin()) != 0xDEADBEEF) std::cerr << "STACK OVERFLOW\n"; // another HACK
             if (self->exc != exception_num::device_not_available) detail::fpu_context_switcher.leave();
             --detail::exception_count;
@@ -193,81 +232,28 @@ namespace jw
 
         namespace detail
         {
-            new_exception_frame last_exception_frame;
-            cpu_registers last_exception_registers;
-            bool throwing_exception { false };
-
-            std::string create_exception_message()
-            {
-                std::stringstream s;
-                s << last_exception_frame;
-                s << last_exception_registers;
-                return s.str();
-            }
-
-            [[noreturn, gnu::used, gnu::optimize("no-omit-frame-pointer")]] 
-            void throw_cpu_exception(std::uint32_t n) 
-            {
-                throwing_exception = false;
-                throw cpu_exception(n, create_exception_message());
-            }
-
-            bool simulate_call(std::uint32_t exc, cpu_registers *reg, exception_frame* frame, bool new_type, auto* func) noexcept
-            {
-                if (frame->fault_address.segment != get_cs()) return false;     // Only throw if exception happened in our code
-                if (frame->flags.v86mode) return false;                         // and not in real mode
-                if (new_type && frame->info_bits.host_exception) return false;  // and not in the DPMI host
-                if (throwing_exception) return false;                           // and we're not recursing
-                throwing_exception = true;
-
-                last_exception_frame = { };
-                if (new_type) last_exception_frame = *static_cast<new_exception_frame*>(frame);
-                else static_cast<old_exception_frame&>(last_exception_frame) = *frame;
-                last_exception_registers = *reg;
-
-                frame->stack.offset -= 8;                                                               // "sub esp, 8"
-                frame->stack.offset &= -0x10;                                                           // "and esp, -0x10"
-                *reinterpret_cast<std::uint32_t*>(frame->stack.offset + 4) = exc;                       // "mov [esp+4], exc"
-                *reinterpret_cast<std::uintptr_t*>(frame->stack.offset) = frame->fault_address.offset;  // "mov [esp], eip"
-                frame->fault_address.offset = reinterpret_cast<std::uintptr_t>(func);                   // "mov eip, func"
-                frame->info_bits.redirect_elsewhere = true;
-                return true;
-            }
-
             std::array<std::unique_ptr<exception_handler>, 0x20> exception_throwers;
 
             bool exception_throwers_setup { false };
             void setup_exception_throwers()
             {
-                if (!config::enable_throwing_from_cpu_exceptions) return;
+                if (not config::enable_throwing_from_cpu_exceptions) return;
                 if (__builtin_expect(exception_throwers_setup, true)) return;
                 exception_throwers_setup = true;
 
-                exception_throwers[0x00] = std::make_unique<exception_handler>(0x00, [](cpu_registers* r, exception_frame* f, bool t) { return simulate_call(0x00, r, f, t, throw_cpu_exception); });
-                exception_throwers[0x01] = std::make_unique<exception_handler>(0x01, [](cpu_registers* r, exception_frame* f, bool t) { return simulate_call(0x01, r, f, t, throw_cpu_exception); });
-                exception_throwers[0x02] = std::make_unique<exception_handler>(0x02, [](cpu_registers* r, exception_frame* f, bool t) { return simulate_call(0x02, r, f, t, throw_cpu_exception); });
-                exception_throwers[0x03] = std::make_unique<exception_handler>(0x03, [](cpu_registers* r, exception_frame* f, bool t) { return simulate_call(0x03, r, f, t, throw_cpu_exception); });
-                exception_throwers[0x04] = std::make_unique<exception_handler>(0x04, [](cpu_registers* r, exception_frame* f, bool t) { return simulate_call(0x04, r, f, t, throw_cpu_exception); });
-                exception_throwers[0x05] = std::make_unique<exception_handler>(0x05, [](cpu_registers* r, exception_frame* f, bool t) { return simulate_call(0x05, r, f, t, throw_cpu_exception); });
-                exception_throwers[0x06] = std::make_unique<exception_handler>(0x06, [](cpu_registers* r, exception_frame* f, bool t) { return simulate_call(0x06, r, f, t, throw_cpu_exception); });
-                exception_throwers[0x07] = std::make_unique<exception_handler>(0x07, [](cpu_registers* r, exception_frame* f, bool t) { return simulate_call(0x07, r, f, t, throw_cpu_exception); });
-                exception_throwers[0x08] = std::make_unique<exception_handler>(0x08, [](cpu_registers* r, exception_frame* f, bool t) { return simulate_call(0x08, r, f, t, throw_cpu_exception); });
-                exception_throwers[0x09] = std::make_unique<exception_handler>(0x09, [](cpu_registers* r, exception_frame* f, bool t) { return simulate_call(0x09, r, f, t, throw_cpu_exception); });
-                exception_throwers[0x0a] = std::make_unique<exception_handler>(0x0a, [](cpu_registers* r, exception_frame* f, bool t) { return simulate_call(0x0a, r, f, t, throw_cpu_exception); });
-                exception_throwers[0x0b] = std::make_unique<exception_handler>(0x0b, [](cpu_registers* r, exception_frame* f, bool t) { return simulate_call(0x0b, r, f, t, throw_cpu_exception); });
-                exception_throwers[0x0c] = std::make_unique<exception_handler>(0x0c, [](cpu_registers* r, exception_frame* f, bool t) { return simulate_call(0x0c, r, f, t, throw_cpu_exception); });
-                exception_throwers[0x0d] = std::make_unique<exception_handler>(0x0d, [](cpu_registers* r, exception_frame* f, bool t) { return simulate_call(0x0d, r, f, t, throw_cpu_exception); });
-                exception_throwers[0x0e] = std::make_unique<exception_handler>(0x0e, [](cpu_registers* r, exception_frame* f, bool t) { return simulate_call(0x0e, r, f, t, throw_cpu_exception); });
+                auto make_thrower = [](exception_num n)
+                {
+                    exception_throwers[n] = std::make_unique<exception_handler>(n, [n](cpu_registers* r, exception_frame* f, bool t) -> bool { throw cpu_exception { n, r, f, t }; });
+                };
+
+                for (auto i = 0; i <= 0xe; ++i)
+                    make_thrower(i);
 
                 capabilities c { };
                 if (!c.supported) return;
                 if (std::strncmp(c.vendor_info.name, "HDPMI", 5) != 0) return;  // TODO: figure out if other hosts support these too
-                exception_throwers[0x10] = std::make_unique<exception_handler>(0x10, [](cpu_registers* r, exception_frame* f, bool t) { return simulate_call(0x10, r, f, t, throw_cpu_exception); });
-                exception_throwers[0x11] = std::make_unique<exception_handler>(0x11, [](cpu_registers* r, exception_frame* f, bool t) { return simulate_call(0x11, r, f, t, throw_cpu_exception); });
-                exception_throwers[0x12] = std::make_unique<exception_handler>(0x12, [](cpu_registers* r, exception_frame* f, bool t) { return simulate_call(0x12, r, f, t, throw_cpu_exception); });
-                exception_throwers[0x13] = std::make_unique<exception_handler>(0x13, [](cpu_registers* r, exception_frame* f, bool t) { return simulate_call(0x13, r, f, t, throw_cpu_exception); });
-                exception_throwers[0x14] = std::make_unique<exception_handler>(0x14, [](cpu_registers* r, exception_frame* f, bool t) { return simulate_call(0x14, r, f, t, throw_cpu_exception); });
-                exception_throwers[0x1e] = std::make_unique<exception_handler>(0x1e, [](cpu_registers* r, exception_frame* f, bool t) { return simulate_call(0x1e, r, f, t, throw_cpu_exception); });
+                for (auto&& i : { 0x10, 0x11, 0x12, 0x13, 0x14, 0x1e })
+                    make_thrower(i);
             }
         }
     }
