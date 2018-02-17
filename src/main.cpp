@@ -91,6 +91,13 @@ void terminate_handler()
     else std::abort();
 }
 
+int return_value { -1 };
+
+void atexit_handler()
+{
+    if (jw::dpmi::debug()) dpmi::detail::notify_gdb_exit(return_value); // TODO: what if a static destructor faults?
+}
+
 int main(int argc, const char** argv)
 {
     patch__cxa_allocate_exception(init_malloc);
@@ -99,11 +106,11 @@ int main(int argc, const char** argv)
     try { throw 0; } catch (...) { }
     _crt0_startup_flags &= ~_CRT0_FLAG_LOCK_MEMORY;
 
-    int return_value { -1 };
     try 
     {   
         dpmi::detail::setup_exception_throwers();
         std::set_terminate(terminate_handler);
+        std::atexit(atexit_handler);
     
         std::deque<std::string_view> args { };
         for (auto i = 0; i < argc; ++i)
@@ -154,8 +161,6 @@ int main(int argc, const char** argv)
             catch (...) { std::cerr << "Caught unknown exception from thread()!\n"; }
         }
     }
-
-    if (jw::dpmi::debug()) dpmi::detail::notify_gdb_exit(return_value); // TODO: what if a static destructor faults?
 
     return return_value;
 }
