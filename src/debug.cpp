@@ -945,13 +945,14 @@ namespace jw
                 signal_handlers[signal](signal);
             }
 
-            void setup_gdb_interface(std::unique_ptr<std::iostream, allocator_delete<jw::dpmi::locking_allocator<std::iostream>>>&& stream)
+            void setup_gdb_interface(io::rs232_config cfg)
             {
                 if (debug_mode) return;
                 debug_mode = true;
                 debugger_reentry = false;
 
-                gdb = std::move(stream);
+                dpmi::locking_allocator<> stream_alloc;
+                gdb = allocate_unique<io::rs232_stream>(stream_alloc, cfg);
 
                 for (auto&& s : { SIGHUP, SIGABRT, SIGTERM, SIGKILL, SIGQUIT, SIGILL, SIGINT })
                     signal_handlers[s] = std::signal(s, csignal);

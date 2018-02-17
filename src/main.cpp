@@ -72,7 +72,7 @@ namespace jw
     {
         namespace detail
         {
-            void setup_gdb_interface(std::unique_ptr<std::iostream, allocator_delete<jw::dpmi::locking_allocator<std::iostream>>>&&);
+            void setup_gdb_interface(io::rs232_config);
             void notify_gdb_exit(byte result);
         }
     }
@@ -119,8 +119,7 @@ int main(int argc, const char** argv)
             {
                 io::rs232_config cfg;
                 cfg.set_com_port(io::com1);
-                dpmi::locking_allocator<> alloc;
-                dpmi::detail::setup_gdb_interface(allocate_unique<io::rs232_stream>(alloc, cfg));
+                dpmi::detail::setup_gdb_interface(cfg);
             }
             else if (stricmp(argv[i], "--ext-debug") == 0)
             {
