@@ -29,6 +29,7 @@ namespace jw
 
             bool debug_mode { false };
             bool killed { false };
+            int break_with_signal { };
 
             locked_pool_allocator<> alloc { 1_MB };
             std::deque<std::string, locked_pool_allocator<>> sent { alloc };
@@ -60,7 +61,7 @@ namespace jw
                 std::uintptr_t last_eip { };
                 new_exception_frame frame;
                 cpu_registers reg;
-                exception_num last_exception;
+                std::uint32_t last_exception;   // may also be signal number
                 bool use_sigcont { false };
                 std::uintptr_t step_range_begin { 0 };
                 std::uintptr_t step_range_end { 0 };
@@ -187,10 +188,11 @@ namespace jw
             constexpr auto reg_max = regnum::mxcsr;
 #endif
 
-            inline auto signal_number(exception_num exc)
+            inline auto signal_number(std::uint32_t exc)
             {
                 switch (exc)
                 {
+                    // cpu exception -> posix signal
                 case 0x01:
                 case 0x03:
                     if (threads[selected_thread_id].use_sigcont)
@@ -216,6 +218,15 @@ namespace jw
                 case 0x11: return 0x0a; // SIGBUS
                 case 0x12: return 0x09; // SIGKILL
                 case 0x13: return 0x08; // SIGFPE
+
+                    // djgpp signal -> posix signal
+                case SIGHUP:  return 0x01;
+                case SIGINT:  return 0x02;
+                case SIGQUIT: return 0x03;
+                case SIGILL:  return 0x04;
+                case SIGABRT: return 0x06;
+                case SIGKILL: return 0x09;
+                case SIGTERM: return 0x0f;
                 default: return 143;
                 }
             }
@@ -814,7 +825,7 @@ namespace jw
                 {
                     debugger_reentry = true;
                     populate_thread_list();
-                    if (__builtin_expect(exc == 0x01 || exc == 0x03, true))
+                    if (__builtin_expect(exc == 0x01 or exc == 0x03, true))
                     {
                         if (thread::detail::thread_details::trap_is_masked(current_thread->thread.lock()))
                         {
@@ -842,7 +853,12 @@ namespace jw
                     if (t) current_thread->frame = *static_cast<new_exception_frame*>(f);
                     else static_cast<old_exception_frame&>(current_thread->frame) = *f;
                     current_thread->reg = *r;
-                    current_thread->last_exception = exc; 
+                    if (exc == 0x03 and break_with_signal != 0)
+                    {
+                        current_thread->last_exception = break_with_signal;
+                        break_with_signal = 0;
+                    }
+                    else current_thread->last_exception = exc;
                     if (exc == 0x03) current_thread->frame.fault_address.offset -= 1;
                     selected_thread_id = current_thread_id;
                     //stop_reply(true);
@@ -879,92 +895,13 @@ namespace jw
 
             extern "C" void csignal(int signal)
             {
-                auto call_next = [signal] { signal_handlers[signal](signal); };
-                if (killed) call_next();
-
-                ++exception_count;  // avoid allocation
-                trap_mask dont_trace_here { };
-                if (debugger_reentry) send_packet("E04");   // last command raised a signal
-                debugger_reentry = true;
-                std::uintptr_t esp, ebp, eip;
-                asm("mov %0, esp": "=rm" (esp));
-                asm("mov %0, ebp": "=rm" (ebp));
-                asm("call %=;%=: pop %0":"=rm" (eip));  // TODO: better estimate of fault location
-                std::deque<packet_string> packet { };
-
-                auto posix_signal = [signal]
+                if (not killed)
                 {
-                    switch (signal)
-                    {
-                    case SIGHUP:  return 1;
-                    case SIGINT:  return 2;
-                    case SIGQUIT: return 3;
-                    case SIGILL:  return 4;
-                    case SIGABRT: return 6;
-                    case SIGKILL: return 9;
-                    case SIGTERM: return 15;
-                    default: return signal;
-                    }
-                };
-
-                char p { '?' };
-                while (true)
-                {
-                    std::stringstream s { };
-                    s << std::hex << std::setfill('0');
-                    if (p == '?')
-                    {
-                        s << "S" << std::setw(2) << posix_signal();
-                        send_packet(s.str());
-                    }
-                    else if (p == 'm')  // read memory
-                    {
-                        auto* addr = reinterpret_cast<byte*>(decode(packet[0]));
-                        std::size_t len = decode(packet[1]);
-                        encode(s, addr, len);
-                        send_packet(s.str());
-                    }
-                    else if (p == 'g') // read registers
-                    {
-                        encode_null(s, 4 * 4);
-                        encode(s, &esp);
-                        encode(s, &ebp);
-                        encode_null(s, 2 * 4);
-                        encode(s, &eip);
-                        for (auto i = regnum::eflags; i <= reg_max; ++i)
-                            encode_null(s, reglen[i]);
-                        send_packet(s.str());
-                    }
-                    else if (p == 'P' or p == 'G' or p == 'm' 
-                        //or p == 'p'
-                        ) send_packet("E00");
-                    else if (p == 'p')  // read one register
-                    {
-                        auto regn = static_cast<regnum>(decode(packet[0]));
-                        switch (regn)
-                        {
-                        case regnum::esp: encode(s, &esp); break;
-                        case regnum::ebp: encode(s, &ebp); break;
-                        case regnum::eip: encode(s, &eip); break;
-                        default:
-                            encode_null(s, reglen[regn]);
-                        }
-                        send_packet(s.str());
-                    }
-                    else if (p == 'k')
-                    {
-                        killed = true;
-                        s << "X" << std::setw(2) << posix_signal();
-                        send_packet(s.str());
-                        break;
-                    }
-                    else send_packet("");
-                    packet = recv_packet();
-                    p = packet.front().delim;
+                    break_with_signal = signal;
+                    breakpoint();
                 }
-                debugger_reentry = false;
-                --exception_count;
-                call_next();
+
+                signal_handlers[signal](signal);
             }
 
             void setup_gdb_interface(std::unique_ptr<std::iostream, allocator_delete<jw::dpmi::locking_allocator<std::iostream>>>&& stream)
@@ -994,6 +931,7 @@ namespace jw
 
             void notify_gdb_exit(byte result)
             {
+                killed = true;
                 std::stringstream s { };
                 s << std::hex << std::setfill('0');
                 s << "W" << std::setw(2) << static_cast<std::uint32_t>(result);

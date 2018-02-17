@@ -141,7 +141,7 @@ int main(int argc, const char** argv)
         }
     }
 
-    if (jw::dpmi::debug()) dpmi::detail::notify_gdb_exit(return_value);
+    if (jw::dpmi::debug()) dpmi::detail::notify_gdb_exit(return_value); // TODO: what if a static destructor faults?
 
     return return_value;
 }
