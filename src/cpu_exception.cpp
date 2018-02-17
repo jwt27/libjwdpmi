@@ -5,6 +5,7 @@
 
 #include <jw/dpmi/cpu_exception.h>
 #include <jw/dpmi/debug.h>
+#include <jw/dpmi/detail/interrupt_id.h>
 #include <cstring>
 
 namespace jw
@@ -37,6 +38,7 @@ namespace jw
         bool exception_handler::call_handler(exception_handler* self, raw_exception_frame* frame) noexcept
         {
             ++detail::exception_count;
+            detail::interrupt_id::push_back(self->exc, detail::interrupt_id::id_t::exception);
             if (self->exc != exception_num::device_not_available) detail::fpu_context_switcher.enter();
             *reinterpret_cast<volatile std::uint32_t*>(stack.begin()) = 0xDEADBEEF;
             bool success = false;
@@ -67,6 +69,7 @@ namespace jw
             }
             if (*reinterpret_cast<volatile std::uint32_t*>(stack.begin()) != 0xDEADBEEF) std::cerr << "STACK OVERFLOW\n"; // another HACK
             if (self->exc != exception_num::device_not_available) detail::fpu_context_switcher.leave();
+            detail::interrupt_id::pop_back();
             --detail::exception_count;
             return success;
         }

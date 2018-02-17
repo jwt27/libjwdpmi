@@ -814,10 +814,12 @@ namespace jw
                 else if (__builtin_expect(debugger_reentry, false) and current_thread->action == thread_info::none)
                 {   // TODO: determine action based on last packet
                     send_packet("E04"); // last command caused another exception
+                    if (debugmsg) std::clog << "debugger re-entry!\n";
                     if (debugmsg) std::clog << *static_cast<new_exception_frame*>(f) << *r;
                     current_thread->frame.info_bits.redirect_elsewhere = true;
-                    detail::fpu_context_switcher.leave();
-                    --detail::exception_count;      // pretend it never happened.
+                    fpu_context_switcher.leave();
+                    interrupt_id::pop_back();
+                    --exception_count;      // pretend it never happened.
                 }
                 else
                 {
