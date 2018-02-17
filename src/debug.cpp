@@ -808,6 +808,7 @@ namespace jw
                 if (__builtin_expect(debugger_reentry, false) and (exc == 0x01 or exc == 0x03))
                 {   // breakpoint in debugger code, ignore
                     if (debugmsg) std::clog << "reentry caused by breakpoint, ignoring.\n";
+                    if (exc == 0x01) for (auto&& w : watchpoints) if (w.second.get_type() == watchpoint::execute) w.second.reset();
                     return true;
                 }
                 else if (__builtin_expect(debugger_reentry, false) and current_thread->action == thread_info::none)
