@@ -3,6 +3,7 @@
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #include <jw/thread/task.h>
+#include <jw/dpmi/detail/interrupt_id.h>
 #pragma once
 
 namespace jw
@@ -111,20 +112,9 @@ namespace jw
                     }
 
                     thread::task<void()> increase_stack_size { [this]() { stack.resize(stack.size() * 2); } };
-                    locked_pool_allocator<> alloc { 4_KB };
                     std::map<int_vector, std::unique_ptr<irq_controller>, std::less<int_vector>, locking_allocator<>> entries { };
                     std::vector<byte, locking_allocator<>> stack { };
                     std::uint32_t stack_use_count { 0 };
-                    std::uint64_t id_count { 0 };
-
-                    struct interrupt_id
-                    {
-                        std::uint64_t id;
-                        int_vector vector;
-                        bool acknowledged { false };
-                        constexpr interrupt_id(std::uint64_t i, int_vector v) : id(i), vector(v) { }
-                    };
-                    std::vector<std::shared_ptr<interrupt_id>, locked_pool_allocator<>> current_interrupt { alloc };
                 };
 
                 static irq_controller& get(int_vector v)
@@ -136,19 +126,11 @@ namespace jw
 
                 static irq_controller& get_irq(irq_level i) { return get(irq_to_vec(i)); }
 
-                static bool is_current_irq(const auto* p) noexcept { return p != nullptr and data->current_interrupt.back().get()->id == p->id; }
-                static auto get_current_irq() noexcept 
-                {
-                    using weak = std::weak_ptr<const irq_controller_data::interrupt_id>;
-                    if (data->current_interrupt.empty()) return weak { };
-                    return weak { data->current_interrupt.back() };
-                }
-
                 INTERRUPT static void acknowledge() noexcept
                 {
                     if (is_acknowledged()) return;
                     send_eoi();
-                    data->current_interrupt.back()->acknowledged = true;
+                    interrupt_id::acknowledge();
                 }
 
             private:
@@ -167,7 +149,11 @@ namespace jw
                 }
 
                 static bool is_irq(int_vector v) { return vec_to_irq(v) != 0xff; }
-                static bool is_acknowledged() { return data->current_interrupt.back()->acknowledged; }
+                static bool is_acknowledged()
+                { 
+                    if (auto&& id = interrupt_id::get_current_interrupt().lock()) return id->acknowledged;
+                    return true;
+                }
 
                 INTERRUPT static auto in_service() noexcept
                 {
@@ -181,7 +167,7 @@ namespace jw
 
                 INTERRUPT static void send_eoi() noexcept
                 {
-                    auto v = data->current_interrupt.back()->vector;
+                    auto v = interrupt_id::get_current_interrupt().lock()->vector;
                     if (data->entries.at(v)->flags & always_chain) return;
                     auto i = vec_to_irq(v);
                     if (i >= 16) return;

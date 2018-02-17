@@ -9,6 +9,7 @@
 #include <jw/thread/thread.h>
 #include <jw/thread/detail/mutex.h>
 #include <jw/dpmi/detail/irq.h>
+#include <jw/dpmi/detail/interrupt_id.h>
 
 namespace jw
 {
@@ -48,14 +49,14 @@ namespace jw
         class recursive_mutex   // TODO: cpu exception ownership
         {
             using thread_ptr = std::weak_ptr<const detail::thread>;
-            using irq_ptr = std::weak_ptr<const dpmi::detail::irq_controller::irq_controller_data::interrupt_id>;
+            using irq_ptr = std::weak_ptr<const dpmi::detail::interrupt_id::id_t>;
             std::variant<thread_ptr, irq_ptr, std::nullptr_t> owner { nullptr };
             std::atomic<std::uint32_t> lock_count { 0 };
 
             struct is_owner
             {
                 bool operator()(const thread_ptr& p) const noexcept { return detail::scheduler::is_current_thread(p.lock().get()); }
-                bool operator()(const irq_ptr& p) const noexcept { return dpmi::detail::irq_controller::is_current_irq(p.lock().get()); }
+                bool operator()(const irq_ptr& p) const noexcept { return dpmi::detail::interrupt_id::is_current_interrupt(p.lock().get()); }
                 bool operator()(const std::nullptr_t&) const noexcept { return false; }
             };
 
@@ -93,7 +94,7 @@ namespace jw
                 if (dpmi::detail::exception_count > 0) return true;
                 if (owner.valueless_by_exception() or not std::visit(has_owner { }, owner))
                 {
-                    if (dpmi::in_irq_context()) owner = dpmi::detail::irq_controller::get_current_irq();
+                    if (dpmi::in_irq_context()) owner = dpmi::detail::interrupt_id::get_current_interrupt();
                     else owner = detail::scheduler::get_current_thread();
                     lock_count = 1;
                     return true;

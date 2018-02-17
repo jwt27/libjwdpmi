@@ -16,7 +16,7 @@ namespace jw
             void irq_controller::interrupt_entry_point(int_vector vec) noexcept
             {
                 ++interrupt_count;
-                data->current_interrupt.push_back(std::allocate_shared<irq_controller_data::interrupt_id>(data->alloc, data->id_count++, vec));
+                interrupt_id::push_back(vec);
                 fpu_context_switcher.enter();
                 
                 byte* esp; asm("mov %0, esp;":"=rm"(esp));
@@ -44,7 +44,7 @@ namespace jw
                 acknowledge();
                 fpu_context_switcher.leave();
                 --interrupt_count;
-                data->current_interrupt.pop_back();
+                interrupt_id::pop_back();
             }
 
             void irq_controller::call()
