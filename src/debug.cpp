@@ -16,8 +16,6 @@
 #include <jw/alloc.h>
 #include <../jwdpmi_config.h>
 
-// TODO: terminate_handler
-
 namespace jw
 {
     namespace dpmi
@@ -29,7 +27,7 @@ namespace jw
 
             bool debug_mode { false };
             bool killed { false };
-            int break_with_signal { };
+            int last_signal { };
 
             locked_pool_allocator<> alloc { 1_MB };
             std::deque<std::string, locked_pool_allocator<>> sent { alloc };
@@ -853,10 +851,10 @@ namespace jw
                     if (t) current_thread->frame = *static_cast<new_exception_frame*>(f);
                     else static_cast<old_exception_frame&>(current_thread->frame) = *f;
                     current_thread->reg = *r;
-                    if (exc == 0x03 and break_with_signal != 0)
+                    if (exc == 0x03 and last_signal != 0)
                     {
-                        current_thread->last_exception = break_with_signal;
-                        break_with_signal = 0;
+                        current_thread->last_exception = last_signal;
+                        last_signal = 0;
                     }
                     else current_thread->last_exception = exc;
                     if (exc == 0x03) current_thread->frame.fault_address.offset -= 1;
@@ -893,13 +891,15 @@ namespace jw
                 return result;
             }
 
+            void break_with_signal(int signal)
+            {
+                last_signal = signal;
+                breakpoint();
+            }
+
             extern "C" void csignal(int signal)
             {
-                if (not killed)
-                {
-                    break_with_signal = signal;
-                    breakpoint();
-                }
+                if (not killed) break_with_signal(signal);
 
                 signal_handlers[signal](signal);
             }

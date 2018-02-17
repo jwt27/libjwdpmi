@@ -74,8 +74,21 @@ namespace jw
         {
             void setup_gdb_interface(std::unique_ptr<std::iostream, allocator_delete<jw::dpmi::locking_allocator<std::iostream>>>&&);
             void notify_gdb_exit(byte result);
+            void break_with_signal(int);
         }
     }
+}
+
+void terminate_handler()
+{
+    static bool recursive_call { false };
+    jw::dpmi::detail::break_with_signal(SIGTERM);
+    if (not recursive_call)
+    {
+        recursive_call = true;
+        jw::terminate();
+    }
+    else std::abort();
 }
 
 int main(int argc, const char** argv)
@@ -90,6 +103,7 @@ int main(int argc, const char** argv)
     try 
     {   
         dpmi::detail::setup_exception_throwers();
+        std::set_terminate(terminate_handler);
     
         std::deque<std::string_view> args { };
         for (auto i = 0; i < argc; ++i)
