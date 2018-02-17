@@ -474,7 +474,7 @@ namespace jw
                 std::stringstream s { };
                 s << std::hex << std::setfill('0');
                 if (async) s << "Stop:";
-                if (exc == 0x01 || exc == 0x03)
+                if (exc == 0x01 or exc == 0x03 or exc == thread::detail::started)
                 {
                     s << "T" << std::setw(2) << signal_number(exc);
                     s << eflags << ':'; reg(s, eflags, r, f, t); s << ';';
@@ -482,20 +482,38 @@ namespace jw
                     s << esp << ':'; reg(s, esp, r, f, t); s << ';';
                     s << ebp << ':'; reg(s, ebp, r, f, t); s << ';';
                     s << "thread:" << current_thread_id << ';';
-                    for (auto&& w : watchpoints) if (w.second.get_state())
+                    if (exc == thread::detail::started)
                     {
-                        if (w.second.get_type() == watchpoint::execute) s << "hwbreak:;";
-                        else
-                        {
-                            s << "watch:";
-                            encode(s, &w.first);
-                            s << ";";
-                        }
-                        break;
+                        s << "create:;";
                     }
-                    else s << "swbreak:;";
+                    else
+                    {
+                        for (auto&& w : watchpoints)
+                        {
+                            if (w.second.get_state())
+                            {
+                                if (w.second.get_type() == watchpoint::execute) s << "hwbreak:;";
+                                else
+                                {
+                                    s << "watch:";
+                                    encode(s, &w.first);
+                                    s << ";";
+                                }
+                                break;
+                            }
+                            else s << "swbreak:;";
+                        }
+                    }
                     if (async) send_notification(s.str());
                     else send_packet(s.str());
+                }
+                else if (last_signal == thread::detail::stopped)
+                {
+                    s << 'w';
+                    if (current_thread->thread.lock()->get_state() == thread::detail::finished) s << "00";
+                    else s << "ff";
+                    s << ';' << current_thread_id;
+                    send_packet(s.str());
                 }
                 else
                 {
@@ -834,6 +852,11 @@ namespace jw
                 }
                 else
                 {
+                    if (not thread_events_enabled)
+                    {
+                        if (last_signal == thread::detail::started or last_signal == thread::detail::stopped)
+                            return true;
+                    }
                     debugger_reentry = true;
                     populate_thread_list();
                     if (__builtin_expect(exc == 0x01 or exc == 0x03, true))
