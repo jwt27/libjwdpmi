@@ -36,17 +36,15 @@ namespace jw
             }
             void unlock() noexcept
             {
-                if (dpmi::detail::exception_count > 0) return;
                 locked.clear();
             }
             bool try_lock() noexcept 
             {
-                if (dpmi::detail::exception_count > 0) return true;
                 return !locked.test_and_set();
             }
         };
 
-        class recursive_mutex   // TODO: cpu exception ownership
+        class recursive_mutex
         {
             using thread_ptr = std::weak_ptr<const detail::thread>;
             using irq_ptr = std::weak_ptr<const dpmi::detail::interrupt_id::id_t>;
@@ -84,14 +82,12 @@ namespace jw
 
             void unlock() noexcept
             {
-                if (dpmi::detail::exception_count > 0) return;
                 if (std::visit(is_owner { }, owner)) --lock_count;
                 if (lock_count == 0) owner = nullptr;
             }
 
             bool try_lock() noexcept
             {
-                if (dpmi::detail::exception_count > 0) return true;
                 if (owner.valueless_by_exception() or not std::visit(has_owner { }, owner))
                 {
                     if (dpmi::in_irq_context()) owner = dpmi::detail::interrupt_id::get_current_interrupt();
