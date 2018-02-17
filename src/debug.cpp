@@ -547,7 +547,7 @@ namespace jw
                                     supported[str.substr(0, equals_sign)] = str.substr(equals_sign + 1);
                                 }
                             }
-                            send_packet("PacketSize=399;swbreak+;hwbreak+");
+                            send_packet("PacketSize=399;swbreak+;hwbreak+;QThreadEvents+");
                         }
                         else if (q == "Attached") send_packet("0");
                         else if (q == "C")
@@ -591,6 +591,16 @@ namespace jw
                             auto str = msg.str();
                             encode(s, str.c_str(), str.size());
                             send_packet(s.str());
+                        }
+                        else send_packet("");
+                    }
+                    else if (p == 'Q')
+                    {
+                        auto& q = packet[0];
+                        if (q == "ThreadEvents")
+                        {
+                            thread_events_enabled = packet[1][0] - '0';
+                            send_packet("OK");
                         }
                         else send_packet("");
                     }
