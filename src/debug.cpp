@@ -180,6 +180,12 @@ namespace jw
                 4
             };
 
+#ifndef __SSE__
+            constexpr auto reg_max = regnum::fop;
+#else
+            constexpr auto reg_max = regnum::mxcsr;
+#endif
+
             inline auto signal_number(exception_num exc)
             {
                 switch (exc)
@@ -652,8 +658,8 @@ namespace jw
                     }
                     else if (p == 'g')  // read registers
                     {
-                        for (int i = eax; i <= eflags; ++i)
-                            reg(s, static_cast<regnum>(i), r, f, t);
+                        for (auto i = eax; i <= reg_max; ++i)
+                            reg(s, i, r, f, t);
                         send_packet(s.str());
                     }
                     else if (p == 'G')  // write registers
@@ -886,7 +892,7 @@ namespace jw
                 std::uintptr_t esp, ebp, eip;
                 asm("mov %0, esp": "=rm" (esp));
                 asm("mov %0, ebp": "=rm" (ebp));
-                asm("call %=;%=: pop %0":"=rm" (eip));
+                asm("call %=;%=: pop %0":"=rm" (eip));  // TODO: better estimate of fault location
                 std::deque<packet_string> packet { };
 
                 auto posix_signal = [signal]
@@ -928,6 +934,8 @@ namespace jw
                         encode(s, &ebp);
                         encode_null(s, 2 * 4);
                         encode(s, &eip);
+                        for (auto i = regnum::eflags; i <= reg_max; ++i)
+                            encode_null(s, reglen[i]);
                         send_packet(s.str());
                     }
                     else if (p == 'P' or p == 'G' or p == 'm' 
