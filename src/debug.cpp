@@ -23,6 +23,13 @@ namespace jw
 #       ifndef NDEBUG
         namespace detail
         {
+            struct rs232_streambuf_internals : public io::detail::rs232_streambuf
+            {
+                using rs232_streambuf::rs232_streambuf;
+                auto* get_gptr() const { return gptr(); }
+                auto* get_egptr() const { return egptr(); }
+            };
+
             const bool debugmsg = config::enable_gdb_debug_messages;
 
             bool debug_mode { false };
@@ -38,7 +45,7 @@ namespace jw
             std::map<int, void(*)(int)> signal_handlers {  };
 
             std::array<std::unique_ptr<exception_handler>, 0x20> exception_handlers;
-            io::detail::rs232_streambuf* gdb_streambuf;
+            rs232_streambuf_internals* gdb_streambuf;
             std::unique_ptr<std::iostream, allocator_delete<jw::dpmi::locking_allocator<std::iostream>>> gdb;
             std::unique_ptr<dpmi::irq_handler> serial_irq;
 
@@ -947,6 +954,11 @@ namespace jw
                 signal_handlers[signal](signal);
             }
 
+            void serial_irq_handler()
+            {
+
+            }
+
             void setup_gdb_interface(io::rs232_config cfg)
             {
                 if (debug_mode) return;
@@ -954,13 +966,10 @@ namespace jw
                 debugger_reentry = false;
 
                 dpmi::locking_allocator<> stream_alloc;
-                gdb_streambuf = new io::detail::rs232_streambuf { cfg };
+                gdb_streambuf = new rs232_streambuf_internals { cfg };
                 gdb = allocate_unique<io::rs232_stream>(stream_alloc, gdb_streambuf);
 
-                serial_irq = std::make_unique<irq_handler>([&]
-                {
-
-                });
+                serial_irq = std::make_unique<irq_handler>(serial_irq_handler);
 
                 for (auto&& s : { SIGHUP, SIGABRT, SIGTERM, SIGKILL, SIGQUIT, SIGILL, SIGINT })
                     signal_handlers[s] = std::signal(s, csignal);
