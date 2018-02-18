@@ -16,6 +16,8 @@
 #include <jw/alloc.h>
 #include <../jwdpmi_config.h>
 
+// TODO: optimize
+
 namespace jw
 {
     namespace dpmi
@@ -28,6 +30,13 @@ namespace jw
                 using rs232_streambuf::rs232_streambuf;
                 auto* get_gptr() const { return gptr(); }
                 auto* get_egptr() const { return egptr(); }
+            };
+
+            enum signals
+            {
+                packet_received = 0x1010,
+                trap_unmasked,
+                continued
             };
 
             const bool debugmsg = config::enable_gdb_debug_messages;
@@ -66,11 +75,9 @@ namespace jw
             struct thread_info
             {
                 std::weak_ptr<thread::detail::thread> thread;
-                std::uintptr_t last_eip { };
                 new_exception_frame frame;
                 cpu_registers reg;
                 std::uint32_t last_exception;   // may also be signal number
-                bool use_sigcont { false };
                 std::uintptr_t step_range_begin { 0 };
                 std::uintptr_t step_range_end { 0 };
                 
@@ -127,7 +134,7 @@ namespace jw
                         t->suspend();
                         action = stop;
                     }
-                    if (thread::detail::thread_details::trap_state(t) && t->id() != current_thread_id) use_sigcont = true;
+                    if (thread::detail::thread_details::trap_state(t) && t->id() != current_thread_id) last_exception = continued;
                 }
 
                 bool do_action() const
@@ -140,6 +147,7 @@ namespace jw
                     case step:
                     case cont:
                     case step_range:
+                    case stop:
                         return true;
                     default: throw std::exception();
                     }
@@ -202,13 +210,7 @@ namespace jw
                 {
                     // cpu exception -> posix signal
                 case 0x01:
-                case 0x03:
-                    if (threads[selected_thread_id].use_sigcont)
-                    {
-                        threads[selected_thread_id].use_sigcont = false;
-                        return 0x13;    // SIGCONT
-                    }
-                    else return 0x05;   // SIGTRAP
+                case 0x03: return 0x05; // SIGTRAP
                 case 0x00: return 0x08; // SIGFPE
                 case 0x02: return 0x09; // SIGKILL
                 case 0x04: return 0x08; // SIGFPE
@@ -235,6 +237,10 @@ namespace jw
                 case SIGABRT: return 0x06;
                 case SIGKILL: return 0x09;
                 case SIGTERM: return 0x0f;
+
+                    // other signals
+                case continued: return 0x13;
+
                 default: return 143;
                 }
             }
@@ -293,7 +299,7 @@ namespace jw
             // not used
             void send_notification(const std::string& output)
             {
-                if (config::enable_gdb_protocol_dump) std::clog << "send --> \"" << output << "\"\n";
+                if (config::enable_gdb_protocol_dump) std::clog << "note --> \"" << output << "\"\n";
                 const auto sum = checksum(output);
                 *gdb << '%' << output << '#' << std::setfill('0') << std::hex << std::setw(2) << sum << std::flush;
             }
@@ -325,30 +331,44 @@ namespace jw
 
                 const auto sum = checksum(rle_output);
                 *gdb << '$' << rle_output << '#' << std::setfill('0') << std::hex << std::setw(2) << sum;
-                if (not config::enable_gdb_interrupts) *gdb << std::flush;
+                if (not interrupt_mask::get()) *gdb << std::flush;
                 sent.push_back(output);
             }
 
             auto recv_packet()
             {
+                static std::string input;
+                static std::string sum;
+
             retry:
+                if (not interrupt_mask::get()) *gdb << std::flush;
                 switch (gdb->get())
                 {
-                case '-': if (sent.size() > 0) send_packet(sent.front()); // intentional fallthrough
+                case '-':
+                    std::cerr << "NACK!\n";
+                    if (sent.size() > 0) send_packet(sent.front());
+                    [[fallthrough]];
                 case '+': if (sent.size() > 0) sent.pop_front();
                 default: goto retry;
+                case 0x03: input = "vCtrlC"; goto parse;
                 case '$': break;
                 }
 
-                std::string input;
+                input.clear();
                 std::getline(*gdb, input, '#');
-                if (config::enable_gdb_protocol_dump) std::clog << "recv <-- \"" << input << "\"\n";
-                std::string sum;
+                sum.clear();
                 sum += gdb->get();
                 sum += gdb->get();
-                if (decode(sum) == checksum(input)) *gdb << '+' << std::flush;
-                else { *gdb << '-' << std::flush; goto retry; }
+                if (decode(sum) == checksum(input)) *gdb << '+';
+                else 
+                {
+                    std::cerr << "BAD CHECKSUM: " << input << ": " << sum << ", calculated: " << checksum(input) << '\n';
+                    *gdb << '-';;
+                    goto retry; 
+                }
 
+            parse:
+                if (config::enable_gdb_protocol_dump) std::clog << "recv <-- \"" << input << "\"\n";
                 std::deque<packet_string> parsed_input { };
                 std::size_t pos { 1 };
                 if (input.size() == 1) parsed_input.emplace_back("", input[0]);
@@ -421,8 +441,7 @@ namespace jw
                 case eip:
                 {
                     auto eip = frame->fault_address.offset;
-                    //if (current_thread->last_exception == 0x01) eip = current_thread->last_eip;   // TODO: is this necessary?
-                    //else if (current_thread->last_exception == 0x03) eip -= 1;
+                    //if (current_thread->last_exception == 0x03) eip -= 1;
                     encode(out, &eip);
                     return;
                 }
@@ -471,7 +490,7 @@ namespace jw
 
             void stop_reply(bool async = false)
             {
-                if (!async && selected_thread_id != current_thread_id)
+                if (not async and selected_thread_id != current_thread_id)
                 {
                     send_packet("S00");
                     return;
@@ -483,7 +502,7 @@ namespace jw
                 std::stringstream s { };
                 s << std::hex << std::setfill('0');
                 if (async) s << "Stop:";
-                if (exc == 0x01 or exc == 0x03 or exc == thread::detail::started)
+                if (exc == 0x01 or exc == 0x03 or exc == thread::detail::thread_started)
                 {
                     s << "T" << std::setw(2) << signal_number(exc);
                     s << eflags << ':'; reg(s, eflags, r, f, t); s << ';';
@@ -491,7 +510,7 @@ namespace jw
                     s << esp << ':'; reg(s, esp, r, f, t); s << ';';
                     s << ebp << ':'; reg(s, ebp, r, f, t); s << ';';
                     s << "thread:" << current_thread_id << ';';
-                    if (exc == thread::detail::started)
+                    if (exc == thread::detail::thread_started)
                     {
                         s << "create:;";
                     }
@@ -516,7 +535,7 @@ namespace jw
                     if (async) send_notification(s.str());
                     else send_packet(s.str());
                 }
-                else if (last_signal == thread::detail::stopped)
+                else if (last_signal == thread::detail::thread_stopped)
                 {
                     s << 'w';
                     if (current_thread->thread.lock()->get_state() == thread::detail::finished) s << "00";
@@ -539,15 +558,19 @@ namespace jw
             [[gnu::hot]] bool handle_packet(exception_num, cpu_registers* r, exception_frame* f, bool t)
             {
                 std::deque<packet_string> packet { };
+                auto send_stop_reply = []
+                {
+                    if (current_thread->last_exception == packet_received) return false;
+                    if (current_thread->action == thread_info::none) return false;
+                    stop_reply();
+                    current_thread->action = thread_info::none;
+                };
+
                 while (true)
                 {
                     std::stringstream s { };
                     s << std::hex << std::setfill('0');
-                    if (current_thread->action != thread_info::none)
-                    {
-                        stop_reply();
-                        current_thread->action = thread_info::none;
-                    }
+                    send_stop_reply();
                     packet = recv_packet();
                     auto& p = packet.front().delim;
                     if (p == '?')   // stop reason
@@ -674,6 +697,12 @@ namespace jw
                                     }
                                 }
                             }
+                        }
+                        else if (v == "CtrlC")
+                        {
+                            for (auto&& t : threads) t.second.set_action(std::string { "t" });
+                            current_thread->last_exception = 0x03;
+                            send_stop_reply();
                         }
                         else send_packet("");
                     }
@@ -863,20 +892,40 @@ namespace jw
                 {
                     if (not thread_events_enabled)
                     {
-                        if (last_signal == thread::detail::started or last_signal == thread::detail::stopped)
+                        if (last_signal == thread::detail::thread_started or last_signal == thread::detail::thread_stopped)
+                        {
+                            last_signal = 0;
                             return true;
+                        }
                     }
                     debugger_reentry = true;
                     populate_thread_list();
+                    if (exc == 0x03 and last_signal != 0)
+                    {
+                        if (last_signal == thread::detail::thread_switched and
+                            (current_thread->action == thread_info::cont or current_thread->action == thread_info::cont_sig))
+                        {
+                            debugger_reentry = false;
+                            return true;
+                        }
+                        if (last_signal == trap_unmasked)
+                        {
+                            if (current_thread->last_exception == 0x01 or
+                                current_thread->last_exception == 0x03)
+                                current_thread->last_exception = continued; // resume with SIGCONT so gdb won't get confused
+                        }
+                        else current_thread->last_exception = last_signal;
+                        last_signal = 0;
+                    }
+                    else current_thread->last_exception = exc;
+
                     if (__builtin_expect(exc == 0x01 or exc == 0x03, true))
                     {
                         if (thread::detail::thread_details::trap_is_masked(current_thread->thread.lock()))
                         {
-                            current_thread->use_sigcont = true;
                             thread::detail::thread_details::set_trap(current_thread->thread.lock());
                             f->flags.trap = false;
                             debugger_reentry = false;
-                            current_thread->last_eip = f->fault_address.offset;
                             if (debugmsg) std::clog << "trap masked at 0x" << std::hex << f->fault_address.offset << ", resuming with SIGCONT.\n";
                             return true;
                         }
@@ -885,26 +934,19 @@ namespace jw
                             f->fault_address.offset <= current_thread->step_range_end)
                         {
                             debugger_reentry = false;
-                            current_thread->last_eip = f->fault_address.offset;
                             if (debugmsg) std::clog << "range step until 0x" << std::hex << current_thread->step_range_end;
                             if (debugmsg) std::clog << ", now at 0x" << f->fault_address.offset << '\n';
                             return true;
                         }
                         thread::detail::thread_details::clear_trap(current_thread->thread.lock());
                     }
+
                     if (debugmsg) std::clog << *static_cast<new_exception_frame*>(f) << *r;
                     if (t) current_thread->frame = *static_cast<new_exception_frame*>(f);
                     else static_cast<old_exception_frame&>(current_thread->frame) = *f;
                     current_thread->reg = *r;
-                    if (exc == 0x03 and last_signal != 0)
-                    {
-                        current_thread->last_exception = last_signal;
-                        last_signal = 0;
-                    }
-                    else current_thread->last_exception = exc;
                     if (exc == 0x03) current_thread->frame.fault_address.offset -= 1;
                     selected_thread_id = current_thread_id;
-                    //stop_reply(true);
                     if (current_thread->action == thread_info::none) current_thread->action = thread_info::cont;
                 }
 
@@ -929,7 +971,6 @@ namespace jw
                 if (t) *f = static_cast<new_exception_frame&>(current_thread->frame);
                 else *static_cast<old_exception_frame*>(f) = current_thread->frame;
                 *r = current_thread->reg;
-                current_thread->last_eip = current_thread->frame.fault_address.offset;
                 debugger_reentry = false;
 
                 if (debugmsg) std::clog << "leaving exception 0x" << std::hex << exc << "\n";
@@ -956,7 +997,14 @@ namespace jw
 
             void serial_irq_handler()
             {
-
+                if (debugger_reentry) return;
+                char* p = gdb_streambuf->get_gptr();
+                std::size_t size = gdb_streambuf->get_egptr() - p;
+                std::string_view str { p, size };
+                if (str.find(0x03) != std::string_view::npos)
+                    break_with_signal(packet_received);
+                else if (str.find('#', str.find('$')) != std::string_view::npos)
+                    break_with_signal(packet_received);
             }
 
             void setup_gdb_interface(io::rs232_config cfg)
@@ -969,7 +1017,7 @@ namespace jw
                 gdb_streambuf = new rs232_streambuf_internals { cfg };
                 gdb = allocate_unique<io::rs232_stream>(stream_alloc, gdb_streambuf);
 
-                serial_irq = std::make_unique<irq_handler>(serial_irq_handler);
+                serial_irq = std::make_unique<irq_handler>(serial_irq_handler, dpmi::no_interrupts);
 
                 for (auto&& s : { SIGHUP, SIGABRT, SIGTERM, SIGKILL, SIGQUIT, SIGILL, SIGINT })
                     signal_handlers[s] = std::signal(s, csignal);
@@ -982,7 +1030,7 @@ namespace jw
                     install_exception_handler(0x07);
 
                 serial_irq->set_irq(cfg.irq);
-                //serial_irq->enable();
+                serial_irq->enable();
 
                 capabilities c { };
                 if (!c.supported) return;
@@ -1016,7 +1064,8 @@ namespace jw
             if (!debug()) return;
             if (detail::debugger_reentry) return;
             auto t = jw::thread::detail::scheduler::get_current_thread().lock();
-            if (thread::detail::thread_details::trap_unmask(t) && thread::detail::thread_details::trap_state(t)) asm("int 3");
+            if (thread::detail::thread_details::trap_unmask(t) && thread::detail::thread_details::trap_state(t))
+                detail::break_with_signal(detail::trap_unmasked);
         }
 #       else
         void notify_gdb_thread_event(thread::detail::thread_event) { }

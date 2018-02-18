@@ -42,8 +42,9 @@ namespace jw
 
             enum thread_event : std::uint32_t
             {
-                started = 0x1000,
-                stopped
+                thread_started = 0x1000,
+                thread_stopped,
+                thread_switched
             };
 
             // Base class for all threads.
