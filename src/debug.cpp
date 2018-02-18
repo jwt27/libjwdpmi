@@ -8,6 +8,8 @@
 #include <iomanip>
 #include <memory>
 #include <csignal>
+#include <cstdlib>
+#include <string_view>
 #include <jw/dpmi/fpu.h>
 #include <jw/dpmi/dpmi.h>
 #include <jw/dpmi/debug.h>
@@ -17,6 +19,8 @@
 #include <../jwdpmi_config.h>
 
 // TODO: optimize
+
+using namespace std::string_literals;
 
 namespace jw
 {
@@ -60,14 +64,17 @@ namespace jw
 
             volatile bool debugger_reentry { true };
 
-            struct packet_string : public std::string
+            struct packet_string : public std::string_view
             {
                 char delim;
-                template <typename T>
-                packet_string(T&& str, char delimiter): std::string(std::forward<T>(str)), delim(delimiter) { }
-                using std::string::operator=;
-                using std::string::basic_string;
+                template <typename T, typename U>
+                packet_string(T&& str, U&& delimiter): std::string_view(std::forward<T>(str)), delim(std::forward<U>(delimiter)) { }
+                using std::string_view::operator=;
+                using std::string_view::basic_string_view;
             };
+
+            std::basic_string<char,std::char_traits<char>,locked_pool_allocator<>> raw_packet_string { alloc };
+            std::deque<packet_string, locked_pool_allocator<>> packet { alloc };
 
             std::uint32_t current_thread_id { 1 };  
             std::uint32_t selected_thread_id { 1 };
@@ -92,36 +99,36 @@ namespace jw
                     step_range
                 } action;
 
-                void set_action(const auto& a, std::uintptr_t resume_at = 0, std::uintptr_t rbegin = 0, std::uintptr_t rend = 0)
+                void set_action(char a, const std::string_view& extra = { }, std::uintptr_t resume_at = 0, std::uintptr_t rbegin = 0, std::uintptr_t rend = 0)
                 {
                     if (resume_at != 0) frame.fault_address.offset = resume_at;
                     auto t = thread.lock();
                     t->resume();
-                    if (a[0] == 'c')  // continue
+                    if (a == 'c')  // continue
                     {
                         frame.flags.trap = false;
                         action = cont;
                     }
-                    else if (a[0] == 's')  // step
+                    else if (a == 's')  // step
                     {
                         frame.flags.trap = true;
                         thread::detail::thread_details::set_trap(t);
                         action = step;
                     }
-                    else if (a[0] == 'C')  // continue with signal
+                    else if (a == 'C')  // continue with signal
                     {
                         frame.flags.trap = false;
-                        if (a.substr(1) == "13") action = cont; // SIGCONT
+                        if (extra == "13") action = cont; // SIGCONT
                         else action = cont_sig;
                     }
-                    else if (a[0] == 'S')  // step with signal
+                    else if (a == 'S')  // step with signal
                     {
                         frame.flags.trap = true;
                         thread::detail::thread_details::set_trap(t);
-                        if (a.substr(1) == "13") action = step; // SIGCONT
+                        if (extra == "13") action = step; // SIGCONT
                         else action = step_sig;
                     }
-                    else if (a[0] == 'r')   // step with range
+                    else if (a == 'r')   // step with range
                     {
                         frame.flags.trap = true;
                         thread::detail::thread_details::set_trap(t);
@@ -129,7 +136,7 @@ namespace jw
                         step_range_end = rend;
                         action = step_range;
                     }
-                    else if (a[0] == 't')   // stop
+                    else if (a == 't')   // stop
                     {
                         t->suspend();
                         action = stop;
@@ -246,14 +253,29 @@ namespace jw
             }
 
             // Decode big-endian hex string
-            inline auto decode(const std::string& s)
+            inline auto decode(std::string_view str)
             {
-                return std::stoul(s, nullptr, 16);
+                std::uint32_t result { };
+                bool negative { false };
+                if (str[0] == '-')
+                {
+                    negative = true;
+                    str.remove_prefix(1);
+                }
+                for (auto&& c : str)
+                {
+                    result <<= 4;
+                    if (c >= 'a' and c <= 'f') result |= 10 + c - 'a';
+                    else if (c >= '0' and c <= '9') result |= c - '0';
+                    else throw std::invalid_argument { "decode() failed: "s + str.data() };
+                }
+                if (negative) result = static_cast<std::uint32_t>(static_cast<std::int32_t>(result) * -1);
+                return result;
             }
 
             // Decode little-endian hex string
             template <typename T>
-            bool reverse_decode(const std::string& in, T* out, std::size_t len = sizeof(T))
+            bool reverse_decode(const std::string_view& in, T* out, std::size_t len = sizeof(T))
             {
                 if (in.size() < 2 * len) return false;
                 auto ptr = reinterpret_cast<byte*>(out);
@@ -289,10 +311,10 @@ namespace jw
                     out << "xx";
             }
 
-            std::uint32_t checksum(const std::string& s)
+            std::uint32_t checksum(const std::string_view& s)
             {
                 std::uint8_t r { 0 };
-                for (auto c : s) r += c;
+                for (auto&& c : s) r += c;
                 return r;
             }
 
@@ -304,11 +326,15 @@ namespace jw
                 *gdb << '%' << output << '#' << std::setfill('0') << std::hex << std::setw(2) << sum << std::flush;
             }
             
-            void send_packet(const std::string& output)
+            void send_packet(const std::string_view& output)
             {
                 if (config::enable_gdb_protocol_dump) std::clog << "send --> \"" << output << "\"\n";
 
-                std::stringstream s { };
+                static std::string rle_output { };
+                rle_output.clear();
+                rle_output.reserve(output.size());
+                auto& s = rle_output;
+
                 for (auto i = output.cbegin(); i < output.cend();)
                 {
                     auto j = i;
@@ -318,26 +344,25 @@ namespace jw
                     {
                         count = std::min(count, 98);    // above 98, rle byte would be non-printable
                         if (count == 7 or count == 8) count = 6;    // rle byte can't be '#' or '$'
-                        s << *i << '*' << static_cast<char>(count + 28);
+                        s += *i;
+                        s += '*';
+                        s += static_cast<char>(count + 28);
                     }
                     else
                     {
-                        for (std::ptrdiff_t k = 0; k < count; ++k)
-                            s << *i;
+                        s.append(count, *i);
                     }
                     i += count;
                 }
-                auto rle_output = s.str();
 
                 const auto sum = checksum(rle_output);
                 *gdb << '$' << rle_output << '#' << std::setfill('0') << std::hex << std::setw(2) << sum;
                 if (not interrupt_mask::get()) *gdb << std::flush;
-                sent.push_back(output);
+                sent.push_back(output.data());
             }
 
-            auto recv_packet()
+            void recv_packet()
             {
-                static std::string input;
                 static std::string sum;
 
             retry:
@@ -350,36 +375,36 @@ namespace jw
                     [[fallthrough]];
                 case '+': if (sent.size() > 0) sent.pop_front();
                 default: goto retry;
-                case 0x03: input = "vCtrlC"; goto parse;
+                case 0x03: raw_packet_string = "vCtrlC"; goto parse;
                 case '$': break;
                 }
 
-                input.clear();
-                std::getline(*gdb, input, '#');
+                raw_packet_string.clear();
+                std::getline(*gdb, raw_packet_string, '#');
                 sum.clear();
                 sum += gdb->get();
                 sum += gdb->get();
-                if (decode(sum) == checksum(input)) *gdb << '+';
+                if (decode(sum) == checksum(raw_packet_string)) *gdb << '+';
                 else 
                 {
-                    std::cerr << "BAD CHECKSUM: " << input << ": " << sum << ", calculated: " << checksum(input) << '\n';
+                    std::cerr << "BAD CHECKSUM: " << raw_packet_string << ": " << sum << ", calculated: " << checksum(raw_packet_string) << '\n';
                     *gdb << '-';;
                     goto retry; 
                 }
 
             parse:
-                if (config::enable_gdb_protocol_dump) std::clog << "recv <-- \"" << input << "\"\n";
-                std::deque<packet_string> parsed_input { };
+                if (config::enable_gdb_protocol_dump) std::clog << "recv <-- \"" << raw_packet_string << "\"\n";
                 std::size_t pos { 1 };
-                if (input.size() == 1) parsed_input.emplace_back("", input[0]);
+                packet.clear();
+                std::string_view input { raw_packet_string };
+                if (input.size() == 1) packet.emplace_back("", input[0]);
                 while (pos < input.size())
                 {
                     auto p = std::min({ input.find(',', pos), input.find(':', pos), input.find(';', pos), input.find('=', pos) });
                     if (p == input.npos) p = input.size();
-                    parsed_input.emplace_back(input.substr(pos, p - pos), input[pos - 1]);
+                    packet.emplace_back(input.substr(pos, p - pos), input[pos - 1]);
                     pos += p - pos + 1;
                 }
-                return parsed_input;
             }
 
             void thread_reg(std::ostream& out, regnum r)
@@ -457,7 +482,7 @@ namespace jw
                 }
             }
 
-            bool setreg(regnum r, const std::string& value, cpu_registers* reg, exception_frame* frame, bool new_type)
+            bool setreg(regnum r, const std::string_view& value, cpu_registers* reg, exception_frame* frame, bool new_type)
             {
                 if (selected_thread_id != current_thread_id) return false;
                 auto* new_frame = static_cast<new_exception_frame*>(frame);
@@ -557,11 +582,10 @@ namespace jw
 
             [[gnu::hot]] bool handle_packet(exception_num, cpu_registers* r, exception_frame* f, bool t)
             {
-                std::deque<packet_string> packet { };
                 auto send_stop_reply = []
                 {
-                    if (current_thread->last_exception == packet_received) return false;
-                    if (current_thread->action == thread_info::none) return false;
+                    if (current_thread->last_exception == packet_received) return;
+                    if (current_thread->action == thread_info::none) return;
                     stop_reply();
                     current_thread->action = thread_info::none;
                 };
@@ -571,7 +595,7 @@ namespace jw
                     std::stringstream s { };
                     s << std::hex << std::setfill('0');
                     send_stop_reply();
-                    packet = recv_packet();
+                    recv_packet();
                     auto& p = packet.front().delim;
                     if (p == '?')   // stop reason
                     {
@@ -583,18 +607,17 @@ namespace jw
                         if (q == "Supported")
                         {
                             packet.pop_front();
-                            for (auto str : packet)
+                            for (auto&& str : packet)
                             {
                                 auto back = str.back();
                                 auto equals_sign = str.find('=', 0);
                                 if (back == '+' || back == '-')
                                 {
-                                    str.pop_back();
-                                    supported[str] = back;
+                                    supported[str.substr(0, str.size() - 1).data()] = back;
                                 }
                                 else if (equals_sign != str.npos)
                                 {
-                                    supported[str.substr(0, equals_sign)] = str.substr(equals_sign + 1);
+                                    supported[str.substr(0, equals_sign).data()] = str.substr(equals_sign + 1);
                                 }
                             }
                             send_packet("PacketSize=399;swbreak+;hwbreak+;QThreadEvents+");
@@ -622,7 +645,7 @@ namespace jw
                             auto id = decode(packet[1]);
                             if (threads.count(id))
                             {
-                                auto t = threads[id].thread.lock();
+                                auto&& t = threads[id].thread.lock();
                                 msg << t->name;
                                 if (id == current_thread_id) msg << " (*)";
                                 msg << ": ";
@@ -677,7 +700,7 @@ namespace jw
                                     if (packet.size() >= i && packet[i + 1].delim == ':')
                                     {
                                         auto id = decode(packet[i + 1]);
-                                        threads[id].set_action(packet[i - 1], 0, begin, end);
+                                        threads[id].set_action(packet[i - 1][0], packet[i - 1].substr(1), 0, begin, end);
                                         ++i;
                                     }
                                     else send_packet("E00");
@@ -685,7 +708,7 @@ namespace jw
                                 else if (packet.size() >= i && packet[i + 1].delim == ':')
                                 {
                                     auto id = decode(packet[i + 1]);
-                                    threads[id].set_action(packet[i]);
+                                    threads[id].set_action(packet[i][0], packet[i].substr(1));
                                     ++i;
                                 }
                                 else
@@ -693,14 +716,14 @@ namespace jw
                                     for (auto& t : threads)
                                     {
                                         if (t.second.action == thread_info::none)
-                                            t.second.set_action(packet[i]);
+                                            t.second.set_action(packet[i][0], packet[i].substr(1));
                                     }
                                 }
                             }
                         }
                         else if (v == "CtrlC")
                         {
-                            for (auto&& t : threads) t.second.set_action(std::string { "t" });
+                            for (auto&& t : threads) t.second.set_action('t');
                             current_thread->last_exception = 0x03;
                             send_stop_reply();
                         }
@@ -708,7 +731,7 @@ namespace jw
                     }
                     else if (p == 'H')  // set current thread
                     {
-                        auto id = decode(packet[0].substr(1));
+                        auto id = decode(packet[0].substr(1)); // TODO: handle -1 (all threads)
                         if (threads.count(id))
                         {
                             selected_thread_id = id;
@@ -774,13 +797,13 @@ namespace jw
                     {
                         auto& t = threads[selected_thread_id];
                         if (packet.size() > 0) t.frame.fault_address.offset = decode(packet[0]);
-                        t.set_action(packet[0].delim + std::string { });
+                        t.set_action(packet[0].delim);
                     }
                     else if (p == 'C' || p == 'S')  // step/continue with signal
                     {
                         auto& t = threads[selected_thread_id];
                         if (packet.size() > 1) t.frame.fault_address.offset = decode(packet[1]);
-                        t.set_action(packet[0].delim + packet[0]);
+                        t.set_action(packet[0].delim, packet[0]);
                     }
                     else if (p == 'Z')  // set break/watchpoint
                     {
