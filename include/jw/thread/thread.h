@@ -69,28 +69,24 @@ namespace jw
         // Yields execution while the given condition evaluates to true.
         inline void yield_while(auto&& condition)
         {
-            dpmi::trap_mask dont_trace_here { };
             while (condition()) yield();
         };
 
         // Yields execution until the given time point.
         template<typename P> inline void yield_until(const P& time_point)
         {
-            dpmi::trap_mask dont_trace_here { };
             yield_while([&time_point] { return P::clock::now() < time_point; });
         };
 
         // Yields execution for the given duration.
         template<typename C = chrono::pit> inline void yield_for(const typename C::duration& duration)
         {
-            dpmi::trap_mask dont_trace_here { };
             yield_until(C::now() + duration);
         };
 
         // Combination of yield_while() and yield_until(). Returns true on timeout.
         template<typename P> inline bool yield_while_until(auto&& condition, const P& time_point)
         {
-            dpmi::trap_mask dont_trace_here { };
             bool c;
             yield_while([&] { return (c = condition()) && P::clock::now() < time_point; });
             return c;
@@ -99,7 +95,6 @@ namespace jw
         // Combination of yield_while() and yield_for(). Returns true on timeout.
         template<typename C = chrono::pit> inline bool yield_while_for(auto&& condition, const typename C::duration& duration)
         {
-            dpmi::trap_mask dont_trace_here { };
             return yield_while_until(condition, C::now() + duration);
         };
     }
