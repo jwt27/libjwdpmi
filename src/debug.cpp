@@ -614,6 +614,7 @@ namespace jw
                 auto send_stop_reply = []
                 {
                     if (current_thread->last_exception == packet_received) return;
+                    if (current_thread->last_exception == thread::detail::thread_switched) return;
                     if (current_thread->action == thread_info::none) return;
                     stop_reply();
                     current_thread->action = thread_info::none;
@@ -957,12 +958,6 @@ namespace jw
                     populate_thread_list();
                     if (exc == 0x03 and current_signal != 0)
                     {
-                        if (current_signal == thread::detail::thread_switched and
-                            (current_thread->action == thread_info::cont or current_thread->action == thread_info::cont_sig))
-                        {
-                            debugger_reentry = false;
-                            return true;
-                        }
                         if (current_signal == trap_unmasked)
                         {
                             if (current_thread->last_exception == 0x01 or
@@ -976,7 +971,8 @@ namespace jw
 
                     if (__builtin_expect(exc == 0x01 or exc == 0x03, true))
                     {
-                        if (thread::detail::thread_details::trap_is_masked(current_thread->thread.lock()))
+                        if (thread::detail::thread_details::trap_is_masked(current_thread->thread.lock())
+                            and current_signal != thread::detail::thread_switched)
                         {
                             thread::detail::thread_details::set_trap(current_thread->thread.lock());
                             if (exc == 0x03 and disable_breakpoint(f->fault_address.offset))
