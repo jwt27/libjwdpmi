@@ -449,10 +449,7 @@ namespace jw
                 case ebx: encode(out, &reg->ebx); return;
                 case ecx: encode(out, &reg->ecx); return;
                 case edx: encode(out, &reg->edx); return;
-                case ebp: 
-                    if (reg->ebp >= frame->stack.offset) encode(out, &reg->ebp);
-                    else encode_null(out, reglen[r]);
-                    return;
+                case ebp: encode(out, &reg->ebp); return;
                 case esi: encode(out, &reg->esi); return;
                 case edi: encode(out, &reg->edi); return;
                 case esp: encode(out, &frame->stack.offset); return;
@@ -466,7 +463,6 @@ namespace jw
                 case eip:
                 {
                     auto eip = frame->fault_address.offset;
-                    //if (current_thread->last_exception == 0x03) eip -= 1;
                     encode(out, &eip);
                     return;
                 }
@@ -530,7 +526,6 @@ namespace jw
                 if (exc == 0x01 or exc == 0x03 or exc == thread::detail::thread_started)
                 {
                     s << "T" << std::setw(2) << signal_number(exc);
-                    s << eflags << ':'; reg(s, eflags, r, f, t); s << ';';
                     s << eip << ':'; reg(s, eip, r, f, t); s << ';';
                     s << esp << ':'; reg(s, esp, r, f, t); s << ';';
                     s << ebp << ':'; reg(s, ebp, r, f, t); s << ';';
