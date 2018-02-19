@@ -1025,10 +1025,14 @@ namespace jw
                 }
                 asm("cli");
 
+                enable_all_breakpoints();
+                if (*reinterpret_cast<byte*>(current_thread->frame.fault_address.offset) == 0xcc
+                    and not disable_breakpoint(current_thread->frame.fault_address.offset))
+                    current_thread->frame.fault_address.offset += 1;
+
                 if (t) *f = static_cast<new_exception_frame&>(current_thread->frame);
                 else *static_cast<old_exception_frame*>(f) = current_thread->frame;
                 *r = current_thread->reg;
-                enable_all_breakpoints();
 
                 if (debugmsg) std::clog << "leaving exception 0x" << std::hex << exc << ", resuming at 0x" << f->fault_address.offset << '\n';
 
