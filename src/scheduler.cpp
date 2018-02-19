@@ -159,7 +159,7 @@ namespace jw
             void scheduler::set_next_thread() noexcept        // TODO: catch exceptions here (from deque, shared_ptr) and do something sensible
             {
                 dpmi::interrupt_mask no_interrupts_please { };
-                for(auto i = 0; i < threads.size(); ++i)
+                for(std::size_t i = 0; i <= threads.size(); ++i)
                 {
                     if (__builtin_expect(current_thread->is_running(), true)) threads.push_back(current_thread);
 
