@@ -148,7 +148,7 @@ namespace jw
             enum
             {
                 divide_error = 0,
-                debug,
+                trap,
                 non_maskable_interrupt,
                 breakpoint,
                 overflow,

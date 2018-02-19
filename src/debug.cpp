@@ -210,45 +210,81 @@ namespace jw
 #else
             constexpr auto reg_max = regnum::mxcsr;
 #endif
+            enum posix_signals : std::uint32_t
+            {
+                sighup = 1,
+                sigint,
+                sigquit,
+                sigill,
+                sigtrap,
+                sigabrt,
+                sigemt,
+                sigfpe,
+                sigkill,
+                sigbus,
+                sigsegv,
+                sigsys,
+                sigpipe,
+                sigalrm,
+                sigterm,
+                sigstop = 17,
+                sigcont = 19,
+                sigusr1 = 30,
+                sigusr2 = 31,
+            };
 
-            inline auto signal_number(std::uint32_t exc)
+
+            inline std::uint32_t signal_number(std::uint32_t exc)
             {
                 switch (exc)
                 {
                     // cpu exception -> posix signal
-                case 0x01:
-                case 0x03: return 0x05; // SIGTRAP
-                case 0x00: return 0x08; // SIGFPE
-                case 0x02: return 0x09; // SIGKILL
-                case 0x04: return 0x08; // SIGFPE
-                case 0x05: return 0x0b; // SIGSEGV
-                case 0x06: return 0x04; // SIGILL
-                case 0x07: return 0x08; // SIGFPE
-                case 0x08: return 0x09; // SIGKILL
-                case 0x09: return 0x0b; // SIGSEGV
-                case 0x0a: return 0x0b; // SIGSEGV
-                case 0x0b: return 0x0b; // SIGSEGV
-                case 0x0c: return 0x0b; // SIGSEGV
-                case 0x0d: return 0x0b; // SIGSEGV
-                case 0x0e: return 0x0b; // SIGSEGV
-                case 0x10: return 0x07; // SIGEMT
-                case 0x11: return 0x0a; // SIGBUS
-                case 0x12: return 0x09; // SIGKILL
-                case 0x13: return 0x08; // SIGFPE
+                case exception_num::trap:
+                case exception_num::breakpoint:
+                    return sigtrap;
+
+                case exception_num::divide_error:
+                case exception_num::overflow:
+                case exception_num::x87_exception:
+                case exception_num::sse_exception:
+                    return sigfpe;
+
+                case exception_num::non_maskable_interrupt:
+                case exception_num::double_fault:
+                    return sigkill;
+
+                case exception_num::bound_range_exceeded:
+                case exception_num::x87_segment_not_present:
+                case exception_num::invalid_tss:
+                case exception_num::segment_not_present:
+                case exception_num::stack_segment_fault:
+                case exception_num::general_protection_fault:
+                case exception_num::page_fault:
+                    return sigsegv;
+
+                case exception_num::invalid_opcode:
+                    return sigill;
+
+                case exception_num::device_not_available:
+                    return sigemt;
+
+                case exception_num::alignment_check:
+                case exception_num::machine_check:
+                    return sigbus;
 
                     // djgpp signal -> posix signal
-                case SIGHUP:  return 0x01;
-                case SIGINT:  return 0x02;
-                case SIGQUIT: return 0x03;
-                case SIGILL:  return 0x04;
-                case SIGABRT: return 0x06;
-                case SIGKILL: return 0x09;
-                case SIGTERM: return 0x0f;
+                case SIGHUP:  return sighup;
+                case SIGINT:  return sigint;
+                case SIGQUIT: return sigquit;
+                case SIGILL:  return sigill;
+                case SIGABRT: return sigabrt;
+                case SIGKILL: return sigkill;
+                case SIGTERM: return sigterm;
 
                     // other signals
-                case continued: return 0x13;
+                case continued: return sigcont;
 
-                default: return 143;
+                default: return sigusr1;
                 }
             }
 

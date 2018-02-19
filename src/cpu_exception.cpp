@@ -214,7 +214,7 @@ namespace jw
             switch (ev)
             {
             case exception_num::divide_error:             return "Divide error.";
-            case exception_num::debug:                    return "Debug exception.";
+            case exception_num::trap:                    return "Debug exception.";
             case exception_num::non_maskable_interrupt:   return "Non-maskable interrupt.";
             case exception_num::breakpoint:               return "Breakpoint.";
             case exception_num::overflow:                 return "Overflow.";
