@@ -74,8 +74,8 @@ namespace jw
 
                 if (dpmi::in_irq_context()) return;
 
+                dpmi::break_with_signal(thread_switched);
                 context_switch();   // switch to a new task context
-                dpmi::detail::notify_gdb_thread_event(thread_switched);
                 check_exception();  // rethrow pending exception
             }
 
@@ -180,7 +180,7 @@ namespace jw
                     if (__builtin_expect(current_thread->awaiting && current_thread->awaiting->pending_exceptions() != 0, false)) break;
                     if (__builtin_expect(current_thread->state == suspended, false)) return;
                 }
-                dpmi::detail::notify_gdb_thread_event(thread_switched); // all threads suspended, wait for gdb
+                dpmi::break_with_signal(thread_switched); // all threads suspended, wait for gdb
             }
         }
     }
