@@ -180,7 +180,7 @@ namespace jw
                     if (__builtin_expect(current_thread->awaiting && current_thread->awaiting->pending_exceptions() != 0, false)) break;
                     if (__builtin_expect(current_thread->state == suspended, false)) return;
                 }
-                dpmi::break_with_signal(thread_switched); // all threads suspended, wait for gdb
+                dpmi::break_with_signal(all_threads_suspended);
             }
         }
     }

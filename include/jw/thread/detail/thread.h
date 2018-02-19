@@ -44,7 +44,8 @@ namespace jw
             {
                 thread_started = 0x1000,
                 thread_stopped,
-                thread_switched
+                thread_switched,
+                all_threads_suspended
             };
 
             // Base class for all threads.
