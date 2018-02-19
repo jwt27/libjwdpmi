@@ -919,7 +919,7 @@ namespace jw
 
             [[gnu::hot]] bool handle_exception(exception_num exc, cpu_registers* r, exception_frame* f, bool t)
             {
-                if (debugmsg) std::clog << "entering exception 0x" << std::hex << exc << "\n";
+                if (debugmsg) std::clog << "entering exception 0x" << std::hex << exc << " from 0x" << f->fault_address.offset << '\n';
                 if (killed) return false;
 
                 if (__builtin_expect(debugger_reentry, false) and (exc == 0x01 or exc == 0x03))
