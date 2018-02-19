@@ -159,7 +159,7 @@ namespace jw
             void scheduler::set_next_thread() noexcept        // TODO: catch exceptions here (from deque, shared_ptr) and do something sensible
             {
                 dpmi::interrupt_mask no_interrupts_please { };
-                do
+                for(auto i = 0; i < threads.size(); ++i)
                 {
                     if (__builtin_expect(current_thread->is_running(), true)) threads.push_back(current_thread);
 
@@ -178,7 +178,9 @@ namespace jw
 
                     if (__builtin_expect(current_thread->pending_exceptions() != 0, false)) break;
                     if (__builtin_expect(current_thread->awaiting && current_thread->awaiting->pending_exceptions() != 0, false)) break;
-                } while (__builtin_expect(current_thread->state == suspended, false));
+                    if (__builtin_expect(current_thread->state == suspended, false)) return;
+                }
+                dpmi::detail::notify_gdb_thread_event(thread_switched); // all threads suspended, wait for gdb
             }
         }
     }
