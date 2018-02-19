@@ -252,6 +252,44 @@ namespace jw
                 }
             }
 
+            inline bool set_breakpoint(std::uintptr_t at)
+            {
+                auto* ptr = reinterpret_cast<byte*>(at);
+                if (*ptr == 0xcc) return false;
+                breakpoints[at] = *ptr;
+                *ptr = 0xcc;
+                return true;
+            }
+
+            inline bool clear_breakpoint(std::uintptr_t at)
+            {
+                auto* ptr = reinterpret_cast<byte*>(at);
+                if (breakpoints.count(at) > 0)
+                {
+                    *ptr = breakpoints[at];
+                    breakpoints.erase(at);
+                    return true;
+                }
+                else return false;
+            }
+
+            inline bool disable_breakpoint(std::uintptr_t at)
+            {
+                auto* ptr = reinterpret_cast<byte*>(at);
+                if (breakpoints.count(at) > 0)
+                {
+                    *ptr = breakpoints[at];
+                    return true;
+                }
+                else return false;
+            }
+
+            inline void enable_all_breakpoints()
+            {
+                for (auto&& bp : breakpoints)
+                    *reinterpret_cast<byte*>(bp.first) = 0xcc;
+            }
+
             // Decode big-endian hex string
             inline auto decode(std::string_view str)
             {
@@ -818,12 +856,8 @@ namespace jw
                                 send_packet("");    // not implemented (TODO)
                                 continue;
                             }
-                            if (*ptr != 0xcc)
-                            {
-                                breakpoints.emplace(addr, *ptr);
-                                *ptr = 0xcc;
-                            }
-                            send_packet("OK");
+                            if (set_breakpoint(addr)) send_packet("OK");
+                            else send_packet("");
                         }
                         else            // set watchpoint
                         {
@@ -853,14 +887,9 @@ namespace jw
                     {
                         auto& z = packet[0][0];
                         std::uintptr_t addr = decode(packet[1]);
-                        auto ptr = reinterpret_cast<byte*>(addr);
                         if (z == '0')   // remove breakpoint
                         {
-                            if (breakpoints.count(addr))
-                            {
-                                *ptr = breakpoints[addr];
-                                send_packet("OK");
-                            }
+                            if (clear_breakpoint(addr)) send_packet("OK");
                             else send_packet("E00");
                         }
                         else            // remove watchpoint
@@ -900,6 +929,8 @@ namespace jw
                 {   // breakpoint in debugger code, ignore
                     if (debugmsg) std::clog << "reentry caused by breakpoint, ignoring.\n";
                     if (exc == 0x01) for (auto&& w : watchpoints) if (w.second.get_type() == watchpoint::execute) w.second.reset();
+                    if (exc == 0x03 and disable_breakpoint(f->fault_address.offset))
+                        f->fault_address.offset -= 1;
                     return true;
                 }
                 else if (__builtin_expect(debugger_reentry, false) and current_thread->action == thread_info::none)
@@ -948,6 +979,8 @@ namespace jw
                         if (thread::detail::thread_details::trap_is_masked(current_thread->thread.lock()))
                         {
                             thread::detail::thread_details::set_trap(current_thread->thread.lock());
+                            if (exc == 0x03 and disable_breakpoint(f->fault_address.offset))
+                                f->fault_address.offset -= 1;
                             f->flags.trap = false;
                             debugger_reentry = false;
                             if (debugmsg) std::clog << "trap masked at 0x" << std::hex << f->fault_address.offset << ", resuming with SIGCONT.\n";
@@ -995,9 +1028,11 @@ namespace jw
                 if (t) *f = static_cast<new_exception_frame&>(current_thread->frame);
                 else *static_cast<old_exception_frame*>(f) = current_thread->frame;
                 *r = current_thread->reg;
-                debugger_reentry = false;
+                enable_all_breakpoints();
 
                 if (debugmsg) std::clog << "leaving exception 0x" << std::hex << exc << ", resuming at 0x" << f->fault_address.offset << '\n';
+
+                debugger_reentry = false;
                 return result;
             }
 
