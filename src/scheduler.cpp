@@ -47,7 +47,6 @@ namespace jw
                     ("mov esp, eax;"
                      "pop gs; pop fs; pop es;"
                      "pop ebx; pop esi; pop edi; pop ebp;"
-                     "add esp, 4;"
                      "test dl, dl;"             // if starting a new thread
                      "jz context_switch_end;"
                      "and esp, -0x10;"          // align stack to 0x10 bytes
@@ -55,6 +54,7 @@ namespace jw
                      "mov [esp], esp;"
                      "jmp %2;"                  // jump to run_thread()
                      "context_switch_end:"
+                     "add esp, 4;"
                      :: "a" (current_thread->context)
                      , "d" (current_thread->state == starting)
                      , "i" (run_thread)
