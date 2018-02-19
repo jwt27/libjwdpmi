@@ -47,7 +47,7 @@ namespace jw
 
             bool debug_mode { false };
             bool killed { false };
-            int last_signal { };
+            int current_signal { };
             bool thread_events_enabled { false };
 
             locked_pool_allocator<> alloc { 1_MB };
@@ -560,7 +560,7 @@ namespace jw
                     if (async) send_notification(s.str());
                     else send_packet(s.str());
                 }
-                else if (last_signal == thread::detail::thread_stopped)
+                else if (current_signal == thread::detail::thread_stopped)
                 {
                     s << 'w';
                     if (current_thread->thread.lock()->get_state() == thread::detail::finished) s << "00";
@@ -915,30 +915,30 @@ namespace jw
                 {
                     if (not thread_events_enabled)
                     {
-                        if (last_signal == thread::detail::thread_started or last_signal == thread::detail::thread_stopped)
+                        if (current_signal == thread::detail::thread_started or current_signal == thread::detail::thread_stopped)
                         {
-                            last_signal = 0;
+                            current_signal = 0;
                             return true;
                         }
                     }
                     debugger_reentry = true;
                     populate_thread_list();
-                    if (exc == 0x03 and last_signal != 0)
+                    if (exc == 0x03 and current_signal != 0)
                     {
-                        if (last_signal == thread::detail::thread_switched and
+                        if (current_signal == thread::detail::thread_switched and
                             (current_thread->action == thread_info::cont or current_thread->action == thread_info::cont_sig))
                         {
                             debugger_reentry = false;
                             return true;
                         }
-                        if (last_signal == trap_unmasked)
+                        if (current_signal == trap_unmasked)
                         {
                             if (current_thread->last_exception == 0x01 or
                                 current_thread->last_exception == 0x03)
                                 current_thread->last_exception = continued; // resume with SIGCONT so gdb won't get confused
                         }
-                        else current_thread->last_exception = last_signal;
-                        last_signal = 0;
+                        else current_thread->last_exception = current_signal;
+                        current_signal = 0;
                     }
                     else current_thread->last_exception = exc;
 
@@ -1007,7 +1007,7 @@ namespace jw
 
             void break_with_signal(int signal)
             {
-                last_signal = signal;
+                current_signal = signal;
                 breakpoint();
             }
 
