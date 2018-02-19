@@ -1005,12 +1005,6 @@ namespace jw
                 if (thread_events_enabled) break_with_signal(e);
             }
 
-            void break_with_signal(int signal)
-            {
-                current_signal = signal;
-                breakpoint();
-            }
-
             extern "C" void csignal(int signal)
             {
                 if (not killed) break_with_signal(signal);
@@ -1088,11 +1082,10 @@ namespace jw
             if (detail::debugger_reentry) return;
             auto t = jw::thread::detail::scheduler::get_current_thread().lock();
             if (thread::detail::thread_details::trap_unmask(t) && thread::detail::thread_details::trap_state(t))
-                detail::break_with_signal(detail::trap_unmasked);
+                break_with_signal(detail::trap_unmasked);
         }
 #       else
         void notify_gdb_thread_event(thread::detail::thread_event) { }
-        void break_with_signal(int) { }
 #       endif
     }
 }

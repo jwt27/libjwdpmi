@@ -11,9 +11,9 @@ namespace jw
     {
         namespace detail
         {
-            void break_with_signal(int);
 #           ifndef NDEBUG
             extern bool debug_mode;
+            extern int current_signal;
 #           endif
         }
 
@@ -29,7 +29,13 @@ namespace jw
 
         // Set a breakpoint with specified signal.
         // signal can be an exception number, C signal number, or any user-defined signal.
-        inline void break_with_signal(int signal) { detail::break_with_signal(signal); }
+        inline void break_with_signal(int signal)
+        {
+#           ifndef NDEBUG
+            detail::current_signal = signal;
+            breakpoint();
+#           endif
+        }
 
         // Disable the trap flag
         struct trap_mask
