@@ -482,6 +482,7 @@ namespace jw
             {
                 if (selected_thread_id != current_thread_id) return false;
                 auto* new_frame = static_cast<new_exception_frame*>(frame);
+                if (debugmsg) std::clog << "set register " << std::hex << r << '=' << value << '\n';
                 switch (r)
                 {
                 case eax:    return reverse_decode(value, &reg->eax, reglen[r]);
@@ -791,13 +792,23 @@ namespace jw
                     else if (p == 'c' || p == 's')  // step/continue
                     {
                         auto& t = threads[selected_thread_id];
-                        if (packet.size() > 0) t.frame.fault_address.offset = decode(packet[0]);
+                        if (packet.size() > 0)
+                        {
+                            std::uintptr_t jmp = decode(packet[0]);
+                            if (debugmsg and t.frame.fault_address.offset != jmp) std::clog << "JUMP to 0x" << std::hex << jmp << '\n';
+                            t.frame.fault_address.offset = jmp;
+                        }
                         t.set_action(packet[0].delim);
                     }
                     else if (p == 'C' || p == 'S')  // step/continue with signal
                     {
                         auto& t = threads[selected_thread_id];
-                        if (packet.size() > 1) t.frame.fault_address.offset = decode(packet[1]);
+                        if (packet.size() > 1)
+                        {
+                            std::uintptr_t jmp = decode(packet[1]);
+                            if (debugmsg and t.frame.fault_address.offset != jmp) std::clog << "JUMP to 0x" << std::hex << jmp << '\n';
+                            t.frame.fault_address.offset = jmp;
+                        }
                         t.set_action(packet[0].delim, packet[0]);
                     }
                     else if (p == 'Z')  // set break/watchpoint
@@ -991,7 +1002,7 @@ namespace jw
                 *r = current_thread->reg;
                 debugger_reentry = false;
 
-                if (debugmsg) std::clog << "leaving exception 0x" << std::hex << exc << "\n";
+                if (debugmsg) std::clog << "leaving exception 0x" << std::hex << exc << ", resuming at 0x" << f->fault_address.offset << '\n';
                 return result;
             }
 
@@ -1013,9 +1024,8 @@ namespace jw
                 char* p = gdb_streambuf->get_gptr();
                 std::size_t size = gdb_streambuf->get_egptr() - p;
                 std::string_view str { p, size };
-                if (str.find(0x03) != std::string_view::npos)
-                    break_with_signal(packet_received);
-                else if (str.find('#', str.find('$')) != std::string_view::npos)
+                if (str.find(0x03) != std::string_view::npos or
+                    str.find('#', str.find('$')) != std::string_view::npos)
                     break_with_signal(packet_received);
             }
 
