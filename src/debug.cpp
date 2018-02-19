@@ -542,12 +542,7 @@ namespace jw
                             if (w.second.get_state())
                             {
                                 if (w.second.get_type() == watchpoint::execute) s << "hwbreak:;";
-                                else
-                                {
-                                    s << "watch:";
-                                    encode(s, &w.first);
-                                    s << ";";
-                                }
+                                else s << "watch:" << w.first << ";";
                                 break;
                             }
                             else s << "swbreak:;";
