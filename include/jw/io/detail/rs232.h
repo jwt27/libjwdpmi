@@ -215,7 +215,8 @@ namespace jw
 
                 static std::unordered_map<port_num, bool> com_port_use_map;
 
-                struct irq_disable  // TODO: disable get/put irqs separately
+            protected:
+                struct irq_disable
                 {
                     enum which 
                     { 
