@@ -907,11 +907,7 @@ namespace jw
                     {
                         killed = true;
                         f->flags.trap = false;
-                        f->stack.offset -= 4;                                                               // "sub esp, 4"
-                        f->stack.offset &= -0x10;                                                           // "and esp, -0x10"
-                        *reinterpret_cast<std::uintptr_t*>(f->stack.offset) = f->fault_address.offset;      // "mov [esp], eip"
-                        f->fault_address.offset = reinterpret_cast<std::uintptr_t>(jw::terminate);          // "mov eip, func"
-                        f->info_bits.redirect_elsewhere = true;
+                        simulate_call(&current_thread->frame, jw::terminate);
                         s << "X" << std::setw(2) << signal_number(current_thread->last_exception);
                         send_packet(s.str());
                         return true;
@@ -940,9 +936,7 @@ namespace jw
                     if (debugmsg) std::clog << "debugger re-entry!\n";
                     if (debugmsg) std::clog << *static_cast<new_exception_frame*>(f) << *r;
                     current_thread->frame.info_bits.redirect_elsewhere = true;
-                    fpu_context_switcher.leave();
-                    interrupt_id::pop_back();
-                    --exception_count;      // pretend it never happened.
+                    leave_exception_context();  // pretend it never happened.
                 }
                 else
                 {

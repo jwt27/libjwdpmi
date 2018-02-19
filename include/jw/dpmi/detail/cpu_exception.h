@@ -98,6 +98,17 @@ namespace jw
             };
 
             void setup_exception_throwers();
+            void enter_exception_context(exception_num exc) noexcept;
+            void leave_exception_context() noexcept;
+
+            inline void simulate_call(exception_frame* frame, auto* func) noexcept
+            {
+                frame->stack.offset -= 8;                                                               // "sub esp, 8"
+                frame->stack.offset &= -0x10;                                                           // "and esp, -0x10"
+                *reinterpret_cast<std::uintptr_t*>(frame->stack.offset) = frame->fault_address.offset;  // "mov [esp], eip"
+                frame->fault_address.offset = reinterpret_cast<std::uintptr_t>(func);                   // "mov eip, func"
+                frame->info_bits.redirect_elsewhere = true;
+            }
         }
     }
 }

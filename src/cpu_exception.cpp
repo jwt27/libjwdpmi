@@ -24,22 +24,25 @@ namespace jw
                 std::rethrow_exception(e);
             }
 
-            bool simulate_call(exception_frame* frame, auto* func) noexcept
+            void enter_exception_context(exception_num exc) noexcept
             {
-                frame->stack.offset -= 8;                                                               // "sub esp, 8"
-                frame->stack.offset &= -0x10;                                                           // "and esp, -0x10"
-                *reinterpret_cast<std::uintptr_t*>(frame->stack.offset) = frame->fault_address.offset;  // "mov [esp], eip"
-                frame->fault_address.offset = reinterpret_cast<std::uintptr_t>(func);                   // "mov eip, func"
-                frame->info_bits.redirect_elsewhere = true;
-                return true;
+                ++detail::exception_count;
+                detail::interrupt_id::push_back(exc, detail::interrupt_id::id_t::exception);
+                if (exc != exception_num::device_not_available) detail::fpu_context_switcher.enter();
+            }
+
+            void leave_exception_context() noexcept
+            {
+                auto exc = detail::interrupt_id::get_current_interrupt().lock()->vector;
+                if (exc != exception_num::device_not_available) detail::fpu_context_switcher.leave();
+                detail::interrupt_id::pop_back();
+                --detail::exception_count;
             }
         }
 
         bool exception_handler::call_handler(exception_handler* self, raw_exception_frame* frame) noexcept
         {
-            ++detail::exception_count;
-            detail::interrupt_id::push_back(self->exc, detail::interrupt_id::id_t::exception);
-            if (self->exc != exception_num::device_not_available) detail::fpu_context_switcher.enter();
+            detail::enter_exception_context(self->exc);
             *reinterpret_cast<volatile std::uint32_t*>(stack.begin()) = 0xDEADBEEF;
             bool success = false;
             auto* f = self->new_type ? &frame->frame_10 : &frame->frame_09;
@@ -68,9 +71,7 @@ namespace jw
                 else std::cerr << "CAUGHT EXCEPTION IN CPU EXCEPTION HANDLER " << self->exc << std::endl; // HACK
             }
             if (*reinterpret_cast<volatile std::uint32_t*>(stack.begin()) != 0xDEADBEEF) std::cerr << "STACK OVERFLOW\n"; // another HACK
-            if (self->exc != exception_num::device_not_available) detail::fpu_context_switcher.leave();
-            detail::interrupt_id::pop_back();
-            --detail::exception_count;
+            detail::leave_exception_context();
             return success;
         }
         
