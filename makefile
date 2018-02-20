@@ -10,6 +10,7 @@ INCLUDE := -Iinclude
 LIBS := 
 
 OUTPUT := libjwdpmi.a
+DEPFILE := libjwdpmi.d
 
 SRCDIR := src
 OUTDIR := bin
@@ -20,10 +21,10 @@ DEP := $(SRC:$(SRCDIR)/%.cpp=$(OBJDIR)/%.d)
 
 .PHONY: all clean
 
-all: $(OUTDIR)/$(OUTPUT)
+all: $(OUTDIR)/$(OUTPUT) $(OUTDIR)/$(DEPFILE)
 
 clean:
-	rm -f $(OBJ) $(DEP) $(OUTDIR)/$(OUTPUT)
+	rm -f $(OBJ) $(DEP) $(OUTDIR)/$(OUTPUT) $(OUTDIR)/$(DEPFILE)
 
 $(OUTDIR): 
 	mkdir -p $(OUTDIR)
@@ -36,6 +37,12 @@ $(OUTDIR)/$(OUTPUT): $(OBJ) | $(OUTDIR)
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.cpp jwdpmi_config.h | $(OBJDIR)
 	$(CXX) $(CXXFLAGS) -MD -MP -MF $(@:.o=.d) -o $@ $(INCLUDE) -c $< $(PIPECMD)
+
+$(OBJDIR)/%.d: $(OBJDIR)/%.o
+
+$(OUTDIR)/$(DEPFILE): $(DEP) | $(OUTDIR)
+	echo -include $(join $(CURDIR)/, $(DEP)) > $@
+	echo $(join $(CURDIR)/, $(OUTDIR)/$(OUTPUT)): $(join $(CURDIR)/, $(OBJ)) >> $@
 
 jwdpmi_config.h:
 	cp -n jwdpmi_config_default.h jwdpmi_config.h
