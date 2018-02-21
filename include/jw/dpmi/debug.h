@@ -13,7 +13,7 @@ namespace jw
         {
 #           ifndef NDEBUG
             extern bool debug_mode;
-            extern int current_signal;
+            extern volatile int current_signal;
 #           endif
         }
 
@@ -49,7 +49,7 @@ namespace jw
             trap_mask& operator=(const trap_mask&) = delete;
             trap_mask& operator=(trap_mask&&) = delete;
         private:
-            bool fail { false };
+            bool failed { false };
         #else
             constexpr trap_mask() noexcept { }
         #endif

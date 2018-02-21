@@ -53,6 +53,7 @@ namespace jw
                      "mov ebp, esp;"
                      "mov [esp], esp;"
                      "jmp %2;"                  // jump to run_thread()
+                     ".global context_switch_end;"
                      "context_switch_end:"
                      "add esp, 4;"
                      :: "a" (current_thread->context)
@@ -87,11 +88,6 @@ namespace jw
                 try
                 {
                     current_thread->state = running;
-                    if (dpmi::debug())
-                    {
-                        dpmi::detail::notify_gdb_thread_event(thread_started);
-                        if (current_thread->state != running) yield();
-                    }
                     current_thread->call();
                     current_thread->state = finished;
                 }
@@ -106,7 +102,7 @@ namespace jw
                 }
 
                 if (current_thread->state != finished) current_thread->state = initialized;
-                dpmi::detail::notify_gdb_thread_event(thread_stopped);
+                dpmi::detail::notify_gdb_thread_event(thread_finished);
 
                 while (true) try { yield(); }
                 catch (const abort_thread&) { }
@@ -159,7 +155,7 @@ namespace jw
             void scheduler::set_next_thread() noexcept        // TODO: catch exceptions here (from deque, shared_ptr) and do something sensible
             {
                 dpmi::interrupt_mask no_interrupts_please { };
-                for(std::size_t i = 0; i <= threads.size(); ++i)
+                for(std::size_t i = 0; ; ++i)
                 {
                     if (__builtin_expect(current_thread->is_running(), true)) threads.push_back(current_thread);
 
@@ -178,9 +174,13 @@ namespace jw
 
                     if (__builtin_expect(current_thread->pending_exceptions() != 0, false)) break;
                     if (__builtin_expect(current_thread->awaiting && current_thread->awaiting->pending_exceptions() != 0, false)) break;
-                    if (__builtin_expect(current_thread->state == suspended, false)) return;
+                    if (__builtin_expect(current_thread->state != suspended, true)) return;
+                    if (i > threads.size())
+                    {
+                        dpmi::break_with_signal(all_threads_suspended);
+                        i = 0;
+                    }
                 }
-                dpmi::break_with_signal(all_threads_suspended);
             }
         }
     }

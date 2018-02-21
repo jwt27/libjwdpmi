@@ -18,7 +18,7 @@ using namespace jw;
 int _crt0_startup_flags = 0
 | config::user_crt0_startup_flags
 #ifndef NDEBUG
-| _CRT0_FLAG_NULLOK
+//| _CRT0_FLAG_NULLOK
 #endif
 | _CRT0_FLAG_NMI_SIGNAL
 | _CRT0_DISABLE_SBRK_ADDRESS_WRAP
@@ -80,10 +80,10 @@ namespace jw
     void terminate_handler()
     {
         static bool recursive_call { false };
-        jw::dpmi::break_with_signal(SIGTERM);
         if (not recursive_call)
         {
             recursive_call = true;
+            jw::dpmi::break_with_signal(SIGTERM);
             jw::terminate();
         }
         else std::abort();

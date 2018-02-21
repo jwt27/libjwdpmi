@@ -36,9 +36,9 @@ $(OUTDIR)/$(OUTPUT): $(OBJ) | $(OUTDIR)
 	$(AR) scru $@ $(OBJ) $(LIBS)
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.cpp jwdpmi_config.h | $(OBJDIR)
-	$(CXX) $(CXXFLAGS) -MD -MP -MT $(CURDIR)/$@ -MF $(@:.o=.d) -o $@ $(INCLUDE) -c $< $(PIPECMD)
+	$(CXX) $(CXXFLAGS) -MD -MP -MF $(@:.o=.d) -o $@ $(INCLUDE) -c $< $(PIPECMD)
 
-$(OBJDIR)/%.d: $(OBJDIR)/%.o
+$(DEP): $(OBJ)
 
 $(OUTDIR)/$(DEPFILE): $(DEP) | $(OUTDIR)
 	echo -include $(foreach D, $(DEP), $(join $(CURDIR)/, $(D))) > $@

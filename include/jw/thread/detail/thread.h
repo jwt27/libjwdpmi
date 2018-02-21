@@ -42,8 +42,7 @@ namespace jw
 
             enum thread_event : std::uint32_t
             {
-                thread_started = 0x1000,
-                thread_stopped,
+                thread_finished = 0x1000,
                 thread_switched,
                 all_threads_suspended
             };
@@ -127,7 +126,7 @@ namespace jw
                 static const thread_context* get_context(auto t) noexcept { return t->context; }
                 static void trap_mask(auto t) noexcept { ++t->trap_masked; }
                 static bool trap_unmask(auto t) noexcept { return (--t->trap_masked) == 0; }
-                static bool trap_is_masked(auto t) noexcept { return t->trap_masked > 0; }
+                static auto trap_masked(auto t) noexcept { return t->trap_masked; }
                 static bool trap_state(auto t) noexcept { return t->trap; }
                 static void set_trap(auto t) noexcept { t->trap = true; }
                 static void clear_trap(auto t) noexcept { t->trap = false; }

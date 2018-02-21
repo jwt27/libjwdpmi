@@ -32,7 +32,6 @@ namespace jw
             // true == interrupts enabled
             static bool get() noexcept
             {
-                if (count > 0) return false;
                 return get_interrupt_state();
             }
 
