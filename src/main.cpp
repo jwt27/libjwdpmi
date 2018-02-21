@@ -77,16 +77,10 @@ namespace jw
         }
     }
 
-    void terminate_handler()
+    [[noreturn]] void terminate_handler()
     {
-        static bool recursive_call { false };
-        if (not recursive_call)
-        {
-            recursive_call = true;
-            jw::dpmi::break_with_signal(SIGTERM);
-            jw::terminate();
-        }
-        else std::abort();
+        jw::dpmi::break_with_signal(SIGTERM);
+        std::abort();
     }
 
     int return_value { -1 };
