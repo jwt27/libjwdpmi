@@ -6,7 +6,7 @@ CXXFLAGS += -fnon-call-exceptions
 CXXFLAGS += -mcld
 CXXFLAGS += -mpreferred-stack-boundary=4
 
-INCLUDE := -Iinclude
+INCLUDE := -I$(CURDIR)/include
 LIBS := 
 
 OUTPUT := libjwdpmi.a
@@ -36,13 +36,13 @@ $(OUTDIR)/$(OUTPUT): $(OBJ) | $(OUTDIR)
 	$(AR) scru $@ $(OBJ) $(LIBS)
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.cpp jwdpmi_config.h | $(OBJDIR)
-	$(CXX) $(CXXFLAGS) -MD -MP -MF $(@:.o=.d) -o $@ $(INCLUDE) -c $< $(PIPECMD)
+	$(CXX) $(CXXFLAGS) -MD -MP -MT $(CURDIR)/$@ -MF $(@:.o=.d) -o $@ $(INCLUDE) -c $< $(PIPECMD)
 
 $(OBJDIR)/%.d: $(OBJDIR)/%.o
 
 $(OUTDIR)/$(DEPFILE): $(DEP) | $(OUTDIR)
-	echo -include $(join $(CURDIR)/, $(DEP)) > $@
-	echo $(join $(CURDIR)/, $(OUTDIR)/$(OUTPUT)): $(join $(CURDIR)/, $(OBJ)) >> $@
+	echo -include $(foreach D, $(DEP), $(join $(CURDIR)/, $(D))) > $@
+	echo $(CURDIR)/$(OUTDIR)/$(OUTPUT): $(foreach O, $(OBJ), $(join $(CURDIR)/, $(O))) >> $@
 
 jwdpmi_config.h:
 	cp -n jwdpmi_config_default.h jwdpmi_config.h
