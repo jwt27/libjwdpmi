@@ -58,7 +58,8 @@ namespace jw
                 static inline std::uint32_t id_count { 0 };
 
                 thread_context* context; // points to esp during context switch
-                std::vector<byte> stack;
+                std::unique_ptr<byte[]> stack;
+                std::size_t stack_size;
                 std::deque<std::exception_ptr> exceptions { };
                 const std::uint32_t id_num { ++id_count };
                 std::uint32_t trap_masked { 0 };
@@ -74,7 +75,7 @@ namespace jw
                 auto& operator=(const thread&) = delete;
                 thread(const thread&) = delete;
 
-                thread(std::size_t bytes) : stack(bytes) { }
+                thread(std::size_t bytes) : stack(new byte[bytes]), stack_size(bytes) { }
 
             public:
                 virtual void abort(bool = true)
