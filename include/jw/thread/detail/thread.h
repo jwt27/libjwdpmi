@@ -54,13 +54,13 @@ namespace jw
                 friend class task_base;
                 friend class thread_details;
 
-                static inline std::uint32_t id_count { 0 };
+                static inline std::uint32_t id_count { 1 };
 
                 thread_context* context; // points to esp during context switch
                 std::unique_ptr<byte[]> stack;
                 std::size_t stack_size;
                 std::deque<std::exception_ptr> exceptions { };
-                const std::uint32_t id_num { ++id_count };
+                const std::uint32_t id_num { id_count++ };
                 std::uint32_t trap_masked { 0 };
                 bool trap { false };
 

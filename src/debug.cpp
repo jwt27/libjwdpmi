@@ -714,12 +714,11 @@ namespace jw
 
                 while (cant_continue())
                 {
-                    //if (debugmsg) std::clog << "current thread action = 0x" << std::hex << current_thread->action << '\n';
-
                     recv_packet();
+                    if (current_thread->signal == packet_received) current_thread->signal = -1;
+
                     std::stringstream s { };
                     s << std::hex << std::setfill('0');
-                    if (current_thread->signal == packet_received) current_thread->signal = -1;
                     auto& p = packet.front().delim;
                     selected_thread_id.try_emplace(p, current_thread_id);
                     if (p == '?')   // stop reason
@@ -858,10 +857,9 @@ namespace jw
                     else if (p == 'H')  // set current thread
                     {
                         auto id = decode(packet[0].substr(1));
-                        if (debugmsg) std::clog << packet[0] << " id=0x" << std::hex << id << '\n';
                         if (threads.count(id) > 0 or id == all_threads_id)
                         {
-                            selected_thread_id[packet[0][1]] = id;
+                            selected_thread_id[packet[0][0]] = id;
                             send_packet("OK");
                         }
                         else send_packet("E00");

@@ -22,7 +22,7 @@ namespace jw
         {
             scheduler::init_main::init_main()
             {
-                main_thread = std::shared_ptr<thread> { new thread(0) };
+                main_thread = std::shared_ptr<thread> { new thread(1) };
                 main_thread->state = running;
                 main_thread->parent = main_thread;
                 main_thread->name = "Main thread";

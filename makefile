@@ -19,7 +19,6 @@ SRC := $(wildcard $(SRCDIR)/*.cpp)
 OBJ := $(SRC:$(SRCDIR)/%.cpp=$(OBJDIR)/%.o)
 DEP := $(SRC:$(SRCDIR)/%.cpp=$(OBJDIR)/%.d)
 
-
 .PHONY: all clean
 
 all: $(OUTDIR)/$(OUTPUT) $(OUTDIR)/$(DEPFILE)
@@ -42,7 +41,7 @@ $(OBJDIR)/%.o: $(SRCDIR)/%.cpp jwdpmi_config.h | $(OBJDIR)
 $(DEP): $(OBJ)
 
 $(OUTDIR)/$(DEPFILE): $(DEP) | $(OUTDIR)
-	echo -include $(DEP) > $@
+	echo include $(DEP) > $@
 	echo $(OUTDIR)/$(OUTPUT): $(OBJ) >> $@
 
 jwdpmi_config.h:
