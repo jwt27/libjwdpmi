@@ -12,12 +12,13 @@ LIBS :=
 OUTPUT := libjwdpmi.a
 DEPFILE := libjwdpmi.d
 
-SRCDIR := src
-OUTDIR := bin
-OBJDIR := obj
+SRCDIR := $(CURDIR)/src
+OUTDIR := $(CURDIR)/bin
+OBJDIR := $(CURDIR)/obj
 SRC := $(wildcard $(SRCDIR)/*.cpp)
 OBJ := $(SRC:$(SRCDIR)/%.cpp=$(OBJDIR)/%.o)
 DEP := $(SRC:$(SRCDIR)/%.cpp=$(OBJDIR)/%.d)
+
 
 .PHONY: all clean
 
@@ -41,8 +42,8 @@ $(OBJDIR)/%.o: $(SRCDIR)/%.cpp jwdpmi_config.h | $(OBJDIR)
 $(DEP): $(OBJ)
 
 $(OUTDIR)/$(DEPFILE): $(DEP) | $(OUTDIR)
-	echo -include $(foreach D, $(DEP), $(join $(CURDIR)/, $(D))) > $@
-	echo $(CURDIR)/$(OUTDIR)/$(OUTPUT): $(foreach O, $(OBJ), $(join $(CURDIR)/, $(O))) >> $@
+	echo -include $(DEP) > $@
+	echo $(OUTDIR)/$(OUTPUT): $(OBJ) >> $@
 
 jwdpmi_config.h:
 	cp -n jwdpmi_config_default.h jwdpmi_config.h
