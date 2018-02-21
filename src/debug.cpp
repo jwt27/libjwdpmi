@@ -83,6 +83,7 @@ namespace jw
                 new_exception_frame frame;
                 cpu_registers reg;
                 std::int32_t signal { -1 };
+                std::int32_t signal_before_trap_mask { -1 };
                 std::uintptr_t step_range_begin { 0 };
                 std::uintptr_t step_range_end { 0 };
 
@@ -343,6 +344,8 @@ namespace jw
                 default:
                     return false;
 
+                case exception_num::trap:
+                case exception_num::breakpoint:
                 case thread::detail::thread_switched:
                 case thread::detail::thread_finished:
                 case thread::detail::all_threads_suspended:
@@ -1058,43 +1061,51 @@ namespace jw
                 {
                     debugger_reentry = true;
                     populate_thread_list();
+
                     if (exc == 0x03 and current_signal != -1)
                     {
                         if (debugmsg) std::clog << "break with signal 0x" << std::hex << current_signal << '\n';
                         if (current_signal == trap_unmasked)
                         {
+                            current_thread->signal = current_thread->signal_before_trap_mask;
                             if (current_thread->signal == 0x01 or
                                 current_thread->signal == 0x03)
                                 current_thread->signal = continued; // resume with SIGCONT so gdb won't get confused
+                            current_thread->signal_before_trap_mask = -1;
                         }
                         else current_thread->signal = current_signal;
                     }
                     else current_thread->signal = exc;
 
-                    if (__builtin_expect(exc == 0x01 or exc == 0x03, true))
+                    if (current_thread->trap_is_masked() and
+                        is_benign_signal(current_thread->signal) and
+                        current_thread->signal != thread::detail::thread_switched and
+                        current_thread->signal != thread::detail::all_threads_suspended)
                     {
-                        if (current_thread->signal != thread::detail::thread_switched and
-                            current_thread->signal != thread::detail::all_threads_suspended)
-                        {
-                            if (current_thread->trap_is_masked())
-                            {
-                                current_thread->set_trap(); // enable trap on next breakpoint when trap is unmasked
-                                f->flags.trap = false;      // disable trap for now
-                                if (debugmsg) std::clog << "trap masked at 0x" << std::hex << f->fault_address.offset << ", resuming with SIGCONT.\n";
-                                result = true;
-                                goto leave;
-                            }
-                        }
+                        current_thread->set_trap(); // re-enable trap when last trap_mask destructs
+                        f->flags.trap = false;      // disable trap for now
+                        if (current_thread->signal_before_trap_mask == -1) current_thread->signal_before_trap_mask = current_thread->signal;
+                        if (debugmsg) std::clog << "trap masked at 0x" << std::hex << f->fault_address.offset << ", resuming with SIGCONT.\n";
+                        result = true;
+                        goto leave;
+                    }
+                    else if (current_thread->trap_is_masked() and not is_benign_signal(current_thread->signal))
+                    {
+                        auto&& t = current_thread->thread.lock();
+                        current_thread->signal_before_trap_mask = -1;
+                        while (thread::detail::thread_details::trap_masked(t))
+                            thread::detail::thread_details::trap_unmask(t);     // serious fault occured, undo trap masks
+                    }
 
-                        if (exc == 0x01 and current_thread->action == thread_info::step_range and
-                            f->fault_address.offset >= current_thread->step_range_begin and
-                            f->fault_address.offset <= current_thread->step_range_end)
-                        {
-                            if (debugmsg) std::clog << "range step until 0x" << std::hex << current_thread->step_range_end;
-                            if (debugmsg) std::clog << ", now at 0x" << f->fault_address.offset << '\n';
-                            result = true;
-                            goto leave_without_checking_breakpoints;
-                        }
+                    if (__builtin_expect(current_thread->signal == 0x01 or current_thread->signal == 0x03, true) and
+                        current_thread->action == thread_info::step_range and
+                        f->fault_address.offset >= current_thread->step_range_begin and
+                        f->fault_address.offset <= current_thread->step_range_end)
+                    {
+                        if (debugmsg) std::clog << "range step until 0x" << std::hex << current_thread->step_range_end;
+                        if (debugmsg) std::clog << ", now at 0x" << f->fault_address.offset << '\n';
+                        result = true;
+                        goto leave_without_checking_breakpoints;
                     }
 
                     if (debugmsg) std::clog << *static_cast<new_exception_frame*>(f) << *r;
@@ -1232,7 +1243,9 @@ namespace jw
         {
             if (failed) return;
             auto t = jw::thread::detail::scheduler::get_current_thread().lock();
-            if (thread::detail::thread_details::trap_unmask(t) and thread::detail::thread_details::trap_state(t))
+            if (thread::detail::thread_details::trap_masked(t) and
+                thread::detail::thread_details::trap_unmask(t) and
+                thread::detail::thread_details::trap_state(t))
                 break_with_signal(detail::trap_unmasked);
         }
 #       else
