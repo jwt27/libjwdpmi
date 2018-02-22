@@ -454,6 +454,15 @@ namespace jw
                 return r;
             }
 
+            bool packet_available()
+            {
+                auto* p = gdb_streambuf->get_gptr();
+                std::size_t size = gdb_streambuf->get_egptr() - p;
+                std::string_view str { p, size };
+                return str.find(0x03) != std::string_view::npos
+                    or str.find('#', str.find('$')) != std::string_view::npos;
+            }
+
             // not used
             void send_notification(const std::string& output)
             {
@@ -847,10 +856,19 @@ namespace jw
                         }
                         else if (v == "CtrlC")
                         {
-                            for (auto&& t : threads) t.second.set_action('t');
-                            if (interrupt_count == 0 and exception_count == 1)
-                                stop_reply();    // breaking in interrupt context yields a useless stack trace
+                            auto already_stopped = []
+                            {
+                                for (auto&& t : threads) if (t.second.action != thread_info::stop) return false;
+                                return true;
+                            };
                             send_packet("OK");
+                            if (already_stopped()) stop_reply();
+                            else
+                            {
+                                for (auto&& t : threads) t.second.set_action('t');
+                                if (interrupt_count == 0 and exception_count == 1)
+                                    stop_reply();    // breaking in interrupt context yields a useless stack trace
+                            }
                         }
                         else send_packet("");
                     }
@@ -1075,10 +1093,13 @@ namespace jw
                     }
                     else current_thread->signal = exc;
 
+                    if (packet_available()) current_thread->signal = packet_received;   // HACK
+
                     if (current_thread->trap_is_masked() and
                         is_benign_signal(current_thread->signal) and
                         current_thread->signal != thread::detail::thread_switched and
-                        current_thread->signal != thread::detail::all_threads_suspended)
+                        current_thread->signal != thread::detail::all_threads_suspended and
+                        current_thread->signal != packet_received)
                     {
                         current_thread->set_trap(); // re-enable trap when last trap_mask destructs
                         f->flags.trap = false;      // disable trap for now
@@ -1165,17 +1186,6 @@ namespace jw
                 signal_handlers[signal](signal);
             }
 
-            void serial_irq_handler()
-            {
-                if (debugger_reentry) return;
-                auto* p = gdb_streambuf->get_gptr();
-                std::size_t size = gdb_streambuf->get_egptr() - p;
-                std::string_view str { p, size };
-                if (str.find(0x03) != std::string_view::npos or
-                    str.find('#', str.find('$')) != std::string_view::npos)
-                    break_with_signal(packet_received);
-            }
-
             void setup_gdb_interface(io::rs232_config cfg)
             {
                 if (debug_mode) return;
@@ -1185,7 +1195,10 @@ namespace jw
                 gdb_streambuf = new rs232_streambuf_internals { cfg };
                 gdb = allocate_unique<io::rs232_stream>(stream_alloc, gdb_streambuf);
 
-                serial_irq = std::make_unique<irq_handler>(serial_irq_handler, dpmi::always_call | dpmi::no_interrupts);
+                serial_irq = std::make_unique<irq_handler>([]
+                {
+                    if (packet_available()) break_with_signal(packet_received);
+                }, dpmi::always_call | dpmi::no_interrupts);
 
                 {
                     exception_handler check_frame_type { 3, [](auto*, auto*, bool t) [[gnu::used]] 
