@@ -471,6 +471,8 @@ namespace jw
             {
                 auto* p = gdb_streambuf->get_gptr();
                 std::size_t size = gdb_streambuf->get_egptr() - p;
+                return size > 1;
+
                 std::string_view str { p, size };
                 return str.find(0x03) != std::string_view::npos
                     or str.find('#', str.find('$')) != std::string_view::npos;
