@@ -1198,8 +1198,7 @@ namespace jw
                     while (cant_continue())
                     {
                         if (packet_available()) current_thread->signals.insert(packet_received);
-                            handle_packet();
-                        for (auto&& w : watchpoints) w.second.reset();
+                        handle_packet();
                     }
 
                     result = current_thread->do_action();
@@ -1213,6 +1212,7 @@ namespace jw
                 *r = current_thread->reg;
 
             leave:
+                for (auto&& w : watchpoints) w.second.reset();
                 enable_all_breakpoints();
                 if (*reinterpret_cast<byte*>(f->fault_address.offset) == 0xcc
                     and not disable_breakpoint(f->fault_address.offset))
