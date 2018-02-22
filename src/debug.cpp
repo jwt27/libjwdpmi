@@ -1094,8 +1094,7 @@ namespace jw
                         while (thread::detail::thread_details::trap_masked(t))
                             thread::detail::thread_details::trap_unmask(t);     // serious fault occured, undo trap masks
                     }
-
-                    if (__builtin_expect(current_thread->signal == 0x01 or current_thread->signal == 0x03, true) and
+                    else if (__builtin_expect(current_thread->signal == 0x01 or current_thread->signal == 0x03, true) and
                         current_thread->action == thread_info::step_range and
                         f->fault_address.offset >= current_thread->step_range_begin and
                         f->fault_address.offset <= current_thread->step_range_end)
@@ -1103,7 +1102,7 @@ namespace jw
                         if (debugmsg) std::clog << "range step until 0x" << std::hex << current_thread->step_range_end;
                         if (debugmsg) std::clog << ", now at 0x" << f->fault_address.offset << '\n';
                         result = true;
-                        goto leave_without_checking_breakpoints;
+                        goto leave;
                     }
 
                     if (debugmsg) std::clog << *static_cast<new_exception_frame*>(f) << *r;
@@ -1148,7 +1147,6 @@ namespace jw
                     and not disable_breakpoint(f->fault_address.offset))
                     f->fault_address.offset += 1;    // don't resume on a breakpoint
 
-            leave_without_checking_breakpoints:
                 if (debugmsg) std::clog << "leaving exception 0x" << std::hex << exc << ", resuming at 0x" << f->fault_address.offset << '\n';
 
                 current_thread->signal = -1;
