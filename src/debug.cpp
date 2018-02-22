@@ -719,16 +719,18 @@ namespace jw
                             }
                             else if (posix_signal(signal) == sigtrap)
                             {
+                                bool watchpoint_hit = false;
                                 for (auto&& w : watchpoints)
                                 {
                                     if (w.second.get_state())
                                     {
+                                        watchpoint_hit = true;
                                         if (w.second.get_type() == watchpoint::execute) s << "hwbreak:;";
                                         else s << "watch:" << w.first << ";";
                                         break;
                                     }
-                                    else s << "swbreak:;";
                                 }
+                                if (not watchpoint_hit) s << "swbreak:;";
                             }
                             if (async) send_notification(s.str());
                             else send_packet(s.str());
