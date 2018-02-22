@@ -35,6 +35,14 @@ namespace jw
             constexpr bool is_benign_signal(std::int32_t) noexcept;
             constexpr bool all_benign_signals(auto*);
 
+            enum signals
+            {
+                packet_received = 0x1010,
+                trap_masked,
+                trap_unmasked,
+                continued
+            };
+
             struct rs232_streambuf_internals : public io::detail::rs232_streambuf
             {
                 using rs232_streambuf::rs232_streambuf;
@@ -84,7 +92,8 @@ namespace jw
                 std::weak_ptr<thread::detail::thread> thread;
                 new_exception_frame frame;
                 cpu_registers reg;
-                std::unordered_multiset<std::int32_t, std::hash<std::uint32_t>, std::equal_to<std::uint32_t>, locked_pool_allocator<>> signals { alloc };
+                std::unordered_multiset<std::int32_t, std::hash<std::int32_t>, std::equal_to<std::int32_t>, locked_pool_allocator<>> signals { alloc };
+                std::int32_t last_stop_signal { -1 };
                 std::uintptr_t step_range_begin { 0 };
                 std::uintptr_t step_range_end { 0 };
 
@@ -116,7 +125,7 @@ namespace jw
                     }
                     else if (a == 's')  // step
                     {
-                        frame.flags.trap = true;
+                        frame.flags.trap = signals.count(trap_masked) == 0;
                         set_trap();
                         action = step;
                     }
@@ -129,14 +138,14 @@ namespace jw
                     }
                     else if (a == 'S')  // step with signal
                     {
-                        frame.flags.trap = true;
+                        frame.flags.trap = signals.count(trap_masked) == 0;
                         set_trap();
                         if (all_benign_signals(this)) action = step;
                         else action = step_sig;
                     }
                     else if (a == 'r')   // step with range
                     {
-                        frame.flags.trap = true;
+                        frame.flags.trap = signals.count(trap_masked) == 0;
                         set_trap();
                         step_range_begin = rbegin;
                         step_range_end = rend;
@@ -148,7 +157,6 @@ namespace jw
                         clear_trap();
                         action = stop;
                     }
-                    //if (thread::detail::thread_details::trap_state(t) and this != current_thread) signal = continued;
                 }
 
                 bool do_action() const
@@ -221,14 +229,6 @@ namespace jw
 #           else
             constexpr auto reg_max = regnum::mxcsr;
 #           endif
-
-            enum signals
-            {
-                packet_received = 0x1010,
-                trap_masked,
-                trap_unmasked,
-                continued
-            };
 
             enum posix_signals : std::int32_t
             {
@@ -670,18 +670,30 @@ namespace jw
             {
                 for (auto&& t : threads)
                 {
-                    for (auto signal = t.second.signals.begin(); signal != t.second.signals.end();)
+                    auto no_stop_signals = [&t]
                     {
-                        if (not is_stop_signal(t.second, *signal) or (t.second.action == thread_info::none and not force))
+                        if (t.second.signals.empty()) return true;
+                        for (auto&& i : t.second.signals) if (is_stop_signal(t.second, i)) return false;
+                        return true;
+                    };
+                    if (no_stop_signals()) t.second.signals.insert(t.second.last_stop_signal);
+
+                    for (auto i = t.second.signals.begin(); i != t.second.signals.end();)
+                    {
+                        auto signal = *i;
+                        if (not is_stop_signal(t.second, signal) or (t.second.action == thread_info::none and not force))
                         {
-                            ++signal;
+                            ++i;
                             continue;
                         }
+                        else i = t.second.signals.erase(i);
+
+                        t.second.last_stop_signal = signal;
 
                         std::stringstream s { };
                         s << std::hex << std::setfill('0');
                         if (async) s << "Stop:";
-                        if (*signal == thread::detail::thread_finished)
+                        if (signal == thread::detail::thread_finished)
                         {
                             if (not thread_events_enabled) continue;
                             s << 'w';
@@ -692,7 +704,7 @@ namespace jw
                         }
                         else
                         {
-                            s << "T" << std::setw(2) << posix_signal(*signal);
+                            s << "T" << std::setw(2) << posix_signal(signal);
                             //s << eip << ':'; reg(s, eip, t.first); s << ';';   // TODO fix thread registers
                             //s << esp << ':'; reg(s, esp, t.first); s << ';';
                             //s << ebp << ':'; reg(s, ebp, t.first); s << ';';
@@ -701,7 +713,7 @@ namespace jw
                             {
                                 if (thread_events_enabled) s << "create:;";
                             }
-                            else if (posix_signal(*signal) == sigtrap)
+                            else if (posix_signal(signal) == sigtrap)
                             {
                                 for (auto&& w : watchpoints)
                                 {
@@ -719,10 +731,8 @@ namespace jw
                         }
                         t.second.action = thread_info::none;
 
-                        if (*signal == thread::detail::all_threads_suspended and supported["no-resumed"] == "+")
+                        if (signal == thread::detail::all_threads_suspended and supported["no-resumed"] == "+")
                             send_packet("N");
-
-                        signal = t.second.signals.erase(signal);
                     }
                 }
             }
