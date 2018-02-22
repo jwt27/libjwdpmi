@@ -1186,6 +1186,12 @@ namespace jw
                 if (config::enable_gdb_interrupts) asm("sti");
                 try
                 {
+                    if (debugmsg)
+                    {
+                        std::clog << "signals:";
+                        for (auto&& s : current_thread->signals) std::clog << " 0x" << std::hex << s;
+                        std::clog << '\n';
+                    }
                     stop_reply();
                     result = handle_packet();
                     for (auto&& w : watchpoints) w.second.reset();
