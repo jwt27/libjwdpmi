@@ -741,337 +741,323 @@ namespace jw
                 }
             }
 
-            [[gnu::hot]] bool handle_packet()
+            [[gnu::hot]] void handle_packet()
             {
-                auto cant_continue = []
-                {
-                    if (current_thread->signals.count(packet_received) > 0) return true;
-                    for (auto&& t : threads)
-                        if (t.second.thread.lock()->is_running() and
-                            t.second.action == thread_info::none) return true;
-                    return false;
-                };
+                recv_packet();
+                current_thread->signals.erase(packet_received);
 
-                while (cant_continue())
+                std::stringstream s { };
+                s << std::hex << std::setfill('0');
+                auto& p = packet.front().delim;
+                selected_thread_id.try_emplace(p, current_thread_id);
+                if (p == '?')   // stop reason
                 {
-                    recv_packet();
-                    current_thread->signals.erase(packet_received);
-
-                    std::stringstream s { };
-                    s << std::hex << std::setfill('0');
-                    auto& p = packet.front().delim;
-                    selected_thread_id.try_emplace(p, current_thread_id);
-                    if (p == '?')   // stop reason
+                    stop_reply(true);
+                }
+                else if (p == 'q')  // query
+                {
+                    auto& q = packet[0];
+                    if (q == "Supported")
+                    {
+                        packet.pop_front();
+                        for (auto&& str : packet)
+                        {
+                            auto back = str.back();
+                            auto equals_sign = str.find('=', 0);
+                            if (back == '+' or back == '-')
+                            {
+                                supported[str.substr(0, str.size() - 1).data()] = back;
+                            }
+                            else if (equals_sign != str.npos)
+                            {
+                                supported[str.substr(0, equals_sign).data()] = str.substr(equals_sign + 1);
+                            }
+                        }
+                        send_packet("PacketSize=399;swbreak+;hwbreak+;QThreadEvents+;no-resumed+");
+                    }
+                    else if (q == "Attached") send_packet("0");
+                    else if (q == "C")
+                    {
+                        s << "QC" << current_thread_id;
+                        send_packet(s.str());
+                    }
+                    else if (q == "fThreadInfo")
+                    {
+                        s << "m";
+                        for (auto&& t : threads)
+                        {
+                            s << t.first << ',';
+                        }
+                        send_packet(s.str());
+                    }
+                    else if (q == "sThreadInfo") send_packet("l");
+                    else if (q == "ThreadExtraInfo")
+                    {
+                        using namespace thread::detail;
+                        std::stringstream msg { };
+                        auto id = decode(packet[1]);
+                        if (threads.count(id))
+                        {
+                            auto&& t = threads[id].thread.lock();
+                            msg << t->name;
+                            if (id == current_thread_id) msg << " (*)";
+                            msg << ": ";
+                            switch (t->get_state())
+                            {
+                            case initialized: msg << "Initialized"; break;
+                            case starting:    msg << "Starting";    break;
+                            case running:     msg << "Running";     break;
+                            case suspended:   msg << "Suspended";   break;
+                            case terminating: msg << "Terminating"; break;
+                            case finished:    msg << "Finished";    break;
+                            }
+                            if (t->pending_exceptions()) msg << ", " << t->pending_exceptions() << " pending exception(s)!";
+                        }
+                        else msg << "invalid thread";
+                        auto str = msg.str();
+                        encode(s, str.c_str(), str.size());
+                        send_packet(s.str());
+                    }
+                    else send_packet("");
+                }
+                else if (p == 'Q')
+                {
+                    auto& q = packet[0];
+                    if (q == "ThreadEvents")
+                    {
+                        thread_events_enabled = packet[1][0] - '0';
+                        send_packet("OK");
+                    }
+                    else send_packet("");
+                }
+                else if (p == 'v')
+                {
+                    auto& v = packet[0];
+                    if (v == "Stopped")
                     {
                         stop_reply(true);
                     }
-                    else if (p == 'q')  // query
+                    else if (v == "Cont?")
                     {
-                        auto& q = packet[0];
-                        if (q == "Supported")
-                        {
-                            packet.pop_front();
-                            for (auto&& str : packet)
-                            {
-                                auto back = str.back();
-                                auto equals_sign = str.find('=', 0);
-                                if (back == '+' or back == '-')
-                                {
-                                    supported[str.substr(0, str.size() - 1).data()] = back;
-                                }
-                                else if (equals_sign != str.npos)
-                                {
-                                    supported[str.substr(0, equals_sign).data()] = str.substr(equals_sign + 1);
-                                }
-                            }
-                            send_packet("PacketSize=399;swbreak+;hwbreak+;QThreadEvents+;no-resumed+");
-                        }
-                        else if (q == "Attached") send_packet("0");
-                        else if (q == "C")
-                        {
-                            s << "QC" << current_thread_id;
-                            send_packet(s.str());
-                        }
-                        else if (q == "fThreadInfo")
-                        {
-                            s << "m";
-                            for (auto&& t : threads) 
-                            {
-                                s << t.first << ',';
-                            }
-                            send_packet(s.str());
-                        }
-                        else if (q == "sThreadInfo") send_packet("l");
-                        else if (q == "ThreadExtraInfo")
-                        {
-                            using namespace thread::detail;
-                            std::stringstream msg { };
-                            auto id = decode(packet[1]);
-                            if (threads.count(id))
-                            {
-                                auto&& t = threads[id].thread.lock();
-                                msg << t->name;
-                                if (id == current_thread_id) msg << " (*)";
-                                msg << ": ";
-                                switch (t->get_state())
-                                {
-                                case initialized: msg << "Initialized"; break;
-                                case starting:    msg << "Starting";    break;
-                                case running:     msg << "Running";     break;
-                                case suspended:   msg << "Suspended";   break;
-                                case terminating: msg << "Terminating"; break;
-                                case finished:    msg << "Finished";    break;
-                                }
-                                if (t->pending_exceptions()) msg << ", " << t->pending_exceptions() << " pending exception(s)!";
-                            }
-                            else msg << "invalid thread";
-                            auto str = msg.str();
-                            encode(s, str.c_str(), str.size());
-                            send_packet(s.str());
-                        }
-                        else send_packet("");
+                        send_packet("vCont;s;S;c;C;t;r");
                     }
-                    else if (p == 'Q')
+                    else if (v == "Cont")
                     {
-                        auto& q = packet[0];
-                        if (q == "ThreadEvents")
+                        for (std::size_t i = 1; i < packet.size(); ++i)
                         {
-                            thread_events_enabled = packet[1][0] - '0';
-                            send_packet("OK");
-                        }
-                        else send_packet("");
-                    }
-                    else if (p == 'v')
-                    {
-                        auto& v = packet[0];
-                        if (v == "Stopped")
-                        {
-                            stop_reply(true);
-                        }
-                        else if (v == "Cont?")
-                        {
-                            send_packet("vCont;s;S;c;C;t;r");
-                        }
-                        else if (v == "Cont")
-                        {
-                            for (std::size_t i = 1; i < packet.size(); ++i)
+                            if (packet[i][0] == 'r')
                             {
-                                if (packet[i][0] == 'r')
-                                {
-                                    auto begin = decode(packet[i].substr(1));
-                                    ++i;
-                                    auto end = decode(packet[i]);
-                                    if (packet.size() >= i and packet[i + 1].delim == ':')
-                                    {
-                                        auto id = decode(packet[i + 1]);
-                                        threads[id].set_action(packet[i - 1][0], 0, begin, end);
-                                        ++i;
-                                    }
-                                    else send_packet("E00");
-                                }
-                                else if (packet.size() >= i and packet[i + 1].delim == ':')
+                                auto begin = decode(packet[i].substr(1));
+                                ++i;
+                                auto end = decode(packet[i]);
+                                if (packet.size() >= i and packet[i + 1].delim == ':')
                                 {
                                     auto id = decode(packet[i + 1]);
-                                    threads[id].set_action(packet[i][0]);
+                                    threads[id].set_action(packet[i - 1][0], 0, begin, end);
                                     ++i;
                                 }
-                                else
+                                else send_packet("E00");
+                            }
+                            else if (packet.size() >= i and packet[i + 1].delim == ':')
+                            {
+                                auto id = decode(packet[i + 1]);
+                                threads[id].set_action(packet[i][0]);
+                                ++i;
+                            }
+                            else
+                            {
+                                for (auto&& t : threads)
                                 {
-                                    for (auto&& t : threads)
-                                    {
-                                        if (t.second.action == thread_info::none)
-                                            t.second.set_action(packet[i][0]);
-                                    }
+                                    if (t.second.action == thread_info::none)
+                                        t.second.set_action(packet[i][0]);
                                 }
                             }
                         }
-                        else if (v == "CtrlC")
+                    }
+                    else if (v == "CtrlC")
+                    {
+                        auto already_stopped = []
                         {
-                            auto already_stopped = []
-                            {
-                                for (auto&& t : threads) if (t.second.action != thread_info::stop) return false;
-                                return true;
-                            };
-                            send_packet("OK");
-                            if (already_stopped()) stop_reply();
-                            else
-                            {
-                                for (auto&& t : threads) t.second.set_action('t');
-                                if (interrupt_count == 0 and exception_count == 1)
-                                    stop_reply();    // breaking in interrupt context yields a useless stack trace
-                            }
+                            for (auto&& t : threads) if (t.second.action != thread_info::stop) return false;
+                            return true;
+                        };
+                        send_packet("OK");
+                        if (already_stopped()) stop_reply();
+                        else
+                        {
+                            for (auto&& t : threads) t.second.set_action('t');
+                            if (interrupt_count == 0 and exception_count == 1)
+                                stop_reply();    // breaking in interrupt context yields a useless stack trace
                         }
+                    }
+                    else send_packet("");
+                }
+                else if (p == 'H')  // set current thread
+                {
+                    auto id = decode(packet[0].substr(1));
+                    if (threads.count(id) > 0 or id == all_threads_id)
+                    {
+                        selected_thread_id[packet[0][0]] = id;
+                        send_packet("OK");
+                    }
+                    else send_packet("E00");
+                }
+                else if (p == 'T')  // is thread alive?
+                {
+                    auto id = decode(packet[0]);
+                    if (threads.count(id)) send_packet("OK");
+                    else send_packet("E01");
+                }
+                else if (p == 'p')  // read one register
+                {
+                    auto regn = static_cast<regnum>(decode(packet[0]));
+                    reg(s, regn, selected_thread_id[p]);
+                    send_packet(s.str());
+                }
+                else if (p == 'P')  // write one register
+                {
+                    if (setreg(static_cast<regnum>(decode(packet[0])), packet[1], selected_thread_id[p])) send_packet("OK");
+                    else send_packet("E00");
+                }
+                else if (p == 'g')  // read registers
+                {
+                    for (auto i = eax; i <= reg_max; ++i)
+                        reg(s, i, selected_thread_id[p]);
+                    send_packet(s.str());
+                }
+                else if (p == 'G')  // write registers
+                {
+                    regnum reg { };
+                    std::size_t pos { };
+                    bool fail { false };
+                    while (pos < packet[0].size())
+                    {
+                        if (fail |= setreg(reg, packet[0].substr(pos), selected_thread_id[p]))
+                        {
+                            send_packet("E00");
+                            break;
+                        }
+                        pos += reglen[reg] * 2;
+                        ++reg;
+                    }
+                    if (!fail) send_packet("OK");
+                }
+                else if (p == 'm')  // read memory
+                {
+                    auto* addr = reinterpret_cast<byte*>(decode(packet[0]));
+                    std::size_t len = decode(packet[1]);
+                    encode(s, addr, len);
+                    send_packet(s.str());
+                }
+                else if (p == 'M')  // write memory
+                {
+                    auto* addr = reinterpret_cast<byte*>(decode(packet[0]));
+                    std::size_t len = decode(packet[1]);
+                    if (reverse_decode(packet[2], addr, len)) send_packet("OK");
+                    else send_packet("E00");
+                }
+                else if (p == 'c' or p == 's')  // step/continue
+                {
+                    auto id = selected_thread_id[p];
+                    auto step_continue = [](auto& t)
+                    {
+                        if (packet.size() > 0)
+                        {
+                            std::uintptr_t jmp = decode(packet[0]);
+                            if (debugmsg and t.frame.fault_address.offset != jmp) std::clog << "JUMP to 0x" << std::hex << jmp << '\n';
+                            t.frame.fault_address.offset = jmp;
+                        }
+                        t.set_action(packet[0].delim);
+                    };
+                    if (id == all_threads_id)
+                        for (auto&& t : threads) step_continue(t.second);
+                    else step_continue(threads[id]);
+
+                }
+                else if (p == 'C' or p == 'S')  // step/continue with signal
+                {
+                    auto id = selected_thread_id[p];
+                    auto step_continue = [](auto& t)
+                    {
+                        if (packet.size() > 1)
+                        {
+                            std::uintptr_t jmp = decode(packet[1]);
+                            if (debugmsg and t.frame.fault_address.offset != jmp) std::clog << "JUMP to 0x" << std::hex << jmp << '\n';
+                            t.frame.fault_address.offset = jmp;
+                        }
+                        t.set_action(packet[0].delim);
+                    };
+                    if (id == all_threads_id)
+                        for (auto&& t : threads) step_continue(t.second);
+                    else step_continue(threads[id]);
+                }
+                else if (p == 'Z')  // set break/watchpoint
+                {
+                    auto& z = packet[0][0];
+                    std::uintptr_t addr = decode(packet[1]);
+                    auto ptr = reinterpret_cast<byte*>(addr);
+                    if (z == '0')   // set breakpoint
+                    {
+                        if (packet.size() > 3)  // conditional breakpoint
+                        {
+                            send_packet("");    // not implemented (TODO)
+                            return;
+                        }
+                        if (set_breakpoint(addr)) send_packet("OK");
                         else send_packet("");
                     }
-                    else if (p == 'H')  // set current thread
+                    else            // set watchpoint
                     {
-                        auto id = decode(packet[0].substr(1));
-                        if (threads.count(id) > 0 or id == all_threads_id)
+                        watchpoint::watchpoint_type w;
+                        if (z == '1') w = watchpoint::execute;
+                        else if (z == '2') w = watchpoint::read_write;
+                        else if (z == '3') w = watchpoint::read;
+                        else if (z == '4') w = watchpoint::read_write;
+                        else
                         {
-                            selected_thread_id[packet[0][0]] = id;
+                            send_packet("");
+                            return;
+                        }
+                        try
+                        {
+                            std::size_t size = decode(packet[2]);
+                            watchpoints.emplace(addr, watchpoint { ptr, w, size });
+                            send_packet("OK");
+                        }
+                        catch (...)
+                        {
+                            send_packet("E00");
+                        }
+                    }
+                }
+                else if (p == 'z')  // remove break/watchpoint
+                {
+                    auto& z = packet[0][0];
+                    std::uintptr_t addr = decode(packet[1]);
+                    if (z == '0')   // remove breakpoint
+                    {
+                        if (clear_breakpoint(addr)) send_packet("OK");
+                        else send_packet("E00");
+                    }
+                    else            // remove watchpoint
+                    {
+                        if (watchpoints.count(addr))
+                        {
+                            watchpoints.erase(addr);
                             send_packet("OK");
                         }
                         else send_packet("E00");
                     }
-                    else if (p == 'T')  // is thread alive?
-                    {
-                        auto id = decode(packet[0]);
-                        if (threads.count(id)) send_packet("OK");
-                        else send_packet("E01");
-                    }
-                    else if (p == 'p')  // read one register
-                    {
-                        auto regn = static_cast<regnum>(decode(packet[0]));
-                        reg(s, regn, selected_thread_id[p]);
-                        send_packet(s.str());
-                    }
-                    else if (p == 'P')  // write one register
-                    {
-                        if (setreg(static_cast<regnum>(decode(packet[0])), packet[1], selected_thread_id[p])) send_packet("OK");
-                        else send_packet("E00");
-                    }
-                    else if (p == 'g')  // read registers
-                    {
-                        for (auto i = eax; i <= reg_max; ++i)
-                            reg(s, i, selected_thread_id[p]);
-                        send_packet(s.str());
-                    }
-                    else if (p == 'G')  // write registers
-                    {
-                        regnum reg { };
-                        std::size_t pos { };
-                        bool fail { false };
-                        while (pos < packet[0].size())
-                        {
-                            if (fail |= setreg(reg, packet[0].substr(pos), selected_thread_id[p]))
-                            {
-                                send_packet("E00");
-                                break;
-                            }
-                            pos += reglen[reg] * 2;
-                            ++reg;
-                        }
-                        if (!fail) send_packet("OK");
-                    }
-                    else if (p == 'm')  // read memory
-                    {
-                        auto* addr = reinterpret_cast<byte*>(decode(packet[0]));
-                        std::size_t len = decode(packet[1]);
-                        encode(s, addr, len);
-                        send_packet(s.str());
-                    }
-                    else if (p == 'M')  // write memory
-                    {
-                        auto* addr = reinterpret_cast<byte*>(decode(packet[0]));
-                        std::size_t len = decode(packet[1]);
-                        if (reverse_decode(packet[2], addr, len)) send_packet("OK");
-                        else send_packet("E00");
-                    }
-                    else if (p == 'c' or p == 's')  // step/continue
-                    {
-                        auto id = selected_thread_id[p];
-                        auto step_continue = [] (auto& t)
-                        {
-                            if (packet.size() > 0)
-                            {
-                                std::uintptr_t jmp = decode(packet[0]);
-                                if (debugmsg and t.frame.fault_address.offset != jmp) std::clog << "JUMP to 0x" << std::hex << jmp << '\n';
-                                t.frame.fault_address.offset = jmp;
-                            }
-                            t.set_action(packet[0].delim);
-                        };
-                        if (id == all_threads_id)
-                            for (auto&& t : threads) step_continue(t.second);
-                        else step_continue(threads[id]);
-                        
-                    }
-                    else if (p == 'C' or p == 'S')  // step/continue with signal
-                    {
-                        auto id = selected_thread_id[p];
-                        auto step_continue = [](auto& t)
-                        {
-                            if (packet.size() > 1)
-                            {
-                                std::uintptr_t jmp = decode(packet[1]);
-                                if (debugmsg and t.frame.fault_address.offset != jmp) std::clog << "JUMP to 0x" << std::hex << jmp << '\n';
-                                t.frame.fault_address.offset = jmp;
-                            }
-                            t.set_action(packet[0].delim);
-                        };
-                        if (id == all_threads_id)
-                            for (auto&& t : threads) step_continue(t.second);
-                        else step_continue(threads[id]);
-                    }
-                    else if (p == 'Z')  // set break/watchpoint
-                    {
-                        auto& z = packet[0][0];
-                        std::uintptr_t addr = decode(packet[1]);
-                        auto ptr = reinterpret_cast<byte*>(addr);
-                        if (z == '0')   // set breakpoint
-                        {
-                            if (packet.size() > 3)  // conditional breakpoint
-                            {
-                                send_packet("");    // not implemented (TODO)
-                                continue;
-                            }
-                            if (set_breakpoint(addr)) send_packet("OK");
-                            else send_packet("");
-                        }
-                        else            // set watchpoint
-                        {
-                            watchpoint::watchpoint_type w;
-                            if (z == '1') w = watchpoint::execute;
-                            else if (z == '2') w = watchpoint::read_write;
-                            else if (z == '3') w = watchpoint::read;
-                            else if (z == '4') w = watchpoint::read_write;
-                            else
-                            {
-                                send_packet("");
-                                continue;
-                            }
-                            try
-                            {
-                                std::size_t size = decode(packet[2]);
-                                watchpoints.emplace(addr, watchpoint { ptr, w, size });
-                                send_packet("OK");
-                            }
-                            catch (...)
-                            {
-                                send_packet("E00");
-                            }
-                        }
-                    }
-                    else if (p == 'z')  // remove break/watchpoint
-                    {
-                        auto& z = packet[0][0];
-                        std::uintptr_t addr = decode(packet[1]);
-                        if (z == '0')   // remove breakpoint
-                        {
-                            if (clear_breakpoint(addr)) send_packet("OK");
-                            else send_packet("E00");
-                        }
-                        else            // remove watchpoint
-                        {
-                            if (watchpoints.count(addr))
-                            {
-                                watchpoints.erase(addr);
-                                send_packet("OK");
-                            }
-                            else send_packet("E00");
-                        }
-                    }
-                    else if (p == 'k')  // kill
-                    {
-                        killed = true;
-                        for (auto&&t : threads) t.second.frame.flags.trap = false;
-                        simulate_call(&current_thread->frame, jw::terminate);
-                        s << "X" << std::setw(2) << posix_signal(*current_thread->signals.cbegin());
-                        send_packet(s.str());
-                        return true;
-                    }
-                    else send_packet("");   // unknown packet
                 }
-                return current_thread->do_action();
+                else if (p == 'k')  // kill
+                {
+                    killed = true;
+                    for (auto&&t : threads) t.second.set_action('c');
+                    simulate_call(&current_thread->frame, jw::terminate);
+                    s << "X" << std::setw(2) << posix_signal(current_thread->last_stop_signal);
+                    send_packet(s.str());
+                }
+                else send_packet("");   // unknown packet
             }
 
             [[gnu::hot]] bool handle_exception(exception_num exc, cpu_registers* r, exception_frame* f, bool)
@@ -1085,6 +1071,15 @@ namespace jw
                     std::cerr << "Exception occured while communicating with GDB.\n";
                     std::cerr << "caused by this packet: " << raw_packet_string << '\n';
                     do { } while (true);
+                };
+
+                auto cant_continue = []
+                {
+                    if (current_thread->signals.count(packet_received) > 0) return true;
+                    for (auto&& t : threads)
+                        if (t.second.thread.lock()->is_running() and
+                            t.second.action == thread_info::none) return true;
+                    return false;
                 };
 
                 if (exc == 0x03) f->fault_address.offset -= 1;
@@ -1135,8 +1130,6 @@ namespace jw
                                 current_thread->signals.insert(continued); // resume with SIGCONT so gdb won't get confused
                             current_thread->signals.erase(trap_masked);
                         }
-
-                        if (packet_available()) current_thread->signals.insert(packet_received);
 
                         if (current_thread->trap_is_masked() and
                             all_benign_signals(current_thread) and
@@ -1190,15 +1183,24 @@ namespace jw
                     }
 
                     if (config::enable_gdb_interrupts) asm("sti");
+
                     if (debugmsg)
                     {
                         std::clog << "signals:";
                         for (auto&& s : current_thread->signals) std::clog << " 0x" << std::hex << s;
                         std::clog << '\n';
                     }
+
                     stop_reply();
-                    result = handle_packet();
-                    for (auto&& w : watchpoints) w.second.reset();
+
+                    while (cant_continue())
+                    {
+                        if (packet_available()) current_thread->signals.insert(packet_received);
+                            handle_packet();
+                        for (auto&& w : watchpoints) w.second.reset();
+                    }
+
+                    result = current_thread->do_action();
                 }
                 catch (const std::exception& e) { print_exception(e); catch_exception(); }
                 catch (...) { catch_exception(); }
