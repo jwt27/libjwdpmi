@@ -2,6 +2,8 @@
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
+#pragma GCC optimize("loop-nest-optimize", "graphite-identity", "omit-frame-pointer") // ICE with O2+
+
 #include <array>
 #include <cstring>
 #include <sstream>
@@ -179,7 +181,7 @@ namespace jw
             std::map<std::uint32_t, thread_info, std::less<std::uint32_t>, locked_pool_allocator<>> threads { alloc };
             thread_info* current_thread { nullptr };
 
-            void populate_thread_list()
+            inline void populate_thread_list()
             {
                 for (auto&& t : jw::thread::detail::scheduler::get_threads())
                 {
@@ -190,7 +192,7 @@ namespace jw
                 current_thread = &threads[current_thread_id];
             }
 
-            void erase_expired_threads()
+            inline void erase_expired_threads()
             {
                 for (auto i = threads.begin(); i != threads.end();)
                 {
@@ -422,7 +424,7 @@ namespace jw
 
             // Decode little-endian hex string
             template <typename T>
-            bool reverse_decode(const std::string_view& in, T* out, std::size_t len = sizeof(T))
+            inline bool reverse_decode(const std::string_view& in, T* out, std::size_t len = sizeof(T))
             {
                 if (in.size() < 2 * len) return false;
                 auto ptr = reinterpret_cast<byte*>(out);
@@ -436,7 +438,7 @@ namespace jw
 
             // Encode little-endian hex string
             template <typename T>
-            void encode(std::ostream& out, T* in, std::size_t len = sizeof(T))
+            inline void encode(std::ostream& out, T* in, std::size_t len = sizeof(T))
             {
                 auto ptr = reinterpret_cast<const byte*>(in);
                 for (std::size_t i = 0; i < len; ++i) 
@@ -445,27 +447,27 @@ namespace jw
 
             // Encode big-endian hex string
             template <typename T>
-            void reverse_encode(std::ostream& out, T* in, std::size_t len = sizeof(T))
+            inline void reverse_encode(std::ostream& out, T* in, std::size_t len = sizeof(T))
             {
                 auto ptr = reinterpret_cast<const byte*>(in);
                 for (std::size_t i = 0; i < len; ++i)
                     out << std::setw(2) << static_cast<std::uint32_t>(ptr[len - i - 1]);
             }
 
-            void encode_null(std::ostream& out, std::size_t len)
+            inline void encode_null(std::ostream& out, std::size_t len)
             {
                 for (std::size_t i = 0; i < len; ++i) 
                     out << "xx";
             }
 
-            std::uint32_t checksum(const std::string_view& s)
+            inline std::uint32_t checksum(const std::string_view& s)
             {
                 std::uint8_t r { 0 };
                 for (auto&& c : s) r += c;
                 return r;
             }
 
-            bool packet_available()
+            inline bool packet_available()
             {
                 auto* p = gdb_streambuf->get_gptr();
                 std::size_t size = gdb_streambuf->get_egptr() - p;
