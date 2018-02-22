@@ -10,6 +10,7 @@
 #include <csignal>
 #include <cstdlib>
 #include <string_view>
+#include <unordered_set>
 #include <jw/dpmi/fpu.h>
 #include <jw/dpmi/dpmi.h>
 #include <jw/dpmi/debug.h>
@@ -31,7 +32,8 @@ namespace jw
 #       ifndef NDEBUG
         namespace detail
         {
-            inline bool is_benign_signal(std::int32_t);
+            constexpr bool is_benign_signal(std::int32_t) noexcept;
+            constexpr bool all_benign_signals(auto*);
 
             struct rs232_streambuf_internals : public io::detail::rs232_streambuf
             {
@@ -82,8 +84,7 @@ namespace jw
                 std::weak_ptr<thread::detail::thread> thread;
                 new_exception_frame frame;
                 cpu_registers reg;
-                std::int32_t signal { -1 };
-                std::int32_t signal_before_trap_mask { -1 };
+                std::unordered_multiset<std::int32_t, std::hash<std::uint32_t>, std::equal_to<std::uint32_t>, locked_pool_allocator<>> signals { alloc };
                 std::uintptr_t step_range_begin { 0 };
                 std::uintptr_t step_range_end { 0 };
 
@@ -123,14 +124,14 @@ namespace jw
                     {
                         frame.flags.trap = false;
                         clear_trap();
-                        if (is_benign_signal(signal)) action = cont;
+                        if (all_benign_signals(this)) action = cont;
                         else action = cont_sig;
                     }
                     else if (a == 'S')  // step with signal
                     {
                         frame.flags.trap = true;
                         set_trap();
-                        if (is_benign_signal(signal)) action = step;
+                        if (all_benign_signals(this)) action = step;
                         else action = step_sig;
                     }
                     else if (a == 'r')   // step with range
@@ -224,6 +225,7 @@ namespace jw
             enum signals
             {
                 packet_received = 0x1010,
+                trap_masked,
                 trap_unmasked,
                 continued
             };
@@ -251,7 +253,7 @@ namespace jw
                 sigusr2 = 31,
             };
 
-            inline std::uint32_t posix_signal(std::int32_t exc)
+            constexpr std::uint32_t posix_signal(std::int32_t exc) noexcept
             {
                 switch (exc)
                 {
@@ -315,7 +317,7 @@ namespace jw
                 }
             }
 
-            inline bool is_stop_signal(std::int32_t exc)
+            inline bool is_stop_signal(thread_info& t, std::int32_t exc)
             {
                 switch (exc)
                 {
@@ -323,8 +325,8 @@ namespace jw
                     return true;
 
                 case thread::detail::thread_switched:
-                    if (current_thread->action == thread_info::stop) return true;
-                    if (thread_events_enabled and current_thread->thread.lock()->get_state() == thread::detail::starting) return true;
+                    if (t.action == thread_info::stop) return true;
+                    if (thread_events_enabled and t.thread.lock()->get_state() == thread::detail::starting) return true;
                     return false;
 
                 case thread::detail::thread_finished:
@@ -337,7 +339,7 @@ namespace jw
                 }
             }
 
-            inline bool is_benign_signal(std::int32_t exc)
+            constexpr bool is_benign_signal(std::int32_t exc) noexcept
             {
                 switch (exc)
                 {
@@ -349,11 +351,20 @@ namespace jw
                 case thread::detail::thread_switched:
                 case thread::detail::thread_finished:
                 case thread::detail::all_threads_suspended:
+                case trap_masked:
+                case trap_unmasked:
                 case packet_received:
                 case continued:
                 case -1:
                     return true;
                 }
+            }
+
+            constexpr bool all_benign_signals(auto* t)
+            {
+                for (auto&& s : t->signals)
+                    if (not is_benign_signal(s)) return false;
+                return true;
             }
 
             inline bool set_breakpoint(std::uintptr_t at)
@@ -659,62 +670,68 @@ namespace jw
             {
                 for (auto&& t : threads)
                 {
-                    if (not is_stop_signal(t.second.signal) or
-                        (t.second.action == thread_info::none and not force)) continue;
-
-                    auto exc = t.second.signal;
-
-                    std::stringstream s { };
-                    s << std::hex << std::setfill('0');
-                    if (async) s << "Stop:";
-                    if (t.second.signal == thread::detail::thread_finished)
+                    for (auto signal = t.second.signals.begin(); signal != t.second.signals.end();)
                     {
-                        if (not thread_events_enabled) continue;
-                        s << 'w';
-                        if (t.second.thread.lock()->get_state() == thread::detail::finished) s << "00";
-                        else s << "ff";
-                        s << ';' << t.first;
-                        send_packet(s.str());
-                    }
-                    else
-                    {
-                        s << "T" << std::setw(2) << posix_signal(exc);
-                        //s << eip << ':'; reg(s, eip, t.first); s << ';';   // TODO fix thread registers
-                        //s << esp << ':'; reg(s, esp, t.first); s << ';';
-                        //s << ebp << ':'; reg(s, ebp, t.first); s << ';';
-                        s << "thread:" << t.first << ';';
-                        if (t.second.thread.lock()->get_state() == thread::detail::starting)
+                        if (not is_stop_signal(t.second, *signal) or (t.second.action == thread_info::none and not force))
                         {
-                            if (thread_events_enabled) s << "create:;";
+                            ++signal;
+                            continue;
+                        }
+
+                        std::stringstream s { };
+                        s << std::hex << std::setfill('0');
+                        if (async) s << "Stop:";
+                        if (*signal == thread::detail::thread_finished)
+                        {
+                            if (not thread_events_enabled) continue;
+                            s << 'w';
+                            if (t.second.thread.lock()->get_state() == thread::detail::finished) s << "00";
+                            else s << "ff";
+                            s << ';' << t.first;
+                            send_packet(s.str());
                         }
                         else
                         {
-                            for (auto&& w : watchpoints)
+                            s << "T" << std::setw(2) << posix_signal(*signal);
+                            //s << eip << ':'; reg(s, eip, t.first); s << ';';   // TODO fix thread registers
+                            //s << esp << ':'; reg(s, esp, t.first); s << ';';
+                            //s << ebp << ':'; reg(s, ebp, t.first); s << ';';
+                            s << "thread:" << t.first << ';';
+                            if (t.second.thread.lock()->get_state() == thread::detail::starting)
                             {
-                                if (w.second.get_state())
-                                {
-                                    if (w.second.get_type() == watchpoint::execute) s << "hwbreak:;";
-                                    else s << "watch:" << w.first << ";";
-                                    break;
-                                }
-                                else s << "swbreak:;";
+                                if (thread_events_enabled) s << "create:;";
                             }
+                            else if (posix_signal(*signal) == sigtrap)
+                            {
+                                for (auto&& w : watchpoints)
+                                {
+                                    if (w.second.get_state())
+                                    {
+                                        if (w.second.get_type() == watchpoint::execute) s << "hwbreak:;";
+                                        else s << "watch:" << w.first << ";";
+                                        break;
+                                    }
+                                    else s << "swbreak:;";
+                                }
+                            }
+                            if (async) send_notification(s.str());
+                            else send_packet(s.str());
                         }
-                        if (async) send_notification(s.str());
-                        else send_packet(s.str());
-                    }
-                    t.second.action = thread_info::none;
-                }
+                        t.second.action = thread_info::none;
 
-                if (current_thread->signal == thread::detail::all_threads_suspended and supported["no-resumed"] == "+")
-                    send_packet("N");
+                        if (*signal == thread::detail::all_threads_suspended and supported["no-resumed"] == "+")
+                            send_packet("N");
+
+                        signal = t.second.signals.erase(signal);
+                    }
+                }
             }
 
             [[gnu::hot]] bool handle_packet()
             {
                 auto cant_continue = []
                 {
-                    if (current_thread->signal == packet_received) return false;
+                    if (current_thread->signals.count(packet_received) > 0) return true;
                     for (auto&& t : threads)
                         if (t.second.thread.lock()->is_running() and
                             t.second.action == thread_info::none) return true;
@@ -724,7 +741,7 @@ namespace jw
                 while (cant_continue())
                 {
                     recv_packet();
-                    if (current_thread->signal == packet_received) current_thread->signal = -1;
+                    current_thread->signals.erase(packet_received);
 
                     std::stringstream s { };
                     s << std::hex << std::setfill('0');
@@ -1034,7 +1051,7 @@ namespace jw
                         killed = true;
                         for (auto&&t : threads) t.second.frame.flags.trap = false;
                         simulate_call(&current_thread->frame, jw::terminate);
-                        s << "X" << std::setw(2) << posix_signal(current_thread->signal);
+                        s << "X" << std::setw(2) << posix_signal(*current_thread->signals.cbegin());
                         send_packet(s.str());
                         return true;
                     }
@@ -1066,7 +1083,7 @@ namespace jw
                     goto leave;
                 }
                 else if (__builtin_expect(debugger_reentry, false) and current_thread->action == thread_info::none)
-                {   // TODO: determine action based on last packet
+                {   // TODO: determine action based on last packet / signal
                     send_packet("E04"); // last command caused another exception
                     if (debugmsg) std::clog << "debugger re-entry!\n";
                     if (debugmsg) std::clog << *static_cast<new_exception_frame*>(f) << *r;
@@ -1081,41 +1098,50 @@ namespace jw
                     if (exc == 0x03 and current_signal != -1)
                     {
                         if (debugmsg) std::clog << "break with signal 0x" << std::hex << current_signal << '\n';
-                        if (current_signal == trap_unmasked)
-                        {
-                            current_thread->signal = current_thread->signal_before_trap_mask;
-                            if (current_thread->signal == 0x01 or
-                                current_thread->signal == 0x03)
-                                current_thread->signal = continued; // resume with SIGCONT so gdb won't get confused
-                            current_thread->signal_before_trap_mask = -1;
-                        }
-                        else current_thread->signal = current_signal;
+                        current_thread->signals.insert(current_signal);
                     }
-                    else current_thread->signal = exc;
+                    else current_thread->signals.insert(exc);
 
-                    if (packet_available()) current_thread->signal = packet_received;   // HACK
+                    if (current_thread->signals.count(trap_unmasked) > 0)
+                    {
+                        bool use_sigcont { false };
+                        for (auto i = current_thread->signals.begin(); i != current_thread->signals.end();)
+                        {
+                            if (posix_signal(*i) == sigtrap)
+                            {
+                                i = current_thread->signals.erase(i);
+                                use_sigcont = true;
+                            }
+                            else ++i;
+                        }
+                        if (use_sigcont)
+                            current_thread->signals.insert(continued); // resume with SIGCONT so gdb won't get confused
+                        current_thread->signals.erase(trap_masked);
+                    }
+
+                    if (packet_available()) current_thread->signals.insert(packet_received);
 
                     if (current_thread->trap_is_masked() and
-                        is_benign_signal(current_thread->signal) and
-                        current_thread->signal != thread::detail::thread_switched and
-                        current_thread->signal != thread::detail::all_threads_suspended and
-                        current_thread->signal != packet_received)
+                        all_benign_signals(current_thread) and
+                        not current_thread->signals.count(thread::detail::thread_switched) and
+                        not current_thread->signals.count(thread::detail::all_threads_suspended) and
+                        not current_thread->signals.count(packet_received))
                     {
                         current_thread->set_trap(); // re-enable trap when last trap_mask destructs
                         f->flags.trap = false;      // disable trap for now
-                        if (current_thread->signal_before_trap_mask == -1) current_thread->signal_before_trap_mask = current_thread->signal;
+                        current_thread->signals.insert(trap_masked);
                         if (debugmsg) std::clog << "trap masked at 0x" << std::hex << f->fault_address.offset << ", resuming with SIGCONT.\n";
                         result = true;
                         goto leave;
                     }
-                    else if (current_thread->trap_is_masked() and not is_benign_signal(current_thread->signal))
+                    else if (current_thread->trap_is_masked() and not all_benign_signals(current_thread))
                     {
                         auto&& t = current_thread->thread.lock();
-                        current_thread->signal_before_trap_mask = -1;
+                        current_thread->signals.erase(trap_masked);
                         while (thread::detail::thread_details::trap_masked(t))
                             thread::detail::thread_details::trap_unmask(t);     // serious fault occured, undo trap masks
                     }
-                    else if (__builtin_expect(current_thread->signal == 0x01 or current_thread->signal == 0x03, true) and
+                    else if ([] { for (auto&& s : current_thread->signals) if (posix_signal(s) != sigtrap) return false; return true; }() and
                         current_thread->action == thread_info::step_range and
                         f->fault_address.offset >= current_thread->step_range_begin and
                         f->fault_address.offset <= current_thread->step_range_end)
@@ -1141,7 +1167,7 @@ namespace jw
                             else t.second.set_action('c');
 
                             if (t.second.thread.lock()->get_state() == thread::detail::starting)
-                                t.second.signal = thread::detail::thread_switched;
+                                t.second.signals.insert(thread::detail::thread_switched);
                         }
                     }
                 }
@@ -1170,7 +1196,6 @@ namespace jw
 
                 if (debugmsg) std::clog << "leaving exception 0x" << std::hex << exc << ", resuming at 0x" << f->fault_address.offset << '\n';
 
-                current_thread->signal = -1;
                 debugger_reentry = false;
                 return result;
             }
