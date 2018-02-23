@@ -1228,6 +1228,8 @@ namespace jw
                 else *static_cast<old_exception_frame*>(f) = current_thread->frame;
                 *r = current_thread->reg;
 
+                leave();
+
                 return current_thread->do_action();
             }
 
