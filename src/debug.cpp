@@ -1255,6 +1255,7 @@ namespace jw
 
                 serial_irq = std::make_unique<irq_handler>([]
                 {
+                    if (debugger_reentry) return;
                     if (packet_available()) break_with_signal(packet_received);
                 }, dpmi::always_call | dpmi::no_interrupts);
 
