@@ -684,7 +684,9 @@ namespace jw
                     for (auto i = t.second.signals.begin(); i != t.second.signals.end();)
                     {
                         auto signal = *i;
-                        if (not is_stop_signal(signal) or (t.second.action == thread_info::none and not force))
+                        if (not is_stop_signal(signal)
+                            or (t.second.action == thread_info::none and not force)
+                            or (posix_signal(signal) == sigtrap and t.second.signals.count(trap_masked)))
                         {
                             ++i;
                             continue;
