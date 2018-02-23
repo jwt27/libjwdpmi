@@ -35,7 +35,7 @@ namespace jw
         namespace detail
         {
             constexpr bool is_benign_signal(std::int32_t) noexcept;
-            constexpr bool all_benign_signals(auto*);
+            bool all_benign_signals(auto*);
 
             enum signals
             {
@@ -53,6 +53,7 @@ namespace jw
             };
 
             const bool debugmsg = config::enable_gdb_debug_messages;
+            const bool temp_debugmsg = debugmsg and true;
 
             volatile bool debugger_reentry { false };
             bool debug_mode { false };
@@ -313,32 +314,44 @@ namespace jw
                 case thread::detail::all_threads_suspended:
                 case thread::detail::thread_finished:
                 case thread::detail::thread_suspended:
+                case thread::detail::thread_started:
                     return sigstop;
 
                 default: return sigusr1;
                 }
             }
 
-            inline bool is_stop_signal(std::int32_t exc)
+            inline constexpr bool is_stop_signal(std::int32_t exc) noexcept
             {
                 switch (exc)
                 {
                 default:
                     return true;
 
-                case thread::detail::thread_started:
-                case thread::detail::thread_finished:
-                    if (thread_events_enabled) return true;
-                    else return false;
-
                 case thread::detail::thread_switched:
                 case packet_received:
+                case trap_masked:
+                case trap_unmasked:
                 case -1:
                     return false;
                 }
             }
 
-            constexpr bool is_benign_signal(std::int32_t exc) noexcept
+            inline constexpr bool is_trap_signal(std::int32_t exc) noexcept
+            {
+                switch (exc)
+                {
+                default:
+                    return false;
+
+                case exception_num::trap:
+                case exception_num::breakpoint:
+                case continued:
+                    return true;
+                }
+            }
+
+            inline constexpr bool is_benign_signal(std::int32_t exc) noexcept
             {
                 switch (exc)
                 {
@@ -359,7 +372,7 @@ namespace jw
                 }
             }
 
-            constexpr bool all_benign_signals(auto* t)
+            inline bool all_benign_signals(auto* t)
             {
                 for (auto&& s : t->signals)
                     if (not is_benign_signal(s)) return false;
@@ -514,9 +527,11 @@ namespace jw
 
                 const auto sum = checksum(rle_output);
                 *gdb << '$' << rle_output << '#' << std::setfill('0') << std::hex << std::setw(2) << sum;
+                if (temp_debugmsg) std::clog << "flush...\n";
                 if (not interrupt_mask::get())
                     *gdb << std::flush;
                 last_sent_packet = output;
+                if (temp_debugmsg) std::clog << "send_packet done.\n";
             }
 
             void recv_packet()
@@ -671,36 +686,41 @@ namespace jw
             {
                 for (auto&& t : threads)
                 {
-                    auto no_stop_signals = [&t]
+                    if (t.second.action == thread_info::none and not force) continue;
+                    auto no_stop_signal = [&t]
                     {
                         if (t.second.signals.empty()) return true;
                         for (auto&& i : t.second.signals) if (is_stop_signal(i)) return false;
                         return true;
                     };
-                    if (no_stop_signals()) t.second.signals.insert(t.second.last_stop_signal);
+                    if (no_stop_signal()) t.second.signals.insert(t.second.last_stop_signal);
 
                     auto t_ptr = t.second.thread.lock();
+
+                    if (temp_debugmsg) std::clog << "stop reply for thread 0x" << std::hex << t_ptr->id() << '\n';
 
                     for (auto i = t.second.signals.begin(); i != t.second.signals.end();)
                     {
                         auto signal = *i;
+                        if (temp_debugmsg) std::clog << "stop reply for signal 0x" << std::hex << signal << ": ";
                         if (not is_stop_signal(signal)
-                            or (t.second.action == thread_info::none and not force)
-                            or (posix_signal(signal) == sigtrap and t.second.signals.count(trap_masked)))
+                            or (is_trap_signal(signal) and t.second.signals.count(trap_masked)))
                         {
+                            if (temp_debugmsg) std::clog << "ignored.\n";
                             ++i;
                             continue;
                         }
                         else i = t.second.signals.erase(i);
+                        if (temp_debugmsg) std::clog << "handled.\n";
 
-                        t.second.last_stop_signal = signal;
+                        if (not thread_events_enabled and (signal == thread::detail::thread_started or signal == thread::detail::thread_finished))
+                            continue;
 
                         std::stringstream s { };
                         s << std::hex << std::setfill('0');
                         if (async) s << "Stop:";
                         if (signal == thread::detail::thread_finished)
                         {
-                            if (not thread_events_enabled) continue;
                             s << 'w';
                             if (t_ptr->get_state() == thread::detail::finished) s << "00";
                             else s << "ff";
@@ -717,11 +737,11 @@ namespace jw
                                 s << ebp << ':'; reg(s, ebp, t.first); s << ';';
                             }
                             s << "thread:" << t.first << ';';
-                            if (thread_events_enabled and signal == thread::detail::thread_started)
+                            if (signal == thread::detail::thread_started)
                             {
                                 s << "create:;";
                             }
-                            else if (posix_signal(signal) == sigtrap)
+                            else if (is_trap_signal(signal))
                             {
                                 bool watchpoint_hit = false;
                                 for (auto&& w : watchpoints)
@@ -740,6 +760,7 @@ namespace jw
                             else send_packet(s.str());
                         }
                         t.second.action = thread_info::none;
+                        t.second.last_stop_signal = signal;
 
                         if (signal == thread::detail::all_threads_suspended and supported["no-resumed"] == "+")
                             send_packet("N");
@@ -1093,6 +1114,15 @@ namespace jw
                     debugger_reentry = false;
                 };
 
+                auto clear_trap_signals = []
+                {
+                    for (auto i = current_thread->signals.begin(); i != current_thread->signals.end();)
+                    {
+                        if (is_trap_signal(*i)) i = current_thread->signals.erase(i);
+                        else ++i;
+                    }
+                };
+
                 try
                 {
                     if (__builtin_expect(debugger_reentry, false) and (exc == 0x01 or exc == 0x03))
@@ -1114,8 +1144,9 @@ namespace jw
                     {
                         debugger_reentry = true;
                         populate_thread_list();
+                        if (packet_available()) current_thread->signals.insert(packet_received);
 
-                        if (exc == 0x03 and current_signal != -1)
+                        if (exc == exception_num::breakpoint and current_signal != -1)
                         {
                             if (debugmsg) std::clog << "break with signal 0x" << std::hex << current_signal << '\n';
                             current_thread->signals.insert(current_signal);
@@ -1123,52 +1154,32 @@ namespace jw
                         }
                         else current_thread->signals.insert(exc);
 
-                        if (current_thread->signals.count(trap_unmasked) > 0)
+                        if (current_thread->signals.count(trap_unmasked))
                         {
-                            bool use_sigcont { false };
-                            for (auto i = current_thread->signals.begin(); i != current_thread->signals.end();)
-                            {
-                                if (posix_signal(*i) == sigtrap)
-                                {
-                                    i = current_thread->signals.erase(i);
-                                    use_sigcont = true;
-                                }
-                                else ++i;
-                            }
-                            if (use_sigcont)
-                                current_thread->signals.insert(continued); // resume with SIGCONT so gdb won't get confused
+                            auto size = current_thread->signals.size();
+                            clear_trap_signals();
+                            if (size != current_thread->signals.size()) current_thread->signals.insert(continued); // resume with SIGCONT so gdb won't get confused
                             current_thread->signals.erase(trap_masked);
+                            current_thread->signals.erase(trap_unmasked);
                         }
 
-                        if (current_thread->trap_is_masked() and
-                            all_benign_signals(current_thread) and
-                            not current_thread->signals.count(thread::detail::thread_switched) and
-                            not current_thread->signals.count(thread::detail::all_threads_suspended) and
-                            not current_thread->signals.count(packet_received))
+                        if (current_thread->trap_is_masked())
                         {
-                            current_thread->set_trap(); // re-enable trap when last trap_mask destructs
-                            f->flags.trap = false;      // disable trap for now
-                            current_thread->signals.insert(trap_masked);
-                            if (debugmsg) std::clog << "trap masked at 0x" << std::hex << f->fault_address.offset << ", resuming with SIGCONT.\n";
-                            leave();
-                            return true;
-                        }
-                        else if (current_thread->trap_is_masked() and not all_benign_signals(current_thread))
-                        {
-                            auto&& t = current_thread->thread.lock();
-                            current_thread->signals.erase(trap_masked);
-                            while (thread::detail::thread_details::trap_masked(t))
-                                thread::detail::thread_details::trap_unmask(t);     // serious fault occured, undo trap masks
-                        }
-                        else if ([] { for (auto&& s : current_thread->signals) if (posix_signal(s) != sigtrap) return false; return true; }() and
-                            current_thread->action == thread_info::step_range and
-                            f->fault_address.offset >= current_thread->step_range_begin and
-                            f->fault_address.offset <= current_thread->step_range_end)
-                        {
-                            if (debugmsg) std::clog << "range step until 0x" << std::hex << current_thread->step_range_end;
-                            if (debugmsg) std::clog << ", now at 0x" << f->fault_address.offset << '\n';
-                            leave();
-                            return true;
+                            if (all_benign_signals(current_thread))
+                            {
+                                current_thread->set_trap(); // re-enable trap when last trap_mask destructs
+                                f->flags.trap = false;      // disable trap for now
+                                current_thread->signals.insert(trap_masked);
+                                if (debugmsg) std::clog << "trap masked at 0x" << std::hex << f->fault_address.offset << "\n";
+                            }
+                            else
+                            {
+                                auto&& t = current_thread->thread.lock();
+                                current_thread->signals.erase(trap_masked);
+                                while (thread::detail::thread_details::trap_masked(t))
+                                    thread::detail::thread_details::trap_unmask(t);     // serious fault occured, undo trap masks
+                                f->flags.trap = true;
+                            }
                         }
 
                         if (debugmsg) std::clog << *static_cast<new_exception_frame*>(f) << *r;
@@ -1194,18 +1205,29 @@ namespace jw
                         }
 
                         current_thread->signals.erase(thread::detail::thread_switched);
+
+                        if (current_thread->action == thread_info::step_range and
+                            current_thread->frame.fault_address.offset >= current_thread->step_range_begin and
+                            current_thread->frame.fault_address.offset <= current_thread->step_range_end)
+                        {
+                            if (debugmsg) std::clog << "range step until 0x" << std::hex << current_thread->step_range_end;
+                            if (debugmsg) std::clog << ", now at 0x" << f->fault_address.offset << '\n';
+                            clear_trap_signals();
+                        }
+
+                        if (debugmsg)
+                        {
+                            std::clog << "signals:";
+                            for (auto&& s : current_thread->signals) std::clog << " 0x" << std::hex << s;
+                            std::clog << '\n';
+                        }
+
+                        if (temp_debugmsg) std::clog << "sending stop reply.\n";
+                        stop_reply();
                     }
 
+                    if (debugmsg) std::clog << "enabling interrupts.\n";
                     if (config::enable_gdb_interrupts) asm("sti");
-
-                    if (debugmsg)
-                    {
-                        std::clog << "signals:";
-                        for (auto&& s : current_thread->signals) std::clog << " 0x" << std::hex << s;
-                        std::clog << '\n';
-                    }
-
-                    stop_reply();
 
                     auto cant_continue = []
                     {
@@ -1215,12 +1237,13 @@ namespace jw
                                 t.second.action == thread_info::none) return true;
                         return false;
                     };
-
+                    if (temp_debugmsg) std::clog << "entering main loop.\n";
                     while (cant_continue())
                     {
                         if (packet_available()) current_thread->signals.insert(packet_received);
                         if (current_thread->signals.count(packet_received)) handle_packet();
                     }
+                    if (temp_debugmsg) std::clog << "leaving main loop.\n";
                 }
                 catch (const std::exception& e) { print_exception(e); catch_exception(); }
                 catch (...) { catch_exception(); }
@@ -1319,7 +1342,10 @@ namespace jw
                 break_with_signal(detail::trap_unmasked);
         }
 #       else
-        void notify_gdb_thread_event(thread::detail::thread_event) { }
+        namespace detail
+        {
+            void notify_gdb_thread_event(thread::detail::thread_event) { }
+        }
 #       endif
     }
 }
