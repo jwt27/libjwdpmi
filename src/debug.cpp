@@ -1217,7 +1217,7 @@ namespace jw
                     while (cant_continue())
                     {
                         if (packet_available()) current_thread->signals.insert(packet_received);
-                        handle_packet();
+                        if (current_thread->signals.count(packet_received)) handle_packet();
                     }
                 }
                 catch (const std::exception& e) { print_exception(e); catch_exception(); }
