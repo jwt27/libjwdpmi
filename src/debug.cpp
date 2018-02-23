@@ -312,29 +312,26 @@ namespace jw
 
                 case thread::detail::all_threads_suspended:
                 case thread::detail::thread_finished:
-                case thread::detail::thread_switched:
+                case thread::detail::thread_suspended:
                     return sigstop;
 
                 default: return sigusr1;
                 }
             }
 
-            inline bool is_stop_signal(thread_info& t, std::int32_t exc)
+            inline bool is_stop_signal(std::int32_t exc)
             {
                 switch (exc)
                 {
                 default:
                     return true;
 
-                case thread::detail::thread_switched:
-                    if (t.action == thread_info::stop) return true;
-                    if (thread_events_enabled and t.thread.lock()->get_state() == thread::detail::starting) return true;
-                    return false;
-
+                case thread::detail::thread_started:
                 case thread::detail::thread_finished:
                     if (thread_events_enabled) return true;
                     else return false;
 
+                case thread::detail::thread_switched:
                 case packet_received:
                 case -1:
                     return false;
@@ -677,15 +674,17 @@ namespace jw
                     auto no_stop_signals = [&t]
                     {
                         if (t.second.signals.empty()) return true;
-                        for (auto&& i : t.second.signals) if (is_stop_signal(t.second, i)) return false;
+                        for (auto&& i : t.second.signals) if (is_stop_signal(i)) return false;
                         return true;
                     };
                     if (no_stop_signals()) t.second.signals.insert(t.second.last_stop_signal);
 
+                    auto t_ptr = t.second.thread.lock();
+
                     for (auto i = t.second.signals.begin(); i != t.second.signals.end();)
                     {
                         auto signal = *i;
-                        if (not is_stop_signal(t.second, signal) or (t.second.action == thread_info::none and not force))
+                        if (not is_stop_signal(signal) or (t.second.action == thread_info::none and not force))
                         {
                             ++i;
                             continue;
@@ -701,7 +700,7 @@ namespace jw
                         {
                             if (not thread_events_enabled) continue;
                             s << 'w';
-                            if (t.second.thread.lock()->get_state() == thread::detail::finished) s << "00";
+                            if (t_ptr->get_state() == thread::detail::finished) s << "00";
                             else s << "ff";
                             s << ';' << t.first;
                             send_packet(s.str());
@@ -709,13 +708,16 @@ namespace jw
                         else
                         {
                             s << "T" << std::setw(2) << posix_signal(signal);
-                            //s << eip << ':'; reg(s, eip, t.first); s << ';';   // TODO fix thread registers
-                            //s << esp << ':'; reg(s, esp, t.first); s << ';';
-                            //s << ebp << ':'; reg(s, ebp, t.first); s << ';';
-                            s << "thread:" << t.first << ';';
-                            if (t.second.thread.lock()->get_state() == thread::detail::starting)
+                            if (t_ptr->get_state() != thread::detail::starting)
                             {
-                                if (thread_events_enabled) s << "create:;";
+                                s << eip << ':'; reg(s, eip, t.first); s << ';';
+                                s << esp << ':'; reg(s, esp, t.first); s << ';';
+                                s << ebp << ':'; reg(s, ebp, t.first); s << ';';
+                            }
+                            s << "thread:" << t.first << ';';
+                            if (thread_events_enabled and signal == thread::detail::thread_started)
+                            {
+                                s << "create:;";
                             }
                             else if (posix_signal(signal) == sigtrap)
                             {
@@ -1182,9 +1184,14 @@ namespace jw
                                 else t.second.set_action('c');
 
                                 if (t.second.thread.lock()->get_state() == thread::detail::starting)
-                                    t.second.signals.insert(thread::detail::thread_switched);
+                                    t.second.signals.insert(thread::detail::thread_started);
                             }
+
+                            if (current_thread->signals.count(thread::detail::thread_switched) and t.second.action == thread_info::stop)
+                                t.second.signals.insert(thread::detail::thread_suspended);
                         }
+
+                        current_thread->signals.erase(thread::detail::thread_switched);
                     }
 
                     if (config::enable_gdb_interrupts) asm("sti");

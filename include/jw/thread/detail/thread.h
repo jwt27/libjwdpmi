@@ -44,6 +44,8 @@ namespace jw
             {
                 thread_finished = 0x1000,
                 thread_switched,
+                thread_started,
+                thread_suspended,
                 all_threads_suspended
             };
 
