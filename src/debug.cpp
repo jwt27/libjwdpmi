@@ -94,7 +94,7 @@ namespace jw
                 std::weak_ptr<thread::detail::thread> thread;
                 new_exception_frame frame;
                 cpu_registers reg;
-                std::unordered_multiset<std::int32_t, std::hash<std::int32_t>, std::equal_to<std::int32_t>, locked_pool_allocator<>> signals { alloc };
+                std::unordered_set<std::int32_t, std::hash<std::int32_t>, std::equal_to<std::int32_t>, locked_pool_allocator<>> signals { alloc };
                 std::int32_t last_stop_signal { -1 };
                 std::uintptr_t step_range_begin { 0 };
                 std::uintptr_t step_range_end { 0 };
