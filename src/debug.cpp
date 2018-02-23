@@ -1067,7 +1067,8 @@ namespace jw
                 if (debugmsg) std::clog << "entering exception 0x" << std::hex << exc << " from 0x" << f->fault_address.offset << '\n';
                 if (killed) return false;
 
-                bool result { false };
+                if (exc == 0x03) f->fault_address.offset -= 1;
+
                 auto catch_exception = []
                 {
                     std::cerr << "Exception occured while communicating with GDB.\n";
@@ -1075,16 +1076,18 @@ namespace jw
                     do { } while (true);
                 };
 
-                auto cant_continue = []
+                auto leave = [exc, f]
                 {
-                    if (current_thread->signals.count(packet_received) > 0) return true;
-                    for (auto&& t : threads)
-                        if (t.second.thread.lock()->is_running() and
-                            t.second.action == thread_info::none) return true;
-                    return false;
-                };
+                    for (auto&& w : watchpoints) w.second.reset();
+                    enable_all_breakpoints();
+                    if (*reinterpret_cast<byte*>(f->fault_address.offset) == 0xcc
+                        and not disable_breakpoint(f->fault_address.offset))
+                        f->fault_address.offset += 1;    // don't resume on a breakpoint
 
-                if (exc == 0x03) f->fault_address.offset -= 1;
+                    if (debugmsg) std::clog << "leaving exception 0x" << std::hex << exc << ", resuming at 0x" << f->fault_address.offset << '\n';
+
+                    debugger_reentry = false;
+                };
 
                 try
                 {
@@ -1092,8 +1095,8 @@ namespace jw
                     {   // breakpoint in debugger code, ignore
                         if (debugmsg) std::clog << "reentry caused by breakpoint, ignoring.\n";
                         if (exc == 0x01) for (auto&& w : watchpoints) if (w.second.get_type() == watchpoint::execute) w.second.reset();
-                        result = true;
-                        goto leave;
+                        leave();
+                        return true;
                     }
                     else if (__builtin_expect(debugger_reentry, false) and current_thread->action == thread_info::none)
                     {   // TODO: determine action based on last packet / signal
@@ -1143,8 +1146,8 @@ namespace jw
                             f->flags.trap = false;      // disable trap for now
                             current_thread->signals.insert(trap_masked);
                             if (debugmsg) std::clog << "trap masked at 0x" << std::hex << f->fault_address.offset << ", resuming with SIGCONT.\n";
-                            result = true;
-                            goto leave;
+                            leave();
+                            return true;
                         }
                         else if (current_thread->trap_is_masked() and not all_benign_signals(current_thread))
                         {
@@ -1160,8 +1163,8 @@ namespace jw
                         {
                             if (debugmsg) std::clog << "range step until 0x" << std::hex << current_thread->step_range_end;
                             if (debugmsg) std::clog << ", now at 0x" << f->fault_address.offset << '\n';
-                            result = true;
-                            goto leave;
+                            leave();
+                            return true;
                         }
 
                         if (debugmsg) std::clog << *static_cast<new_exception_frame*>(f) << *r;
@@ -1195,13 +1198,20 @@ namespace jw
 
                     stop_reply();
 
+                    auto cant_continue = []
+                    {
+                        if (current_thread->signals.count(packet_received) > 0) return true;
+                        for (auto&& t : threads)
+                            if (t.second.thread.lock()->is_running() and
+                                t.second.action == thread_info::none) return true;
+                        return false;
+                    };
+
                     while (cant_continue())
                     {
                         if (packet_available()) current_thread->signals.insert(packet_received);
                         handle_packet();
                     }
-
-                    result = current_thread->do_action();
                 }
                 catch (const std::exception& e) { print_exception(e); catch_exception(); }
                 catch (...) { catch_exception(); }
@@ -1211,17 +1221,7 @@ namespace jw
                 else *static_cast<old_exception_frame*>(f) = current_thread->frame;
                 *r = current_thread->reg;
 
-            leave:
-                for (auto&& w : watchpoints) w.second.reset();
-                enable_all_breakpoints();
-                if (*reinterpret_cast<byte*>(f->fault_address.offset) == 0xcc
-                    and not disable_breakpoint(f->fault_address.offset))
-                    f->fault_address.offset += 1;    // don't resume on a breakpoint
-
-                if (debugmsg) std::clog << "leaving exception 0x" << std::hex << exc << ", resuming at 0x" << f->fault_address.offset << '\n';
-
-                debugger_reentry = false;
-                return result;
+                return current_thread->do_action();
             }
 
             void notify_gdb_thread_event(thread::detail::thread_event e)
