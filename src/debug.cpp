@@ -451,9 +451,8 @@ namespace jw
             inline bool packet_available()
             {
                 auto* p = gdb_streambuf->get_gptr();
+                if (gdb_streambuf->get_egptr() == p) *gdb << std::flush;
                 std::size_t size = gdb_streambuf->get_egptr() - p;
-                return size > 1;
-
                 std::string_view str { p, size };
                 return str.find(0x03) != std::string_view::npos
                     or str.find('#', str.find('$')) != std::string_view::npos;
