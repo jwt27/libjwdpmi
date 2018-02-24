@@ -889,14 +889,14 @@ namespace jw
                     {
                         auto already_stopped = []
                         {
-                            for (auto&& t : threads) if (t.second.action != thread_info::stop) return false;
-                            return true;
+                            for (auto&& t : threads) if (t.second.signals.count(SIGINT)) return true;
+                            return false;
                         };
                         send_packet("OK");
                         if (already_stopped()) stop_reply();
                         else
                         {
-                            for (auto&& t : threads) t.second.set_action('t');
+                            for (auto&& t : threads) t.second.signals.insert(SIGINT);
                             if (interrupt_count == 0 and exception_count == 1)
                                 stop_reply();    // breaking in interrupt context yields a useless stack trace
                         }
