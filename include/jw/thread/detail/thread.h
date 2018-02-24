@@ -40,15 +40,6 @@ namespace jw
                 finished
             };
 
-            enum thread_event : std::uint32_t
-            {
-                thread_finished = 0x1000,
-                thread_switched,
-                thread_started,
-                thread_suspended,
-                all_threads_suspended
-            };
-
             // Base class for all threads.
             class thread
             {

@@ -10,6 +10,7 @@
 #include <jw/dpmi/debug.h>
 #include <jw/dpmi/cpu_exception.h>
 #include <jw/dpmi/detail/alloc.h>
+#include <jw/dpmi/detail/debug.h>
 #include <jw/io/rs232.h>
 #include <../jwdpmi_config.h>
 

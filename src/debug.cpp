@@ -17,6 +17,7 @@
 #include <jw/dpmi/dpmi.h>
 #include <jw/dpmi/debug.h>
 #include <jw/dpmi/cpu_exception.h>
+#include <jw/dpmi/detail/debug.h>
 #include <jw/io/rs232.h>
 #include <jw/alloc.h>
 #include <../jwdpmi_config.h>
@@ -36,14 +37,6 @@ namespace jw
         {
             constexpr bool is_benign_signal(std::int32_t) noexcept;
             bool all_benign_signals(auto*);
-
-            enum signals
-            {
-                packet_received = 0x1010,
-                trap_masked,
-                trap_unmasked,
-                continued
-            };
 
             struct rs232_streambuf_internals : public io::detail::rs232_streambuf
             {
@@ -233,29 +226,6 @@ namespace jw
             constexpr auto reg_max = regnum::mxcsr;
 #           endif
 
-            enum posix_signals : std::int32_t
-            {
-                sighup = 1,
-                sigint,
-                sigquit,
-                sigill,
-                sigtrap,
-                sigabrt,
-                sigemt,
-                sigfpe,
-                sigkill,
-                sigbus,
-                sigsegv,
-                sigsys,
-                sigpipe,
-                sigalrm,
-                sigterm,
-                sigstop = 17,
-                sigcont = 19,
-                sigusr1 = 30,
-                sigusr2 = 31,
-            };
-
             constexpr std::uint32_t posix_signal(std::int32_t exc) noexcept
             {
                 switch (exc)
@@ -311,10 +281,10 @@ namespace jw
                 case packet_received:
                     return 0;
 
-                case thread::detail::all_threads_suspended:
-                case thread::detail::thread_finished:
-                case thread::detail::thread_suspended:
-                case thread::detail::thread_started:
+                case all_threads_suspended:
+                case thread_finished:
+                case thread_suspended:
+                case thread_started:
                     return sigstop;
 
                 default: return sigusr1;
@@ -328,7 +298,7 @@ namespace jw
                 default:
                     return true;
 
-                case thread::detail::thread_switched:
+                case thread_switched:
                 case packet_received:
                 case trap_masked:
                 case trap_unmasked:
@@ -360,9 +330,9 @@ namespace jw
 
                 case exception_num::trap:
                 case exception_num::breakpoint:
-                case thread::detail::thread_switched:
-                case thread::detail::thread_finished:
-                case thread::detail::all_threads_suspended:
+                case thread_switched:
+                case thread_finished:
+                case all_threads_suspended:
                 case trap_masked:
                 case trap_unmasked:
                 case packet_received:
@@ -713,13 +683,16 @@ namespace jw
                         else i = t.second.signals.erase(i);
                         if (temp_debugmsg) std::clog << "handled.\n";
 
-                        if (not thread_events_enabled and (signal == thread::detail::thread_started or signal == thread::detail::thread_finished))
+                        if (not thread_events_enabled and (signal == thread_started or signal == thread_finished))
                             continue;
+
+                        t.second.action = thread_info::none;
+                        t.second.last_stop_signal = signal;
 
                         std::stringstream s { };
                         s << std::hex << std::setfill('0');
                         if (async) s << "Stop:";
-                        if (signal == thread::detail::thread_finished)
+                        if (signal == thread_finished)
                         {
                             s << 'w';
                             if (t_ptr->get_state() == thread::detail::finished) s << "00";
@@ -737,7 +710,7 @@ namespace jw
                                 s << ebp << ':'; reg(s, ebp, t.first); s << ';';
                             }
                             s << "thread:" << t.first << ';';
-                            if (signal == thread::detail::thread_started)
+                            if (signal == thread_started)
                             {
                                 s << "create:;";
                             }
@@ -759,10 +732,8 @@ namespace jw
                             if (async) send_notification(s.str());
                             else send_packet(s.str());
                         }
-                        t.second.action = thread_info::none;
-                        t.second.last_stop_signal = signal;
 
-                        if (signal == thread::detail::all_threads_suspended and supported["no-resumed"] == "+")
+                        if (signal == all_threads_suspended and supported["no-resumed"] == "+")
                             send_packet("N");
                     }
                 }
@@ -1197,14 +1168,14 @@ namespace jw
                                 else t.second.set_action('c');
 
                                 if (t.second.thread.lock()->get_state() == thread::detail::starting)
-                                    t.second.signals.insert(thread::detail::thread_started);
+                                    t.second.signals.insert(thread_started);
                             }
 
-                            if (current_thread->signals.count(thread::detail::thread_switched) and t.second.action == thread_info::stop)
-                                t.second.signals.insert(thread::detail::thread_suspended);
+                            if (current_thread->signals.count(thread_switched) and t.second.action == thread_info::stop)
+                                t.second.signals.insert(thread_suspended);
                         }
 
-                        current_thread->signals.erase(thread::detail::thread_switched);
+                        current_thread->signals.erase(thread_switched);
 
                         if (current_thread->action == thread_info::step_range and
                             current_thread->frame.fault_address.offset >= current_thread->step_range_begin and
@@ -1258,7 +1229,7 @@ namespace jw
                 return current_thread->do_action();
             }
 
-            void notify_gdb_thread_event(thread::detail::thread_event e)
+            void notify_gdb_thread_event(debug_signals e)
             {
                 if (thread_events_enabled) break_with_signal(e);
             }
@@ -1344,7 +1315,7 @@ namespace jw
 #       else
         namespace detail
         {
-            void notify_gdb_thread_event(thread::detail::thread_event) { }
+            void notify_gdb_thread_event(debug_signals) { }
         }
 #       endif
     }
