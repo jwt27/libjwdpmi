@@ -75,8 +75,8 @@ namespace jw
                 using std::string_view::basic_string_view;
             };
 
-            std::basic_string<char, std::char_traits<char>, locked_pool_allocator<>> last_sent_packet { alloc };
-            std::basic_string<char,std::char_traits<char>,locked_pool_allocator<>> raw_packet_string { alloc };
+            std::deque<std::string, locked_pool_allocator<>> sent_packets { alloc };
+            std::string raw_packet_string;
             std::deque<packet_string, locked_pool_allocator<>> packet { alloc };
 
             std::uint32_t current_thread_id { 1 };
@@ -88,7 +88,8 @@ namespace jw
                 std::weak_ptr<thread::detail::thread> thread;
                 new_exception_frame frame;
                 cpu_registers reg;
-                std::unordered_set<std::int32_t, std::hash<std::int32_t>, std::equal_to<std::int32_t>, locked_pool_allocator<>> signals { alloc };
+                template <typename T> using set_with_alloc = std::unordered_set<T, std::hash<T>, std::equal_to<T>, locked_pool_allocator<T>>;
+                set_with_alloc<std::int32_t> signals { alloc };
                 std::int32_t last_stop_signal { -1 };
                 std::uintptr_t step_range_begin { 0 };
                 std::uintptr_t step_range_end { 0 };
@@ -497,11 +498,23 @@ namespace jw
 
                 const auto sum = checksum(rle_output);
                 *gdb << '$' << rle_output << '#' << std::setfill('0') << std::hex << std::setw(2) << sum;
-                if (temp_debugmsg) std::clog << "flush...\n";
-                if (not interrupt_mask::get())
-                    *gdb << std::flush;
-                last_sent_packet = output;
+                sent_packets.emplace_back(output);
                 if (temp_debugmsg) std::clog << "send_packet done.\n";
+            }
+
+            void recv_ack()
+            {
+                *gdb << std::flush;
+                switch (gdb->peek())
+                {
+                case '-':
+                    std::cerr << "NACK --> " << sent_packets.back() << '\n';
+                    if (sent_packets.size() > 0) send_packet(sent_packets.back());
+                    [[fallthrough]];
+                case '+':
+                    if (sent_packets.size() > 0) sent_packets.pop_back();
+                    gdb->get();
+                }
             }
 
             void recv_packet()
@@ -509,17 +522,17 @@ namespace jw
                 static std::string sum;
 
             retry:
-                if (not interrupt_mask::get()) *gdb << std::flush;
-                switch (gdb->get())
+                recv_ack();
+                switch (gdb->peek())
                 {
-                case '-':
-                    std::cerr << "NACK --> " << last_sent_packet << '\n';
-                    send_packet(last_sent_packet);
-                    [[fallthrough]];
-                case '+': // last_sent_packet.clear();
                 default: goto retry;
-                case 0x03: raw_packet_string = "vCtrlC"; goto parse;
-                case '$': break;
+                case 0x03:
+                    gdb->get();
+                    raw_packet_string = "vCtrlC";
+                    goto parse;
+                case '$':
+                    gdb->get();
+                    break;
                 }
 
                 raw_packet_string.clear();
@@ -532,7 +545,7 @@ namespace jw
                 {
                     std::cerr << "BAD CHECKSUM: " << raw_packet_string << ": " << sum << ", calculated: " << checksum(raw_packet_string) << '\n';
                     *gdb << '-';
-                    goto retry; 
+                    goto retry;
                 }
 
             parse:
@@ -757,6 +770,7 @@ namespace jw
                     auto& q = packet[0];
                     if (q == "Supported")
                     {
+                        sent_packets.clear();
                         packet.pop_front();
                         for (auto&& str : packet)
                         {
@@ -1069,6 +1083,7 @@ namespace jw
                 {
                     std::cerr << "Exception occured while communicating with GDB.\n";
                     std::cerr << "caused by this packet: " << raw_packet_string << '\n';
+                    std::cerr << std::boolalpha << "good=" << gdb->good() << " bad=" << gdb->bad() << " fail=" << gdb->fail() << " eof=" << gdb->eof() << '\n';
                     do { } while (true);
                 };
 
@@ -1197,7 +1212,7 @@ namespace jw
                         stop_reply();
                     }
 
-                    if (debugmsg) std::clog << "enabling interrupts.\n";
+                    if (temp_debugmsg) std::clog << "enabling interrupts.\n";
                     if (config::enable_gdb_interrupts) asm("sti");
 
                     auto cant_continue = []
@@ -1211,10 +1226,12 @@ namespace jw
                     if (temp_debugmsg) std::clog << "entering main loop.\n";
                     while (cant_continue())
                     {
-                        if (packet_available()) current_thread->signals.insert(packet_received);
-                        if (current_thread->signals.count(packet_received)) handle_packet();
+                        if (packet_available()) handle_packet();
+                        recv_ack();
                     }
                     if (temp_debugmsg) std::clog << "leaving main loop.\n";
+
+                    while (sent_packets.size() > 0) recv_ack();
                 }
                 catch (const std::exception& e) { print_exception(e); catch_exception(); }
                 catch (...) { catch_exception(); }
