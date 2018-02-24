@@ -6,25 +6,25 @@ CXXFLAGS += -fnon-call-exceptions
 CXXFLAGS += -mcld
 CXXFLAGS += -mpreferred-stack-boundary=4
 
-INCLUDE := -I$(CURDIR)/include
+INCLUDE := -Iinclude
 LIBS := 
 
 OUTPUT := libjwdpmi.a
 DEPFILE := libjwdpmi.d
 
-SRCDIR := $(CURDIR)/src
-OUTDIR := $(CURDIR)/bin
-OBJDIR := $(CURDIR)/obj
+SRCDIR := src
+OUTDIR := bin
+OBJDIR := obj
 SRC := $(wildcard $(SRCDIR)/*.cpp)
 OBJ := $(SRC:$(SRCDIR)/%.cpp=$(OBJDIR)/%.o)
 DEP := $(SRC:$(SRCDIR)/%.cpp=$(OBJDIR)/%.d)
 
 .PHONY: all clean
 
-all: $(OUTDIR)/$(OUTPUT) $(OUTDIR)/$(DEPFILE)
+all: $(OUTDIR)/$(OUTPUT)
 
 clean:
-	rm -f $(OBJ) $(DEP) $(OUTDIR)/$(OUTPUT) $(OUTDIR)/$(DEPFILE)
+	rm -f $(OBJ) $(DEP) $(OUTDIR)/$(OUTPUT)
 
 $(OUTDIR): 
 	mkdir -p $(OUTDIR)
@@ -37,12 +37,6 @@ $(OUTDIR)/$(OUTPUT): $(OBJ) | $(OUTDIR)
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.cpp jwdpmi_config.h | $(OBJDIR)
 	$(CXX) $(CXXFLAGS) -MD -MP -MF $(@:.o=.d) -o $@ $(INCLUDE) -c $< $(PIPECMD)
-
-$(DEP): $(OBJ)
-
-$(OUTDIR)/$(DEPFILE): $(DEP) | $(OUTDIR)
-	echo include $(DEP) > $@
-	echo $(OUTDIR)/$(OUTPUT): $(OBJ) >> $@
 
 jwdpmi_config.h:
 	cp -n jwdpmi_config_default.h jwdpmi_config.h
