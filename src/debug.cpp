@@ -1153,8 +1153,6 @@ namespace jw
                         {
                             if (all_benign_signals(current_thread))
                             {
-                                current_thread->set_trap(); // re-enable trap when last trap_mask destructs
-                                f->flags.trap = false;      // disable trap for now
                                 current_thread->signals.insert(trap_masked);
                                 if (debugmsg) std::clog << "trap masked at 0x" << std::hex << f->fault_address.offset << "\n";
                             }
@@ -1164,7 +1162,6 @@ namespace jw
                                 current_thread->signals.erase(trap_masked);
                                 while (thread::detail::thread_details::trap_masked(t))
                                     thread::detail::thread_details::trap_unmask(t);     // serious fault occured, undo trap masks
-                                f->flags.trap = true;
                             }
                         }
 
