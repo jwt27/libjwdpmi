@@ -30,7 +30,7 @@ namespace jw
 
             // Get the current interrupt flag state
             // true == interrupts enabled
-            static bool get() noexcept
+            static bool enabled() noexcept
             {
                 return get_interrupt_state();
             }
@@ -99,6 +99,15 @@ namespace jw
                 byte mask = 1 << (irq % 8);
                 auto& port = irq < 8 ? pic0_data : pic1_data;
                 port.write(port.read() & ~mask);
+            }
+
+            static bool enabled(irq_level irq) // TODO: raii unmask
+            {
+                if (map[irq].count > 0) return false;
+
+                byte mask = 1 << (irq % 8);
+                auto& port = irq < 8 ? pic0_data : pic1_data;
+                return port.read() & mask;
             }
 
         private:

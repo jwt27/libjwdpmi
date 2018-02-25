@@ -112,13 +112,23 @@ namespace jw
                 virtual int_type overflow(int_type c = traits_type::eof()) override;
 
             private:
+                void check_irq_exception()
+                {
+                    if (__builtin_expect(irq_exception != nullptr, false))
+                    {
+                        auto e = std::move(irq_exception);
+                        irq_exception = nullptr;
+                        std::rethrow_exception(e);
+                    }
+                }
+
                 void set_rts() noexcept
                 {
                     if (config.force_dtr_rts_high) return;
                     auto r = modem_control.read();
                     auto r2 = r;
                     r2.dtr = true;
-                    r2.rts = rx_ptr != rx_buf.end() - 14;
+                    r2.rts = egptr() != rx_buf.end() - 8;
                     if (r.rts != r2.rts)
                     {
                         modem_control.write(r2);
@@ -126,29 +136,54 @@ namespace jw
                     }
                 }
 
-                void get(bool entire_fifo = false) noexcept
+                uart_line_status_reg read_status()
                 {
-                    std::unique_lock<std::recursive_mutex> lock { getting, std::try_to_lock };
-                    if (not lock) return;
-                    auto end = rx_ptr + std::min(entire_fifo ? 14 : 1, rx_buf.end() - rx_ptr);
-                    while (rx_ptr < end) *(rx_ptr++) = get_one();
-                    setg(rx_buf.begin(), gptr(), end);
+                    auto status = line_status.read();
+                    if (status.overflow_error)       throw io::overflow { "RS232 FIFO overflow" };
+                    if (status.parity_error)         throw parity_error { "RS232 parity error" };
+                    if (status.framing_error)        throw framing_error { "RS232 framing error" };
+                    if (status.line_break)           throw line_break { "RS232 line break detected" };
+                    //if (status.fifo_contains_error)  throw io_error { "RS232 FIFO contains error" };
+                    return status;
                 }
 
-                void put() noexcept
+                void get(bool entire_fifo = false)
+                {
+                    //irq_disable no_irq { this, irq_disable::get };
+                    dpmi::interrupt_mask no_irq { };
+                    auto size = std::min(entire_fifo ? 8 : 1, rx_buf.end() - rx_ptr);
+                    for (auto i = 0; i < size or read_status().data_available; ++i)
+                    {
+                        if (rx_ptr >= rx_buf.end()) throw io::overflow { "RS232 receive buffer overflow" };
+                        *(rx_ptr++) = get_one();
+                    }
+                    setg(rx_buf.begin(), gptr(), rx_ptr);
+                }
+
+                void put()
                 {
                     //if (config.flow_control == rs232_config::xon_xoff && !cts) { put_one(xon); return; };
-                    std::unique_lock<std::recursive_mutex> lock { putting, std::try_to_lock };
-                    if (not lock) return;
-                    auto end = tx_ptr + std::min(line_status.read().tx_fifo_empty ? 16 : 1, pptr() - tx_ptr);
-                    for (; tx_ptr < end; ++tx_ptr)
-                        if (!put_one(*tx_ptr)) break;
+                    //irq_disable no_irq { this, irq_disable::put };
+                    dpmi::interrupt_mask no_irq { };
+                    std::unique_lock<std::recursive_mutex> locked { putting, std::try_to_lock };
+                    if (not locked) return;
+                    auto size = std::min(read_status().tx_fifo_empty ? 16 : 1, pptr() - tx_ptr);
+                    for (auto i = 0; i < size or (tx_ptr < pptr() and read_status().transmitter_empty); ++tx_ptr, ++i)
+                        if (not put_one(*tx_ptr)) break;
                 }
 
-                char_type get_one() noexcept
+                char_type get_one()
                 {
                 retry:
-                    thread::yield_while([this] { return !line_status.read().data_available; });
+                    try
+                    {
+                        do { } while(not read_status().data_available);
+                    }
+                    catch (const line_break&)
+                    {
+                        if (data_port.read() != 0) throw;
+                        goto retry;
+                    }
                     auto c = data_port.read();
                     if (config.flow_control == rs232_config::xon_xoff)
                     {
@@ -159,11 +194,11 @@ namespace jw
                     return c;
                 }
 
-                bool put_one(char_type c) noexcept
+                bool put_one(char_type c)
                 {
-                    if (!line_status.read().transmitter_empty) return false;
-                    if (config.flow_control == rs232_config::rts_cts && !modem_status.read().cts) return false;
-                    thread::yield_while([this] { return !line_status.read().transmitter_empty; });
+                    if (not read_status().transmitter_empty) return false;
+                    if (config.flow_control == rs232_config::rts_cts and not modem_status.read().cts) return false;
+                    thread::yield_while([this] { return not read_status().transmitter_empty; });
                     data_port.write(c);
                     return true;
                 }
@@ -171,23 +206,30 @@ namespace jw
                 dpmi::irq_handler irq_handler { [this]() INTERRUPT
                 {
                     auto id = irq_id.read();
-                    while (not id.no_irq_pending)
+                    if (not id.no_irq_pending)
                     {
                         dpmi::irq_handler::acknowledge();
-                        switch (id.id)
+                        try
                         {
-                        case uart_irq_id_reg::data_available:
-                            get(!id.timeout); break;
-                        case uart_irq_id_reg::transmitter_empty:
-                            put(); break;
-                        case uart_irq_id_reg::line_status:
-                            if (line_status.read().line_break) { cts = false; break; }
-                            [[fallthrough]];
-                        case uart_irq_id_reg::modem_status:
-                            modem_status.read();
-                            put(); break;
+                            switch (id.id)
+                            {
+                            case uart_irq_id_reg::data_available:
+                                get(not id.timeout); break;
+                            case uart_irq_id_reg::transmitter_empty:
+                                put(); break;
+                            case uart_irq_id_reg::line_status:
+                                try { read_status(); }
+                                catch (const line_break&) { cts = false; break; }
+                                [[fallthrough]];
+                            case uart_irq_id_reg::modem_status:
+                                modem_status.read();
+                                put(); break;
+                            }
                         }
-                        id = irq_id.read();
+                        catch (...)
+                        {
+                            irq_exception = std::current_exception();
+                        }
                     }
                     set_rts();
                 } };
@@ -203,12 +245,13 @@ namespace jw
                 in_port <uart_line_status_reg> line_status;
                 in_port <uart_modem_status_reg> modem_status;
                 std::recursive_mutex getting, putting;
+                std::exception_ptr irq_exception;
                 bool cts { false };
 
                 std::array<char_type, 1_KB> rx_buf;
                 std::array<char_type, 1_KB> tx_buf;
-                char_type* rx_ptr { rx_buf.data() };
-                char_type* tx_ptr { tx_buf.data() };
+                char_type* volatile rx_ptr { rx_buf.data() };
+                char_type* volatile tx_ptr { tx_buf.data() };
 
                 static const char_type xon = 0x11;
                 static const char_type xoff = 0x13;
@@ -216,7 +259,8 @@ namespace jw
                 static std::unordered_map<port_num, bool> com_port_use_map;
 
             protected:
-                struct irq_disable
+                /*
+                struct irq_disable  // TODO: needs fixing
                 {
                     enum which 
                     { 
@@ -227,7 +271,7 @@ namespace jw
                         all = 0b1111
                     };
 
-                    irq_disable(auto* p, which type = all) noexcept : owner(p), reg(p->irq_enable.read())
+                    irq_disable(auto* p, auto type = all) noexcept : owner(p), reg(p->irq_enable.read())
                     {
                         uart_irq_enable_reg r { reg };
                         r.data_available = not (type & get);
@@ -242,7 +286,7 @@ namespace jw
                     irq_disable() { }
                     rs232_streambuf* owner;
                     uart_irq_enable_reg reg;
-                };
+                };*/
             };
         }
     }

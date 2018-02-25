@@ -98,6 +98,18 @@ namespace jw
                 default_irq_context.save();
                 contexts.emplace_back(nullptr);
 
+                reinstall_exception_handlers();
+
+                init = true;
+            }
+
+            fpu_context_switcher_t::~fpu_context_switcher_t()
+            {
+                init = false;
+            }
+
+            void fpu_context_switcher_t::reinstall_exception_handlers()
+            {
                 set_fpu_emulation(false, true);
                 if (test_cr0_access()) use_ts_bit = true;
                 else
@@ -127,13 +139,6 @@ namespace jw
                     switch_context();
                     return true;
                 });
-
-                init = true;
-            }
-
-            fpu_context_switcher_t::~fpu_context_switcher_t()
-            {
-                init = false;
             }
         }
     }

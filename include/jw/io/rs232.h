@@ -6,6 +6,7 @@
 #include <vector>
 #include <unordered_map>
 #include <algorithm>
+#include <stdexcept>
 #include <jw/dpmi/alloc.h>
 #include <jw/dpmi/irq.h>
 #include <jw/io/ioport.h>
@@ -14,6 +15,12 @@ namespace jw
 {
     namespace io
     {
+        struct io_error : public std::runtime_error { using runtime_error::runtime_error; };
+        struct overflow : public io_error { using io_error::io_error; };
+        struct parity_error : public io_error { using io_error::io_error; };
+        struct framing_error : public io_error { using io_error::io_error; };
+        struct line_break : public io_error { using io_error::io_error; };
+
         enum com_port
         {
             com1,

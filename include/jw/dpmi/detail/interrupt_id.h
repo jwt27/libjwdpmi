@@ -10,16 +10,16 @@ namespace jw::dpmi::detail
 {
     struct interrupt_id : public class_lock<interrupt_id>
     {
-        locked_pool_allocator<> alloc { 4_KB };
+        locked_pool_allocator<> alloc { 1_KB };
         std::uint64_t id_count { 0 };
         std::uint32_t use_count { 0 };
         struct id_t
         {
-            std::uint64_t id;
-            std::uint32_t vector;
-            enum { interrupt, exception } type;
+            const std::uint64_t id;
+            const std::uint32_t vector;
+            enum { interrupt, exception } const type;
             bool acknowledged { type == exception };
-            constexpr id_t(std::uint64_t i, std::uint32_t v, auto t) : id(i), vector(v), type(t) { }
+            constexpr id_t(std::uint64_t i, std::uint32_t v, auto t) noexcept : id(i), vector(v), type(t) { }
         };
         std::vector<std::shared_ptr<id_t>, locked_pool_allocator<>> current_interrupt { alloc };
 
@@ -30,7 +30,7 @@ namespace jw::dpmi::detail
         }
         static void pop_back() { get()->current_interrupt.pop_back(); }
 
-        static bool is_current_interrupt(const auto* p) noexcept { return p != nullptr and get()->current_interrupt.back().get()->id == p->id; }
+        static bool is_current_interrupt(const auto* p) noexcept { return p != nullptr and get()->current_interrupt.back()->id == p->id; }
         static auto get_current_interrupt() noexcept
         {
             using weak = std::weak_ptr<const id_t>;

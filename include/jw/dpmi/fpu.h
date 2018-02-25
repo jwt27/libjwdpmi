@@ -202,6 +202,8 @@ namespace jw
                     }
                 }
 
+                void reinstall_exception_handlers();
+
                 fpu_context* get_last_context()
                 {
                     if (contexts.back() == nullptr) switch_context();

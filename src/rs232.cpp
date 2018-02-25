@@ -53,7 +53,7 @@ namespace jw
                 fctrl.enable_fifo = true;
                 fctrl.clear_rx = true;
                 fctrl.clear_tx = true;
-                fctrl.irq_threshold = uart_fifo_control_reg::bytes_14;
+                fctrl.irq_threshold = uart_fifo_control_reg::bytes_8;
                 fifo_control.write(fctrl);
 
                 if (irq_id.read().fifo_enabled != 0b11) throw std::runtime_error("16550A not detected"); // HACK
@@ -80,64 +80,113 @@ namespace jw
 
             int rs232_streambuf::sync()
             {
-                while (tx_ptr < pptr())
+                thread::yield_while([this]
                 {
+                    {
+                        std::unique_lock<std::recursive_mutex> lock { getting };
+                        if (read_status().data_available) underflow();
+                    }
                     overflow();
-                    underflow();
-                    thread::yield();
-                }
+                    return tx_ptr < pptr();
+                });
                 return 0;
             }
 
-            std::streamsize rs232_streambuf::xsgetn(char_type * s, std::streamsize n)
+            std::streamsize rs232_streambuf::xsgetn(char_type* s, std::streamsize n)
             {
-                std::streamsize max_n = 0;
-                while (max_n < n && underflow() != traits_type::eof()) max_n = std::min(rx_ptr - gptr(), n);
+                std::unique_lock<std::recursive_mutex> lock { getting };
+                std::streamsize max_n;
+                thread::yield_while([&]
                 {
-                    irq_disable no_irq { this };
+                    max_n = std::min(egptr() - gptr(), n);
+                    return max_n < n and underflow() != traits_type::eof();
+                });
+                {
+                    dpmi::interrupt_mask no_irq { };
                     std::copy_n(gptr(), max_n, s);
-                    setg(rx_buf.begin(), gptr() + max_n, rx_ptr);
+                    setg(rx_buf.begin(), gptr() + max_n, egptr());
                 }
                 return max_n;
             }
 
+            // rx_buf:  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+            //          ^               ^       ^       ^
+            //          rx_buf.begin()  gptr()  rx_ptr  tx_buf.end()
+            //          == eback()      |       |
+            //                          |       +- one past last received char (== egptr())
+            //                          +- next char to get
+
             rs232_streambuf::int_type rs232_streambuf::underflow()
             {
+                //std::clog << "underflow() avail=" << std::boolalpha << read_status().data_available;
                 std::unique_lock<std::recursive_mutex> lock { getting };
-                if (gptr() != rx_buf.begin()) std::copy(gptr(), rx_ptr, rx_buf.begin());
-                rx_ptr = rx_buf.begin() + (rx_ptr - gptr());
-                setg(rx_buf.begin(), rx_buf.begin(), rx_ptr);
-                do 
-                { 
-                    get(); 
-                    thread::yield();
-                } while (rx_ptr == gptr());
+                auto qsize = rx_buf.size() / 4;
+                if (rx_ptr > rx_buf.begin() + qsize * 3)
+                {
+                    dpmi::interrupt_mask no_irq { };
+                    auto offset = gptr() - (rx_buf.begin() + qsize);
+                    std::copy(rx_buf.begin() + offset, rx_ptr, rx_buf.begin());
+                    rx_ptr -= offset;
+                    setg(rx_buf.begin(), rx_buf.begin() + qsize, rx_ptr);
+                }
                 set_rts();
+                do
+                {
+                    check_irq_exception();
+                    if (not dpmi::interrupt_mask::enabled() or
+                        not irq_enable.read().data_available or
+                        not dpmi::irq_mask::enabled(config.irq))
+                        get();
+                    else thread::yield();
+                    //std::clog << '.';
+                } while (gptr() == rx_ptr);
+                //std::clog << ". done. got: " << std::string_view { gptr(), egptr() - gptr() } << "\n";
                 return *gptr();
             }
 
-            std::streamsize rs232_streambuf::xsputn(const char_type * s, std::streamsize n)
+            std::streamsize rs232_streambuf::xsputn(const char_type* s, std::streamsize n)
             {
-                irq_disable no_irq { this };
-                auto max_n = std::min(tx_buf.end() - pptr(), n);
-                if (max_n < n) overflow();
-                max_n = std::min(tx_buf.end() - pptr(), n);
-                std::copy_n(s, max_n, pptr());
-                setp(pptr() + max_n, tx_buf.end());
+                std::unique_lock<std::recursive_mutex> lock { putting };
+                std::streamsize max_n;
+                while ((max_n = std::min(tx_buf.end() - pptr(), n)) < n)
+                    overflow();
+                {
+                    dpmi::interrupt_mask no_irq { };
+                    std::copy_n(s, max_n, pptr());
+                    setp(pptr() + max_n, tx_buf.end());
+                }
                 return max_n;
             }
+
+            // tx_buf:  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+            //          ^               ^       ^       ^
+            //          tx_buf.begin()  tx_ptr  pptr()  epptr()
+            //                          |       |
+            //                          |       +- current put pointer
+            //                          +- next character to send
 
             rs232_streambuf::int_type rs232_streambuf::overflow(int_type c) 
             {
                 std::unique_lock<std::recursive_mutex> lock { putting };
-                do
+                thread::yield_while([this]
                 {
-                    put();
-                    if (tx_ptr != tx_buf.begin()) std::copy(tx_ptr, pptr(), tx_buf.begin());
+                    check_irq_exception();
+                    {
+                        dpmi::interrupt_mask no_irq { };
+                        put();
+                    }
+                    return tx_ptr < pptr();
+                });
+
+                auto hsize = tx_buf.size() / 2;
+                if (pptr() > tx_buf.begin() + hsize)
+                {
+                    dpmi::interrupt_mask no_irq { };
+                    std::copy(tx_ptr, pptr(), tx_buf.begin());
                     setp(tx_buf.begin() + (pptr() - tx_ptr), tx_buf.end());
                     tx_ptr = tx_buf.begin();
-                    thread::yield();
-                } while (pptr() == epptr());
+                }
+
                 if (traits_type::not_eof(c)) sputc(c);
                 return ~traits_type::eof();
             }

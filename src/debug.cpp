@@ -12,7 +12,7 @@
 #include <csignal>
 #include <cstdlib>
 #include <string_view>
-#include <unordered_set>
+#include <set>
 #include <jw/dpmi/fpu.h>
 #include <jw/dpmi/dpmi.h>
 #include <jw/dpmi/debug.h>
@@ -46,7 +46,7 @@ namespace jw
             };
 
             const bool debugmsg = config::enable_gdb_debug_messages;
-            const bool temp_debugmsg = debugmsg and true;
+            const bool temp_debugmsg = true;
 
             volatile bool debugger_reentry { false };
             bool debug_mode { false };
@@ -88,7 +88,8 @@ namespace jw
                 std::weak_ptr<thread::detail::thread> thread;
                 new_exception_frame frame;
                 cpu_registers reg;
-                template <typename T> using set_with_alloc = std::unordered_set<T, std::hash<T>, std::equal_to<T>, locked_pool_allocator<T>>;
+                //template <typename T> using set_with_alloc = std::unordered_set<T, std::hash<T>, std::equal_to<T>, locked_pool_allocator<T>>;
+                template <typename T> using set_with_alloc = std::set<T, std::less<T>, locked_pool_allocator<T>>;
                 set_with_alloc<std::int32_t> signals { alloc };
                 std::int32_t last_stop_signal { -1 };
                 std::uintptr_t step_range_begin { 0 };
@@ -154,6 +155,7 @@ namespace jw
                         clear_trap();
                         action = stop;
                     }
+                    else throw std::exception { };
                 }
 
                 bool do_action() const
@@ -451,11 +453,12 @@ namespace jw
             inline bool packet_available()
             {
                 auto* p = gdb_streambuf->get_gptr();
-                if (gdb_streambuf->get_egptr() == p) *gdb << std::flush;
                 std::size_t size = gdb_streambuf->get_egptr() - p;
                 std::string_view str { p, size };
-                return str.find(0x03) != std::string_view::npos
+                bool result = str.find(0x03) != std::string_view::npos
                     or str.find('#', str.find('$')) != std::string_view::npos;
+                //if (result) std::clog << "(packet available)";
+                return result;
             }
 
             // not used
@@ -496,15 +499,14 @@ namespace jw
                 }
 
                 const auto sum = checksum(rle_output);
-                *gdb << '$' << rle_output << '#' << std::setfill('0') << std::hex << std::setw(2) << sum;
+                *gdb << '$' << rle_output << '#' << std::setfill('0') << std::hex << std::setw(2) << sum << std::flush;
                 sent_packets.emplace_back(output);
-                if (temp_debugmsg) std::clog << "send_packet done.\n";
             }
 
             void recv_ack()
             {
                 *gdb << std::flush;
-                switch (gdb->peek())
+                if (gdb->rdbuf()->in_avail()) switch (gdb->peek())
                 {
                 case '-':
                     std::cerr << "NACK --> " << sent_packets.back() << '\n';
@@ -524,7 +526,10 @@ namespace jw
                 recv_ack();
                 switch (gdb->peek())
                 {
-                default: goto retry;
+                default: gdb->get();
+                case '+':
+                case '-':
+                    goto retry;
                 case 0x03:
                     gdb->get();
                     raw_packet_string = "vCtrlC";
@@ -679,12 +684,10 @@ namespace jw
 
                     auto t_ptr = t.second.thread.lock();
 
-                    if (temp_debugmsg) std::clog << "stop reply for thread 0x" << std::hex << t_ptr->id() << '\n';
-
                     for (auto i = t.second.signals.begin(); i != t.second.signals.end();)
                     {
                         auto signal = *i;
-                        if (temp_debugmsg) std::clog << "stop reply for signal 0x" << std::hex << signal << ": ";
+                        if (temp_debugmsg) std::clog << "stop reply for thread 0x" << std::hex << t.first << " signal 0x" << signal << ": ";
                         if (not is_stop_signal(signal)
                             or (is_trap_signal(signal) and t.second.signals.count(trap_masked)))
                         {
@@ -883,6 +886,12 @@ namespace jw
                                         t.second.set_action(packet[i][0]);
                                 }
                             }
+                        }
+                        if (temp_debugmsg)
+                        {
+                            std::clog << "vCont result: " << std::hex;
+                            for (auto&& t : threads) std::clog << t.first << "=" << t.second.action << ' ';
+                            std::clog << '\n';
                         }
                     }
                     else if (v == "CtrlC")
@@ -1208,26 +1217,24 @@ namespace jw
                         stop_reply();
                     }
 
-                    if (temp_debugmsg) std::clog << "enabling interrupts.\n";
                     if (config::enable_gdb_interrupts) asm("sti");
 
                     auto cant_continue = []
                     {
-                        if (current_thread->signals.count(packet_received) > 0) return true;
                         for (auto&& t : threads)
                             if (t.second.thread.lock()->is_running() and
                                 t.second.action == thread_info::none) return true;
                         return false;
                     };
                     if (temp_debugmsg) std::clog << "entering main loop.\n";
-                    while (cant_continue())
+                    do
                     {
                         if (packet_available()) handle_packet();
                         recv_ack();
-                    }
+                    } while (cant_continue());
                     if (temp_debugmsg) std::clog << "leaving main loop.\n";
 
-                    while (sent_packets.size() > 0) recv_ack();
+                    while (sent_packets.size() > 0 and not killed) recv_ack();
                 }
                 catch (const std::exception& e) { print_exception(e); catch_exception(); }
                 catch (...) { catch_exception(); }
@@ -1266,7 +1273,7 @@ namespace jw
                 {
                     if (debugger_reentry) return;
                     if (packet_available()) break_with_signal(packet_received);
-                }, dpmi::always_call | dpmi::no_interrupts);
+                }, dpmi::always_call);
 
                 {
                     exception_handler check_frame_type { 3, [](auto*, auto*, bool t) [[gnu::used]] 
@@ -1282,10 +1289,10 @@ namespace jw
 
                 auto install_exception_handler = [](auto&& e) { exception_handlers[e] = std::make_unique<exception_handler>(e, [e](auto* r, auto* f, bool t) { return handle_exception(e, r, f, t); }); };
 
-                for (auto&& e : { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e })
+                for (auto e = 0x00; e <= 0x0e; ++e)
                     install_exception_handler(e);
-                if (!detail::test_cr0_access())
-                    install_exception_handler(0x07);
+
+                fpu_context_switcher.reinstall_exception_handlers();    // make sure fpu context switching routines are called first.
 
                 serial_irq->set_irq(cfg.irq);
                 serial_irq->enable();
