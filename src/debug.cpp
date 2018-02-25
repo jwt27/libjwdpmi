@@ -1312,6 +1312,7 @@ namespace jw
                 s << "W" << std::setw(2) << static_cast<std::uint32_t>(result);
                 send_packet(s.str());
 
+                debug_mode = false;
                 serial_irq.reset();
                 for (auto&& e : exception_handlers) e.reset();
             }

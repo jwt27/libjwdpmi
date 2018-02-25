@@ -78,10 +78,13 @@ namespace jw
         }
     }
 
+    std::terminate_handler original_terminate_handler;
     [[noreturn]] void terminate_handler()
     {
         jw::dpmi::break_with_signal(SIGTERM);
-        std::abort();
+        std::set_terminate(original_terminate_handler);
+        original_terminate_handler();
+        do { } while (true);
     }
 
     int return_value { -1 };
@@ -103,7 +106,7 @@ int main(int argc, const char** argv)
     try 
     {   
         dpmi::detail::setup_exception_throwers();
-        std::set_terminate(jw::terminate_handler);
+        original_terminate_handler = std::set_terminate(jw::terminate_handler);
         std::atexit(jw::atexit_handler);
     
         std::deque<std::string_view> args { };
