@@ -64,7 +64,7 @@ namespace jw
         *reinterpret_cast<std::ptrdiff_t*>(p + 1) = new_malloc - post_call;     // hotpatch __cxa_alloc to call irq_safe_malloc instead.
     }
 
-    void terminate()
+    [[noreturn]] void terminate()
     {
         throw terminate_exception { };
     }

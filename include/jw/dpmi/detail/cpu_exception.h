@@ -101,7 +101,7 @@ namespace jw
             void enter_exception_context(exception_num exc) noexcept;
             void leave_exception_context() noexcept;
 
-            inline void simulate_call(exception_frame* frame, auto* func) noexcept
+            inline void simulate_call(exception_frame* frame, void(*func)()) noexcept
             {
                 frame->stack.offset -= 8;                                                               // "sub esp, 8"
                 frame->stack.offset &= -0x10;                                                           // "and esp, -0x10"

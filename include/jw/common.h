@@ -21,5 +21,5 @@ namespace jw
         virtual const char* what() const noexcept { return "Terminating."; }
     };
 
-    void terminate();
+    [[noreturn]] void terminate();
 }

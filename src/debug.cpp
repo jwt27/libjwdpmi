@@ -37,6 +37,7 @@ namespace jw
         {
             constexpr bool is_benign_signal(std::int32_t) noexcept;
             bool all_benign_signals(auto*);
+            void kill();
 
             struct rs232_streambuf_internals : public io::detail::rs232_streambuf
             {
@@ -1073,7 +1074,7 @@ namespace jw
                 {
                     killed = true;
                     for (auto&&t : threads) t.second.set_action('c');
-                    simulate_call(&current_thread->frame, jw::terminate);
+                    simulate_call(&current_thread->frame, kill);
                     s << "X" << std::setw(2) << posix_signal(current_thread->last_stop_signal);
                     send_packet(s.str());
                 }
@@ -1315,6 +1316,14 @@ namespace jw
                 debug_mode = false;
                 serial_irq.reset();
                 for (auto&& e : exception_handlers) e.reset();
+            }
+
+            [[noreturn]] void kill()
+            {
+                debug_mode = false;
+                serial_irq.reset();
+                for (auto&& e : exception_handlers) e.reset();
+                jw::terminate();
             }
         }
 
