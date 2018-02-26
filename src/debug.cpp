@@ -891,12 +891,6 @@ namespace jw
                                 }
                             }
                         }
-                        if (temp_debugmsg)
-                        {
-                            std::clog << "vCont result: " << std::hex;
-                            for (auto&& t : threads) std::clog << t.first << "=" << t.second.action << ' ';
-                            std::clog << '\n';
-                        }
                     }
                     else if (v == "CtrlC")
                     {
