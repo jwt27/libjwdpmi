@@ -671,38 +671,38 @@ namespace jw
 
             void stop_reply(bool force = false, bool async = false)
             {
-                for (auto&& t : threads)
+                auto do_stop_reply = [force, async] (auto&& t, bool report_last = false)
                 {
-                    if (t.second.action == thread_info::none and not force) continue;
-                    auto no_stop_signal = [&t]
+                    if (t.action == thread_info::none and not force) return false;
+                    auto no_stop_signal = [] (auto&& t)
                     {
-                        if (t.second.signals.empty()) return true;
-                        for (auto&& i : t.second.signals) if (is_stop_signal(i)) return false;
+                        if (t.signals.empty()) return true;
+                        for (auto&& i : t.signals) if (is_stop_signal(i)) return false;
                         return true;
                     };
-                    if (no_stop_signal()) t.second.signals.insert(t.second.last_stop_signal);
+                    if (no_stop_signal(t) and report_last) t.signals.insert(t.last_stop_signal);
 
-                    auto t_ptr = t.second.thread.lock();
+                    auto t_ptr = t.thread.lock();
 
-                    for (auto i = t.second.signals.begin(); i != t.second.signals.end();)
+                    for (auto i = t.signals.begin(); i != t.signals.end();)
                     {
                         auto signal = *i;
-                        if (temp_debugmsg) std::clog << "stop reply for thread 0x" << std::hex << t.first << " signal 0x" << signal << ": ";
+                        if (temp_debugmsg) std::clog << "stop reply for thread 0x" << std::hex << t_ptr->id() << " signal 0x" << signal << ": ";
                         if (not is_stop_signal(signal)
-                            or (is_trap_signal(signal) and t.second.signals.count(trap_masked)))
+                            or (is_trap_signal(signal) and t.signals.count(trap_masked)))
                         {
                             if (temp_debugmsg) std::clog << "ignored.\n";
                             ++i;
                             continue;
                         }
-                        else i = t.second.signals.erase(i);
+                        else i = t.signals.erase(i);
                         if (temp_debugmsg) std::clog << "handled.\n";
 
                         if (not thread_events_enabled and (signal == thread_started or signal == thread_finished))
                             continue;
 
-                        t.second.action = thread_info::none;
-                        t.second.last_stop_signal = signal;
+                        t.action = thread_info::none;
+                        t.last_stop_signal = signal;
 
                         std::stringstream s { };
                         s << std::hex << std::setfill('0');
@@ -712,7 +712,7 @@ namespace jw
                             s << 'w';
                             if (t_ptr->get_state() == thread::detail::finished) s << "00";
                             else s << "ff";
-                            s << ';' << t.first;
+                            s << ';' << t_ptr->id();
                             send_packet(s.str());
                         }
                         else
@@ -720,11 +720,11 @@ namespace jw
                             s << "T" << std::setw(2) << posix_signal(signal);
                             if (t_ptr->get_state() != thread::detail::starting)
                             {
-                                s << eip << ':'; reg(s, eip, t.first); s << ';';
-                                s << esp << ':'; reg(s, esp, t.first); s << ';';
-                                s << ebp << ':'; reg(s, ebp, t.first); s << ';';
+                                s << eip << ':'; reg(s, eip, t_ptr->id()); s << ';';
+                                s << esp << ':'; reg(s, esp, t_ptr->id()); s << ';';
+                                s << ebp << ':'; reg(s, ebp, t_ptr->id()); s << ';';
                             }
-                            s << "thread:" << t.first << ';';
+                            s << "thread:" << t_ptr->id() << ';';
                             if (signal == thread_started)
                             {
                                 s << "create:;";
@@ -751,9 +751,28 @@ namespace jw
                         if (signal == all_threads_suspended and supported["no-resumed"] == "+")
                             send_packet("N");
 
-                        return;
+                        return true;
+                    }
+                    return false;
+                };
+                bool report_last = false;
+
+            try_harder:
+                if (not do_stop_reply(*current_thread, report_last))
+                {
+                    auto report_other_threads = [&do_stop_reply, &report_last]
+                    {
+                        for (auto&& t : threads)
+                            if (do_stop_reply(t.second), report_last) return true;
+                        return false;
+                    };
+                    if (not report_other_threads() and force)
+                    {
+                        report_last = true;
+                        goto try_harder;
                     }
                 }
+
             }
 
             [[gnu::hot]] void handle_packet()
