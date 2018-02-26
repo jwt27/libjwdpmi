@@ -182,6 +182,11 @@ namespace jw
 
             inline void populate_thread_list()
             {
+                for (auto i = threads.begin(); i != threads.end();)
+                {
+                    if (i->second.thread.expired()) i = threads.erase(i);
+                    else ++i;
+                }
                 for (auto&& t : jw::thread::detail::scheduler::get_threads())
                 {
                     threads[t->id()].thread = t;
@@ -189,15 +194,6 @@ namespace jw
                 current_thread_id = jw::thread::detail::scheduler::get_current_thread_id();
                 threads[current_thread_id].thread = jw::thread::detail::scheduler::get_current_thread();
                 current_thread = &threads[current_thread_id];
-            }
-
-            inline void erase_expired_threads()
-            {
-                for (auto i = threads.begin(); i != threads.end();)
-                {
-                    if (i->second.thread.expired()) i = threads.erase(i);
-                    else ++i;
-                }
             }
 
             enum regnum
@@ -1174,8 +1170,6 @@ namespace jw
                         if (new_frame_type) current_thread->frame = *static_cast<new_exception_frame*>(f);
                         else static_cast<old_exception_frame&>(current_thread->frame) = *f;
                         current_thread->reg = *r;
-
-                        erase_expired_threads();
 
                         for (auto&&t : threads)
                         {
