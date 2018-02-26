@@ -1214,7 +1214,7 @@ namespace jw
                         stop_reply();
                     }
 
-                    if (config::enable_gdb_interrupts) asm("sti");
+                    if (config::enable_gdb_interrupts and current_thread->frame.flags.interrupt) asm("sti");
 
                     auto cant_continue = []
                     {
