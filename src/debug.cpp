@@ -79,6 +79,7 @@ namespace jw
             std::deque<std::string, locked_pool_allocator<>> sent_packets { alloc };
             std::string raw_packet_string;
             std::deque<packet_string, locked_pool_allocator<>> packet { alloc };
+            bool replied { false };
 
             std::uint32_t current_thread_id { 1 };
             std::map<char, std::uint32_t, std::less<char>, locked_pool_allocator<>> selected_thread_id { alloc };
@@ -502,6 +503,7 @@ namespace jw
                 const auto sum = checksum(rle_output);
                 *gdb << '$' << rle_output << '#' << std::setfill('0') << std::hex << std::setw(2) << sum << std::flush;
                 sent_packets.emplace_back(output);
+                replied = true;
             }
 
             void recv_ack()
@@ -540,6 +542,7 @@ namespace jw
                     break;
                 }
 
+                replied = false;
                 raw_packet_string.clear();
                 std::getline(*gdb, raw_packet_string, '#');
                 sum.clear();
@@ -1123,13 +1126,12 @@ namespace jw
                     if (__builtin_expect(debugger_reentry, false) and (exc == 0x01 or exc == 0x03))
                     {   // breakpoint in debugger code, ignore
                         if (debugmsg) std::clog << "reentry caused by breakpoint, ignoring.\n";
-                        if (exc == 0x01) for (auto&& w : watchpoints) if (w.second.get_type() == watchpoint::execute) w.second.reset();
                         leave();
                         return true;
                     }
-                    else if (__builtin_expect(debugger_reentry, false) and current_thread->action == thread_info::none)
+                    else if (__builtin_expect(debugger_reentry, false) and not replied)
                     {   // TODO: determine action based on last packet / signal
-                        send_packet("E04"); // last command caused another exception
+                        send_packet("E04"); // last command caused another exception (most likely page fault after a request to read memory)
                         if (debugmsg) std::clog << "debugger re-entry!\n";
                         if (debugmsg) std::clog << *static_cast<new_exception_frame*>(f) << *r;
                         current_thread->frame.info_bits.redirect_elsewhere = true;
