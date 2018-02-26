@@ -750,6 +750,8 @@ namespace jw
 
                         if (signal == all_threads_suspended and supported["no-resumed"] == "+")
                             send_packet("N");
+
+                        return;
                     }
                 }
             }
