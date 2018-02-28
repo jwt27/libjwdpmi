@@ -23,10 +23,19 @@ namespace jw
 {
     namespace chrono
     {
-        inline std::uint64_t rdtsc() noexcept
+        using tsc_count = std::uint64_t;
+
+        inline tsc_count rdtsc()
         {
-            std::uint64_t tsc;
+            tsc_count tsc;
             asm volatile ("rdtsc;": "=A" (tsc));
+            return tsc;
+        }
+
+        inline tsc_count rdtscp()
+        {
+            tsc_count tsc;
+            asm volatile ("cpuid;rdtsc;": "=A" (tsc): "a" (0) : "ebx", "ecx");
             return tsc;
         }
 
