@@ -64,7 +64,7 @@ namespace jw
         struct data_lock final : protected detail::memory_lock
         {
             template<typename T>
-            data_lock(const T* addr, std::size_t num_elements = 1) : memory_lock(get_ds(), reinterpret_cast<void*>(addr), num_elements * sizeof(T)) { }
+            data_lock(const T* addr, std::size_t num_elements = 1) : memory_lock(get_ds(), reinterpret_cast<const void*>(addr), num_elements * sizeof(T)) { }
             data_lock(const void* addr, std::size_t size_bytes) : memory_lock(get_ds(), addr, size_bytes) { }
             using memory_lock::operator=;
         };
