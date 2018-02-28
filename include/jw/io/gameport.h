@@ -123,10 +123,10 @@ namespace jw::io
             value.x1 *= x1_range;
             value.y1 *= y1_range;
 
-            value.x0 -= x0_range / 2;
-            value.y0 -= y0_range / 2;
-            value.x1 -= x1_range / 2;
-            value.y1 -= y1_range / 2;
+            value.x0 += cfg.output_range.x0_min - x0_range / 2;
+            value.y0 += cfg.output_range.y0_min - y0_range / 2;
+            value.x1 += cfg.output_range.x1_min - x1_range / 2;
+            value.y1 += cfg.output_range.y1_min - y1_range / 2;
 
             return value;
         }
