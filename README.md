@@ -14,6 +14,7 @@ Current features include:
 * Integrated GDB [remote debugging](https://i.imgur.com/HsREynj.png) backend.
 * Access to PIT, RTC and RDTSC clocks using `std::chrono`.
 * VESA VBE3 graphics interface.
+* Accurate analog game port interface.
 
 ## Installing
 * Build and install gcc with `--target=i586-pc-msdosdjgpp`, and install the djgpp standard library.  
