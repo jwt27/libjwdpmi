@@ -7,6 +7,7 @@
 #include <jw/dpmi/irq.h>
 #include <jw/thread/task.h>
 #include <jw/dpmi/lock.h>
+#include <jw/event.h>
 #include <limits>
 #include <optional>
 
@@ -93,6 +94,8 @@ namespace jw::io
         struct button_t
         {
             bool a0, b0, a1, b1;
+            constexpr bool operator==(const button_t& o) const noexcept { return a0 == o.a0 and b0 == o.b0 and a1 == o.a1 and b1 == o.b1; }
+            constexpr bool operator!=(const button_t& o) const noexcept { return not (o == *this); }
         };
 
         gameport(config c) : cfg(c), port(c.port)
@@ -156,6 +159,8 @@ namespace jw::io
             return button_state;
         }
 
+        event<void(button_t, chrono::tsc::time_point)> button_changed;
+
     private:
         struct [[gnu::packed]] raw_gameport
         {
@@ -177,13 +182,17 @@ namespace jw::io
         chrono::tsc_count timing_start;
         button_t button_state;
         std::optional<dpmi::data_lock> lock;
+        std::deque<std::pair<button_t, chrono::tsc_count>> button_events { };
 
-        void update_buttons(raw_gameport p) // TODO: events
+        void update_buttons(raw_gameport p, chrono::tsc_count now)
         {
-            button_state.a0 = not p.a0;
-            button_state.b0 = not p.b0;
-            button_state.a1 = not p.a1;
-            button_state.b1 = not p.b1;
+            button_t x;
+            x.a0 = not p.a0;
+            x.b0 = not p.b0;
+            x.a1 = not p.a1;
+            x.b1 = not p.b1;
+            if (x != button_state) button_events.emplace_back(x, now);
+            button_state = x;
         }
 
         void poll()
@@ -207,7 +216,7 @@ namespace jw::io
                 if (timing.y0 and (not p.y0 or i > c.y0_max)) { timing.y0 = false; last.y0 = std::clamp(i, c.y0_min, c.y0_max); }
                 if (timing.x1 and (not p.x1 or i > c.x1_max)) { timing.x1 = false; last.x1 = std::clamp(i, c.x1_min, c.x1_max); }
                 if (timing.y1 and (not p.y1 or i > c.y1_max)) { timing.y1 = false; last.y1 = std::clamp(i, c.y1_min, c.y1_max); }
-                update_buttons(p);
+                update_buttons(p, now);
             } while (cfg.strategy == poll_strategy::busy_loop and (timing.x0 or timing.y0 or timing.x1 or timing.y1));
         }
 
@@ -215,7 +224,9 @@ namespace jw::io
         {
             while (true)
             {
-                poll();
+                if (cfg.strategy != poll_strategy::busy_loop) poll();
+                for (auto&& b : button_events)
+                    button_changed(b.first, chrono::tsc::to_time_point(b.second));
                 thread::yield();
             }
         } };
