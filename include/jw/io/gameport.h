@@ -225,8 +225,8 @@ namespace jw::io
             while (true)
             {
                 if (cfg.strategy != poll_strategy::busy_loop) poll();
-                for (auto&& b : button_events)
-                    button_changed(b.first, chrono::tsc::to_time_point(b.second));
+                for (auto i = button_events.begin(); i != button_events.end(); i = button_events.erase(i))
+                    button_changed(i->first, chrono::tsc::to_time_point(i->second));
                 thread::yield();
             }
         } };
