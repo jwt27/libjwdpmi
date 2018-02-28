@@ -136,6 +136,20 @@ namespace jw
             using time_point = std::chrono::time_point<tsc>;
 
             static constexpr bool is_steady { false };
+
+            static duration to_duration(tsc_count count)
+            {
+                double ns = (setup::current_tsc_ref() == tsc_reference::rtc) ? setup::ns_per_rtc_tick : setup::ns_per_pit_tick;
+                ns *= count;
+                ns /= setup::tsc_ticks_per_irq;
+                return duration { static_cast<std::int64_t>(ns) };
+            }
+
+            static time_point to_time_point(tsc_count count)
+            {
+                return time_point { to_duration(count) };
+            }
+
             static time_point now() noexcept
             {
                 if (__builtin_expect(!setup::rtc_irq.is_enabled() && !setup::pit_irq.is_enabled(), false))
@@ -143,10 +157,7 @@ namespace jw
                     auto t = std::chrono::duration_cast<duration>(std::chrono::_V2::high_resolution_clock::now().time_since_epoch());
                     return time_point { t };
                 }
-                double ns = (setup::current_tsc_ref() == tsc_reference::rtc) ? setup::ns_per_rtc_tick : setup::ns_per_pit_tick;
-                ns *= rdtsc();
-                ns /= setup::tsc_ticks_per_irq;
-                return time_point { duration { static_cast<std::int64_t>(ns) } };
+                return to_time_point(rdtsc());
             }
         };
     }
