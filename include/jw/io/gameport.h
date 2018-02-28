@@ -60,13 +60,29 @@ namespace jw::io
         struct value_t
         {
             T x0, y0, x1, y1;
+
             constexpr value_t(T vx0, T vy0, T vx1, T vy1) noexcept : x0(vx0), y0(vy0), x1(vx1), y1(vy1) { }
             constexpr value_t(T v) noexcept : value_t(v, v, v, v) { }
             constexpr value_t() noexcept = default;
         };
 
+        template<typename T>
+        struct vector_t
+        {
+            using V[[gnu::vector_size(2 * sizeof(T))]] = T;
+            union
+            {
+                V v;
+                struct { T x0, y0, x1, y1; };
+            };
+
+            constexpr vector_t(T vx0, T vy0, T vx1, T vy1) noexcept : x0(vx0), y0(vy0), x1(vx1), y1(vy1) { }
+            constexpr vector_t(T v) noexcept : vector_t(v, v, v, v) { }
+            constexpr vector_t() noexcept = default;
+        };
+
         using raw_t = value_t<chrono::tsc_count>;
-        using normalized_t = value_t<float>;
+        using normalized_t = vector_t<float>;
 
         struct button_t
         {
@@ -85,11 +101,39 @@ namespace jw::io
         auto get()
         {
             poll();
-            return normalized_t { };     // TODO
+
+            normalized_t value;
+            value.x0 = last.x0 - cfg.calibration.x0_min;
+            value.y0 = last.y0 - cfg.calibration.y0_min;
+            value.x1 = last.x1 - cfg.calibration.x1_min;
+            value.y1 = last.y1 - cfg.calibration.y1_min;
+
+            value.x0 /= cfg.calibration.x0_max;
+            value.y0 /= cfg.calibration.y0_max;
+            value.x1 /= cfg.calibration.x1_max;
+            value.y1 /= cfg.calibration.y1_max;
+
+            auto x0_range = cfg.output_range.x0_max - cfg.output_range.x0_min;
+            auto y0_range = cfg.output_range.y0_max - cfg.output_range.y0_min;
+            auto x1_range = cfg.output_range.x1_max - cfg.output_range.x1_min;
+            auto y1_range = cfg.output_range.y1_max - cfg.output_range.y1_min;
+
+            value.x0 *= x0_range;
+            value.y0 *= y0_range;
+            value.x1 *= x1_range;
+            value.y1 *= y1_range;
+
+            value.x0 -= x0_range / 2;
+            value.y0 -= y0_range / 2;
+            value.x1 -= x1_range / 2;
+            value.y1 -= y1_range / 2;
+
+            return value;
         }
 
-        auto buttons() const
+        auto buttons()
         {
+            if (cfg.strategy != poll_strategy::busy_loop) poll();
             return button_state;
         }
 
