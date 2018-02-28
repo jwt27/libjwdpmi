@@ -8,6 +8,10 @@
 #include <jw/thread/task.h>
 #include <limits>
 
+// TODO: smoothing
+// TODO: centering
+// TODO: auto-calibrate?
+
 namespace jw::io
 {
     struct gameport
@@ -104,6 +108,8 @@ namespace jw::io
                 poll_irq.set_irq(8);
                 poll_irq.enable();
                 break;
+            case poll_strategy::busy_loop:
+                break;
             }
         }
 
@@ -121,33 +127,21 @@ namespace jw::io
 
         auto get()
         {
-            poll();
-
+            auto raw = get_raw();
             normalized_t value;
-            value.x0 = last.x0 - cfg.calibration.x0_min;
-            value.y0 = last.y0 - cfg.calibration.y0_min;
-            value.x1 = last.x1 - cfg.calibration.x1_min;
-            value.y1 = last.y1 - cfg.calibration.y1_min;
 
-            value.x0 /= cfg.calibration.x0_max;
-            value.y0 /= cfg.calibration.y0_max;
-            value.x1 /= cfg.calibration.x1_max;
-            value.y1 /= cfg.calibration.y1_max;
+            auto& c = cfg.calibration;
+            auto& o = cfg.output_range;
 
-            auto x0_range = cfg.output_range.x0_max - cfg.output_range.x0_min;
-            auto y0_range = cfg.output_range.y0_max - cfg.output_range.y0_min;
-            auto x1_range = cfg.output_range.x1_max - cfg.output_range.x1_min;
-            auto y1_range = cfg.output_range.y1_max - cfg.output_range.y1_min;
+            value.x0 = static_cast<float>(raw.x0 - c.x0_min) / (c.x0_max - c.x0_min);
+            value.y0 = static_cast<float>(raw.y0 - c.y0_min) / (c.y0_max - c.y0_min);
+            value.x1 = static_cast<float>(raw.x1 - c.x1_min) / (c.x1_max - c.x1_min);
+            value.y1 = static_cast<float>(raw.y1 - c.y1_min) / (c.y1_max - c.y1_min);
 
-            value.x0 *= x0_range;
-            value.y0 *= y0_range;
-            value.x1 *= x1_range;
-            value.y1 *= y1_range;
-
-            value.x0 += cfg.output_range.x0_min - x0_range / 2;
-            value.y0 += cfg.output_range.y0_min - y0_range / 2;
-            value.x1 += cfg.output_range.x1_min - x1_range / 2;
-            value.y1 += cfg.output_range.y1_min - y1_range / 2;
+            value.x0 = o.x0_min + value.x0 * (o.x0_max - o.x0_min);
+            value.y0 = o.y0_min + value.y0 * (o.y0_max - o.y0_min);
+            value.x1 = o.x1_min + value.x1 * (o.x1_max - o.x1_min);
+            value.y1 = o.y1_min + value.y1 * (o.y1_max - o.y1_min);
 
             return value;
         }
