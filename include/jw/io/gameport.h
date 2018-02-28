@@ -37,13 +37,13 @@ namespace jw::io
 
             struct
             {
-                chrono::tsc_count x0_min { std::numeric_limits<chrono::tsc_count>::max() };
+                chrono::tsc_count x0_min { 0 };
+                chrono::tsc_count y0_min { 0 };
+                chrono::tsc_count x1_min { 0 };
+                chrono::tsc_count y1_min { 0 };
                 chrono::tsc_count x0_max { std::numeric_limits<chrono::tsc_count>::max() };
-                chrono::tsc_count y0_min { std::numeric_limits<chrono::tsc_count>::max() };
                 chrono::tsc_count y0_max { std::numeric_limits<chrono::tsc_count>::max() };
-                chrono::tsc_count x1_min { std::numeric_limits<chrono::tsc_count>::max() };
                 chrono::tsc_count x1_max { std::numeric_limits<chrono::tsc_count>::max() };
-                chrono::tsc_count y1_min { std::numeric_limits<chrono::tsc_count>::max() };
                 chrono::tsc_count y1_max { std::numeric_limits<chrono::tsc_count>::max() };
             } calibration;
 
@@ -196,10 +196,12 @@ namespace jw::io
             {
                 auto p = port.read();
                 auto now = chrono::rdtsc();
-                if (timing.x0 and not p.x0) { timing.x0 = false; if (now <= cfg.calibration.x0_max) last.x0 = now - timing_start; }
-                if (timing.y0 and not p.y0) { timing.y0 = false; if (now <= cfg.calibration.y0_max) last.y0 = now - timing_start; }
-                if (timing.x1 and not p.x1) { timing.x1 = false; if (now <= cfg.calibration.x1_max) last.x1 = now - timing_start; }
-                if (timing.y1 and not p.y1) { timing.y1 = false; if (now <= cfg.calibration.y1_max) last.y1 = now - timing_start; }
+                auto& c = cfg.calibration;
+                auto i = now - timing_start;
+                if (timing.x0 and (not p.x0 or i > c.x0_max)) { timing.x0 = false; last.x0 = std::clamp(i, c.x0_min, c.x0_max); }
+                if (timing.y0 and (not p.y0 or i > c.y0_max)) { timing.y0 = false; last.y0 = std::clamp(i, c.y0_min, c.y0_max); }
+                if (timing.x1 and (not p.x1 or i > c.x1_max)) { timing.x1 = false; last.x1 = std::clamp(i, c.x1_min, c.x1_max); }
+                if (timing.y1 and (not p.y1 or i > c.y1_max)) { timing.y1 = false; last.y1 = std::clamp(i, c.y1_min, c.y1_max); }
                 update_buttons(p);
             } while (cfg.strategy == poll_strategy::busy_loop and (timing.x0 or timing.y0 or timing.x1 or timing.y1));
         }
