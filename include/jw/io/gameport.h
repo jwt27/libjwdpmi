@@ -6,7 +6,9 @@
 #include <jw/chrono/chrono.h>
 #include <jw/dpmi/irq.h>
 #include <jw/thread/task.h>
+#include <jw/dpmi/lock.h>
 #include <limits>
+#include <optional>
 
 // TODO: smoothing
 // TODO: centering
@@ -101,10 +103,12 @@ namespace jw::io
                 poll_task->start();
                 break;
             case poll_strategy::pit_irq:
+                lock = std::make_optional<dpmi::data_lock>(this);
                 poll_irq.set_irq(0);
                 poll_irq.enable();
                 break;
             case poll_strategy::rtc_irq:
+                lock = std::make_optional<dpmi::data_lock>(this);
                 poll_irq.set_irq(8);
                 poll_irq.enable();
                 break;
@@ -172,6 +176,7 @@ namespace jw::io
         value_t<bool> timing { false };
         chrono::tsc_count timing_start;
         button_t button_state;
+        std::optional<dpmi::data_lock> lock;
 
         void update_buttons(raw_gameport p) // TODO: events
         {
