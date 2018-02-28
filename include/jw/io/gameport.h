@@ -89,8 +89,29 @@ namespace jw::io
             bool a0, b0, a1, b1;
         };
 
-        gameport(config c) : cfg(c), port(c.port) { }    // TODO
-        ~gameport() { }
+        gameport(config c) : cfg(c), port(c.port)
+        {
+            switch (cfg.strategy)
+            {
+            case poll_strategy::thread:
+                poll_task->start();
+                break;
+            case poll_strategy::pit_irq:
+                poll_irq.set_irq(0);
+                poll_irq.enable();
+                break;
+            case poll_strategy::rtc_irq:
+                poll_irq.set_irq(8);
+                poll_irq.enable();
+                break;
+            }
+        }
+
+        ~gameport()
+        {
+            poll_irq.disable();
+            if (poll_task->is_running()) poll_task->abort();
+        }
 
         auto get_raw()
         {
