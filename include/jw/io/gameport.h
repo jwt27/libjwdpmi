@@ -126,6 +126,10 @@ namespace jw::io
         {
             if (not timing.x0 and not timing.y0 and not timing.x1 and not timing.y1)
             {
+                timing.x0 = cfg.enable.x0;
+                timing.y0 = cfg.enable.y0;
+                timing.x1 = cfg.enable.x1;
+                timing.y1 = cfg.enable.y1;
                 port.write({ });
                 timing_start = chrono::rdtsc();
             }
