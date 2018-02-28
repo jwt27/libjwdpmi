@@ -7,9 +7,11 @@
 #include <jw/dpmi/irq.h>
 #include <jw/thread/task.h>
 #include <jw/dpmi/lock.h>
+#include <jw/dpmi/alloc.h>
 #include <jw/event.h>
 #include <limits>
 #include <optional>
+#include <experimental/deque>
 
 // TODO: smoothing
 // TODO: centering
@@ -98,26 +100,26 @@ namespace jw::io
             constexpr bool operator!=(const button_t& o) const noexcept { return not (o == *this); }
         };
 
-        gameport(config c) : cfg(c), port(c.port)
+        gameport(config c) : cfg(c), port(c.port),
+            memory_resource(using_irq()? std::make_unique<dpmi::locking_memory_resource>() : nullptr)   // TODO: locked_pool_memory_resource
         {
             switch (cfg.strategy)
             {
-            case poll_strategy::thread:
-                poll_task->start();
-                break;
             case poll_strategy::pit_irq:
-                lock = std::make_optional<dpmi::data_lock>(this);
                 poll_irq.set_irq(0);
-                poll_irq.enable();
                 break;
             case poll_strategy::rtc_irq:
-                lock = std::make_optional<dpmi::data_lock>(this);
                 poll_irq.set_irq(8);
-                poll_irq.enable();
                 break;
-            case poll_strategy::busy_loop:
+            default:
                 break;
             }
+            if (using_irq())
+            {
+                lock = std::make_optional<dpmi::data_lock>(this);
+                poll_irq.enable();
+            }
+            poll_task->start();
         }
 
         ~gameport()
@@ -182,7 +184,10 @@ namespace jw::io
         chrono::tsc_count timing_start;
         button_t button_state;
         std::optional<dpmi::data_lock> lock;
-        std::deque<std::pair<button_t, chrono::tsc_count>> button_events { };
+        std::unique_ptr<std::experimental::pmr::memory_resource> memory_resource;
+        std::experimental::pmr::deque<std::pair<button_t, chrono::tsc_count>> button_events { using_irq() ? memory_resource.get() : std::experimental::pmr::get_default_resource() };
+
+        bool using_irq() const { return cfg.strategy == poll_strategy::pit_irq or cfg.strategy == poll_strategy::rtc_irq; }
 
         void update_buttons(raw_gameport p, chrono::tsc_count now)
         {
