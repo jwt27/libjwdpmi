@@ -223,7 +223,7 @@ namespace jw
             std::shared_ptr<pool_type> pool;
         };
 
-        class locking_memory_resource : public std::experimental::pmr::memory_resource
+        struct locking_memory_resource : public std::experimental::pmr::memory_resource
         {
             virtual ~locking_memory_resource()
             {
