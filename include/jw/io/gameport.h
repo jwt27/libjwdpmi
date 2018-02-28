@@ -88,9 +88,9 @@ namespace jw::io
             return normalized_t { };     // TODO
         }
 
-        auto buttons()
+        auto buttons() const
         {
-            return button_t { };    // TODO
+            return button_state;
         }
 
     private:
@@ -100,10 +100,10 @@ namespace jw::io
             bool y0 : 1;
             bool x1 : 1;
             bool y1 : 1;
+            bool a0 : 1;
             bool b0 : 1;
+            bool a1 : 1;
             bool b1 : 1;
-            bool b2 : 1;
-            bool b3 : 1;
         };
         static_assert(sizeof(raw_gameport) == 1);
 
@@ -112,6 +112,15 @@ namespace jw::io
         raw_t last;
         value_t<bool> timing { false };
         chrono::tsc_count timing_start;
+        button_t button_state;
+
+        void update_buttons(raw_gameport p) // TODO: events
+        {
+            button_state.a0 = not p.a0;
+            button_state.b0 = not p.b0;
+            button_state.a1 = not p.a1;
+            button_state.b1 = not p.b1;
+        }
 
         void poll()
         {
@@ -128,6 +137,7 @@ namespace jw::io
                 if (timing.y0 and not p.y0) { timing.y0 = false; if (now <= cfg.calibration.y0_max) last.y0 = now - timing_start; }
                 if (timing.x1 and not p.x1) { timing.x1 = false; if (now <= cfg.calibration.x1_max) last.x1 = now - timing_start; }
                 if (timing.y1 and not p.y1) { timing.y1 = false; if (now <= cfg.calibration.y1_max) last.y1 = now - timing_start; }
+                update_buttons(p);
             } while (cfg.strategy == poll_strategy::busy_loop and (timing.x0 or timing.y0 or timing.x1 or timing.y1));
         }
 
@@ -138,7 +148,7 @@ namespace jw::io
                 poll();
                 thread::yield();
             }
-        }, 1_KB };
+        } };
 
         dpmi::irq_handler poll_irq { [this]
         {
