@@ -1148,15 +1148,16 @@ namespace jw
 
                 try
                 {
-                    if (__builtin_expect(debugger_reentry, false) and (exc == 0x01 or exc == 0x03))
-                    {   // breakpoint in debugger code, ignore
-                        if (debugmsg) std::clog << "reentry caused by breakpoint, ignoring.\n";
-                        leave();
-                        return true;
-                    }
-                    else if (__builtin_expect(debugger_reentry, false) and not replied)
-                    {   // TODO: determine action based on last packet / signal
-                        send_packet("E04"); // last command caused another exception (most likely page fault after a request to read memory)
+                    if (__builtin_expect(debugger_reentry, false))
+                    {
+                        if (exc == 0x01 or exc == 0x03)
+                        {   // breakpoint in debugger code, ignore
+                            if (debugmsg) std::clog << "reentry caused by breakpoint, ignoring.\n";
+                            leave();
+                            return true;
+                        }
+                        // TODO: determine action based on last packet / signal
+                        if (not replied) send_packet("E04"); // last command caused another exception (most likely page fault after a request to read memory)
                         if (debugmsg) std::clog << "debugger re-entry!\n";
                         if (debugmsg) std::clog << *static_cast<new_exception_frame*>(f) << *r;
                         current_thread->frame.info_bits.redirect_elsewhere = true;
