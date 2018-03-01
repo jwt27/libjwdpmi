@@ -100,8 +100,8 @@ namespace jw::io
             constexpr bool operator!=(const button_t& o) const noexcept { return not (o == *this); }
         };
 
-        gameport(config c) : cfg(c), port(c.port),
-            memory_resource(using_irq()? std::make_unique<dpmi::locking_memory_resource>() : nullptr)   // TODO: locked_pool_memory_resource
+        gameport(config c, std::size_t alloc_size = 1_KB) : cfg(c), port(c.port),
+            memory_resource(using_irq()? std::make_unique<dpmi::locked_pool_memory_resource>(alloc_size) : nullptr)
         {
             switch (cfg.strategy)
             {
