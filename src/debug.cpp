@@ -594,13 +594,7 @@ namespace jw
                     case es: if (new_frame_type) encode(out, &t.frame.es); else encode_null(out, reglen[r]); return;
                     case fs: if (new_frame_type) encode(out, &t.frame.fs); else encode_null(out, reglen[r]); return;
                     case gs: if (new_frame_type) encode(out, &t.frame.gs); else encode_null(out, reglen[r]); return;
-                    case eip:
-                    {
-                        auto eip = t.frame.fault_address.offset;
-                        if (*reinterpret_cast<byte*>(eip) == 0xcc and not breakpoints.count(eip)) eip += 1;
-                        encode(out, &eip);
-                        return;
-                    }
+                    case eip: encode(out, &t.frame.fault_address.offset); return;
                     default:
                         encode_null(out, reglen[r]);
                         return;
