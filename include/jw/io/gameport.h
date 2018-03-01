@@ -13,7 +13,6 @@
 #include <optional>
 #include <experimental/deque>
 
-// TODO: smoothing
 // TODO: centering
 // TODO: auto-calibrate?
 
@@ -33,6 +32,7 @@ namespace jw::io
         {
             port_num port { 0x201 };
             poll_strategy strategy { poll_strategy::busy_loop };
+            chrono::tsc::duration smoothing_window { std::chrono::milliseconds { 50 } };
 
             struct
             {
@@ -130,22 +130,41 @@ namespace jw::io
 
         auto get_raw()
         {
+            auto now = chrono::tsc::now();
+            for (auto i = samples.begin(); i != samples.end();)
+            {
+                if (samples.size() > 1 and chrono::tsc::to_time_point(i->second) < now - cfg.smoothing_window)
+                    i = samples.erase(i);
+                else ++i;
+            }
             poll();
-            return last;
+            return samples.back().first;
         }
 
         auto get()
         {
-            auto raw = get_raw();
-            normalized_t value;
+            get_raw();
+            normalized_t value { 0 };
 
             auto& c = cfg.calibration;
             auto& o = cfg.output_range;
 
-            value.x0 = static_cast<float>(raw.x0 - c.x0_min) / (c.x0_max - c.x0_min);
-            value.y0 = static_cast<float>(raw.y0 - c.y0_min) / (c.y0_max - c.y0_min);
-            value.x1 = static_cast<float>(raw.x1 - c.x1_min) / (c.x1_max - c.x1_min);
-            value.y1 = static_cast<float>(raw.y1 - c.y1_min) / (c.y1_max - c.y1_min);
+            for (auto&& s : samples)
+            {
+                value.x0 += s.first.x0;     // TODO: generic vector4 class
+                value.y0 += s.first.y0;
+                value.x1 += s.first.x1;
+                value.y1 += s.first.y1;
+            }
+            value.x0 /= samples.size();
+            value.y0 /= samples.size();
+            value.x1 /= samples.size();
+            value.y1 /= samples.size();
+
+            value.x0 = (value.x0 - c.x0_min) / (c.x0_max - c.x0_min);
+            value.y0 = (value.y0 - c.y0_min) / (c.y0_max - c.y0_min);
+            value.x1 = (value.x1 - c.x1_min) / (c.x1_max - c.x1_min);
+            value.y1 = (value.y1 - c.y1_min) / (c.y1_max - c.y1_min);
 
             value.x0 = o.x0_min + value.x0 * (o.x0_max - o.x0_min);
             value.y0 = o.y0_min + value.y0 * (o.y0_max - o.y0_min);
@@ -185,9 +204,11 @@ namespace jw::io
         button_t button_state;
         std::optional<dpmi::data_lock> lock;
         std::unique_ptr<std::experimental::pmr::memory_resource> memory_resource;
-        std::experimental::pmr::deque<std::pair<button_t, chrono::tsc_count>> button_events { using_irq() ? memory_resource.get() : std::experimental::pmr::get_default_resource() };
+        std::experimental::pmr::deque<std::pair<button_t, chrono::tsc_count>> button_events { get_memory_resource() };
+        std::experimental::pmr::deque<std::pair<raw_t, chrono::tsc_count>> samples { get_memory_resource() };
 
         bool using_irq() const { return cfg.strategy == poll_strategy::pit_irq or cfg.strategy == poll_strategy::rtc_irq; }
+        std::experimental::pmr::memory_resource* get_memory_resource() const noexcept { if (using_irq()) return memory_resource.get(); else return std::experimental::pmr::get_default_resource(); }
 
         void update_buttons(raw_gameport p, chrono::tsc_count now)
         {
@@ -223,6 +244,7 @@ namespace jw::io
                 if (timing.y1 and (not p.y1 or i > c.y1_max)) { timing.y1 = false; last.y1 = std::clamp(i, c.y1_min, c.y1_max); }
                 update_buttons(p, now);
             } while (cfg.strategy == poll_strategy::busy_loop and (timing.x0 or timing.y0 or timing.x1 or timing.y1));
+            if (not (timing.x0 or timing.y0 or timing.x1 or timing.y1)) samples.emplace_back(last, chrono::rdtsc());
         }
 
         thread::task<void()> poll_task { [this]
