@@ -266,6 +266,26 @@ namespace jw
             static inline std::map<void*, ptr_with_lock>* map { };
         };
 
-        // TODO: locked_pool_resource
+        struct locked_pool_memory_resource : protected locked_pool_allocator<byte>, public std::experimental::pmr::memory_resource,
+            private class_lock<locked_pool_memory_resource>
+        {
+            locked_pool_memory_resource(std::size_t size_bytes) : locked_pool_allocator(size_bytes) { }
+
+        protected:
+            virtual void* do_allocate(std::size_t n, std::size_t) override
+            {
+                return reinterpret_cast<void*>(locked_pool_allocator::allocate(n));
+            }
+
+            virtual void do_deallocate(void* ap, std::size_t size, std::size_t) noexcept override
+            {
+                locked_pool_allocator::deallocate(reinterpret_cast<byte*>(ap), size);
+            }
+
+            virtual bool do_is_equal(const std::experimental::pmr::memory_resource& other) const noexcept override
+            {
+                return dynamic_cast<const locked_pool_memory_resource*>(&other) == this;
+            }
+        };
     }
 }
