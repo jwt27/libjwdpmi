@@ -569,6 +569,11 @@ namespace jw
 
             void reg(std::ostream& out, regnum r, std::uint32_t id)
             {
+                if (threads.count(id) == 0)
+                {
+                    encode_null(out, reglen[r]);
+                    return;
+                }
                 auto&& t = threads[id];
                 if (&t == current_thread)
                 {
@@ -639,6 +644,7 @@ namespace jw
 
             bool setreg(regnum r, const std::string_view& value, std::uint32_t id)
             {
+                if (threads.count(id) == 0) return false;
                 auto&& t = threads[id];
                 if (&t != current_thread) return false; // TODO
                 if (debugmsg) std::clog << "set register " << std::hex << r << '=' << value << '\n';
@@ -888,7 +894,7 @@ namespace jw
                                 if (packet.size() >= i and packet[i + 1].delim == ':')
                                 {
                                     auto id = decode(packet[i + 1]);
-                                    threads[id].set_action(packet[i - 1][0], 0, begin, end);
+                                    if(threads.count(id)) threads[id].set_action(packet[i - 1][0], 0, begin, end);
                                     ++i;
                                 }
                                 else send_packet("E00");
@@ -896,7 +902,7 @@ namespace jw
                             else if (packet.size() >= i and packet[i + 1].delim == ':')
                             {
                                 auto id = decode(packet[i + 1]);
-                                threads[id].set_action(packet[i][0]);
+                                if (threads.count(id)) threads[id].set_action(packet[i][0]);
                                 ++i;
                             }
                             else
@@ -945,9 +951,13 @@ namespace jw
                 }
                 else if (p == 'p')  // read one register
                 {
-                    auto regn = static_cast<regnum>(decode(packet[0]));
-                    reg(s, regn, selected_thread_id[p]);
-                    send_packet(s.str());
+                    if (threads.count(selected_thread_id[p]))
+                    {
+                        auto regn = static_cast<regnum>(decode(packet[0]));
+                        reg(s, regn, selected_thread_id[p]);
+                        send_packet(s.str());
+                    }
+                    else send_packet("E00");
                 }
                 else if (p == 'P')  // write one register
                 {
@@ -956,9 +966,13 @@ namespace jw
                 }
                 else if (p == 'g')  // read registers
                 {
-                    for (auto i = eax; i <= reg_max; ++i)
-                        reg(s, i, selected_thread_id[p]);
-                    send_packet(s.str());
+                    if (threads.count(selected_thread_id[p]))
+                    {
+                        for (auto i = eax; i <= reg_max; ++i)
+                            reg(s, i, selected_thread_id[p]);
+                        send_packet(s.str());
+                    }
+                    else send_packet("E00");
                 }
                 else if (p == 'G')  // write registers
                 {
@@ -1004,9 +1018,9 @@ namespace jw
                         }
                         t.set_action(packet[0].delim);
                     };
-                    if (id == all_threads_id)
-                        for (auto&& t : threads) step_continue(t.second);
-                    else step_continue(threads[id]);
+                    if (id == all_threads_id) for (auto&& t : threads) step_continue(t.second);
+                    else if (threads.count(id)) step_continue(threads[id]);
+                    else send_packet("E00");
 
                 }
                 else if (p == 'C' or p == 'S')  // step/continue with signal
@@ -1022,9 +1036,9 @@ namespace jw
                         }
                         t.set_action(packet[0].delim);
                     };
-                    if (id == all_threads_id)
-                        for (auto&& t : threads) step_continue(t.second);
-                    else step_continue(threads[id]);
+                    if (id == all_threads_id) for (auto&& t : threads) step_continue(t.second);
+                    else if (threads.count(id)) step_continue(threads[id]);
+                    else send_packet("E00");
                 }
                 else if (p == 'Z')  // set break/watchpoint
                 {
