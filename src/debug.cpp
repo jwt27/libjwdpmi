@@ -772,7 +772,6 @@ namespace jw
                         goto try_harder;
                     }
                 }
-
             }
 
             [[gnu::hot]] void handle_packet()

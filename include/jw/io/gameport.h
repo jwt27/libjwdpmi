@@ -18,6 +18,7 @@
 
 namespace jw::io
 {
+    template <typename Clock = chrono::tsc>
     struct gameport
     {
         enum class poll_strategy
@@ -42,14 +43,15 @@ namespace jw::io
 
             struct
             {
-                chrono::tsc_count x0_min { 0 };
-                chrono::tsc_count y0_min { 0 };
-                chrono::tsc_count x1_min { 0 };
-                chrono::tsc_count y1_min { 0 };
-                chrono::tsc_count x0_max { std::numeric_limits<chrono::tsc_count>::max() };
-                chrono::tsc_count y0_max { std::numeric_limits<chrono::tsc_count>::max() };
-                chrono::tsc_count x1_max { std::numeric_limits<chrono::tsc_count>::max() };
-                chrono::tsc_count y1_max { std::numeric_limits<chrono::tsc_count>::max() };
+                using T = typename Clock::duration;
+                T x0_min { 0 };
+                T y0_min { 0 };
+                T x1_min { 0 };
+                T y1_min { 0 };
+                T x0_max { std::numeric_limits<typename T::rep>::max() };
+                T y0_max { std::numeric_limits<typename T::rep>::max() };
+                T x1_max { std::numeric_limits<typename T::rep>::max() };
+                T y1_max { std::numeric_limits<typename T::rep>::max() };
             } calibration;
 
             struct
@@ -90,7 +92,7 @@ namespace jw::io
             constexpr vector_t() noexcept = default;
         };
 
-        using raw_t = value_t<chrono::tsc_count>;
+        using raw_t = value_t<typename Clock::duration>;
         using normalized_t = vector_t<float>;
 
         struct button_t
@@ -133,12 +135,12 @@ namespace jw::io
             auto now = chrono::tsc::now();
             for (auto i = samples.begin(); i != samples.end();)
             {
-                if (samples.size() > 1 and chrono::tsc::to_time_point(i->second) < now - cfg.smoothing_window)
+                if (samples.size() > 1 and i->second < now - cfg.smoothing_window)
                     i = samples.erase(i);
                 else ++i;
             }
             poll();
-            return samples.back().first;
+            return last;
         }
 
         auto get()
@@ -151,20 +153,20 @@ namespace jw::io
 
             for (auto&& s : samples)
             {
-                value.x0 += s.first.x0;     // TODO: generic vector4 class
-                value.y0 += s.first.y0;
-                value.x1 += s.first.x1;
-                value.y1 += s.first.y1;
+                value.x0 += s.first.x0.count();     // TODO: generic vector4 class
+                value.y0 += s.first.y0.count();
+                value.x1 += s.first.x1.count();
+                value.y1 += s.first.y1.count();
             }
             value.x0 /= samples.size();
             value.y0 /= samples.size();
             value.x1 /= samples.size();
             value.y1 /= samples.size();
 
-            value.x0 = (value.x0 - c.x0_min) / (c.x0_max - c.x0_min);
-            value.y0 = (value.y0 - c.y0_min) / (c.y0_max - c.y0_min);
-            value.x1 = (value.x1 - c.x1_min) / (c.x1_max - c.x1_min);
-            value.y1 = (value.y1 - c.y1_min) / (c.y1_max - c.y1_min);
+            value.x0 = (value.x0 - c.x0_min.count()) / (c.x0_max.count() - c.x0_min.count());
+            value.y0 = (value.y0 - c.y0_min.count()) / (c.y0_max.count() - c.y0_min.count());
+            value.x1 = (value.x1 - c.x1_min.count()) / (c.x1_max.count() - c.x1_min.count());
+            value.y1 = (value.y1 - c.y1_min.count()) / (c.y1_max.count() - c.y1_min.count());
 
             value.x0 = o.x0_min + value.x0 * (o.x0_max - o.x0_min);
             value.y0 = o.y0_min + value.y0 * (o.y0_max - o.y0_min);
@@ -200,17 +202,17 @@ namespace jw::io
         io_port<raw_gameport> port;
         raw_t last;
         value_t<bool> timing { false };
-        chrono::tsc_count timing_start;
+        typename Clock::time_point timing_start;
         button_t button_state;
         std::optional<dpmi::data_lock> lock;
         std::unique_ptr<std::experimental::pmr::memory_resource> memory_resource;
-        std::experimental::pmr::deque<std::pair<button_t, chrono::tsc_count>> button_events { get_memory_resource() };
-        std::experimental::pmr::deque<std::pair<raw_t, chrono::tsc_count>> samples { get_memory_resource() };
+        std::experimental::pmr::deque<std::pair<button_t, typename Clock::time_point>> button_events { get_memory_resource() };
+        std::experimental::pmr::deque<std::pair<raw_t, typename Clock::time_point>> samples { get_memory_resource() };
 
         bool using_irq() const { return cfg.strategy == poll_strategy::pit_irq or cfg.strategy == poll_strategy::rtc_irq; }
         std::experimental::pmr::memory_resource* get_memory_resource() const noexcept { if (using_irq()) return memory_resource.get(); else return std::experimental::pmr::get_default_resource(); }
 
-        void update_buttons(raw_gameport p, chrono::tsc_count now)
+        void update_buttons(raw_gameport p, typename Clock::time_point now)
         {
             button_t x;
             x.a0 = not p.a0;
@@ -223,6 +225,7 @@ namespace jw::io
 
         void poll()
         {
+            decltype(Clock::now()) now;
             if (not timing.x0 and not timing.y0 and not timing.x1 and not timing.y1)
             {
                 timing.x0 = cfg.enable.x0;
@@ -230,12 +233,12 @@ namespace jw::io
                 timing.x1 = cfg.enable.x1;
                 timing.y1 = cfg.enable.y1;
                 port.write({ });
-                timing_start = chrono::rdtsc();
+                timing_start = Clock::now();
             }
             do
             {
                 auto p = port.read();
-                auto now = chrono::rdtsc();
+                now = Clock::now();
                 auto& c = cfg.calibration;
                 auto i = now - timing_start;
                 if (timing.x0 and (not p.x0 or i > c.x0_max)) { timing.x0 = false; last.x0 = std::clamp(i, c.x0_min, c.x0_max); }
@@ -244,7 +247,7 @@ namespace jw::io
                 if (timing.y1 and (not p.y1 or i > c.y1_max)) { timing.y1 = false; last.y1 = std::clamp(i, c.y1_min, c.y1_max); }
                 update_buttons(p, now);
             } while (cfg.strategy == poll_strategy::busy_loop and (timing.x0 or timing.y0 or timing.x1 or timing.y1));
-            if (not (timing.x0 or timing.y0 or timing.x1 or timing.y1)) samples.emplace_back(last, chrono::rdtsc());
+            if (not (timing.x0 or timing.y0 or timing.x1 or timing.y1)) samples.emplace_back(last, now);
         }
 
         thread::task<void()> poll_task { [this]
@@ -253,7 +256,7 @@ namespace jw::io
             {
                 if (cfg.strategy != poll_strategy::busy_loop) poll();
                 for (auto i = button_events.begin(); i != button_events.end(); i = button_events.erase(i))
-                    button_changed(i->first, chrono::tsc::to_time_point(i->second));
+                    button_changed(i->first, i->second);
                 thread::yield();
             }
         } };
