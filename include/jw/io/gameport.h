@@ -132,41 +132,42 @@ namespace jw::io
 
         auto get_raw()
         {
-            auto now = chrono::tsc::now();
-            for (auto i = samples.begin(); i != samples.end();)
-            {
-                if (samples.size() > 1 and i->second < now - cfg.smoothing_window)
-                    i = samples.erase(i);
-                else ++i;
-            }
             poll();
-            return last;
-        }
-
-        auto get()
-        {
-            get_raw();
-            normalized_t value { 0 };
-
+            raw_t value { typename Clock::duration { 0 } };
             auto& c = cfg.calibration;
-            auto& o = cfg.output_range;
 
             for (auto&& s : samples)
             {
-                value.x0 += s.first.x0.count();     // TODO: generic vector4 class
-                value.y0 += s.first.y0.count();
-                value.x1 += s.first.x1.count();
-                value.y1 += s.first.y1.count();
+                value.x0 += s.first.x0 - c.x0_min;     // TODO: generic vector4 class
+                value.y0 += s.first.y0 - c.y0_min;
+                value.x1 += s.first.x1 - c.x1_min;
+                value.y1 += s.first.y1 - c.y1_min;
             }
             value.x0 /= samples.size();
             value.y0 /= samples.size();
             value.x1 /= samples.size();
             value.y1 /= samples.size();
 
-            value.x0 = (value.x0 - c.x0_min.count()) / (c.x0_max.count() - c.x0_min.count());
-            value.y0 = (value.y0 - c.y0_min.count()) / (c.y0_max.count() - c.y0_min.count());
-            value.x1 = (value.x1 - c.x1_min.count()) / (c.x1_max.count() - c.x1_min.count());
-            value.y1 = (value.y1 - c.y1_min.count()) / (c.y1_max.count() - c.y1_min.count());
+            return value;
+        }
+
+        auto get()
+        {
+            auto& c = cfg.calibration;
+            auto& o = cfg.output_range;
+
+            auto raw = get_raw();
+            normalized_t value;
+
+            value.x0 = raw.x0.count();
+            value.y0 = raw.y0.count();
+            value.x1 = raw.x1.count();
+            value.y1 = raw.y1.count();
+
+            value.x0 /= c.x0_max.count() - c.x0_min.count();
+            value.y0 /= c.y0_max.count() - c.y0_min.count();
+            value.x1 /= c.x1_max.count() - c.x1_min.count();
+            value.y1 /= c.y1_max.count() - c.y1_min.count();
 
             value.x0 = o.x0_min + value.x0 * (o.x0_max - o.x0_min);
             value.y0 = o.y0_min + value.y0 * (o.y0_max - o.y0_min);
@@ -200,7 +201,7 @@ namespace jw::io
 
         const config cfg;
         io_port<raw_gameport> port;
-        raw_t last;
+        raw_t sample;
         value_t<bool> timing { false };
         typename Clock::time_point timing_start;
         button_t button_state;
@@ -225,8 +226,9 @@ namespace jw::io
 
         void poll()
         {
+            auto timing_done = [this] { return not (timing.x0 or timing.y0 or timing.x1 or timing.y1); };
             decltype(Clock::now()) now;
-            if (not timing.x0 and not timing.y0 and not timing.x1 and not timing.y1)
+            if (timing_done())
             {
                 timing.x0 = cfg.enable.x0;
                 timing.y0 = cfg.enable.y0;
@@ -241,13 +243,21 @@ namespace jw::io
                 now = Clock::now();
                 auto& c = cfg.calibration;
                 auto i = now - timing_start;
-                if (timing.x0 and (not p.x0 or i > c.x0_max)) { timing.x0 = false; last.x0 = std::clamp(i, c.x0_min, c.x0_max); }
-                if (timing.y0 and (not p.y0 or i > c.y0_max)) { timing.y0 = false; last.y0 = std::clamp(i, c.y0_min, c.y0_max); }
-                if (timing.x1 and (not p.x1 or i > c.x1_max)) { timing.x1 = false; last.x1 = std::clamp(i, c.x1_min, c.x1_max); }
-                if (timing.y1 and (not p.y1 or i > c.y1_max)) { timing.y1 = false; last.y1 = std::clamp(i, c.y1_min, c.y1_max); }
+                if (timing.x0 and (not p.x0 or i > c.x0_max)) { timing.x0 = false; sample.x0 = std::clamp(i, c.x0_min, c.x0_max); }
+                if (timing.y0 and (not p.y0 or i > c.y0_max)) { timing.y0 = false; sample.y0 = std::clamp(i, c.y0_min, c.y0_max); }
+                if (timing.x1 and (not p.x1 or i > c.x1_max)) { timing.x1 = false; sample.x1 = std::clamp(i, c.x1_min, c.x1_max); }
+                if (timing.y1 and (not p.y1 or i > c.y1_max)) { timing.y1 = false; sample.y1 = std::clamp(i, c.y1_min, c.y1_max); }
                 update_buttons(p, now);
-            } while (cfg.strategy == poll_strategy::busy_loop and (timing.x0 or timing.y0 or timing.x1 or timing.y1));
-            if (not (timing.x0 or timing.y0 or timing.x1 or timing.y1)) samples.emplace_back(last, now);
+            } while (cfg.strategy == poll_strategy::busy_loop and not timing_done());
+            if (timing_done()) samples.emplace_back(sample, now);
+
+            for (auto i = samples.begin(); i != samples.end();)
+            {
+                if (samples.size() > 1 and i->second < now - cfg.smoothing_window)
+                    i = samples.erase(i);
+                else break;
+            }
+            while (samples.size() == 0) poll();
         }
 
         thread::task<void()> poll_task { [this]
