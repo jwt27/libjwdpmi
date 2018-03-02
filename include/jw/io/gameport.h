@@ -48,10 +48,10 @@ namespace jw::io
                 T y0_min { 0 };
                 T x1_min { 0 };
                 T y1_min { 0 };
-                T x0_max { std::numeric_limits<typename T::rep>::max() };
-                T y0_max { std::numeric_limits<typename T::rep>::max() };
-                T x1_max { std::numeric_limits<typename T::rep>::max() };
-                T y1_max { std::numeric_limits<typename T::rep>::max() };
+                T x0_max { std::chrono::milliseconds { 25 } };
+                T y0_max { std::chrono::milliseconds { 25 } };
+                T x1_max { std::chrono::milliseconds { 25 } };
+                T y1_max { std::chrono::milliseconds { 25 } };
             } calibration;
 
             struct
