@@ -32,7 +32,7 @@ namespace jw
         constexpr bool enable_throwing_from_cpu_exceptions = true;
 
         // Enable interrupts while the gdb interface is active
-        constexpr bool enable_gdb_interrupts = false;
+        constexpr bool enable_gdb_interrupts = true;
 
         // Enable debug messages from the gdb interface
         constexpr bool enable_gdb_debug_messages = false;
