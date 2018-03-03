@@ -15,9 +15,9 @@
 #include <set>
 #include <jw/dpmi/fpu.h>
 #include <jw/dpmi/dpmi.h>
-#include <jw/dpmi/debug.h>
+#include <jw/debug/debug.h>
 #include <jw/dpmi/cpu_exception.h>
-#include <jw/dpmi/detail/debug.h>
+#include <jw/debug/detail/signals.h>
 #include <jw/io/rs232.h>
 #include <jw/alloc.h>
 #include <../jwdpmi_config.h>
@@ -25,12 +25,14 @@
 // TODO: optimize
 
 using namespace std::string_literals;
+using namespace jw::dpmi;
+using namespace jw::dpmi::detail;
 
 extern void* context_switch_end asm("context_switch_end");
 
 namespace jw
 {
-    namespace dpmi
+    namespace debug
     {
 #       ifndef NDEBUG
         namespace detail

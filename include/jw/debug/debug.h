@@ -7,7 +7,7 @@
 
 namespace jw
 {
-    namespace dpmi
+    namespace debug
     {
         namespace detail
         {
@@ -70,7 +70,7 @@ namespace jw
             watchpoint(T* ptr, watchpoint_type t) : watchpoint(near_to_linear(ptr), sizeof(T), t) 
             { static_assert(sizeof(T) == 4 || sizeof(T) == 2 || sizeof(T) == 1); }
 
-            watchpoint(auto* ptr, watchpoint_type t, std::size_t size) : watchpoint(near_to_linear(ptr), size, t) { }
+            watchpoint(auto* ptr, watchpoint_type t, std::size_t size) : watchpoint(dpmi::near_to_linear(ptr), size, t) { }
 
         #ifndef NDEBUG
             watchpoint(const watchpoint&) = delete;
@@ -87,7 +87,7 @@ namespace jw
             watchpoint(std::uintptr_t linear_addr, std::size_t size_bytes, watchpoint_type t) : type(t)
             {
                 bool c;
-                dpmi_error_code error;
+                dpmi::dpmi_error_code error;
                 split_uint32_t addr = linear_addr;
                 asm volatile(
                     "int 0x31;"
@@ -99,7 +99,7 @@ namespace jw
                     , "c"(addr.lo)
                     , "d"((t << 8) | size_bytes)
                     : "cc");
-                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+                if (c) throw dpmi::dpmi_error(error, __PRETTY_FUNCTION__);
             }
 
             // Remove a watchpoint (DPMI 0.9, AX=0B01)
@@ -123,7 +123,7 @@ namespace jw
             {
             #ifndef NDEBUG
                 bool c;
-                dpmi_error_code error;
+                dpmi::dpmi_error_code error;
                 asm("int 0x31;"
                     : "=@ccc" (c)
                     , "=a"(error)
@@ -131,7 +131,7 @@ namespace jw
                     , "b"(handle)
                     , "d"(0)
                     : "cc");
-                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+                if (c) throw dpmi::dpmi_error(error, __PRETTY_FUNCTION__);
                 return error != 0;
             #else
                 return false;
@@ -143,7 +143,7 @@ namespace jw
             {
             #ifndef NDEBUG
                 bool c;
-                dpmi_error_code error;
+                dpmi::dpmi_error_code error;
                 asm (
                     "int 0x31;"
                     : "=@ccc" (c)
@@ -151,7 +151,7 @@ namespace jw
                     : "a"(0x0b03)
                     , "b"(handle)
                     : "cc");
-                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+                if (c) throw dpmi::dpmi_error(error, __PRETTY_FUNCTION__);
             #endif
             }
 

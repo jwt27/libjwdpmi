@@ -62,7 +62,7 @@ namespace jw
         inline void yield()
         {
             if (dpmi::in_irq_context()) return;
-            dpmi::trap_mask dont_trace_here { };
+            debug::trap_mask dont_trace_here { };
             detail::scheduler::thread_switch(); 
         }
 

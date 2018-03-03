@@ -4,7 +4,7 @@
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
 #include <jw/dpmi/cpu_exception.h>
-#include <jw/dpmi/debug.h>
+#include <jw/debug/debug.h>
 #include <jw/dpmi/detail/interrupt_id.h>
 #include <cstring>
 

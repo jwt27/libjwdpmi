@@ -5,7 +5,7 @@
 
 namespace jw
 {
-    namespace dpmi
+    namespace debug
     {
         namespace detail
         {

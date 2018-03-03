@@ -11,7 +11,7 @@
 
 #include <jw/common.h>
 #include <jw/dpmi/lock.h>
-#include <jw/dpmi/debug.h>
+#include <jw/debug/debug.h>
 #include <jw/dpmi/irq_mask.h>
 #include <jw/dpmi/irq_check.h>
 
@@ -152,7 +152,7 @@ namespace jw
 
                 {
                     interrupt_mask no_interrupts_please { };
-                    dpmi::trap_mask dont_trap_here { };
+                    debug::trap_mask dont_trap_here { };
                     pool->clear();
                     pool->resize(size_bytes);
                     new(begin()) pool_node { };
@@ -163,7 +163,7 @@ namespace jw
             auto max_size() const noexcept
             {
                 interrupt_mask no_interrupts_please { };
-                dpmi::trap_mask dont_trap_here { };
+                debug::trap_mask dont_trap_here { };
 
                 std::size_t n { 0 };
                 for (auto* i = begin(); i != nullptr; i = i->next)

@@ -7,10 +7,10 @@
 #include <crt0.h>
 #include <csignal>
 #include <jw/alloc.h>
-#include <jw/dpmi/debug.h>
+#include <jw/debug/debug.h>
 #include <jw/dpmi/cpu_exception.h>
 #include <jw/dpmi/detail/alloc.h>
-#include <jw/dpmi/detail/debug.h>
+#include <jw/debug/detail/signals.h>
 #include <jw/io/rs232.h>
 #include <../jwdpmi_config.h>
 
@@ -69,7 +69,7 @@ namespace jw
         throw terminate_exception { };
     }
 
-    namespace dpmi
+    namespace debug
     {
         namespace detail
         {
@@ -81,7 +81,7 @@ namespace jw
     std::terminate_handler original_terminate_handler;
     [[noreturn]] void terminate_handler()
     {
-        jw::dpmi::break_with_signal(SIGTERM);
+        debug::break_with_signal(SIGTERM);
         std::set_terminate(original_terminate_handler);
         original_terminate_handler();
         do { } while (true);
@@ -91,7 +91,7 @@ namespace jw
 
     void atexit_handler()
     {
-        if (jw::dpmi::debug()) dpmi::detail::notify_gdb_exit(return_value);
+        if (debug::debug()) debug::detail::notify_gdb_exit(return_value);
     }
 }
 
@@ -117,11 +117,11 @@ int main(int argc, const char** argv)
             {
                 io::rs232_config cfg;
                 cfg.set_com_port(io::com1);
-                dpmi::detail::setup_gdb_interface(cfg);
+                debug::detail::setup_gdb_interface(cfg);
             }
             else if (stricmp(argv[i], "--ext-debug") == 0)
             {
-                dpmi::detail::debug_mode = true;
+                debug::detail::debug_mode = true;
             }
             else
         #endif
@@ -130,10 +130,10 @@ int main(int argc, const char** argv)
             }
         }
 
-        if (dpmi::debug())
+        if (debug::debug())
         {
             std::cout << "Debug mode activated. Connecting to GDB..." << std::endl;
-            dpmi::breakpoint();
+            debug::breakpoint();
         }
     
         jw::return_value = jwdpmi_main(args); 
@@ -187,7 +187,7 @@ void* operator new(std::size_t n)
         {
             new_alloc_initialized = almost;
             {
-                dpmi::trap_mask dont_trap_here { };
+                debug::trap_mask dont_trap_here { };
                 if (new_alloc != nullptr) delete new_alloc;
                 new_alloc = nullptr;
                 new_alloc = new dpmi::detail::new_allocator { };
@@ -203,7 +203,7 @@ void* operator new(std::size_t n)
     else if (new_alloc_initialized == yes && !new_alloc_resize_reentry.test_and_set())
     {
         dpmi::interrupt_mask no_interrupts_here { };
-        dpmi::trap_mask dont_trap_here { };
+        debug::trap_mask dont_trap_here { };
         try
         {
             new_alloc_initialized = almost;
