@@ -20,7 +20,7 @@ namespace jw
             split_int<T, (size >> 1)> hi;
         };
         std::conditional_t<std::is_signed_v<T>, std::int64_t, std::uint64_t> value : size;
-        constexpr split_int() noexcept { }
+        constexpr split_int() noexcept = default;
         constexpr split_int(auto v) noexcept : value(v) { };
         constexpr operator auto() const noexcept { return value; }
     };
@@ -34,7 +34,7 @@ namespace jw
              T hi : size >> 1;
         };
         std::conditional_t<std::is_signed_v<T>, std::int64_t, std::uint64_t> value : size;
-        constexpr split_int() noexcept { }
+        constexpr split_int() noexcept = default;
         constexpr split_int(auto v) noexcept : value(v) { };
         constexpr operator auto() const noexcept { return value; }
     };
@@ -43,7 +43,7 @@ namespace jw
     union alignas(1) [[gnu::packed]] split_int<T, 8, bool>
     {
         std::conditional_t<std::is_signed<T>::value, std::int8_t, std::uint8_t> value;
-        constexpr split_int() noexcept { }
+        constexpr split_int() noexcept = default;
         constexpr split_int(auto v) noexcept : value(v) { }
         constexpr operator auto() const noexcept { return value; }
     };
