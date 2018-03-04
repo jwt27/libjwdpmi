@@ -2,6 +2,8 @@
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
+#pragma GCC target("no-sse", "fpmath=387")
+
 #include <jw/dpmi/fpu.h>
 #include <jw/dpmi/cpu_exception.h>
 #include <jw/dpmi/irq.h>

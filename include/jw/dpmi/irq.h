@@ -39,7 +39,7 @@
 
 // TODO: (eventually) software interrupts, real-mode callbacks
 
-#define INTERRUPT [[gnu::hot, gnu::flatten, gnu::optimize("O3", "no-fast-math", "no-tree-vectorize")]]
+#define INTERRUPT [[gnu::hot, gnu::optimize("O3")]]
 
 namespace jw
 {
