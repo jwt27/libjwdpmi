@@ -7,7 +7,7 @@
 #include <jw/video/vga.h>
 #include <jw/video/vbe_types.h>
 #include <jw/video/pixel.h>
-#include <jw/vector2.h>
+#include <jw/vector.h>
 
 namespace jw
 {

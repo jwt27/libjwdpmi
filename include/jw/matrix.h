@@ -4,7 +4,7 @@
 #pragma once
 #include <experimental/vector>
 #include <type_traits>
-#include <jw/vector2.h>
+#include <jw/vector.h>
 
 namespace jw
 {
