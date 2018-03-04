@@ -13,28 +13,90 @@
 #include <jw/dpmi/irq.h>
 #include <jw/alloc.h>
 #include <jw/common.h>
+#include <jw/split_stdint.h>
 #include <../jwdpmi_config.h>
-
-// TODO: find some way to completely avoid generating fpu instructions
-//#define NO_FPU_ATTR [[gnu::flatten, gnu::optimize("no-tree-vectorize"), gnu::target("no-mmx", "no-sse")]]
 
 namespace jw
 {
     namespace dpmi
     {
-        class alignas(0x10) fpu_context
+        union alignas(0x08) [[gnu::packed]] fpu_register
         {
-        #ifdef __SSE__
-            std::array<byte, 512+0x10> context;
-        #else
-            std::array<byte, 108+0x10> context;
-        #endif
+            long double value_ld;
+            double value_d;
+            float value_f;
+            split_int64_t mmx;
+        };
+        static_assert(sizeof(fpu_register) == 0x10);
+
+        union alignas(0x10) [[gnu::packed]] sse_register
+        {
+            std::array<float, 4> value;
+        };
+        static_assert(sizeof(sse_register) == 0x10);
+
+        struct alignas(0x08) fsave_data
+        {
+            union
+            {
+                struct
+                {
+                    std::uint16_t fctrl;
+                    unsigned : 16;
+                    std::uint16_t fstat;
+                    unsigned : 16;
+                    std::uint16_t ftag;
+                    unsigned : 16;
+                    std::uintptr_t fioff;
+                    selector fiseg;
+                    std::uint16_t fop;
+                    std::uintptr_t fooff;
+                    selector foseg;
+                    unsigned : 16;
+                    byte st[8*10];
+                };
+                std::array<byte, 108> raw;
+            };
+        };
+
+        struct alignas(0x10) fxsave_data
+        {
+            union
+            {
+                struct //[[gnu::packed]]
+                {
+                    std::uint16_t fctrl;
+                    std::uint16_t fstat;
+                    std::uint8_t ftag;
+                    unsigned : 8;
+                    std::uint16_t fop;
+                    std::uintptr_t fioff;
+                    selector fiseg;
+                    unsigned : 16;
+                    std::uintptr_t fooff;
+                    selector foseg;
+                    unsigned : 16;
+                    std::uint32_t mxcsr;
+                    std::uint32_t mxcsr_mask;
+                    fpu_register st[8];
+                    sse_register xmm[16];
+                };
+                std::array<byte, 512> raw;
+            };
+        };
+
+#       ifdef __SSE__
+        class alignas(0x10) fpu_context : public fxsave_data
+#       else
+        class alignas(0x10) fpu_context : public fsave_data
+#       endif
+        {
         public:
             void save() noexcept
             {
-                auto ptr = context.data();
-                asm("and %0, -0x10;"
-                    "add %0, 0x10;"
+                auto ptr = raw.data();
+                asm(//"and %0, -0x10;"
+                    //"add %0, 0x10;"
             #ifdef __SSE__
                     "fxsave [%0];"
             #else
@@ -44,9 +106,9 @@ namespace jw
             }
             void restore() noexcept
             {
-                auto ptr = context.data();
-                asm("and %0, -0x10;"
-                    "add %0, 0x10;"
+                auto ptr = raw.data();
+                asm(//"and %0, -0x10;"
+                    //"add %0, 0x10;"
             #ifdef __SSE__
                     "fxrstor [%0];"
             #else
