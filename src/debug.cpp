@@ -205,18 +205,18 @@ namespace jw
                 eip, eflags,
                 cs, ss, ds, es, fs, gs,
                 st0, st1, st2, st3, st4, st5, st6, st7,
-                fctrl, cstat, ftag, fiseg, fioff, foseg, fooff, fop,
+                fctrl, fstat, ftag, fiseg, fioff, foseg, fooff, fop,
                 xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7,
                 mxcsr
             };
             regnum& operator++(regnum& r) { return r = static_cast<regnum>(r + 1); }
 
-            constexpr std::array<std::size_t, 41> reglen
+            constexpr std::array<std::size_t, 41> regsize
             {
                 4, 4, 4, 4,
                 4, 4, 4, 4,
                 4, 4,
-                2, 2, 2, 2, 2, 2,
+                4, 4, 4, 4, 4, 4,
                 10, 10, 10, 10, 10, 10, 10, 10,
                 4, 4, 4, 4, 4, 4, 4, 4,
                 16, 16, 16, 16, 16, 16, 16, 16,
@@ -573,7 +573,7 @@ namespace jw
             {
                 if (threads.count(id) == 0)
                 {
-                    encode_null(out, reglen[r]);
+                    encode_null(out, regsize[r]);
                     return;
                 }
                 auto&& t = threads[id];
@@ -590,15 +590,15 @@ namespace jw
                     case edi: encode(out, &t.reg.edi); return;
                     case esp: encode(out, &t.frame.stack.offset); return;
                     case eflags: encode(out, &t.frame.flags.raw_eflags); return;
-                    case cs: encode(out, &t.frame.fault_address.segment); return;
-                    case ss: encode(out, &t.frame.stack.segment); return;
-                    case ds: if (new_frame_type) encode(out, &t.frame.ds); else encode_null(out, reglen[r]); return;
-                    case es: if (new_frame_type) encode(out, &t.frame.es); else encode_null(out, reglen[r]); return;
-                    case fs: if (new_frame_type) encode(out, &t.frame.fs); else encode_null(out, reglen[r]); return;
-                    case gs: if (new_frame_type) encode(out, &t.frame.gs); else encode_null(out, reglen[r]); return;
+                    case cs: { std::uint32_t s = t.frame.fault_address.segment; encode(out, &s); return; }
+                    case ss: { std::uint32_t s = t.frame.stack.segment; encode(out, &s); return; }
+                    case ds: { if (new_frame_type) { std::uint32_t s = t.frame.ds; encode(out, &s); } else encode_null(out, regsize[r]); return; }
+                    case es: { if (new_frame_type) { std::uint32_t s = t.frame.es; encode(out, &s); } else encode_null(out, regsize[r]); return; }
+                    case fs: { if (new_frame_type) { std::uint32_t s = t.frame.fs; encode(out, &s); } else encode_null(out, regsize[r]); return; }
+                    case gs: { if (new_frame_type) { std::uint32_t s = t.frame.gs; encode(out, &s); } else encode_null(out, regsize[r]); return; }
                     case eip: encode(out, &t.frame.fault_address.offset); return;
                     default:
-                        encode_null(out, reglen[r]);
+                        encode_null(out, regsize[r]);
                         return;
                         if (r > mxcsr) return;
                         //auto fpu = detail::fpu_context_switcher.get_last_context();
@@ -613,7 +613,7 @@ namespace jw
                     auto t_ptr = t.thread.lock();
                     if (not t_ptr or t_ptr->get_state() == thread::detail::starting)
                     {
-                        encode_null(out, reglen[r]);
+                        encode_null(out, regsize[r]);
                         return;
                     }
                     auto* reg = thread::detail::thread_details::get_context(t_ptr);
@@ -626,14 +626,14 @@ namespace jw
                     case esi: encode(out, &reg->esi); return;
                     case edi: encode(out, &reg->edi); return;
                     case esp: encode(out, &r_esp); return;
-                    case cs: encode(out, &current_thread->frame.fault_address.segment); return;
-                    case ss: encode(out, &current_thread->frame.stack.segment); return;
-                    case ds: encode(out, &current_thread->frame.stack.segment); return;
-                    case es: encode(out, &reg->es, reglen[r]); return;
-                    case fs: encode(out, &reg->fs, reglen[r]); return;
-                    case gs: encode(out, &reg->gs, reglen[r]); return;
+                    case cs: { std::uint32_t s = current_thread->frame.fault_address.segment;  encode(out, &s); return; }
+                    case ss: { std::uint32_t s = current_thread->frame.stack.segment; encode(out, &s); return; }
+                    case ds: { std::uint32_t s = current_thread->frame.stack.segment; encode(out, &s); return; }
+                    case es: { std::uint32_t s = reg->es; encode(out, &s, regsize[r]); return; }
+                    case fs: { std::uint32_t s = reg->fs; encode(out, &s, regsize[r]); return; }
+                    case gs: { std::uint32_t s = reg->gs; encode(out, &s, regsize[r]); return; }
                     case eip: encode(out, &r_eip); return;
-                    default: encode_null(out, reglen[r]);
+                    default: encode_null(out, regsize[r]);
                     }
                 }
             }
@@ -646,22 +646,22 @@ namespace jw
                 if (debugmsg) std::clog << "set register " << std::hex << r << '=' << value << '\n';
                 switch (r)
                 {
-                case eax:    return reverse_decode(value, &t.reg.eax, reglen[r]);
-                case ebx:    return reverse_decode(value, &t.reg.ebx, reglen[r]);
-                case ecx:    return reverse_decode(value, &t.reg.ecx, reglen[r]);
-                case edx:    return reverse_decode(value, &t.reg.edx, reglen[r]);
-                case ebp:    return reverse_decode(value, &t.reg.ebp, reglen[r]);
-                case esi:    return reverse_decode(value, &t.reg.esi, reglen[r]);
-                case edi:    return reverse_decode(value, &t.reg.edi, reglen[r]);
-                case esp:    return reverse_decode(value, &t.frame.stack.offset, reglen[r]);
-                case eip:    return reverse_decode(value, &t.frame.fault_address.offset, reglen[r]);
-                case eflags: return reverse_decode(value, &t.frame.flags.raw_eflags, reglen[r]);
-                case cs:     return reverse_decode(value, &t.frame.fault_address.segment, reglen[r]);
-                case ss:     return reverse_decode(value, &t.frame.stack.segment, reglen[r]);
-                case ds: if (new_frame_type) { return reverse_decode(value, &t.frame.ds, reglen[r]); } return false;
-                case es: if (new_frame_type) { return reverse_decode(value, &t.frame.es, reglen[r]); } return false;
-                case fs: if (new_frame_type) { return reverse_decode(value, &t.frame.fs, reglen[r]); } return false;
-                case gs: if (new_frame_type) { return reverse_decode(value, &t.frame.gs, reglen[r]); } return false;
+                case eax:    return reverse_decode(value, &t.reg.eax, regsize[r]);
+                case ebx:    return reverse_decode(value, &t.reg.ebx, regsize[r]);
+                case ecx:    return reverse_decode(value, &t.reg.ecx, regsize[r]);
+                case edx:    return reverse_decode(value, &t.reg.edx, regsize[r]);
+                case ebp:    return reverse_decode(value, &t.reg.ebp, regsize[r]);
+                case esi:    return reverse_decode(value, &t.reg.esi, regsize[r]);
+                case edi:    return reverse_decode(value, &t.reg.edi, regsize[r]);
+                case esp:    return reverse_decode(value, &t.frame.stack.offset, regsize[r]);
+                case eip:    return reverse_decode(value, &t.frame.fault_address.offset, regsize[r]);
+                case eflags: return reverse_decode(value, &t.frame.flags.raw_eflags, regsize[r]);
+                case cs:     return reverse_decode(value, &t.frame.fault_address.segment, regsize[r]);
+                case ss:     return reverse_decode(value, &t.frame.stack.segment, regsize[r]);
+                case ds: if (new_frame_type) { return reverse_decode(value, &t.frame.ds, regsize[r]); } return false;
+                case es: if (new_frame_type) { return reverse_decode(value, &t.frame.es, regsize[r]); } return false;
+                case fs: if (new_frame_type) { return reverse_decode(value, &t.frame.fs, regsize[r]); } return false;
+                case gs: if (new_frame_type) { return reverse_decode(value, &t.frame.gs, regsize[r]); } return false;
                 default: if (r > mxcsr) return false;
                     //auto fpu = detail::fpu_context_switcher.get_last_context();
                     switch (r)
@@ -981,7 +981,7 @@ namespace jw
                             send_packet("E00");
                             break;
                         }
-                        pos += reglen[reg] * 2;
+                        pos += regsize[reg] * 2;
                         ++reg;
                     }
                     if (!fail) send_packet("OK");
