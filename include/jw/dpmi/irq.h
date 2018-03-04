@@ -46,7 +46,6 @@ namespace jw
     namespace dpmi
     {
         using int_vector = std::uint32_t; // easier to use from asm
-        using ack_ptr = void(*)();
 
         // Configuration flags passed to irq_handler constructor.
         enum irq_config_flags
