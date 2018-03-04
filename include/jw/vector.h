@@ -223,15 +223,14 @@ namespace jw
 
 #   if defined(__SSE2__)
     using vector2f = vector<2, double>;
-    using vector2i = vector<2, std::int32_t>;
     using vector3i = vector<3, std::int32_t>;
     using vector4i = vector<4, std::int32_t>;
 #   else
     using vector2f = vector<2, float>;
-    using vector2i = vector<2, std::int16_t>;
     using vector3i = vector<3, std::int16_t>;
     using vector4i = vector<4, std::int16_t>;
 #   endif
+    using vector2i = vector<2, std::int32_t>;
     using vector3f = vector<3, float>;
     using vector4f = vector<4, float>;
 }
