@@ -9,6 +9,7 @@
 #include <jw/dpmi/lock.h>
 #include <jw/dpmi/alloc.h>
 #include <jw/event.h>
+#include <jw/vector.h>
 #include <limits>
 #include <optional>
 #include <experimental/deque>
@@ -56,14 +57,8 @@ namespace jw::io
 
             struct
             {
-                float x0_min { -1 };
-                float x0_max { +1 };
-                float y0_min { -1 };
-                float y0_max { +1 };
-                float x1_min { -1 };
-                float x1_max { +1 };
-                float y1_min { -1 };
-                float y1_max { +1 };
+                vector4f max { +1, +1, +1, +1 };
+                vector4f min { -1, -1, -1, -1 };
             } output_range;
         };
 
@@ -77,23 +72,8 @@ namespace jw::io
             constexpr value_t() noexcept = default;
         };
 
-        template<typename T>
-        struct vector_t
-        {
-            using V[[gnu::vector_size(2 * sizeof(T))]] = T;
-            union
-            {
-                V v;
-                struct { T x0, y0, x1, y1; };
-            };
-
-            constexpr vector_t(T vx0, T vy0, T vx1, T vy1) noexcept : x0(vx0), y0(vy0), x1(vx1), y1(vy1) { }
-            constexpr vector_t(T v) noexcept : vector_t(v, v, v, v) { }
-            constexpr vector_t() noexcept = default;
-        };
-
         using raw_t = value_t<typename Clock::duration>;
-        using normalized_t = vector_t<float>;
+        using normalized_t = vector4f;
 
         struct button_t
         {
@@ -159,20 +139,20 @@ namespace jw::io
             auto raw = get_raw();
             normalized_t value;
 
-            value.x0 = raw.x0.count();
-            value.y0 = raw.y0.count();
-            value.x1 = raw.x1.count();
-            value.y1 = raw.y1.count();
+            value.x = raw.x0.count();
+            value.y = raw.y0.count();
+            value.z = raw.x1.count();
+            value.w = raw.y1.count();
 
-            value.x0 /= c.x0_max.count() - c.x0_min.count();
-            value.y0 /= c.y0_max.count() - c.y0_min.count();
-            value.x1 /= c.x1_max.count() - c.x1_min.count();
-            value.y1 /= c.y1_max.count() - c.y1_min.count();
+            value.x /= c.x0_max.count() - c.x0_min.count();
+            value.y /= c.y0_max.count() - c.y0_min.count();
+            value.z /= c.x1_max.count() - c.x1_min.count();
+            value.w /= c.y1_max.count() - c.y1_min.count();
 
-            value.x0 = o.x0_min + value.x0 * (o.x0_max - o.x0_min);
-            value.y0 = o.y0_min + value.y0 * (o.y0_max - o.y0_min);
-            value.x1 = o.x1_min + value.x1 * (o.x1_max - o.x1_min);
-            value.y1 = o.y1_min + value.y1 * (o.y1_max - o.y1_min);
+            value.x = o.min.x + value.x * (o.max.x - o.min.x);
+            value.y = o.min.y + value.y * (o.max.y - o.min.y);
+            value.z = o.min.z + value.z * (o.max.z - o.min.z);
+            value.w = o.min.w + value.w * (o.max.w - o.min.w);
 
             return value;
         }
