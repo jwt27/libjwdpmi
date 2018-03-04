@@ -14,7 +14,7 @@
 #include <optional>
 #include <experimental/deque>
 
-// TODO: centering
+// TODO: centering / deadzone
 // TODO: auto-calibrate?
 
 namespace jw::io
@@ -118,7 +118,7 @@ namespace jw::io
 
             for (auto&& s : samples)
             {
-                value.x0 += s.first.x0 - c.x0_min;     // TODO: generic vector4 class
+                value.x0 += s.first.x0 - c.x0_min;
                 value.y0 += s.first.y0 - c.y0_min;
                 value.x1 += s.first.x1 - c.x1_min;
                 value.y1 += s.first.y1 - c.y1_min;
