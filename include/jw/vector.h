@@ -12,6 +12,7 @@ namespace jw
     namespace detail
     {
         template<unsigned N, typename T, typename = void> struct vector_size { static constexpr std::size_t size { N * sizeof(T) }; };
+        /*
 #       ifdef __MMX__
         template<unsigned N> struct vector_size<N, std::int32_t,  std::enable_if_t<N <= 2>> { static constexpr std::size_t size { 8 }; };
         template<unsigned N> struct vector_size<N, std::uint32_t, std::enable_if_t<N <= 2>> { static constexpr std::size_t size { 8 }; };
@@ -34,6 +35,7 @@ namespace jw
         template<unsigned N, typename = std::enable_if_t<N <= 16>> struct vector_size<N, std::int8_t> { static constexpr std::size_t size { 16 }; };
         template<unsigned N, typename = std::enable_if_t<N <= 16>> struct vector_size<N, std::uint8_t> { static constexpr std::size_t size { 16 }; };
 #       endif
+        */
 
         struct empty { };
     }
