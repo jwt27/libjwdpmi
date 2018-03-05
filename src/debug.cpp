@@ -977,7 +977,7 @@ namespace jw
                 {
                     if (threads.count(query_thread_id))
                     {
-                        for (auto i = eax; i <= reg_max; ++i)
+                        for (auto i = eax; i <= gs; ++i)
                             reg(s, i, query_thread_id);
                         send_packet(s.str());
                     }
