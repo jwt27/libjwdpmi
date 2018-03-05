@@ -423,7 +423,7 @@ namespace jw
             template <typename T>
             inline void encode(std::ostream& out, T* in, std::size_t len = sizeof(T))
             {
-                auto ptr = reinterpret_cast<const byte*>(in);
+                auto ptr = reinterpret_cast<const volatile byte*>(in);
                 for (std::size_t i = 0; i < len; ++i) 
                     out << std::setw(2) << static_cast<std::uint32_t>(ptr[i]);
             }
@@ -432,7 +432,7 @@ namespace jw
             template <typename T>
             inline void reverse_encode(std::ostream& out, T* in, std::size_t len = sizeof(T))
             {
-                auto ptr = reinterpret_cast<const byte*>(in);
+                auto ptr = reinterpret_cast<const volatile byte*>(in);
                 for (std::size_t i = 0; i < len; ++i)
                     out << std::setw(2) << static_cast<std::uint32_t>(ptr[len - i - 1]);
             }
