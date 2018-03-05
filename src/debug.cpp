@@ -83,9 +83,10 @@ namespace jw
             std::deque<packet_string, locked_pool_allocator<>> packet { alloc };
             bool replied { false };
 
-            std::uint32_t current_thread_id { 1 };
-            std::map<char, std::uint32_t, std::less<char>, locked_pool_allocator<>> selected_thread_id { alloc };
             constexpr auto all_threads_id { std::numeric_limits<std::uint32_t>::max() };
+            std::uint32_t current_thread_id { 1 };
+            std::uint32_t query_thread_id { 1 };
+            std::uint32_t control_thread_id { all_threads_id };
 
             struct thread_info
             {
@@ -797,7 +798,6 @@ namespace jw
                 std::stringstream s { };
                 s << std::hex << std::setfill('0');
                 auto& p = packet.front().delim;
-                selected_thread_id.try_emplace(p, current_thread_id);
                 if (p == '?')   // stop reason
                 {
                     stop_reply(true);
@@ -946,7 +946,8 @@ namespace jw
                     auto id = decode(packet[0].substr(1));
                     if (threads.count(id) > 0 or id == all_threads_id)
                     {
-                        selected_thread_id[packet[0][0]] = id;
+                        if (packet[0][0] == 'g') query_thread_id = id;
+                        else if (packet[0][0] == 'c') control_thread_id = id;
                         send_packet("OK");
                     }
                     else send_packet("E00");
@@ -959,25 +960,25 @@ namespace jw
                 }
                 else if (p == 'p')  // read one register
                 {
-                    if (threads.count(selected_thread_id[p]))
+                    if (threads.count(query_thread_id))
                     {
                         auto regn = static_cast<regnum>(decode(packet[0]));
-                        reg(s, regn, selected_thread_id[p]);
+                        reg(s, regn, query_thread_id);
                         send_packet(s.str());
                     }
                     else send_packet("E00");
                 }
                 else if (p == 'P')  // write one register
                 {
-                    if (setreg(static_cast<regnum>(decode(packet[0])), packet[1], selected_thread_id[p])) send_packet("OK");
+                    if (setreg(static_cast<regnum>(decode(packet[0])), packet[1], query_thread_id)) send_packet("OK");
                     else send_packet("E00");
                 }
                 else if (p == 'g')  // read registers
                 {
-                    if (threads.count(selected_thread_id[p]))
+                    if (threads.count(query_thread_id))
                     {
                         for (auto i = eax; i <= reg_max; ++i)
-                            reg(s, i, selected_thread_id[p]);
+                            reg(s, i, query_thread_id);
                         send_packet(s.str());
                     }
                     else send_packet("E00");
@@ -989,7 +990,7 @@ namespace jw
                     bool fail { false };
                     while (pos < packet[0].size())
                     {
-                        if (fail |= setreg(reg, packet[0].substr(pos), selected_thread_id[p]))
+                        if (fail |= setreg(reg, packet[0].substr(pos), query_thread_id))
                         {
                             send_packet("E00");
                             break;
@@ -1015,7 +1016,7 @@ namespace jw
                 }
                 else if (p == 'c' or p == 's')  // step/continue
                 {
-                    auto id = selected_thread_id[p];
+                    auto id = control_thread_id;
                     auto step_continue = [](auto& t)
                     {
                         if (packet.size() > 0)
@@ -1033,7 +1034,7 @@ namespace jw
                 }
                 else if (p == 'C' or p == 'S')  // step/continue with signal
                 {
-                    auto id = selected_thread_id[p];
+                    auto id = control_thread_id;
                     auto step_continue = [](auto& t)
                     {
                         if (packet.size() > 1)
