@@ -53,10 +53,12 @@ namespace jw
                     std::uintptr_t fooff;
                     selector foseg;
                     unsigned : 16;
-                    byte st[8*10];
+                    byte st[10][8];
                 };
                 std::array<byte, 108> raw;
             };
+            void save() noexcept { asm("fsave [%0];"::"r"(raw.data())); }
+            void restore() noexcept { asm("frstor [%0];"::"r"(raw.data())); }
         };
 
         struct alignas(0x10) fxsave_data
@@ -83,45 +85,20 @@ namespace jw
                 };
                 std::array<byte, 512> raw;
             };
+            void save() noexcept { asm("fxsave [%0];"::"r"(raw.data())); }
+            void restore() noexcept { asm("fxrstor [%0];"::"r"(raw.data())); }
         };
 
 #       ifdef __SSE__
-        class alignas(0x10) fpu_context : public fxsave_data
+        using fpu_context = fxsave_data;
 #       else
-        class alignas(0x10) fpu_context : public fsave_data
+        using fpu_context = fsave_data;
 #       endif
-        {
-        public:
-            void save() noexcept
-            {
-                auto ptr = raw.data();
-                asm(//"and %0, -0x10;"
-                    //"add %0, 0x10;"
-            #ifdef __SSE__
-                    "fxsave [%0];"
-            #else
-                    "fnsave [%0];"
-            #endif
-                    ::"r"(ptr));
-            }
-            void restore() noexcept
-            {
-                auto ptr = raw.data();
-                asm(//"and %0, -0x10;"
-                    //"add %0, 0x10;"
-            #ifdef __SSE__
-                    "fxrstor [%0];"
-            #else
-                    "frstor [%0];"
-            #endif
-                    ::"r"(ptr));
-            }
-        };
 
         namespace detail
         {
-            bool test_cr0_access();
-            bool test_cr4_access();
+            [[gnu::pure]] bool test_cr0_access();
+            [[gnu::pure]] bool test_cr4_access();
 
             struct [[gnu::packed]] cr0_t
             {
@@ -192,84 +169,24 @@ namespace jw
                     unsigned : 8;
                 };
 
-                void set_fpu_emulation(bool em, bool mp = true)
-                {
-                    dpmi_error_code error;
-                    bool c;
-                    asm volatile(
-                        "int 0x31;"
-                        : "=@ccc" (c)
-                        , "=a" (error)
-                        : "a" (0x0E01)
-                        , "b" (mp | (em << 1))
-                        : "cc");
-                    if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
-                }
-
-                fpu_emulation_status get_fpu_emulation()
-                {
-                    fpu_emulation_status status;
-                    asm volatile(
-                        "int 0x31;"
-                        : "=a" (status)
-                        : "a" (0x0E00)
-                        : "cc");
-                    return status;
-                }
-                
-                INTERRUPT void switch_context()
-                {
-                    if (contexts.back() == nullptr)
-                    {
-                        if (last_restored < contexts.size() - 1)
-                        {
-                            if (contexts[last_restored] == nullptr) contexts[last_restored] = alloc.allocate(1);
-                            contexts[last_restored]->save();
-                        }
-                        default_irq_context.restore();
-                    }
-                    else contexts.back()->restore();
-                    last_restored = contexts.size() - 1;
-                }
+                void set_fpu_emulation(bool em, bool mp = true);
+                fpu_emulation_status get_fpu_emulation();
+                INTERRUPT void switch_context();
 
             public:
                 fpu_context_switcher_t();
                 ~fpu_context_switcher_t();
 
-                INTERRUPT void enter() noexcept
-                {
-                    if (__builtin_expect(!init, false)) return;
-                    contexts.push_back(nullptr);
-                    if (!use_ts_bit) set_fpu_emulation(true);
-                    else
-                    {
-                        cr0_t cr0 { };
-                        cr0.task_switched = true;
-                        cr0.set();
-                    }
-                }
-
-                INTERRUPT void leave() noexcept
-                {
-                    if (__builtin_expect(!init, false)) return;
-                    if (contexts.back() != nullptr) alloc.deallocate(contexts.back(), 1);
-                    contexts.pop_back();
-                    bool switch_required = last_restored != (contexts.size() - 1);
-                    if (!use_ts_bit) set_fpu_emulation(switch_required);
-                    else
-                    {
-                        cr0_t cr0 { };
-                        cr0.task_switched = switch_required;
-                        cr0.set();
-                    }
-                }
-
+                INTERRUPT void enter() noexcept;
+                INTERRUPT void leave() noexcept;
                 void reinstall_exception_handlers();
 
                 fpu_context* get_last_context()
                 {
-                    if (contexts.back() == nullptr) switch_context();
-                    return contexts[last_restored];
+                    asm volatile ("fnop":::"memory");   // force a context switch
+                    for (auto i = contexts.rbegin(); i != contexts.rend(); ++i)
+                        if (*i != nullptr) return *i;
+                    return nullptr;
                 }
             } inline fpu_context_switcher;
         }

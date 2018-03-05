@@ -3,10 +3,12 @@
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma GCC target("no-sse", "fpmath=387")
+#pragma GCC optimize("no-fast-math", "no-tree-vectorize")
 
 #include <jw/dpmi/fpu.h>
 #include <jw/dpmi/cpu_exception.h>
 #include <jw/dpmi/irq.h>
+#include <jw/dpmi/irq_mask.h>
 
 namespace jw
 {
@@ -72,7 +74,7 @@ namespace jw
                 cr0.native_exceptions = true;
                 cr0.monitor_fpu = true;
                 cr0.task_switched = false;
-            #ifdef __SSE__
+#ifdef __SSE__
                 asm("test %b0, %b0;"
                     "jz skip%=;"
                     "mov eax, cr4;"
@@ -82,7 +84,8 @@ namespace jw
                     ::"q"(test_cr4_access())
                     : "eax");
                 cr0.fpu_emulation = false;
-            #endif
+                set_fpu_emulation(false);
+#endif
                 cr0.set();
 
                 asm("fnclex;"
@@ -91,14 +94,14 @@ namespace jw
                     "fnstcw [esp];"
                     "or word ptr [esp], 0x00BF;"   // mask all exceptions
                     "fldcw [esp];"
-            #ifdef __SSE__
+#ifdef __SSE__
                     "stmxcsr [esp];"
                     "or dword ptr [esp], 0x00001F80;"
                     "ldmxcsr [esp];"
-            #endif
+#endif
                     "add esp, 4;");
                 default_irq_context.save();
-                contexts.emplace_back(nullptr);
+                contexts.push_back(nullptr);
 
                 reinstall_exception_handlers();
 
@@ -113,13 +116,25 @@ namespace jw
             void fpu_context_switcher_t::reinstall_exception_handlers()
             {
                 set_fpu_emulation(false, true);
-                if (test_cr0_access()) use_ts_bit = true;
-                else
+                if (test_cr0_access())
                 {
-                    use_ts_bit = false;
+                    interrupt_mask no_irqs { };
+                    {
+                        cr0_t cr0 { };
+                        cr0.task_switched = true;
+                        cr0.set();
+                    }
+                    cr0_t cr0 { };
+                    use_ts_bit = cr0.task_switched;
+                    cr0.task_switched = false;
+                    cr0.set();
+                }
+
+                if (not use_ts_bit)
+                {
                     exc06_handler = std::make_unique<exception_handler>(exception_num::invalid_opcode, [this](cpu_registers*, exception_frame*, bool) INTERRUPT
                     {
-                        if (!get_fpu_emulation().em) return false;
+                        if (not get_fpu_emulation().em) return false;
                         set_fpu_emulation(false);
                         switch_context();
                         return true;
@@ -131,16 +146,91 @@ namespace jw
                     if (__builtin_expect(use_ts_bit, true))
                     {
                         cr0_t cr0 { };
+                        if (not cr0.task_switched) return false;
                         cr0.task_switched = false;
                         cr0.set();
                     }
                     else
                     {
+                        if (not get_fpu_emulation().em) return false;
                         set_fpu_emulation(false);
                     }
                     switch_context();
                     return true;
                 });
+            }
+
+            void fpu_context_switcher_t::switch_context()
+            {
+                if (contexts.back() == nullptr)
+                {
+                    if (last_restored < contexts.size() - 1)
+                    {
+                        if (contexts[last_restored] == nullptr) contexts[last_restored] = alloc.allocate(1);
+                        contexts[last_restored]->save();
+                    }
+                    default_irq_context.restore();
+                }
+                else
+                {
+                    contexts.back()->restore();
+                    alloc.deallocate(contexts.back(), 1);
+                    contexts.back() = nullptr;
+                }
+                last_restored = contexts.size() - 1;
+            }
+
+            void fpu_context_switcher_t::enter() noexcept
+            {
+                if (__builtin_expect(not init, false)) return;
+                contexts.push_back(nullptr);
+                if (not use_ts_bit) set_fpu_emulation(true);
+                else
+                {
+                    cr0_t cr0 { };
+                    cr0.task_switched = true;
+                    cr0.set();
+                }
+            }
+
+            void fpu_context_switcher_t::leave() noexcept
+            {
+                if (__builtin_expect(not init, false)) return;
+                if (contexts.back() != nullptr) alloc.deallocate(contexts.back(), 1);
+                contexts.pop_back();
+                bool switch_required = last_restored != (contexts.size() - 1);
+                if (not use_ts_bit) set_fpu_emulation(switch_required);
+                else
+                {
+                    cr0_t cr0 { };
+                    cr0.task_switched = switch_required;
+                    cr0.set();
+                }
+            }
+
+            void fpu_context_switcher_t::set_fpu_emulation(bool em, bool mp)
+            {
+                dpmi_error_code error;
+                bool c;
+                asm volatile(
+                    "int 0x31;"
+                    : "=@ccc" (c)
+                    , "=a" (error)
+                    : "a" (0x0E01)
+                    , "b" (mp | (em << 1))
+                    : "cc");
+                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+            }
+
+            fpu_context_switcher_t::fpu_emulation_status fpu_context_switcher_t::get_fpu_emulation()
+            {
+                fpu_emulation_status status;
+                asm volatile(
+                    "int 0x31;"
+                    : "=a" (status)
+                    : "a" (0x0E00)
+                    : "cc");
+                return status;
             }
         }
     }
