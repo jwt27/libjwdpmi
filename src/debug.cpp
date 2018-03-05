@@ -598,13 +598,26 @@ namespace jw
                     case gs: { if (new_frame_type) { std::uint32_t s = t.frame.gs; encode(out, &s); } else encode_null(out, regsize[r]); return; }
                     case eip: encode(out, &t.frame.fault_address.offset); return;
                     default:
-                        encode_null(out, regsize[r]);
-                        return;
-                        if (r > mxcsr) return;
-                        //auto fpu = detail::fpu_context_switcher.get_last_context();
+                        if (r > reg_max) return;
+                        auto* volatile fpu = fpu_context_switcher.get_last_context();
                         switch (r)
                         {
-                        default:; // TODO
+                            case st0: case st1: case st2: case st3: case st4: case st5: case st6: case st7:
+                                encode(out, &fpu->st[r - st0], regsize[r]); return;
+                            case fctrl: { std::uint32_t s = fpu->fctrl; encode(out, &s); return; }
+                            case fstat: { std::uint32_t s = fpu->fstat; encode(out, &s); return; }
+                            case ftag:  { std::uint32_t s = fpu->ftag ; encode(out, &s); return; }
+                            case fiseg: { std::uint32_t s = fpu->fiseg; encode(out, &s); return; }
+                            case fioff: { std::uint32_t s = fpu->fioff; encode(out, &s); return; }
+                            case foseg: { std::uint32_t s = fpu->foseg; encode(out, &s); return; }
+                            case fooff: { std::uint32_t s = fpu->fooff; encode(out, &s); return; }
+                            case fop:   { std::uint32_t s = fpu->fop  ; encode(out, &s); return; }
+#                           ifdef __SSE__
+                            case xmm0: case xmm1: case xmm2: case xmm3: case xmm4: case xmm5: case xmm6: case xmm7:
+                                encode(out, &fpu->xmm[r - xmm0]); return;
+                            case mxcsr: encode(out, &fpu->mxcsr); return;
+#                           endif
+                            default: encode_null(out, regsize[r]); return;
                         }
                     }
                 }
@@ -663,7 +676,7 @@ namespace jw
                 case fs: if (new_frame_type) { return reverse_decode(value.substr(0, 4), &t.frame.fs, regsize[r]); } return false;
                 case gs: if (new_frame_type) { return reverse_decode(value.substr(0, 4), &t.frame.gs, regsize[r]); } return false;
                 default: if (r > mxcsr) return false;
-                    //auto fpu = detail::fpu_context_switcher.get_last_context();
+                    //auto fpu = fpu_context_switcher.get_last_context();
                     switch (r)
                     {
                     default: return false; // TODO
