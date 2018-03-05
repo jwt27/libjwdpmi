@@ -656,12 +656,12 @@ namespace jw
                 case esp:    return reverse_decode(value, &t.frame.stack.offset, regsize[r]);
                 case eip:    return reverse_decode(value, &t.frame.fault_address.offset, regsize[r]);
                 case eflags: return reverse_decode(value, &t.frame.flags.raw_eflags, regsize[r]);
-                case cs:     return reverse_decode(value, &t.frame.fault_address.segment, regsize[r]);
-                case ss:     return reverse_decode(value, &t.frame.stack.segment, regsize[r]);
-                case ds: if (new_frame_type) { return reverse_decode(value, &t.frame.ds, regsize[r]); } return false;
-                case es: if (new_frame_type) { return reverse_decode(value, &t.frame.es, regsize[r]); } return false;
-                case fs: if (new_frame_type) { return reverse_decode(value, &t.frame.fs, regsize[r]); } return false;
-                case gs: if (new_frame_type) { return reverse_decode(value, &t.frame.gs, regsize[r]); } return false;
+                case cs:     return reverse_decode(value.substr(0, 4), &t.frame.fault_address.segment, regsize[r]);
+                case ss:     return reverse_decode(value.substr(0, 4), &t.frame.stack.segment, regsize[r]);
+                case ds: if (new_frame_type) { return reverse_decode(value.substr(0, 4), &t.frame.ds, regsize[r]); } return false;
+                case es: if (new_frame_type) { return reverse_decode(value.substr(0, 4), &t.frame.es, regsize[r]); } return false;
+                case fs: if (new_frame_type) { return reverse_decode(value.substr(0, 4), &t.frame.fs, regsize[r]); } return false;
+                case gs: if (new_frame_type) { return reverse_decode(value.substr(0, 4), &t.frame.gs, regsize[r]); } return false;
                 default: if (r > mxcsr) return false;
                     //auto fpu = detail::fpu_context_switcher.get_last_context();
                     switch (r)
