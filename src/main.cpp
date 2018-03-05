@@ -79,11 +79,21 @@ namespace jw
     }
 
     std::terminate_handler original_terminate_handler;
-    [[noreturn]] void terminate_handler()
+    [[noreturn]] void terminate_handler() noexcept
     {
+        if (auto exc = std::current_exception())
+        {
+            std::cerr << "std::terminate called after throwing an exception:\n";
+            try { std::rethrow_exception(exc); }
+            catch (const std::exception& e) { print_exception(e); }
+            catch (const terminate_exception& e) { std::cerr << "terminate_exception.\n"; }
+            catch (...) { std::cerr << "unknown exception.\n"; }
+        }
+        else std::cerr << "std::terminate called.\n";
         debug::break_with_signal(SIGTERM);
         std::set_terminate(original_terminate_handler);
-        original_terminate_handler();
+        if (original_terminate_handler != nullptr) original_terminate_handler();
+        else std::abort();
         do { } while (true);
     }
 
