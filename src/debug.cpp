@@ -1328,8 +1328,6 @@ namespace jw
                 for (auto e = 0x00; e <= 0x0e; ++e)
                     install_exception_handler(e);
 
-                fpu_context_switcher.reinstall_exception_handlers();    // make sure fpu context switching routines are called first.
-
                 serial_irq->set_irq(cfg.irq);
                 serial_irq->enable();
 

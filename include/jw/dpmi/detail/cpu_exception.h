@@ -98,7 +98,6 @@ namespace jw
             };
 
             void setup_exception_throwers();
-            void enter_exception_context(exception_num exc) noexcept;
             void leave_exception_context() noexcept;
 
             inline void simulate_call(exception_frame* frame, void(*func)()) noexcept

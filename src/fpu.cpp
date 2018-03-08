@@ -103,18 +103,6 @@ namespace jw
                 default_irq_context.save();
                 contexts.push_back(nullptr);
 
-                reinstall_exception_handlers();
-
-                init = true;
-            }
-
-            fpu_context_switcher_t::~fpu_context_switcher_t()
-            {
-                init = false;
-            }
-
-            void fpu_context_switcher_t::reinstall_exception_handlers()
-            {
                 set_fpu_emulation(false, true);
                 if (test_cr0_access())
                 {
@@ -130,80 +118,91 @@ namespace jw
                     cr0.set();
                 }
 
-                if (not use_ts_bit)
-                {
-                    exc06_handler = std::make_unique<exception_handler>(exception_num::invalid_opcode, [this](cpu_registers*, exception_frame*, bool) INTERRUPT
-                    {
-                        if (not get_fpu_emulation().em) return false;
-                        set_fpu_emulation(false);
-                        switch_context();
-                        return true;
-                    });
-                }
+                auto dummy_exception_handler = [this] (auto e) { return std::make_unique<exception_handler>(e, [this](cpu_registers*, exception_frame*, bool) { return context_switch_successful; }); };
+                if (not use_ts_bit) exc06_handler = dummy_exception_handler(exception_num::invalid_opcode);
+                exc07_handler = dummy_exception_handler(exception_num::device_not_available);
 
-                exc07_handler = std::make_unique<exception_handler>(exception_num::device_not_available, [this](cpu_registers*, exception_frame*, bool) INTERRUPT
+                init = true;
+            }
+
+            fpu_context_switcher_t::~fpu_context_switcher_t()
+            {
+                init = false;
+            }
+
+            bool fpu_context_switcher_t::enter(std::uint32_t exc) noexcept
+            {
+                if (__builtin_expect(not init, false)) return false;
+
+                auto try_context_switch = [this, exc]
                 {
-                    if (__builtin_expect(use_ts_bit, true))
+                    if (exc != exception_num::device_not_available and exc != exception_num::invalid_opcode) return false;
+                    if (get_fpu_emulation().em)
+                    {
+                        set_fpu_emulation(false);
+                    }
+                    else
                     {
                         cr0_t cr0 { };
                         if (not cr0.task_switched) return false;
                         cr0.task_switched = false;
                         cr0.set();
                     }
+
+                    if (contexts.back() == nullptr)
+                    {
+                        for (auto&& i : contexts)
+                        {
+                            if (i == nullptr)
+                            {
+                                i = alloc.allocate(1);
+                                i->save();
+                                break;
+                            }
+                        }
+                        default_irq_context.restore();  // is this necessary?
+                    }
                     else
                     {
-                        if (not get_fpu_emulation().em) return false;
-                        set_fpu_emulation(false);
+                        contexts.back()->restore();
+                        alloc.deallocate(contexts.back(), 1);
+                        contexts.back() = nullptr;
                     }
-                    switch_context();
                     return true;
-                });
-            }
+                };
 
-            void fpu_context_switcher_t::switch_context()
-            {
-                if (contexts.back() == nullptr)
+                context_switch_successful = try_context_switch();
+
+                if (not context_switch_successful)
                 {
-                    if (last_restored < contexts.size() - 1)
+                    contexts.push_back(nullptr);
+                    if (not use_ts_bit) set_fpu_emulation(true);
+                    else
                     {
-                        if (contexts[last_restored] == nullptr) contexts[last_restored] = alloc.allocate(1);
-                        contexts[last_restored]->save();
+                        cr0_t cr0 { };
+                        cr0.task_switched = true;
+                        cr0.set();
                     }
-                    default_irq_context.restore();
                 }
-                else
-                {
-                    contexts.back()->restore();
-                    alloc.deallocate(contexts.back(), 1);
-                    contexts.back() = nullptr;
-                }
-                last_restored = contexts.size() - 1;
-            }
-
-            void fpu_context_switcher_t::enter() noexcept
-            {
-                if (__builtin_expect(not init, false)) return;
-                contexts.push_back(nullptr);
-                if (not use_ts_bit) set_fpu_emulation(true);
-                else
-                {
-                    cr0_t cr0 { };
-                    cr0.task_switched = true;
-                    cr0.set();
-                }
+                return context_switch_successful;
             }
 
             void fpu_context_switcher_t::leave() noexcept
             {
                 if (__builtin_expect(not init, false)) return;
+                if (context_switch_successful) return;
+
                 if (contexts.back() != nullptr) alloc.deallocate(contexts.back(), 1);
                 contexts.pop_back();
-                bool switch_required = last_restored != (contexts.size() - 1);
-                if (not use_ts_bit) set_fpu_emulation(switch_required);
+
+                if (not use_ts_bit)
+                {
+                    set_fpu_emulation((contexts.size() > 1 and get_fpu_emulation().em) or contexts.back() != nullptr);
+                }
                 else
                 {
                     cr0_t cr0 { };
-                    cr0.task_switched = switch_required;
+                    cr0.task_switched = (contexts.size() > 1 and cr0.task_switched) or contexts.back() != nullptr;
                     cr0.set();
                 }
             }

@@ -16,8 +16,8 @@ namespace jw
             void irq_controller::interrupt_entry_point(int_vector vec) noexcept
             {
                 ++interrupt_count;
+                fpu_context_switcher.enter(0);
                 interrupt_id::push_back(vec, interrupt_id::id_t::interrupt);
-                fpu_context_switcher.enter();
                 
                 byte* esp; asm("mov %0, esp;":"=rm"(esp));
                 if (__builtin_expect(static_cast<std::size_t>(esp - data->stack.data()) <= config::interrupt_minimum_stack_size, false))
@@ -42,9 +42,9 @@ namespace jw
                 spurious:
                 asm("cli");
                 acknowledge();
+                interrupt_id::pop_back();
                 fpu_context_switcher.leave();
                 --interrupt_count;
-                interrupt_id::pop_back();
             }
 
             void irq_controller::call()

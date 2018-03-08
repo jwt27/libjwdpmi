@@ -26,25 +26,30 @@ namespace jw
                 std::rethrow_exception(e);
             }
 
-            void enter_exception_context(exception_num exc) noexcept
+            bool enter_exception_context(exception_num exc) noexcept
             {
                 ++detail::exception_count;
+                auto fpu_context_switch_handled = detail::fpu_context_switcher.enter(exc);
                 detail::interrupt_id::push_back(exc, detail::interrupt_id::id_t::exception);
-                if (exc != exception_num::device_not_available) detail::fpu_context_switcher.enter();
+                return fpu_context_switch_handled;
             }
 
             void leave_exception_context() noexcept
             {
                 auto exc = detail::interrupt_id::get_current_interrupt().lock()->vector;
-                if (exc != exception_num::device_not_available) detail::fpu_context_switcher.leave();
                 detail::interrupt_id::pop_back();
+                detail::fpu_context_switcher.leave();
                 --detail::exception_count;
             }
         }
 
         bool exception_handler::call_handler(exception_handler* self, raw_exception_frame* frame) noexcept
         {
-            detail::enter_exception_context(self->exc);
+            if (detail::enter_exception_context(self->exc))
+            {   // fpu context switch
+                detail::leave_exception_context();
+                return true;
+            }
             *reinterpret_cast<volatile std::uint32_t*>(stack.begin()) = 0xDEADBEEF;
             bool success = false;
             auto* f = self->new_type ? &frame->frame_10 : &frame->frame_09;

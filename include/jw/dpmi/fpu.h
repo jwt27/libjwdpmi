@@ -120,9 +120,9 @@ namespace jw
                 cr0_t()
                 {
                     bool cr0_access = test_cr0_access();
-                    if (!cr0_access) return;
                     asm volatile(
                         "test %b1, %b1;"
+                        "mov %0, 0;"
                         "jz skip%=;"
                         "mov %0, cr0;"
                         "skip%=:"
@@ -146,12 +146,12 @@ namespace jw
             class fpu_context_switcher_t : class_lock<fpu_context_switcher_t>
             {
                 locked_pool_allocator<fpu_context> alloc { config::interrupt_fpu_context_pool };
-                std::deque<fpu_context*, locked_pool_allocator<>> contexts { alloc };
-                
+                std::deque<fpu_context* volatile, locked_pool_allocator<>> contexts { alloc };
+
                 fpu_context default_irq_context;
+                bool context_switch_successful { false };
                 bool use_ts_bit { false };
                 bool init { false };
-                std::uint32_t last_restored { 0 };
 
                 struct fpu_emulation_status
                 {
@@ -171,19 +171,17 @@ namespace jw
 
                 void set_fpu_emulation(bool em, bool mp = true);
                 fpu_emulation_status get_fpu_emulation();
-                INTERRUPT void switch_context();
 
             public:
                 fpu_context_switcher_t();
                 ~fpu_context_switcher_t();
 
-                INTERRUPT void enter() noexcept;
+                INTERRUPT bool enter(std::uint32_t) noexcept;
                 INTERRUPT void leave() noexcept;
-                void reinstall_exception_handlers();
 
                 fpu_context* get_last_context()
                 {
-                    asm volatile ("fnop":::"memory");   // force a context switch
+                    asm volatile ("fnop;fwait;":::"memory");   // force a context switch
                     for (auto i = contexts.rbegin(); i != contexts.rend(); ++i)
                         if (*i != nullptr) return *i;
                     return nullptr;
