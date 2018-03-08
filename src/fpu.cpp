@@ -118,6 +118,8 @@ namespace jw
                     cr0.set();
                 }
 
+                use_ts_bit = false; // HACK
+
                 auto dummy_exception_handler = [this] (auto e) { return std::make_unique<exception_handler>(e, [this](cpu_registers*, exception_frame*, bool) { return context_switch_successful; }); };
                 if (not use_ts_bit) exc06_handler = dummy_exception_handler(exception_num::invalid_opcode);
                 exc07_handler = dummy_exception_handler(exception_num::device_not_available);
@@ -143,6 +145,7 @@ namespace jw
                     }
                     else
                     {
+                        return false;
                         cr0_t cr0 { };
                         if (not cr0.task_switched) return false;
                         cr0.task_switched = false;
