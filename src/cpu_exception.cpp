@@ -36,7 +36,6 @@ namespace jw
 
             void leave_exception_context() noexcept
             {
-                auto exc = detail::interrupt_id::get_current_interrupt().lock()->vector;
                 detail::interrupt_id::pop_back();
                 detail::fpu_context_switcher.leave();
                 --detail::exception_count;
