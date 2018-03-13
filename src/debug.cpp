@@ -49,7 +49,7 @@ namespace jw
             };
 
             const bool debugmsg = config::enable_gdb_debug_messages;
-            const bool temp_debugmsg = true;
+            const bool temp_debugmsg = config::enable_gdb_debug_messages and true;
 
             volatile bool debugger_reentry { false };
             bool debug_mode { false };
@@ -1137,9 +1137,12 @@ namespace jw
                 {
                     for (auto&& w : watchpoints) w.second.reset();
                     enable_all_breakpoints();
-                    if (*reinterpret_cast<byte*>(f->fault_address.offset) == 0xcc
-                        and not disable_breakpoint(f->fault_address.offset))
-                        f->fault_address.offset += 1;    // don't resume on a breakpoint
+                    if (*reinterpret_cast<byte*>(f->fault_address.offset) == 0xcc)  // don't resume on a breakpoint
+                    {
+                        if (disable_breakpoint(f->fault_address.offset))
+                            f->flags.trap = true;   // trap on next instruction to re-enable
+                        else f->fault_address.offset += 1;  // hardcoded breakpoint, safe to skip
+                    }
 
                     if (debugmsg) std::clog << "leaving exception 0x" << std::hex << exc << ", resuming at 0x" << f->fault_address.offset << '\n';
 
