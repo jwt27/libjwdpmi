@@ -33,6 +33,12 @@ namespace jw
         std::shared_ptr<handler_t> handler_ptr;
     };
 
+    template<typename R, typename... A>
+    callback(R(*)(A...)) -> callback<R(A...)>;
+
+    template<typename F, typename Sig = typename std::__function_guide_helper<decltype(&F::operator())>::type>
+    callback(F) -> callback<Sig>;
+
     template<typename sig> class event;
     template <typename R, typename ... A>
     class event<R(A...)>
