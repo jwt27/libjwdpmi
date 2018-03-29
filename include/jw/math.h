@@ -4,6 +4,7 @@
 #pragma once
 #include <type_traits>
 #include <cmath>
+#include <jw/common.h>
 
 namespace jw
 {
