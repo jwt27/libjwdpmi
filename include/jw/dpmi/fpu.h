@@ -148,7 +148,7 @@ namespace jw
                 locked_pool_allocator<fpu_context> alloc { config::interrupt_fpu_context_pool };
                 std::deque<fpu_context* volatile, locked_pool_allocator<>> contexts { alloc };
 
-                fpu_context default_irq_context;
+                fpu_context* default_irq_context;
                 bool context_switch_successful { false };
                 bool use_ts_bit { false };
                 bool init { false };

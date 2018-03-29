@@ -100,7 +100,8 @@ namespace jw
                     "ldmxcsr [esp];"
 #endif
                     "add esp, 4;");
-                default_irq_context.save();
+                default_irq_context = alloc.allocate(1);
+                default_irq_context->save();
                 contexts.push_back(nullptr);
 
                 set_fpu_emulation(false, true);
@@ -130,6 +131,7 @@ namespace jw
             fpu_context_switcher_t::~fpu_context_switcher_t()
             {
                 init = false;
+                alloc.deallocate(default_irq_context, 1);
             }
 
             bool fpu_context_switcher_t::enter(std::uint32_t exc) noexcept
@@ -163,7 +165,7 @@ namespace jw
                                 break;
                             }
                         }
-                        default_irq_context.restore();  // is this necessary?
+                        default_irq_context->restore();  // is this necessary?
                     }
                     else
                     {
