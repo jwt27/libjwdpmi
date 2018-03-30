@@ -1,11 +1,14 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
 #include <iostream>
+#include <mutex>
 #include <jw/io/ioport.h>
 #include <jw/dpmi/irq.h>
 #include <jw/common.h>
+#include <jw/io/io_error.h>
 
 namespace jw
 {
@@ -45,36 +48,56 @@ namespace jw
                 virtual int_type overflow(int_type c = traits_type::eof()) override;
 
             private:
-                void get() noexcept
+                void check_irq_exception()
                 {
-                    if (getting.test_and_set()) return;
-                    while (!status_port.read().no_data_available && rx_ptr < rx_buf.end()) 
-                        *(rx_ptr++) = data_port.read();
-                    setg(rx_buf.begin(), gptr(), rx_ptr);
-                    getting.clear();
+                    if (__builtin_expect(irq_exception != nullptr, false))
+                    {
+                        auto e = std::move(irq_exception);
+                        irq_exception = nullptr;
+                        std::rethrow_exception(e);
+                    }
                 }
 
-                void put() noexcept
+                void get()
                 {
-                    if (putting.test_and_set()) return;
-                    while (!status_port.read().dont_send_data && tx_ptr < pptr())
+                    dpmi::interrupt_mask no_irq { };
+                    do
+                    {
+                        if (rx_ptr >= rx_buf.end()) throw io::overflow { "MPU401 receive buffer overflow" };
+                        *(rx_ptr++) = data_port.read();
+                    } while (not status_port.read().no_data_available);
+                    setg(rx_buf.begin(), gptr(), rx_ptr);
+                }
+
+                void put()
+                {
+                    dpmi::interrupt_mask no_irq { };
+                    std::unique_lock<std::recursive_mutex> locked { putting, std::try_to_lock };
+                    if (not locked) return;
+                    while (tx_ptr < pptr() and not status_port.read().dont_send_data)
                         data_port.write(*tx_ptr++);
-                    putting.clear();
                 }
 
                 dpmi::irq_handler irq_handler { [this]() INTERRUPT
                 {
-                    if (!status_port.read().no_data_available) dpmi::irq_handler::acknowledge();
-                    get();
-                    put();
+                    try
+                    {
+                        if (not status_port.read().no_data_available)
+                        {
+                            dpmi::irq_handler::acknowledge();
+                            get();
+                        }
+                        put();
+                    }
+                    catch (...) { irq_exception = std::current_exception(); }
                 } };
 
                 mpu401_config cfg;
                 out_port<byte> cmd_port;
                 in_port<mpu401_status> status_port;
                 io_port<byte> data_port;
-                std::atomic_flag getting { false };
-                std::atomic_flag putting { false };
+                std::recursive_mutex getting, putting;
+                std::exception_ptr irq_exception;
 
                 std::array<char_type, 1_KB> rx_buf;
                 std::array<char_type, 1_KB> tx_buf;
