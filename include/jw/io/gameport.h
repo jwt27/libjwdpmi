@@ -60,7 +60,7 @@ namespace jw::io
                 vector4f max { +1, +1, +1, +1 };
                 vector4f min { -1, -1, -1, -1 };
             } output_range;
-        };
+        } const cfg;
 
         template<typename T>
         struct value_t
@@ -179,7 +179,6 @@ namespace jw::io
         };
         static_assert(sizeof(raw_gameport) == 1);
 
-        const config cfg;
         io_port<raw_gameport> port;
         raw_t sample;
         value_t<bool> timing { false };
