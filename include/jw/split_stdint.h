@@ -22,6 +22,7 @@ namespace jw
         std::conditional_t<std::is_signed_v<T>, std::int64_t, std::uint64_t> value : size;
         constexpr split_int() noexcept = default;
         constexpr split_int(auto v) noexcept : value(v) { };
+        template<typename L, typename H> constexpr split_int(L&& l, H&& h) noexcept : lo(std::forward<L>(l)), hi(std::forward<H>(h)) { };
         constexpr operator auto() const noexcept { return value; }
     };
 
@@ -36,6 +37,7 @@ namespace jw
         std::conditional_t<std::is_signed_v<T>, std::int64_t, std::uint64_t> value : size;
         constexpr split_int() noexcept = default;
         constexpr split_int(auto v) noexcept : value(v) { };
+        template<typename L, typename H> constexpr split_int(L&& l, H&& h) noexcept : lo(std::forward<L>(l)), hi(std::forward<H>(h)) { };
         constexpr operator auto() const noexcept { return value; }
     };
 
