@@ -147,9 +147,9 @@ namespace jw::io
 
         io_port<byte> port;
         raw_t sample;
-        std::bitset<4> timing { false };
+        std::bitset<4> timing { 0 };
         typename clock::time_point timing_start;
-        std::bitset<4> button_state;
+        std::bitset<4> button_state { 0 };
         std::optional<dpmi::data_lock> lock;
         std::unique_ptr<std::experimental::pmr::memory_resource> memory_resource;
         std::experimental::pmr::deque<std::pair<std::bitset<4>, typename clock::time_point>> button_events { get_memory_resource() };
