@@ -158,15 +158,6 @@ namespace jw::io
         bool using_irq() const { return cfg.strategy == poll_strategy::pit_irq or cfg.strategy == poll_strategy::rtc_irq; }
         std::experimental::pmr::memory_resource* get_memory_resource() const noexcept { if (using_irq()) return memory_resource.get(); else return std::experimental::pmr::get_default_resource(); }
 
-        void update_buttons(byte p, typename clock::time_point now)
-        {
-            std::bitset<4> x;
-            for (auto i = 0; i < 4; ++i)
-                x[i] = not (p & (1 << (4 + i)));
-            if (x != button_state) button_events.emplace_back(x, now);
-            button_state = x;
-        }
-
         void poll()
         {
             decltype(clock::now()) now;
