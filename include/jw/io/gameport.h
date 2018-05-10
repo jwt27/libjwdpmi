@@ -73,13 +73,6 @@ namespace jw::io
             } output_range;
         } cfg;
 
-        struct button_t
-        {
-            bool a0, b0, a1, b1;
-            constexpr bool operator==(const button_t& o) const noexcept { return a0 == o.a0 and b0 == o.b0 and a1 == o.a1 and b1 == o.b1; }
-            constexpr bool operator!=(const button_t& o) const noexcept { return not (o == *this); }
-        };
-
         gameport(config c, std::size_t alloc_size = 1_KB) : cfg(c), port(c.port),
             memory_resource(using_irq()? std::make_unique<dpmi::locked_pool_memory_resource>(alloc_size) : nullptr)
         {
@@ -148,42 +141,28 @@ namespace jw::io
             return button_state;
         }
 
-        event<void(button_t, chrono::tsc::time_point)> button_changed;
+        event<void(std::bitset<4>, chrono::tsc::time_point)> button_changed;
 
     private:
-        struct [[gnu::packed]] raw_gameport
-        {
-            bool x0 : 1;
-            bool y0 : 1;
-            bool x1 : 1;
-            bool y1 : 1;
-            bool a0 : 1;
-            bool b0 : 1;
-            bool a1 : 1;
-            bool b1 : 1;
-        };
-        static_assert(sizeof(raw_gameport) == 1);
 
-        io_port<raw_gameport> port;
+        io_port<byte> port;
         raw_t sample;
         std::bitset<4> timing { false };
         typename clock::time_point timing_start;
-        button_t button_state;
+        std::bitset<4> button_state;
         std::optional<dpmi::data_lock> lock;
         std::unique_ptr<std::experimental::pmr::memory_resource> memory_resource;
-        std::experimental::pmr::deque<std::pair<button_t, typename clock::time_point>> button_events { get_memory_resource() };
+        std::experimental::pmr::deque<std::pair<std::bitset<4>, typename clock::time_point>> button_events { get_memory_resource() };
         std::experimental::pmr::deque<std::pair<raw_t, typename clock::time_point>> samples { get_memory_resource() };
 
         bool using_irq() const { return cfg.strategy == poll_strategy::pit_irq or cfg.strategy == poll_strategy::rtc_irq; }
         std::experimental::pmr::memory_resource* get_memory_resource() const noexcept { if (using_irq()) return memory_resource.get(); else return std::experimental::pmr::get_default_resource(); }
 
-        void update_buttons(raw_gameport p, typename clock::time_point now)
+        void update_buttons(byte p, typename clock::time_point now)
         {
-            button_t x;
-            x.a0 = not p.a0;
-            x.b0 = not p.b0;
-            x.a1 = not p.a1;
-            x.b1 = not p.b1;
+            std::bitset<4> x;
+            for (auto i = 0; i < 4; ++i)
+                x[i] = not (p & (1 << (4 + i)));
             if (x != button_state) button_events.emplace_back(x, now);
             button_state = x;
         }
@@ -203,12 +182,21 @@ namespace jw::io
                 auto p = port.read();
                 now = clock::now();
                 auto& c = cfg.calibration;
-                auto i = now - timing_start;
-                if (timing[0] and (not p.x0 or i > c.max[0])) { timing[0] = false; sample[0] = std::clamp(i, c.min[0], c.max[0]); }
-                if (timing[1] and (not p.y0 or i > c.max[1])) { timing[1] = false; sample[1] = std::clamp(i, c.min[1], c.max[1]); }
-                if (timing[2] and (not p.x1 or i > c.max[2])) { timing[2] = false; sample[2] = std::clamp(i, c.min[2], c.max[2]); }
-                if (timing[3] and (not p.y1 or i > c.max[3])) { timing[3] = false; sample[3] = std::clamp(i, c.min[3], c.max[3]); }
-                update_buttons(p, now);
+                auto t = now - timing_start;
+                for (auto i = 0; i < 4; ++i)
+                {
+                    if (timing[i] and (not (p & (1 << i)) or t > c.max[i]))
+                    {
+                        timing[i] = false;
+                        sample[i] = std::clamp(t, c.min[i], c.max[i]);
+                    }
+                }
+
+                std::bitset<4> x;
+                for (auto i = 0; i < 4; ++i)
+                    x[i] = not (p & (1 << (4 + i)));
+                if (x != button_state) button_events.emplace_back(x, now);
+                button_state = x;
             } while (cfg.strategy == poll_strategy::busy_loop and timing.any());
             if (timing.none()) samples.emplace_back(sample, now);
 
