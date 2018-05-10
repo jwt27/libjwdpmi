@@ -10,6 +10,7 @@
 #include <jw/dpmi/alloc.h>
 #include <jw/event.h>
 #include <jw/vector.h>
+#include <../jwdpmi_config.h>
 #include <limits>
 #include <optional>
 #include <experimental/deque>
@@ -19,9 +20,10 @@
 
 namespace jw::io
 {
-    template <typename Clock = chrono::tsc>
     struct gameport
     {
+        using clock = jw::config::gameport_clock;
+
         enum class poll_strategy
         {
             busy_loop,
@@ -44,7 +46,7 @@ namespace jw::io
 
             struct
             {
-                using T = typename Clock::duration;
+                using T = typename clock::duration;
                 T x0_min { 0 };
                 T y0_min { 0 };
                 T x1_min { 0 };
@@ -72,7 +74,7 @@ namespace jw::io
             constexpr value_t() noexcept = default;
         };
 
-        using raw_t = value_t<typename Clock::duration>;
+        using raw_t = value_t<typename clock::duration>;
         using normalized_t = vector4f;
 
         struct button_t
@@ -113,7 +115,7 @@ namespace jw::io
         auto get_raw()
         {
             poll();
-            raw_t value { typename Clock::duration { 0 } };
+            raw_t value { typename clock::duration { 0 } };
             auto& c = cfg.calibration;
 
             for (auto&& s : samples)
@@ -182,17 +184,17 @@ namespace jw::io
         io_port<raw_gameport> port;
         raw_t sample;
         value_t<bool> timing { false };
-        typename Clock::time_point timing_start;
+        typename clock::time_point timing_start;
         button_t button_state;
         std::optional<dpmi::data_lock> lock;
         std::unique_ptr<std::experimental::pmr::memory_resource> memory_resource;
-        std::experimental::pmr::deque<std::pair<button_t, typename Clock::time_point>> button_events { get_memory_resource() };
-        std::experimental::pmr::deque<std::pair<raw_t, typename Clock::time_point>> samples { get_memory_resource() };
+        std::experimental::pmr::deque<std::pair<button_t, typename clock::time_point>> button_events { get_memory_resource() };
+        std::experimental::pmr::deque<std::pair<raw_t, typename clock::time_point>> samples { get_memory_resource() };
 
         bool using_irq() const { return cfg.strategy == poll_strategy::pit_irq or cfg.strategy == poll_strategy::rtc_irq; }
         std::experimental::pmr::memory_resource* get_memory_resource() const noexcept { if (using_irq()) return memory_resource.get(); else return std::experimental::pmr::get_default_resource(); }
 
-        void update_buttons(raw_gameport p, typename Clock::time_point now)
+        void update_buttons(raw_gameport p, typename clock::time_point now)
         {
             button_t x;
             x.a0 = not p.a0;
@@ -206,7 +208,7 @@ namespace jw::io
         void poll()
         {
             auto timing_done = [this] { return not (timing.x0 or timing.y0 or timing.x1 or timing.y1); };
-            decltype(Clock::now()) now;
+            decltype(clock::now()) now;
             if (timing_done())
             {
                 timing.x0 = cfg.enable.x0;
@@ -214,12 +216,12 @@ namespace jw::io
                 timing.x1 = cfg.enable.x1;
                 timing.y1 = cfg.enable.y1;
                 port.write({ });
-                timing_start = Clock::now();
+                timing_start = clock::now();
             }
             do
             {
                 auto p = port.read();
-                now = Clock::now();
+                now = clock::now();
                 auto& c = cfg.calibration;
                 auto i = now - timing_start;
                 if (timing.x0 and (not p.x0 or i > c.x0_max)) { timing.x0 = false; sample.x0 = std::clamp(i, c.x0_min, c.x0_max); }
