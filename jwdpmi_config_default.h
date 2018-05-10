@@ -52,5 +52,8 @@ namespace jw
 
         // Clock used for gameport timing.
         using gameport_clock = jw::chrono::tsc;
+
+        // Clock used for midi timestamps.
+        using midi_clock = jw::chrono::tsc;
     }
 }
