@@ -62,7 +62,8 @@ namespace jw
         template<typename... Ts>
         constexpr vector(Ts... args) noexcept : a { static_cast<T>(args)... } { }
 
-        constexpr decltype(auto) operator[](std::ptrdiff_t i) const noexcept { return (a[i]); }
+        constexpr const T& operator[](std::ptrdiff_t i) const noexcept { return (a[i]); }
+        constexpr T& operator[](std::ptrdiff_t i) noexcept { return (a[i]); }
 
         constexpr vector() noexcept { };
         constexpr vector(const vector&) noexcept = default;
