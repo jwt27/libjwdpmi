@@ -13,6 +13,7 @@
 #include <../jwdpmi_config.h>
 #include <limits>
 #include <optional>
+#include <bitset>
 #include <experimental/deque>
 
 // TODO: centering / deadzone
@@ -32,50 +33,45 @@ namespace jw::io
             thread
         };
 
-        struct config
-        {
-            port_num port { 0x201 };
-            poll_strategy strategy { poll_strategy::busy_loop };
-            chrono::tsc::duration smoothing_window { std::chrono::milliseconds { 50 } };
-
-            struct
-            {
-                bool x0 { true }, y0 { true };
-                bool x1 { true }, y1 { true };
-            } enable;
-
-            struct
-            {
-                using T = typename clock::duration;
-                T x0_min { 0 };
-                T y0_min { 0 };
-                T x1_min { 0 };
-                T y1_min { 0 };
-                T x0_max { std::chrono::milliseconds { 25 } };
-                T y0_max { std::chrono::milliseconds { 25 } };
-                T x1_max { std::chrono::milliseconds { 25 } };
-                T y1_max { std::chrono::milliseconds { 25 } };
-            } calibration;
-
-            struct
-            {
-                vector4f max { +1, +1, +1, +1 };
-                vector4f min { -1, -1, -1, -1 };
-            } output_range;
-        } const cfg;
-
         template<typename T>
         struct value_t
         {
-            T x0, y0, x1, y1;
+            union
+            {
+                std::array<T, 4> a;
+                struct { T x, y, z, w; };
+            };
 
-            constexpr value_t(T vx0, T vy0, T vx1, T vy1) noexcept : x0(vx0), y0(vy0), x1(vx1), y1(vy1) { }
+            constexpr const T& operator[](std::ptrdiff_t i) const { return (a[i]); }
+            constexpr T& operator[](std::ptrdiff_t i) { return (a[i]); }
+
+            constexpr value_t(T vx0, T vy0, T vx1, T vy1) noexcept : x(vx0), y(vy0), z(vx1), w(vy1) { }
             constexpr value_t(T v) noexcept : value_t(v, v, v, v) { }
             constexpr value_t() noexcept = default;
         };
 
         using raw_t = value_t<typename clock::duration>;
         using normalized_t = vector4f;
+
+        struct config
+        {
+            port_num port { 0x201 };
+            poll_strategy strategy { poll_strategy::busy_loop };
+            chrono::tsc::duration smoothing_window { std::chrono::milliseconds { 50 } };
+
+            value_t<bool> enable { true };
+
+            struct
+            {
+                raw_t min { std::chrono::milliseconds { 0 } }, max { std::chrono::milliseconds { 25 } };
+            } calibration;
+
+            struct
+            {
+                normalized_t max { +1, +1, +1, +1 };
+                normalized_t min { -1, -1, -1, -1 };
+            } output_range;
+        } cfg;
 
         struct button_t
         {
@@ -120,15 +116,10 @@ namespace jw::io
 
             for (auto&& s : samples)
             {
-                value.x0 += s.first.x0 - c.x0_min;
-                value.y0 += s.first.y0 - c.y0_min;
-                value.x1 += s.first.x1 - c.x1_min;
-                value.y1 += s.first.y1 - c.y1_min;
+                for (auto i = 0; i < 4; ++i)
+                    value.a[i] += s.first.a[i] - c.min.a[0];
             }
-            value.x0 /= samples.size();
-            value.y0 /= samples.size();
-            value.x1 /= samples.size();
-            value.y1 /= samples.size();
+            for (auto&& s : value.a) s /= samples.size();
 
             return value;
         }
@@ -141,20 +132,12 @@ namespace jw::io
             auto raw = get_raw();
             normalized_t value;
 
-            value.x = raw.x0.count();
-            value.y = raw.y0.count();
-            value.z = raw.x1.count();
-            value.w = raw.y1.count();
-
-            value.x /= c.x0_max.count() - c.x0_min.count();
-            value.y /= c.y0_max.count() - c.y0_min.count();
-            value.z /= c.x1_max.count() - c.x1_min.count();
-            value.w /= c.y1_max.count() - c.y1_min.count();
-
-            value.x = o.min.x + value.x * (o.max.x - o.min.x);
-            value.y = o.min.y + value.y * (o.max.y - o.min.y);
-            value.z = o.min.z + value.z * (o.max.z - o.min.z);
-            value.w = o.min.w + value.w * (o.max.w - o.min.w);
+            for (auto i = 0; i < 4; ++i)
+            {
+                value[i] = raw[i].count();
+                value[i] /= c.max[i].count() - c.min[i].count();
+                value[i] = o.min[i] + value[i] * (o.max[i] - o.min[i]);
+            }
 
             return value;
         }
@@ -183,7 +166,7 @@ namespace jw::io
 
         io_port<raw_gameport> port;
         raw_t sample;
-        value_t<bool> timing { false };
+        std::bitset<4> timing { false };
         typename clock::time_point timing_start;
         button_t button_state;
         std::optional<dpmi::data_lock> lock;
@@ -207,14 +190,11 @@ namespace jw::io
 
         void poll()
         {
-            auto timing_done = [this] { return not (timing.x0 or timing.y0 or timing.x1 or timing.y1); };
             decltype(clock::now()) now;
-            if (timing_done())
+            if (timing.none())
             {
-                timing.x0 = cfg.enable.x0;
-                timing.y0 = cfg.enable.y0;
-                timing.x1 = cfg.enable.x1;
-                timing.y1 = cfg.enable.y1;
+                for (auto i = 0; i < 4; ++i)
+                    timing[i] = cfg.enable.a[i];
                 port.write({ });
                 timing_start = clock::now();
             }
@@ -224,13 +204,13 @@ namespace jw::io
                 now = clock::now();
                 auto& c = cfg.calibration;
                 auto i = now - timing_start;
-                if (timing.x0 and (not p.x0 or i > c.x0_max)) { timing.x0 = false; sample.x0 = std::clamp(i, c.x0_min, c.x0_max); }
-                if (timing.y0 and (not p.y0 or i > c.y0_max)) { timing.y0 = false; sample.y0 = std::clamp(i, c.y0_min, c.y0_max); }
-                if (timing.x1 and (not p.x1 or i > c.x1_max)) { timing.x1 = false; sample.x1 = std::clamp(i, c.x1_min, c.x1_max); }
-                if (timing.y1 and (not p.y1 or i > c.y1_max)) { timing.y1 = false; sample.y1 = std::clamp(i, c.y1_min, c.y1_max); }
+                if (timing[0] and (not p.x0 or i > c.max[0])) { timing[0] = false; sample[0] = std::clamp(i, c.min[0], c.max[0]); }
+                if (timing[1] and (not p.y0 or i > c.max[1])) { timing[1] = false; sample[1] = std::clamp(i, c.min[1], c.max[1]); }
+                if (timing[2] and (not p.x1 or i > c.max[2])) { timing[2] = false; sample[2] = std::clamp(i, c.min[2], c.max[2]); }
+                if (timing[3] and (not p.y1 or i > c.max[3])) { timing[3] = false; sample[3] = std::clamp(i, c.min[3], c.max[3]); }
                 update_buttons(p, now);
-            } while (cfg.strategy == poll_strategy::busy_loop and not timing_done());
-            if (timing_done()) samples.emplace_back(sample, now);
+            } while (cfg.strategy == poll_strategy::busy_loop and timing.any());
+            if (timing.none()) samples.emplace_back(sample, now);
 
             for (auto i = samples.begin(); i != samples.end();)
             {
