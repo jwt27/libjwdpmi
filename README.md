@@ -15,6 +15,7 @@ Current features include:
 * Access to PIT, RTC and RDTSC clocks using `std::chrono`.
 * VESA VBE3 graphics interface.
 * Accurate analog game port interface.
+* MIDI protocol implementation.
 
 ## Installing
 * Build and install gcc with `--target=i586-pc-msdosdjgpp`, and install the djgpp standard library.  
@@ -34,7 +35,7 @@ $ git submodule update --init
 ```
 AR:=i586-pc-msdosdjgpp-ar
 CXX:=i586-pc-msdosdjgpp-g++
-CXXFLAGS:=-std=gnu++17
+CXXFLAGS:=-std=gnu++17 -masm=intel
 
 export AR CXX CXXFLAGS
 libjwdpmi:
