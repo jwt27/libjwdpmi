@@ -15,9 +15,6 @@ namespace jw
         std::uint64_t tsc_total { 0 };
         bool tsc_resync { true };
 
-        constexpr io::out_port<byte> pit_cmd { 0x43 };
-        constexpr io::io_port<byte> pit0_data { 0x40 };
-
         void setup::update_tsc()
         {
             static std::uint64_t last_tsc;

@@ -59,6 +59,7 @@ namespace jw
 
         private:
             static inline std::atomic<std::uint32_t> tsc_ticks_per_irq { 0 };
+            static constexpr double ns_per_pit_count { 1e9 / max_pit_frequency };
             static inline double ns_per_pit_tick;
             static inline double ns_per_rtc_tick;
 
@@ -84,6 +85,8 @@ namespace jw
 
             static inline constexpr io::out_port<byte> rtc_index { 0x70 };
             static inline constexpr io::io_port<byte> rtc_data { 0x71 };
+            static inline constexpr io::out_port<byte> pit_cmd { 0x43 };
+            static inline constexpr io::io_port<byte> pit0_data { 0x40 };
 
             struct reset_all { ~reset_all(); } static inline reset;
         };
@@ -124,7 +127,12 @@ namespace jw
                     auto t = std::chrono::duration_cast<duration>(std::chrono::_V2::steady_clock::now().time_since_epoch());
                     return time_point { t };
                 }
-                return time_point { duration { static_cast<std::int64_t>(setup::ns_per_pit_tick * setup::pit_ticks) } };
+                dpmi::interrupt_mask no_irqs { };
+                setup::pit_cmd.write(0x00);        // latch counter 0
+                split_uint16_t counter { setup::pit0_data.read(), setup::pit0_data.read() };
+                double ns { setup::ns_per_pit_count * counter + setup::ns_per_pit_tick * setup::pit_ticks };
+                return time_point { duration { static_cast<std::int64_t>(ns) } };
+
             }
         };
 
