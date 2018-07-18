@@ -63,19 +63,21 @@ namespace jw
             dpmi::irq_handler::acknowledge();
         }, dpmi::always_call | dpmi::no_auto_eoi };
 
-        void setup::setup_pit(bool enable, std::uint32_t freq_divider)
+        void setup::setup_pit(bool enable, std::uint32_t freq_divisor)
         {
             dpmi::interrupt_mask no_irq { };
             reset_pit();
             if (!enable) return;
 
-            if (freq_divider < 1 || freq_divider > 0x10000) 
+            if (freq_divisor < 1 || freq_divisor > 0x10000)
                 throw std::out_of_range("PIT frequency divisor must be a value between 1 and 0x10000, inclusive.");
-            ns_per_pit_tick = 1e9 / (max_pit_frequency / freq_divider);
+
+            pit_counter_max = freq_divisor;
+            ns_per_pit_tick = 1e9 / (max_pit_frequency / freq_divisor);
             pit_irq.set_irq(0);
             pit_irq.enable();
 
-            split_uint16_t div { freq_divider };
+            split_uint16_t div { freq_divisor };
             pit_cmd.write(0x34);
             pit0_data.write(div.lo);
             pit0_data.write(div.hi);

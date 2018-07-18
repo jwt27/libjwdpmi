@@ -50,10 +50,10 @@ namespace jw
             friend class pit;
             friend class tsc;
 
-            static constexpr long double max_pit_frequency { 1194375.0L / 1.001L };     // freq = max_pit_frequency / divider
+            static constexpr long double max_pit_frequency { 1194375.0L / 1.001L };     // freq = max_pit_frequency / divisor
             static constexpr std::uint32_t max_rtc_frequency { 0x8000 };                // freq = max_rtc_frequency >> (shift - 1)
 
-            static void setup_pit(bool enable, std::uint32_t freq_divider = 0x10000);   // default: 18.2Hz
+            static void setup_pit(bool enable, std::uint32_t freq_divisor = 0x10000);   // default: 18.2Hz
             static void setup_rtc(bool enable, std::uint8_t freq_shift = 10);           // default: 64Hz
             static void setup_tsc(std::size_t num_samples, tsc_reference ref = tsc_reference::none);
 
@@ -63,6 +63,7 @@ namespace jw
             static inline double ns_per_pit_tick;
             static inline double ns_per_rtc_tick;
 
+            static inline std::uint32_t pit_counter_max;
             static inline volatile std::uint64_t pit_ticks;
             static inline volatile std::uint_fast16_t rtc_ticks;
             
@@ -130,9 +131,8 @@ namespace jw
                 dpmi::interrupt_mask no_irqs { };
                 setup::pit_cmd.write(0x00);        // latch counter 0
                 split_uint16_t counter { setup::pit0_data.read(), setup::pit0_data.read() };
-                double ns { setup::ns_per_pit_count * counter + setup::ns_per_pit_tick * setup::pit_ticks };
+                double ns { setup::ns_per_pit_count * (setup::pit_counter_max - counter) + setup::ns_per_pit_tick * setup::pit_ticks };
                 return time_point { duration { static_cast<std::int64_t>(ns) } };
-
             }
         };
 
