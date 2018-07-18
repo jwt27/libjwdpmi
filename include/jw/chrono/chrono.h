@@ -7,6 +7,7 @@
 #include <atomic>
 #include <deque>
 #include <jw/dpmi/irq.h>
+#include <jw/math.h>
 
 // included by <chrono>
 #include <ratio>
@@ -132,7 +133,7 @@ namespace jw
                 setup::pit_cmd.write(0x00);        // latch counter 0
                 split_uint16_t counter { setup::pit0_data.read(), setup::pit0_data.read() };
                 double ns { setup::ns_per_pit_count * (setup::pit_counter_max - counter) + setup::ns_per_pit_tick * setup::pit_ticks };
-                return time_point { duration { static_cast<std::int64_t>(ns) } };
+                return time_point { duration { static_cast<std::int64_t>(jw::round(ns)) } };
             }
         };
 
@@ -150,7 +151,7 @@ namespace jw
                 double ns = (setup::current_tsc_ref() == tsc_reference::rtc) ? setup::ns_per_rtc_tick : setup::ns_per_pit_tick;
                 ns *= count;
                 ns /= setup::tsc_ticks_per_irq;
-                return duration { static_cast<std::int64_t>(ns) };
+                return duration { static_cast<std::int64_t>(jw::round(ns)) };
             }
 
             static time_point to_time_point(tsc_count count)

@@ -188,7 +188,7 @@ namespace jw
             sec += read_bcd() * 60 * 60 * 24 * 365.2425;
             sec += 946684800;   // seconds from 1970 to 2000
             sec *= static_cast<std::uint64_t>(1e6);
-            sec += setup::rtc_ticks * setup::ns_per_rtc_tick / 1e3;
+            sec += jw::round(setup::rtc_ticks * setup::ns_per_rtc_tick / 1e3);
             return time_point { duration { sec } };
         }
     }
