@@ -78,7 +78,7 @@ namespace jw
             pit_irq.enable();
 
             split_uint16_t div { freq_divisor };
-            pit_cmd.write(0x34);
+            pit_cmd.write(0b00'11'010'0); // select counter 0, write both lsb/msb, mode 2 (rate generator), binary mode
             pit0_data.write(div.lo);
             pit0_data.write(div.hi);
         }
