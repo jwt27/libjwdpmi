@@ -4,6 +4,7 @@
 #pragma once
 #include <variant>
 #include <vector>
+#include <deque>
 #include <iostream>
 #include <unordered_map>
 #include <jw/common.h>
@@ -79,7 +80,13 @@ namespace jw::audio
         template<typename T> constexpr midi(T&& m, typename clock::time_point t = clock::time_point::min()) : msg(std::forward<T>(m)), time(t) { }
 
     protected:
-        inline static std::unordered_map<std::istream*, byte> last_status_rx { };
+        struct istream_info
+        {
+            std::deque<byte> msg { };
+            clock::time_point time;
+            byte last_status { 0 };
+        };
+        inline static std::unordered_map<std::istream*, istream_info> rx_state { };
         inline static std::unordered_map<std::ostream*, byte> last_status_tx { };
 
         struct stream_writer
@@ -158,64 +165,81 @@ namespace jw::audio
 
         friend std::istream& operator>>(std::istream& in, midi& out)
         {
-            byte a { last_status_rx[&in] };
-            auto get = [&in] { return static_cast<byte>(in.get()); };
-            if ((in.peek() & 0x80) == 0 and a == 0) do { a = get(); } while ((a & 0x80) == 0);
-            out.time = clock::now();
-            if ((a & 0xf0) != 0xf0)   // channel message
+            auto& pending { rx_state[&in] };
+            auto i { pending.msg.cbegin() };
+            auto get = [&]
             {
-                last_status_rx[&in] = a;
-                byte ch = a & 0x0f;
-                switch (a & 0xf0)
+                if (i != pending.msg.cend()) return *(i++);
+                auto b = static_cast<byte>(in.get());
+                if (b >= 0xf8)  // system realtime messages may be mixed in
                 {
-                case 0x80: out.msg = note_event { { ch }, false, get(), get() }; break;
-                case 0x90:
-                {
-                    auto key = get();
-                    auto vel = get();
-                    if (vel == 0) out.msg = note_event { { ch }, false, key, vel };
-                    else out.msg = note_event { { ch }, true, key, vel };
-                    break;
-                }
-                case 0xa0: out.msg = key_pressure { { ch }, get(), get() }; break;
-                case 0xb0: out.msg = control_change { { ch }, get(), get() }; break;
-                case 0xc0: out.msg = program_change { { ch }, get() }; break;
-                case 0xd0: out.msg = channel_pressure { { ch }, get() }; break;
-                case 0xe0: out.msg = pitch_change { { ch }, { get(), get() } }; break;
-                }
-            }
-            else                    // system message
-            {
-                if (a < 0xf8) last_status_rx[&in] = 0;
-                switch (a)
-                {
-                case 0xf0:
-                {
-                    out.msg = sysex { };
-                    auto& data = std::get<sysex>(out.msg).data;
-                    std::vector<char> extra { };
-                    while (true)
+                    out.time = clock::now();
+                    switch (b)
                     {
-                        a = get();
-                        if (a == 0xf7) break;       // end of sysex
-                        if ((a & 0x80) == 0) data.push_back(a);
-                        else extra.push_back(a);    // single-byte realtime messages may be mixed in
+                    case 0xf8: out.msg = clock_tick { }; break;
+                    case 0xfa: out.msg = clock_start { }; break;
+                    case 0xfb: out.msg = clock_continue { }; break;
+                    case 0xfc: out.msg = clock_stop { }; break;
+                    case 0xfe: out.msg = active_sense { }; break;
+                    case 0xff: out.msg = reset { }; break;
                     }
-                    for (auto&& i : extra) in.putback(i);
-                    break;
+                    throw system_realtime_message { };
                 }
-                case 0xf1: out.msg = mtc_quarter_frame { { }, get() }; break;
-                case 0xf2: out.msg = song_position { { }, { get(), get() } }; break;
-                case 0xf3: out.msg = song_select { { }, get() }; break;
-                case 0xf6: out.msg = tune_request { }; break;
-                case 0xf8: out.msg = clock_tick { }; break;
-                case 0xfa: out.msg = clock_start { }; break;
-                case 0xfb: out.msg = clock_continue { }; break;
-                case 0xfc: out.msg = clock_stop { }; break;
-                case 0xfe: out.msg = active_sense { }; break;
-                case 0xff: out.msg = reset { }; break;
+                pending.msg.push_back(b);
+                return b;
+            };
+
+            try
+            {
+                byte a { pending.last_status };
+                bool no_pending_msg = pending.msg.empty();
+                if (no_pending_msg and a == 0) while ((in.peek() & 0x80) == 0) in.get();    // discard data until the first status byte
+                a = get();
+                if (no_pending_msg) pending.time = clock::now();
+                out.time = pending.time;
+                if ((a & 0xf0) != 0xf0)   // channel message
+                {
+                    pending.last_status = a;
+                    byte ch = a & 0x0f;
+                    switch (a & 0xf0)
+                    {
+                    case 0x80: out.msg = note_event { { ch }, false, get(), get() }; break;
+                    case 0x90:
+                    {
+                        auto key = get();
+                        auto vel = get();
+                        if (vel == 0) out.msg = note_event { { ch }, false, key, vel };
+                        else out.msg = note_event { { ch }, true, key, vel };
+                        break;
+                    }
+                    case 0xa0: out.msg = key_pressure { { ch }, get(), get() }; break;
+                    case 0xb0: out.msg = control_change { { ch }, get(), get() }; break;
+                    case 0xc0: out.msg = program_change { { ch }, get() }; break;
+                    case 0xd0: out.msg = channel_pressure { { ch }, get() }; break;
+                    case 0xe0: out.msg = pitch_change { { ch }, { get(), get() } }; break;
+                    }
                 }
+                else                    // system message
+                {
+                    pending.last_status = 0;
+                    switch (a)
+                    {
+                    case 0xf0:
+                    {
+                        out.msg = sysex { };
+                        auto& data = std::get<sysex>(out.msg).data;
+                        for (; a != 0xf7; a = get()) data.push_back(a);
+                        break;
+                    }
+                    case 0xf1: out.msg = mtc_quarter_frame { { }, get() }; break;
+                    case 0xf2: out.msg = song_position { { }, { get(), get() } }; break;
+                    case 0xf3: out.msg = song_select { { }, get() }; break;
+                    case 0xf6: out.msg = tune_request { }; break;
+                    }
+                }
+                pending.msg.clear();
             }
+            catch (const system_realtime_message&) { }
             return in;
         }
     };
