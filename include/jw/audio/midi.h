@@ -228,6 +228,7 @@ namespace jw::audio
                     {
                         out.msg = sysex { };
                         auto& data = std::get<sysex>(out.msg).data;
+                        data.reserve(32);
                         for (; a != 0xf7; a = get()) data.push_back(a);
                         break;
                     }
