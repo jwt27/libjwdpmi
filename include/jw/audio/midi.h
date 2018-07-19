@@ -84,8 +84,8 @@ namespace jw::audio
         struct istream_info
         {
             std::mutex mutex { };
-            std::deque<byte> msg { };
-            clock::time_point time;
+            std::deque<byte> pending_msg { };
+            clock::time_point pending_msg_time;
             byte last_status { 0 };
         };
         struct ostream_info
@@ -173,12 +173,12 @@ namespace jw::audio
 
         friend std::istream& operator>>(std::istream& in, midi& out)
         {
-            auto& pending { rx_state[&in] };
-            std::unique_lock<std::mutex> lock { pending.mutex };
-            auto i { pending.msg.cbegin() };
+            auto& rx { rx_state[&in] };
+            std::unique_lock<std::mutex> lock { rx.mutex };
+            auto i { rx.pending_msg.cbegin() };
             auto get = [&]
             {
-                if (i != pending.msg.cend()) return *(i++);
+                if (i != rx.pending_msg.cend()) return *(i++);
                 auto b = static_cast<byte>(in.get());
                 if (b >= 0xf8)  // system realtime messages may be mixed in
                 {
@@ -194,21 +194,21 @@ namespace jw::audio
                     }
                     throw system_realtime_message { };
                 }
-                pending.msg.push_back(b);
+                rx.pending_msg.push_back(b);
                 return b;
             };
 
             try
             {
-                byte a { pending.last_status };
-                bool no_pending_msg = pending.msg.empty();
+                byte a { rx.last_status };
+                bool no_pending_msg = rx.pending_msg.empty();
                 if (no_pending_msg and a == 0) while ((in.peek() & 0x80) == 0) in.get();    // discard data until the first status byte
                 a = get();
-                if (no_pending_msg) pending.time = clock::now();
-                out.time = pending.time;
+                if (no_pending_msg) rx.pending_msg_time = clock::now();
+                out.time = rx.pending_msg_time;
                 if ((a & 0xf0) != 0xf0)   // channel message
                 {
-                    pending.last_status = a;
+                    rx.last_status = a;
                     byte ch = a & 0x0f;
                     switch (a & 0xf0)
                     {
@@ -230,7 +230,7 @@ namespace jw::audio
                 }
                 else                    // system message
                 {
-                    pending.last_status = 0;
+                    rx.last_status = 0;
                     switch (a)
                     {
                     case 0xf0:
@@ -247,7 +247,7 @@ namespace jw::audio
                     case 0xf6: out.msg = tune_request { }; break;
                     }
                 }
-                pending.msg.clear();
+                rx.pending_msg.clear();
             }
             catch (const system_realtime_message&) { }
             return in;
