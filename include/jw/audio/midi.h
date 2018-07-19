@@ -7,6 +7,7 @@
 #include <deque>
 #include <iostream>
 #include <unordered_map>
+#include <mutex>
 #include <jw/common.h>
 #include <jw/split_stdint.h>
 #include <jw/thread/thread.h>
@@ -82,12 +83,18 @@ namespace jw::audio
     protected:
         struct istream_info
         {
+            std::mutex mutex { };
             std::deque<byte> msg { };
             clock::time_point time;
             byte last_status { 0 };
         };
+        struct ostream_info
+        {
+            std::mutex mutex { };
+            byte last_status { 0 };
+        };
         inline static std::unordered_map<std::istream*, istream_info> rx_state { };
-        inline static std::unordered_map<std::ostream*, byte> last_status_tx { };
+        inline static std::unordered_map<std::ostream*, ostream_info> tx_state { };
 
         struct stream_writer
         {
@@ -95,15 +102,15 @@ namespace jw::audio
 
             void put_status(byte a)
             {
-                if (last_status_tx[&out] != a) out.put(a);
-                last_status_tx[&out] = a;
+                if (tx_state[&out].last_status != a) out.put(a);
+                tx_state[&out].last_status = a;
             }
 
-            void clear_status() { last_status_tx[&out] = 0; }
+            void clear_status() { tx_state[&out].last_status = 0; }
 
             void operator()(const note_event& msg)
             {
-                if (not msg.on and last_status_tx[&out] == (0x90 | (msg.channel & 0x0f)))
+                if (not msg.on and tx_state[&out].last_status == (0x90 | (msg.channel & 0x0f)))
                 {
                     put_status(0x90 | (msg.channel & 0x0f));
                     out.put(msg.key);
@@ -159,6 +166,7 @@ namespace jw::audio
     public:
         friend std::ostream& operator<<(std::ostream& out, const midi& in)
         {
+            std::unique_lock<std::mutex> lock { tx_state[&out].mutex };
             std::visit(stream_writer { out }, in.msg);
             return out;
         }
@@ -166,6 +174,7 @@ namespace jw::audio
         friend std::istream& operator>>(std::istream& in, midi& out)
         {
             auto& pending { rx_state[&in] };
+            std::unique_lock<std::mutex> lock { pending.mutex };
             auto i { pending.msg.cbegin() };
             auto get = [&]
             {
