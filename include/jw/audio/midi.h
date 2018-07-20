@@ -228,11 +228,23 @@ namespace jw::audio
             try
             {
                 byte a { rx.last_status };
-                bool no_pending_msg = rx.pending_msg.empty();
-                if (no_pending_msg and a == 0) while ((in.peek() & 0x80) == 0) in.get();    // discard data until the first status byte
-                a = get();
-                if (no_pending_msg) rx.pending_msg_time = clock::now();
+
+                if (rx.pending_msg.empty())
+                {
+                    if (a == 0)
+                    {
+                        while ((in.peek() & 0x80) == 0) in.get();    // discard data until the first status byte
+                        a = get();
+                    }
+                    in.peek();      // make sure there is data available before timestamping
+                    rx.pending_msg_time = clock::now();
+                }
+                else
+                {
+                    if (rx.pending_msg[0] & 0x80 != 0) a = get();
+                }
                 out.time = rx.pending_msg_time;
+
                 if ((a & 0xf0) != 0xf0)   // channel message
                 {
                     rx.last_status = a;
