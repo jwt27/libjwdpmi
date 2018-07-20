@@ -8,6 +8,7 @@
 #include <iostream>
 #include <unordered_map>
 #include <mutex>
+#include <optional>
 #include <jw/common.h>
 #include <jw/split_stdint.h>
 #include <jw/thread/thread.h>
@@ -79,6 +80,31 @@ namespace jw::audio
 
         midi(std::istream& in) { in >> *this; }
         template<typename T> constexpr midi(T&& m, typename clock::time_point t = clock::time_point::min()) : msg(std::forward<T>(m)), time(t) { }
+
+        bool is_channel_message() const
+        {
+            return std::visit([](auto&& m) { return std::is_base_of_v<channel_message, std::decay_t<decltype(m)>>; }, msg);
+        }
+
+        bool is_system_message() const
+        {
+            return std::visit([](auto&& m) { return std::is_base_of_v<system_message, std::decay_t<decltype(m)>>; }, msg);
+        }
+
+        bool is_realtime_message() const
+        {
+            return std::visit([](auto&& m) { return std::is_base_of_v<system_realtime_message, std::decay_t<decltype(m)>>; }, msg);
+        }
+
+        auto channel() const
+        {
+            return std::visit([](auto&& m) -> std::optional<std::uint32_t>
+            {
+                if constexpr (std::is_base_of_v<channel_message, std::decay_t<decltype(m)>>)
+                    return { m.channel };
+                return { };
+            }, msg);
+        }
 
     protected:
         struct istream_info
