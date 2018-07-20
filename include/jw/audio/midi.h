@@ -192,7 +192,8 @@ namespace jw::audio
     public:
         friend std::ostream& operator<<(std::ostream& out, const midi& in)
         {
-            std::unique_lock<std::mutex> lock { tx_state[&out].mutex };
+            std::unique_lock<std::mutex> lock { tx_state[&out].mutex, std::defer_lock };
+            if (not in.is_realtime_message()) lock.lock();
             std::visit(stream_writer { out }, in.msg);
             return out;
         }
