@@ -241,7 +241,7 @@ namespace jw::audio
                 }
                 else
                 {
-                    if (rx.pending_msg[0] & 0x80 != 0) a = get();
+                    if ((rx.pending_msg[0] & 0x80) != 0) a = get();
                 }
                 out.time = rx.pending_msg_time;
 
