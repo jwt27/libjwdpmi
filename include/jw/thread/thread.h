@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <sstream>
 #include <jw/thread/detail/scheduler.h>
+#include <../jwdpmi_config.h>
 
 namespace jw
 {
@@ -79,7 +80,7 @@ namespace jw
         };
 
         // Yields execution for the given duration.
-        template<typename C = chrono::pit> inline void yield_for(const typename C::duration& duration)
+        template<typename C = config::thread_clock> inline void yield_for(const typename C::duration& duration)
         {
             yield_until(C::now() + duration);
         };
@@ -93,7 +94,7 @@ namespace jw
         };
 
         // Combination of yield_while() and yield_for(). Returns true on timeout.
-        template<typename C = chrono::pit> inline bool yield_while_for(auto&& condition, const typename C::duration& duration)
+        template<typename C = config::thread_clock> inline bool yield_while_for(auto&& condition, const typename C::duration& duration)
         {
             return yield_while_until(condition, C::now() + duration);
         };

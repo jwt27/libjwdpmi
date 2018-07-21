@@ -55,5 +55,8 @@ namespace jw
 
         // Clock used for midi timestamps.
         using midi_clock = jw::chrono::tsc;
+
+        // Default clock used by thread::yield_for() and thread::yield_while_for().
+        using thread_clock = jw::chrono::pit;
     }
 }
