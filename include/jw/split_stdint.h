@@ -3,52 +3,56 @@
 
 #pragma once
 #include <cstdint>
+#pragma GCC diagnostic error "-Wpadded"
 
 namespace jw
 {
-    constexpr auto constexpr_min(auto a, auto b) { return std::min(a, b); }
-
-    template<typename T, std::size_t size, typename condition = bool>
-    union alignas(constexpr_min(size >> 3, 4ul))[[gnu::packed]] split_int;
-
-    template<typename T, std::size_t size>
-    union alignas(constexpr_min(size >> 3, 4ul)) [[gnu::packed]] split_int<T, size, std::enable_if_t<(size >> 1) % 2 == 0, bool>>
+    namespace detail
     {
-        struct[[gnu::packed]]
+        template<typename T, std::size_t size, typename condition = bool>
+        union split_int;
+
+        template<typename T, std::size_t size>
+        union [[gnu::packed]] split_int<T, size, std::enable_if_t<(size / 2) % 2 == 0, bool>>
         {
-            split_int<unsigned, (size >> 1)> lo;
-            split_int<T, (size >> 1)> hi;
+            struct [[gnu::packed]]
+            {
+                split_int<unsigned, (size / 2)> lo;
+                split_int<T, (size / 2)> hi;
+            };
+            std::conditional_t<std::is_signed_v<T>, std::int64_t, std::uint64_t> value : size;
+            constexpr split_int() noexcept = default;
+            constexpr split_int(auto v) noexcept : value(v) { };
+            template<typename L, typename H> constexpr split_int(L&& l, H&& h) noexcept : lo(std::forward<L>(l)), hi(std::forward<H>(h)) { };
+            constexpr operator auto() const noexcept { return value; }
         };
-        std::conditional_t<std::is_signed_v<T>, std::int64_t, std::uint64_t> value : size;
-        constexpr split_int() noexcept = default;
-        constexpr split_int(auto v) noexcept : value(v) { };
-        template<typename L, typename H> constexpr split_int(L&& l, H&& h) noexcept : lo(std::forward<L>(l)), hi(std::forward<H>(h)) { };
-        constexpr operator auto() const noexcept { return value; }
-    };
 
-    template<typename T, std::size_t size>
-    union alignas(constexpr_min(size >> 3, 4ul)) [[gnu::packed]] split_int<T, size, std::enable_if_t<(size >> 1) % 2 != 0, bool>>
-    {
-        struct[[gnu::packed]]
+        template<typename T, std::size_t size>
+        union [[gnu::packed]] split_int<T, size, std::enable_if_t<(size / 2) % 2 != 0, bool>>
         {
-             unsigned lo : size >> 1;
-             T hi : size >> 1;
+            struct [[gnu::packed]]
+            {
+                 unsigned lo : size >> 1;
+                 T hi : size >> 1;
+            };
+            std::conditional_t<std::is_signed_v<T>, std::int64_t, std::uint64_t> value : size;
+            constexpr split_int() noexcept = default;
+            constexpr split_int(auto v) noexcept : value(v) { };
+            template<typename L, typename H> constexpr split_int(L&& l, H&& h) noexcept : lo(std::forward<L>(l)), hi(std::forward<H>(h)) { };
+            constexpr operator auto() const noexcept { return value; }
         };
-        std::conditional_t<std::is_signed_v<T>, std::int64_t, std::uint64_t> value : size;
-        constexpr split_int() noexcept = default;
-        constexpr split_int(auto v) noexcept : value(v) { };
-        template<typename L, typename H> constexpr split_int(L&& l, H&& h) noexcept : lo(std::forward<L>(l)), hi(std::forward<H>(h)) { };
-        constexpr operator auto() const noexcept { return value; }
-    };
 
-    template<typename T>
-    union alignas(1) [[gnu::packed]] split_int<T, 8, bool>
-    {
-        std::conditional_t<std::is_signed<T>::value, std::int8_t, std::uint8_t> value;
-        constexpr split_int() noexcept = default;
-        constexpr split_int(auto v) noexcept : value(v) { }
-        constexpr operator auto() const noexcept { return value; }
-    };
+        template<typename T>
+        union [[gnu::packed]] split_int<T, 8, bool>
+        {
+            std::conditional_t<std::is_signed<T>::value, std::int8_t, std::uint8_t> value;
+            constexpr split_int() noexcept = default;
+            constexpr split_int(auto v) noexcept : value(v) { }
+            constexpr operator auto() const noexcept { return value; }
+        };
+    }
+
+    template<typename T, std::size_t N> using split_int[[gnu::aligned([] { return std::min(N / 8, 4ul); }())]] = detail::split_int<T, N>;
 
     using split_uint16_t = split_int<unsigned, 16>;
     using split_uint32_t = split_int<unsigned, 32>;
@@ -57,6 +61,12 @@ namespace jw
     using split_int32_t = split_int<signed, 32>;
     using split_int64_t = split_int<signed, 64>;
 
-    static_assert(sizeof(split_uint64_t) == 8, "check sizeof jw::split_int");
-    static_assert(alignof(split_uint64_t) == 4, "check alignof jw::split_int");
+    static_assert(sizeof(split_uint64_t) == 8);
+    static_assert(sizeof(split_uint32_t) == 4);
+    static_assert(sizeof(split_uint16_t) == 2);
+    static_assert(alignof(split_uint64_t) == 4);
+    static_assert(alignof(split_uint32_t) == 4);
+    static_assert(alignof(split_uint16_t) == 2);
 }
+
+#pragma GCC diagnostic pop
