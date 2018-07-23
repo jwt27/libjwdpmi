@@ -100,14 +100,14 @@ namespace jw
                 v->init();
                 return std::move(v);
             }
-            catch (vbe::not_supported) { }
+            catch (const vbe::not_supported&) { }
             try
             {
                 auto v = std::make_unique<vbe2>();
                 v->init();
                 return std::move(v);
             }
-            catch (vbe::not_supported) { }
+            catch (const vbe::not_supported&) { }
 
             auto v = std::make_unique<vbe>();
             v->init();
