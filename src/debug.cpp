@@ -631,7 +631,7 @@ namespace jw
                         return;
                     }
                     auto* reg = thread::detail::thread_details::get_context(t_ptr);
-                    auto r_esp = reinterpret_cast<const std::uintptr_t>(reg) - sizeof(thread::detail::thread_context);
+                    auto r_esp = reinterpret_cast<std::uintptr_t>(reg) - sizeof(thread::detail::thread_context);
                     auto* r_eip = &context_switch_end;
                     switch (r)
                     {
