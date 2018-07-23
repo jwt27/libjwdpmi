@@ -28,7 +28,7 @@ int _crt0_startup_flags = 0
 
 int jwdpmi_main(std::deque<std::string_view>);
 
-inline namespace __cxxabiv1
+namespace __cxxabiv1
 {
     extern "C" void* __cxa_allocate_exception(std::size_t thrown_size) _GLIBCXX_NOTHROW;
 }
