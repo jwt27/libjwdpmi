@@ -23,6 +23,9 @@
 #include <jw/dpmi/fpu.h>
 #include <../jwdpmi_config.h>
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpacked-not-aligned"
+
 namespace jw
 {
     namespace dpmi
@@ -174,6 +177,8 @@ namespace jw
         };
     }
 }
+
+#pragma GCC diagnostic pop
 
 #include <jw/dpmi/detail/cpu_exception.h>
 

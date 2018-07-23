@@ -11,6 +11,8 @@ namespace jw
     {
         namespace detail
         {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpacked-not-aligned"
             struct[[gnu::packed]] vbe3_pm_info
             {
                 char pmid[4];
@@ -40,6 +42,7 @@ namespace jw
                 byte _reserved[222];
                 byte oem_data[256];
             };
+#pragma GCC diagnostic pop
         }
 
         struct vbe_info
