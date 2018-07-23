@@ -65,7 +65,7 @@ namespace jw
         constexpr const T& operator[](std::ptrdiff_t i) const noexcept { return (a[i]); }
         constexpr T& operator[](std::ptrdiff_t i) noexcept { return (a[i]); }
 
-        constexpr vector() noexcept = default;
+        constexpr vector() noexcept : a { } { };
         constexpr vector(const vector&) noexcept = default;
         constexpr vector(vector&&) noexcept = default;
         constexpr vector& operator=(const vector&) noexcept = default;
