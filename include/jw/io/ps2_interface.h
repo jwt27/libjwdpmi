@@ -121,7 +121,7 @@ namespace jw
                 try
                 {
                     dpmi::irq_mask no_irq { 1 };
-                    byte result;
+                    byte result { keyboard_response::ERROR };
                     ps2_command<cmd...>(data.begin(), result);
                     return result;
                 }
