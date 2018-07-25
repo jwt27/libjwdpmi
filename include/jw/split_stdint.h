@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
@@ -32,8 +33,8 @@ namespace jw
         {
             struct [[gnu::packed]]
             {
-                 unsigned lo : size >> 1;
-                 T hi : size >> 1;
+                 unsigned lo : size / 2;
+                 T hi : size / 2;
             };
             std::conditional_t<std::is_signed_v<T>, std::int64_t, std::uint64_t> value : size;
             constexpr split_int() noexcept = default;
@@ -61,12 +62,14 @@ namespace jw
     using split_int32_t = split_int<signed, 32>;
     using split_int64_t = split_int<signed, 64>;
 
+#ifndef __INTELLISENSE__
     static_assert(sizeof(split_uint64_t) == 8);
     static_assert(sizeof(split_uint32_t) == 4);
     static_assert(sizeof(split_uint16_t) == 2);
     static_assert(alignof(split_uint64_t) == 4);
     static_assert(alignof(split_uint32_t) == 4);
     static_assert(alignof(split_uint16_t) == 2);
+#endif
 }
 
 #pragma GCC diagnostic pop
