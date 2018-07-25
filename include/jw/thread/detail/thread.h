@@ -64,7 +64,7 @@ namespace jw
 
                 virtual void call() { throw std::bad_function_call(); };
 
-                auto& operator=(const thread&) = delete;
+                thread& operator=(const thread&) = delete;
                 thread(const thread&) = delete;
 
                 thread(std::size_t bytes) : stack(new byte[bytes]), stack_size(bytes) { }
