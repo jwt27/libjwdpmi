@@ -18,7 +18,7 @@ OBJDIR := obj
 SRC := $(wildcard $(SRCDIR)/*.cpp)
 OBJ := $(SRC:$(SRCDIR)/%.cpp=$(OBJDIR)/%.o)
 DEP := $(SRC:$(SRCDIR)/%.cpp=$(OBJDIR)/%.d)
-PREPROCESSED := $(SRC:$(SRCDIR)/%.cpp=$(OBJDIR)/%.i)
+PREPROCESSED := $(SRC:$(SRCDIR)/%.cpp=$(OBJDIR)/%.ii)
 
 .PHONY: all clean
 
@@ -41,7 +41,7 @@ $(OUTDIR)/$(OUTPUT): $(OBJ) | $(OUTDIR)
 $(OBJDIR)/%.o: $(SRCDIR)/%.cpp jwdpmi_config.h | $(OBJDIR)
 	$(CXX) $(CXXFLAGS) -MD -MP -MF $(@:.o=.d) -o $@ $(INCLUDE) -c $< $(PIPECMD)
 
-$(OBJDIR)/%.i: $(SRCDIR)/%.cpp | $(OBJDIR)
+$(OBJDIR)/%.ii: $(SRCDIR)/%.cpp | $(OBJDIR)
 	$(CXX) $(CXXFLAGS) -E -o $@ $(INCLUDE) -c $<
 
 jwdpmi_config.h:
