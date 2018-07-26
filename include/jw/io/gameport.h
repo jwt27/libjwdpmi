@@ -183,9 +183,7 @@ namespace jw::io
                     }
                 }
 
-                std::bitset<4> x;
-                for (auto i = 0; i < 4; ++i)
-                    x[i] = not (p & (1 << (4 + i)));
+                std::bitset<4> x { static_cast<std::uint64_t>(~p) >> 4 };
                 if (x != button_state) button_events.emplace_back(x, now);
                 button_state = x;
             } while (cfg.strategy == poll_strategy::busy_loop and timing.any());
