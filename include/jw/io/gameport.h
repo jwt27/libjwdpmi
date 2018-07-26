@@ -141,7 +141,7 @@ namespace jw::io
             return button_state;
         }
 
-        event<void(std::bitset<4>, chrono::tsc::time_point)> button_changed;
+        event<void(std::bitset<4>, clock::time_point)> button_changed;
 
     private:
 
