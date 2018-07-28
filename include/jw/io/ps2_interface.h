@@ -5,6 +5,7 @@
 
 #pragma once
 #include <atomic>
+#include <mutex>
 #include <jw/io/keyboard_interface.h>
 #include <jw/dpmi/irq.h>
 #include <jw/dpmi/lock.h>
@@ -120,6 +121,7 @@ namespace jw
                 retry:
                 try
                 {
+                    std::unique_lock<std::mutex> lock { mutex };
                     dpmi::irq_mask no_irq { 1 };
                     byte result { keyboard_response::ERROR };
                     ps2_command<cmd...>(data.begin(), result);
@@ -147,6 +149,7 @@ namespace jw
             const in_port<controller_status> status_port { 0x64 };
             const out_port<byte> command_port { 0x64 };
             const io_port<byte> data_port { 0x60 };
+            std::mutex mutex;
 
             controller_status get_status() { return status_port.read(); }
 
