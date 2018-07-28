@@ -12,6 +12,7 @@
 #include <jw/dpmi/detail/alloc.h>
 #include <jw/debug/detail/signals.h>
 #include <jw/io/rs232.h>
+#include <bits/cxxabi_init_exception.h>
 #include <../jwdpmi_config.h>
 
 using namespace jw;
@@ -27,11 +28,6 @@ int _crt0_startup_flags = 0
 | _CRT0_FLAG_LOCK_MEMORY;
 
 int jwdpmi_main(std::deque<std::string_view>);
-
-namespace __cxxabiv1
-{
-    extern "C" void* __cxa_allocate_exception(std::size_t thrown_size) _GLIBCXX_NOTHROW;
-}
 
 namespace jw
 {
