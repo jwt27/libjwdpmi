@@ -205,39 +205,32 @@ namespace jw
         template<> inline void ps2_interface::do_ps2_command<ps2_interface::recv_discard_any>(const byte*&, byte&) { read_from_keyboard(); }
         template<> inline void ps2_interface::do_ps2_command<ps2_interface::recv_ack>(const byte*&, byte&) 
         {
-            do
+            auto b = read_from_keyboard();
+            switch (b)
             {
-                auto b = read_from_keyboard();
-                switch (b)
-                {
-                case ACK:
-                    return;
-                default:
-                    std::cerr << "PS/2 interface: expected ACK, got this: " << std::hex << (unsigned)b << std::endl;
-                    [[fallthrough]];
-                case RESEND:
-                    throw std::runtime_error("Keyboard on fire.");
-                }
-            } while (true);
+            case ACK:
+                return;
+            default:
+                std::cerr << "PS/2 interface: expected ACK, got this: " << std::hex << (unsigned)b << std::endl;
+                [[fallthrough]];
+            case RESEND:
+                throw io_error("Keyboard on fire.");
+            }
         }
 
         template<> inline void ps2_interface::do_ps2_command<ps2_interface::recv_data>(const byte*&, byte& out) 
         {
-            do
+            out = read_from_keyboard();
+            switch (out)
             {
-                out = read_from_keyboard();
-                switch (out)
-                {
-                case ACK:
-                    std::cerr << "PS/2 interface: unexpected ACK!" << std::endl;
-                    //break;
-                    [[fallthrough]];
-                case RESEND:
-                    throw std::runtime_error("Keyboard on fire.");
-                default:
-                    return;
-                }
-            } while (true);
+            case ACK:
+                std::cerr << "PS/2 interface: unexpected ACK!" << std::endl;
+                [[fallthrough]];
+            case RESEND:
+                throw io_error("Keyboard on fire.");
+            default:
+                return;
+            }
         }
     }
 }
