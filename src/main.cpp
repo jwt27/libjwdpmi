@@ -183,7 +183,7 @@ namespace jw
     std::atomic_flag new_alloc_resize_reentry { false };
 }
 
-void* operator new(std::size_t n)
+[[nodiscard]] void* operator new(std::size_t n)
 {
     if (dpmi::in_irq_context())
     {

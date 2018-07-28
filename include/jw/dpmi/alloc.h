@@ -37,7 +37,7 @@ namespace jw
             using value_type = T;
             using pointer = T*;
 
-            auto allocate(std::size_t n)
+            [[nodiscard]] T* allocate(std::size_t n)
             {
                 throw_if_irq();
                 if (__builtin_expect(map == nullptr, false)) map = new std::map<void*, data_lock> { };
@@ -99,7 +99,7 @@ namespace jw
                 constexpr pool_node(pool_node* _next, bool _free) noexcept :next(_next), free(_free) { }
             };
 
-            auto allocate(std::size_t num_elements)
+            [[nodiscard]] T* allocate(std::size_t num_elements)
             {
                 interrupt_mask no_interrupts_please { };
 
@@ -233,7 +233,7 @@ namespace jw
             }
 
         protected:
-            virtual void* do_allocate(std::size_t n, std::size_t a) override
+            [[nodiscard]] virtual void* do_allocate(std::size_t n, std::size_t a) override
             {
                 throw_if_irq();
                 if (map == nullptr) map = new std::map<void*, ptr_with_lock> { };
@@ -272,7 +272,7 @@ namespace jw
             locked_pool_memory_resource(std::size_t size_bytes) : locked_pool_allocator(size_bytes) { }
 
         protected:
-            virtual void* do_allocate(std::size_t n, std::size_t) override
+            [[nodiscard]] virtual void* do_allocate(std::size_t n, std::size_t) override
             {
                 return reinterpret_cast<void*>(locked_pool_allocator::allocate(n));
             }
