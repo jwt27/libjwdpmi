@@ -183,11 +183,22 @@ namespace jw
     std::atomic_flag new_alloc_resize_reentry { false };
 }
 
-[[nodiscard]] void* operator new(std::size_t n)
+[[nodiscard]] void* operator new(std::size_t n, std::align_val_t alignment)
 {
+    auto align = std::max(static_cast<std::size_t>(alignment), std::size_t { 4 });
+    n += align + 4;
+
+    auto aligned_ptr = [align](void* p)
+    {
+        if (p == nullptr) throw std::bad_alloc { };
+        auto b = ((reinterpret_cast<std::uintptr_t>(p) + 4) & -align) + align;
+        *(reinterpret_cast<void**>(b) - 1) = p;
+        return reinterpret_cast<void*>(b);
+    };
+
     if (dpmi::in_irq_context())
     {
-        if (new_alloc_initialized == yes) return new_alloc->allocate(n);
+        if (new_alloc_initialized == yes) return aligned_ptr(new_alloc->allocate(n));
         else throw std::bad_alloc { };
     }
     if (__builtin_expect(new_alloc_initialized == no, false))
@@ -210,7 +221,7 @@ namespace jw
             throw;
         }
     }
-    else if (new_alloc_initialized == yes && !new_alloc_resize_reentry.test_and_set())
+    else if (new_alloc_initialized == yes and not new_alloc_resize_reentry.test_and_set())
     {
         dpmi::interrupt_mask no_interrupts_here { };
         debug::trap_mask dont_trap_here { };
@@ -229,11 +240,17 @@ namespace jw
         new_alloc_resize_reentry.clear();
     }
     
-    return std::malloc(n);
+    return aligned_ptr(std::malloc(n));
+}
+
+[[nodiscard]] void* operator new(std::size_t n)
+{
+    return ::operator new(n, std::align_val_t { __STDCPP_DEFAULT_NEW_ALIGNMENT__ });
 }
 
 void operator delete(void* p, std::size_t)
 {
+    p = *(reinterpret_cast<void**>(p) - 1);
     if (new_alloc_initialized == yes && new_alloc->in_pool(p))
     {
         new_alloc->deallocate(p);
