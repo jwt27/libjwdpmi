@@ -6,6 +6,7 @@
 #pragma once
 #include <atomic>
 #include <mutex>
+#include <jw/io/io_error.h>
 #include <jw/io/keyboard_interface.h>
 #include <jw/dpmi/irq.h>
 #include <jw/dpmi/lock.h>
@@ -59,8 +60,6 @@ namespace jw
             virtual ~ps2_interface();
 
         private:
-            struct keyboard_error : public std::exception { };
-
             void write_to_controller(byte b)
             {
                 thread::yield_while([this]() { return get_status().busy; });
@@ -77,11 +76,9 @@ namespace jw
             {
                 bool timeout = thread::yield_while_for([this]
                 {
-                    auto s = get_status();
-                    if (s.parity_error || s.timeout_error) throw keyboard_error { };
-                    return !s.data_available;
-                }, std::chrono::seconds { 5 });
-                if (timeout) throw keyboard_error { };
+                    return not get_status().data_available;
+                }, std::chrono::milliseconds { 100 });
+                if (timeout) throw timeout_error { "Keyboard timeout" };
                 auto b = data_port.read();
                 if (config.translate_scancodes) b = detail::scancode::undo_translation(b);
                 return b;
@@ -127,7 +124,7 @@ namespace jw
                     ps2_command<cmd...>(data.begin(), result);
                     return result;
                 }
-                catch (const keyboard_error&)
+                catch (const io_error&)
                 {
                     reset();
                     goto retry;
@@ -151,7 +148,13 @@ namespace jw
             const io_port<byte> data_port { 0x60 };
             std::mutex mutex;
 
-            controller_status get_status() { return status_port.read(); }
+            controller_status get_status()
+            {
+                auto s = status_port.read();
+                if (s.timeout_error) throw timeout_error { "Keyboard timeout" };
+                if (s.parity_error) throw parity_error { "Keyboard parity error" };
+                return s;
+            }
 
             struct controller_configuration_data
             {

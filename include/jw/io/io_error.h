@@ -11,4 +11,5 @@ namespace jw::io
     struct parity_error : public io_error { using io_error::io_error; };
     struct framing_error : public io_error { using io_error::io_error; };
     struct line_break : public io_error { using io_error::io_error; };
+    struct timeout_error : public io_error { using io_error::io_error; };
 }
