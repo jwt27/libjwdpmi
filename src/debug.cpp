@@ -39,6 +39,7 @@ namespace jw
         {
             constexpr bool is_benign_signal(std::int32_t) noexcept;
             bool all_benign_signals(auto*);
+            void uninstall_gdb_interface();
             [[noreturn]] void kill();
 
             struct rs232_streambuf_internals : public io::detail::rs232_streambuf
@@ -53,7 +54,6 @@ namespace jw
 
             volatile bool debugger_reentry { false };
             bool debug_mode { false };
-            bool killed { false };
             volatile int current_signal { -1 };
             bool thread_events_enabled { false };
             bool new_frame_type { true };
@@ -1098,11 +1098,12 @@ namespace jw
                 }
                 else if (p == 'k')  // kill
                 {
-                    killed = true;
+                    if (debugmsg) std::clog << "KILL signal received.";
                     for (auto&&t : threads) t.second.set_action('c');
                     simulate_call(&current_thread->frame, kill);
                     s << "X" << std::setw(2) << posix_signal(current_thread->last_stop_signal);
                     send_packet(s.str());
+                    uninstall_gdb_interface();
                 }
                 else send_packet("");   // unknown packet
             }
@@ -1110,7 +1111,11 @@ namespace jw
             [[gnu::hot]] bool handle_exception(exception_num exc, cpu_registers* r, exception_frame* f, bool)
             {
                 if (debugmsg) std::clog << "entering exception 0x" << std::hex << exc << " from 0x" << f->fault_address.offset << '\n';
-                if (killed) return false;
+                if (not debug_mode)
+                {
+                    if (debugmsg) std::cerr << "already killed!\n";
+                    return false;
+                }
 
                 if (exc == 0x03) f->fault_address.offset -= 1;
 
@@ -1257,7 +1262,7 @@ namespace jw
                     } while (cant_continue());
                     if (temp_debugmsg) std::clog << "leaving main loop.\n";
 
-                    while (sent_packets.size() > 0 and not killed) recv_ack();
+                    while (sent_packets.size() > 0 and debug_mode) recv_ack();
                 }
                 catch (const std::exception& e) { print_exception(e); catch_exception(); }
                 catch (...) { catch_exception(); }
@@ -1279,7 +1284,7 @@ namespace jw
 
             extern "C" void csignal(int signal)
             {
-                if (not killed) break_with_signal(signal);
+                break_with_signal(signal);
                 signal_handlers[signal](signal);
             }
 
@@ -1329,13 +1334,14 @@ namespace jw
             {
                 debug_mode = false;
                 serial_irq.reset();
+                watchpoints.clear();
+                for (auto&& bp : breakpoints) *reinterpret_cast<byte*>(bp.first) = bp.second;
                 for (auto&& e : exception_handlers) e.reset();
                 for (auto&& s : signal_handlers) std::signal(s.first, s.second);
             }
 
             void notify_gdb_exit(byte result)
             {
-                killed = true;
                 std::stringstream s { };
                 s << std::hex << std::setfill('0');
                 s << "W" << std::setw(2) << static_cast<std::uint32_t>(result);
