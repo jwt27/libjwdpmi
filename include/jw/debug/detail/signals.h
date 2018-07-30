@@ -12,7 +12,6 @@ namespace jw
             enum debug_signals : std::int32_t
             {
                 packet_received = 0x1000,
-                trap_masked,
                 trap_unmasked,
                 continued,
                 thread_switched,

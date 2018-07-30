@@ -39,7 +39,7 @@ namespace jw
         {
             constexpr bool is_benign_signal(std::int32_t) noexcept;
             bool all_benign_signals(auto*);
-            void kill();
+            [[noreturn]] void kill();
 
             struct rs232_streambuf_internals : public io::detail::rs232_streambuf
             {
@@ -99,10 +99,7 @@ namespace jw
                 std::int32_t last_stop_signal { -1 };
                 std::uintptr_t step_range_begin { 0 };
                 std::uintptr_t step_range_end { 0 };
-
-                void set_trap() noexcept { thread::detail::thread_details::set_trap(thread.lock()); }
-                bool trap_is_masked() noexcept { return thread::detail::thread_details::trap_masked(thread.lock()) > 0; }
-                void clear_trap() noexcept { thread::detail::thread_details::clear_trap(thread.lock()); }
+                std::int32_t trap_mask { 0 };
                 
                 enum
                 {
@@ -123,33 +120,28 @@ namespace jw
                     if (a == 'c')  // continue
                     {
                         frame.flags.trap = false;
-                        clear_trap();
                         action = cont;
                     }
                     else if (a == 's')  // step
                     {
-                        frame.flags.trap = signals.count(trap_masked) == 0;
-                        set_trap();
+                        frame.flags.trap = trap_mask == 0;
                         action = step;
                     }
                     else if (a == 'C')  // continue with signal
                     {
                         frame.flags.trap = false;
-                        clear_trap();
                         if (all_benign_signals(this)) action = cont;
                         else action = cont_sig;
                     }
                     else if (a == 'S')  // step with signal
                     {
-                        frame.flags.trap = signals.count(trap_masked) == 0;
-                        set_trap();
+                        frame.flags.trap = trap_mask == 0;
                         if (all_benign_signals(this)) action = step;
                         else action = step_sig;
                     }
                     else if (a == 'r')   // step with range
                     {
-                        frame.flags.trap = signals.count(trap_masked) == 0;
-                        set_trap();
+                        frame.flags.trap = trap_mask == 0;
                         step_range_begin = rbegin;
                         step_range_end = rend;
                         action = step_range;
@@ -157,7 +149,6 @@ namespace jw
                     else if (a == 't')   // stop
                     {
                         t->suspend();
-                        clear_trap();
                         action = stop;
                     }
                     else throw std::exception { };
@@ -304,7 +295,6 @@ namespace jw
 
                 case thread_switched:
                 case packet_received:
-                case trap_masked:
                 case trap_unmasked:
                 case -1:
                     return false;
@@ -337,7 +327,6 @@ namespace jw
                 case thread_switched:
                 case thread_finished:
                 case all_threads_suspended:
-                case trap_masked:
                 case trap_unmasked:
                 case packet_received:
                 case continued:
@@ -705,7 +694,7 @@ namespace jw
                         auto signal = *i;
                         if (temp_debugmsg) std::clog << "stop reply for thread 0x" << std::hex << t_ptr->id() << " signal 0x" << signal << ": ";
                         if (not is_stop_signal(signal)
-                            or (is_trap_signal(signal) and t.signals.count(trap_masked)))
+                            or (is_trap_signal(signal) and t.trap_mask > 0))
                         {
                             if (temp_debugmsg) std::clog << "ignored.\n";
                             ++i;
@@ -1194,23 +1183,18 @@ namespace jw
                             auto size = current_thread->signals.size();
                             clear_trap_signals();
                             if (size != current_thread->signals.size()) current_thread->signals.insert(continued); // resume with SIGCONT so gdb won't get confused
-                            current_thread->signals.erase(trap_masked);
                             current_thread->signals.erase(trap_unmasked);
                         }
 
-                        if (current_thread->trap_is_masked())
+                        if (current_thread->trap_mask > 0)
                         {
                             if (all_benign_signals(current_thread))
                             {
-                                current_thread->signals.insert(trap_masked);
                                 if (debugmsg) std::clog << "trap masked at 0x" << std::hex << f->fault_address.offset << "\n";
                             }
                             else
                             {
-                                auto&& t = current_thread->thread.lock();
-                                current_thread->signals.erase(trap_masked);
-                                while (thread::detail::thread_details::trap_masked(t))
-                                    thread::detail::thread_details::trap_unmask(t);     // serious fault occured, undo trap masks
+                                current_thread->trap_mask = 0;     // serious fault occured, undo trap masks
                             }
                         }
 
@@ -1367,19 +1351,19 @@ namespace jw
         {
             if (not debug()) { failed = true; return; }
             if (detail::debugger_reentry) { failed = true; return; }
-            auto t = jw::thread::detail::scheduler::get_current_thread().lock();
-            if (t) thread::detail::thread_details::trap_mask(t);
-            else failed = true;
+            ++detail::threads[jw::thread::detail::scheduler::get_current_thread_id()].trap_mask;
         }
 
         trap_mask::~trap_mask() noexcept
         {
             if (failed) return;
-            auto t = jw::thread::detail::scheduler::get_current_thread().lock();
-            if (thread::detail::thread_details::trap_masked(t) and
-                thread::detail::thread_details::trap_unmask(t) and
-                thread::detail::thread_details::trap_state(t))
-                break_with_signal(detail::trap_unmasked);
+            auto& t = detail::threads[jw::thread::detail::scheduler::get_current_thread_id()];
+            t.trap_mask = std::max(t.trap_mask - 1, 0l);
+            if (t.trap_mask == 0 and [&t]
+            {
+                for (auto&& s : t.signals) if (detail::is_trap_signal(s)) return true;
+                return false;
+            }()) break_with_signal(detail::trap_unmasked);
         }
 #       else
         namespace detail
