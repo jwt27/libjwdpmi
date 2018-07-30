@@ -1325,6 +1325,14 @@ namespace jw
                     install_exception_handler(e);
             }
 
+            void uninstall_gdb_interface()
+            {
+                debug_mode = false;
+                serial_irq.reset();
+                for (auto&& e : exception_handlers) e.reset();
+                for (auto&& s : signal_handlers) std::signal(s.first, s.second);
+            }
+
             void notify_gdb_exit(byte result)
             {
                 killed = true;
@@ -1332,17 +1340,12 @@ namespace jw
                 s << std::hex << std::setfill('0');
                 s << "W" << std::setw(2) << static_cast<std::uint32_t>(result);
                 send_packet(s.str());
-
-                debug_mode = false;
-                serial_irq.reset();
-                for (auto&& e : exception_handlers) e.reset();
+                uninstall_gdb_interface();
             }
 
             [[noreturn]] void kill()
             {
-                debug_mode = false;
-                serial_irq.reset();
-                for (auto&& e : exception_handlers) e.reset();
+                uninstall_gdb_interface();
                 jw::terminate();
             }
         }
