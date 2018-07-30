@@ -68,16 +68,16 @@ namespace jw
         {
             if (config::dosbox)
             {
-                command<send_data, recv_ack, send_data, recv_ack, recv_ack>({ 0xF0, set }); // Dosbox-X sends two ACKs
-                current_scancode_set = static_cast<scancode_set>(command<send_data, recv_ack, send_data, recv_data, recv_ack>({ 0xF0, 0 }));  // Dosbox-X sends ACK-data-ACK...
+                command<send_data, recv_kb_ack, send_data, recv_kb_ack, recv_kb_ack>({ 0xF0, set }); // Dosbox-X sends two ACKs
+                current_scancode_set = static_cast<scancode_set>(command<send_data, recv_kb_ack, send_data, recv_kb_data, recv_kb_ack>({ 0xF0, 0 }));  // Dosbox-X sends ACK-data-ACK...
             }
             else
             {
-                command<send_data, recv_ack, send_data, recv_ack>({ 0xF0, set });
-                current_scancode_set = static_cast<scancode_set>(command<send_data, recv_ack, send_data, recv_ack, recv_data>({ 0xF0, 0 }));  // Should be ACK-ACK-data.
+                command<send_data, recv_kb_ack, send_data, recv_kb_ack>({ 0xF0, set });
+                current_scancode_set = static_cast<scancode_set>(command<send_data, recv_kb_ack, send_data, recv_kb_ack, recv_kb_data>({ 0xF0, 0 }));  // Should be ACK-ACK-data.
             }
 
-            if (set == set3) command<send_data, recv_ack>({ 0xF8 });    // Enable make/break mode for all keys.
+            if (set == set3) command<send_data, recv_kb_ack>({ 0xF8 });    // Enable make/break mode for all keys.
         }
     }
 }
