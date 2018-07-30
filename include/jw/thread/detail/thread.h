@@ -81,7 +81,7 @@ namespace jw
                 std::size_t pending_exceptions() const noexcept { return __builtin_expect(exceptions.size(), 0); }
 
                 // Get the unique ID number for this thread.
-                const std::uint32_t& id() const noexcept { return id_num; }
+                std::uint32_t id() const noexcept { return id_num; }
 
                 // Get the current detail::thread_state (initialized, starting, running, suspended, terminating, finished)
                 thread_state get_state() const noexcept { return state; }

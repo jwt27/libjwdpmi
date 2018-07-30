@@ -44,7 +44,7 @@ namespace jw
                 // --- Public functions and variables inherited from detail::thread:
                 // bool is_running() const noexcept;
                 // std::size_t pending_exceptions() const noexcept;
-                // const std::uint32_t& id() const noexcept;
+                // std::uint32_t id() const noexcept;
                 // thread_state get_state() const noexcept;
                 // void suspend() noexcept;
                 // void resume() noexcept;
