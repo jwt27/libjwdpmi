@@ -885,18 +885,31 @@ namespace jw
                         {
                             if (packet[i][0] == 'r')
                             {
-                                auto begin = decode(packet[i].substr(1));
-                                ++i;
-                                auto end = decode(packet[i]);
-                                if (packet.size() > i + 1 and packet[i + 1].delim == ':')
+                                if (i + 1 >= packet.size() or packet[i + 1].delim != ',')
                                 {
-                                    auto id = decode(packet[i + 1]);
-                                    if(threads.count(id)) threads[id].set_action(packet[i - 1][0], 0, begin, end);
+                                    send_packet("E00");
+                                    break;
+                                }
+                                auto begin = decode(packet[i].substr(1));
+                                auto end = decode(packet[i + 1]);
+
+                                if (i + 2 < packet.size() and packet[i + 2].delim == ':')
+                                {
+                                    auto id = decode(packet[i + 2]);
+                                    if (threads.count(id)) threads[id].set_action(packet[i][0], 0, begin, end);
                                     ++i;
                                 }
-                                else send_packet("E00");
+                                else
+                                {
+                                    for (auto&& t : threads)
+                                    {
+                                        if (t.second.action == thread_info::none)
+                                            t.second.set_action(packet[i][0], 0, begin, end);
+                                    }
+                                }
+                                ++i;
                             }
-                            else if (packet.size() > i + 1 and packet[i + 1].delim == ':')
+                            else if (i + 1 < packet.size() and packet[i + 1].delim == ':')
                             {
                                 auto id = decode(packet[i + 1]);
                                 if (threads.count(id)) threads[id].set_action(packet[i][0]);
