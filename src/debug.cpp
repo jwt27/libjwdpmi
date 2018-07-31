@@ -83,7 +83,7 @@ namespace jw
             std::deque<packet_string, locked_pool_allocator<>> packet { alloc };
             bool replied { false };
 
-            constexpr auto all_threads_id { std::numeric_limits<std::uint32_t>::max() };
+            constexpr std::uint32_t all_threads_id { std::numeric_limits<std::uint32_t>::max() };
             std::uint32_t current_thread_id { 1 };
             std::uint32_t query_thread_id { 1 };
             std::uint32_t control_thread_id { all_threads_id };
@@ -888,7 +888,7 @@ namespace jw
                                 auto begin = decode(packet[i].substr(1));
                                 ++i;
                                 auto end = decode(packet[i]);
-                                if (packet.size() >= i and packet[i + 1].delim == ':')
+                                if (packet.size() > i + 1 and packet[i + 1].delim == ':')
                                 {
                                     auto id = decode(packet[i + 1]);
                                     if(threads.count(id)) threads[id].set_action(packet[i - 1][0], 0, begin, end);
@@ -896,7 +896,7 @@ namespace jw
                                 }
                                 else send_packet("E00");
                             }
-                            else if (packet.size() >= i and packet[i + 1].delim == ':')
+                            else if (packet.size() > i + 1 and packet[i + 1].delim == ':')
                             {
                                 auto id = decode(packet[i + 1]);
                                 if (threads.count(id)) threads[id].set_action(packet[i][0]);
