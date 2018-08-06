@@ -883,36 +883,23 @@ namespace jw
                     {
                         for (std::size_t i = 1; i < packet.size(); ++i)
                         {
-                            if (packet[i][0] == 'r')
+                            std::uintptr_t begin { 0 }, end { 0 };
+                            char c { packet[i][0] };
+                            if (c == 'r')
                             {
                                 if (i + 1 >= packet.size() or packet[i + 1].delim != ',')
                                 {
                                     send_packet("E00");
                                     break;
                                 }
-                                auto begin = decode(packet[i].substr(1));
-                                auto end = decode(packet[i + 1]);
-
-                                if (i + 2 < packet.size() and packet[i + 2].delim == ':')
-                                {
-                                    auto id = decode(packet[i + 2]);
-                                    if (threads.count(id)) threads[id].set_action(packet[i][0], 0, begin, end);
-                                    ++i;
-                                }
-                                else
-                                {
-                                    for (auto&& t : threads)
-                                    {
-                                        if (t.second.action == thread_info::none)
-                                            t.second.set_action(packet[i][0], 0, begin, end);
-                                    }
-                                }
+                                begin = decode(packet[i].substr(1));
+                                end = decode(packet[i + 1]);
                                 ++i;
                             }
-                            else if (i + 1 < packet.size() and packet[i + 1].delim == ':')
+                            if (i + 1 < packet.size() and packet[i + 1].delim == ':')
                             {
                                 auto id = decode(packet[i + 1]);
-                                if (threads.count(id)) threads[id].set_action(packet[i][0]);
+                                if (threads.count(id)) threads[id].set_action(c, 0, begin, end);
                                 ++i;
                             }
                             else
@@ -920,7 +907,7 @@ namespace jw
                                 for (auto&& t : threads)
                                 {
                                     if (t.second.action == thread_info::none)
-                                        t.second.set_action(packet[i][0]);
+                                        t.second.set_action(c, 0, begin, end);
                                 }
                             }
                         }
