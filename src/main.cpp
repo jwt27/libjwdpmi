@@ -12,7 +12,7 @@
 #include <jw/dpmi/detail/alloc.h>
 #include <jw/debug/detail/signals.h>
 #include <jw/io/rs232.h>
-#include <bits/cxxabi_init_exception.h>
+#include <cxxabi.h>
 #include <../jwdpmi_config.h>
 
 using namespace jw;
@@ -50,10 +50,9 @@ namespace jw
         return nullptr;
     }
 
-    // BLACK MAGIC HAPPENS HERE
     void patch__cxa_allocate_exception(auto* func) noexcept
     {
-        auto p = reinterpret_cast<byte*>(__cxxabiv1::__cxa_allocate_exception); // take the address of __cxa_allocate_exception
+        auto p = reinterpret_cast<byte*>(abi::__cxa_allocate_exception);        // take the address of __cxa_allocate_exception
         p = std::find(p, p + 0x20, 0xe8);                                       // find the first 0xe8 byte, assume this is the call to malloc.
         auto post_call = reinterpret_cast<std::uintptr_t>(p + 5);               // e8 call instruction is 5 bytes
         auto new_malloc = reinterpret_cast<std::ptrdiff_t>(func);               // take the address of new malloc
