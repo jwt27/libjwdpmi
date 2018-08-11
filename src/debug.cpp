@@ -130,13 +130,13 @@ namespace jw
                     else if (a == 'C')  // continue with signal
                     {
                         frame.flags.trap = false;
-                        if (all_benign_signals(this)) action = cont;
+                        if (is_benign_signal(last_stop_signal)) action = cont;
                         else action = cont_sig;
                     }
                     else if (a == 'S')  // step with signal
                     {
                         frame.flags.trap = trap_mask == 0;
-                        if (all_benign_signals(this)) action = step;
+                        if (is_benign_signal(last_stop_signal)) action = step;
                         else action = step_sig;
                     }
                     else if (a == 'r')   // step with range
