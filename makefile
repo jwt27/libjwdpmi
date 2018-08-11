@@ -1,5 +1,5 @@
 CXXFLAGS += -masm=intel
-CXXFLAGS += -std=gnu++17
+CXXFLAGS += -std=gnu++17 -fconcepts
 CXXFLAGS += -Wall -Wextra
 CXXFLAGS += -fasynchronous-unwind-tables
 CXXFLAGS += -fnon-call-exceptions
@@ -18,6 +18,7 @@ OBJDIR := obj
 SRC := $(wildcard $(SRCDIR)/*.cpp)
 OBJ := $(SRC:$(SRCDIR)/%.cpp=$(OBJDIR)/%.o)
 DEP := $(SRC:$(SRCDIR)/%.cpp=$(OBJDIR)/%.d)
+ASM := $(SRC:$(SRCDIR)/%.cpp=$(OBJDIR)/%.asm)
 PREPROCESSED := $(SRC:$(SRCDIR)/%.cpp=$(OBJDIR)/%.ii)
 
 .PHONY: all clean
@@ -25,6 +26,8 @@ PREPROCESSED := $(SRC:$(SRCDIR)/%.cpp=$(OBJDIR)/%.ii)
 all: $(OUTDIR)/$(OUTPUT)
 
 preprocessed: $(PREPROCESSED)
+
+asm: $(ASM)
 
 clean:
 	rm -f $(OBJ) $(DEP) $(OUTDIR)/$(OUTPUT)
@@ -37,6 +40,9 @@ $(OBJDIR):
 
 $(OUTDIR)/$(OUTPUT): $(OBJ) | $(OUTDIR)
 	$(AR) scru $@ $(OBJ) $(LIBS)
+
+$(OBJDIR)/%.asm: $(SRCDIR)/%.cpp jwdpmi_config.h | $(OBJDIR)
+	$(CXX) $(CXXFLAGS) -S -o $@ $(INCLUDE) -c $< $(PIPECMD)
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.cpp jwdpmi_config.h | $(OBJDIR)
 	$(CXX) $(CXXFLAGS) -MD -MP -MF $(@:.o=.d) -o $@ $(INCLUDE) -c $< $(PIPECMD)
