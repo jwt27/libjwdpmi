@@ -190,6 +190,7 @@ namespace jw
                 current_thread = &threads[current_thread_id];
             }
 
+            // Register order and sizes found in {gdb source}/gdb/regformats/i386/i386.dat
             enum regnum
             {
                 eax, ecx, edx, ebx,
