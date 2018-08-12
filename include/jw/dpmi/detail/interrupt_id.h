@@ -5,9 +5,16 @@
 #include <cstdint>
 #include <jw/dpmi/lock.h>
 #include <jw/dpmi/alloc.h>
+#include <cxxabi.h>
 
 namespace jw::dpmi::detail
 {
+    struct jw_cxa_eh_globals
+    {
+        void *caughtExceptions { nullptr };
+        unsigned int uncaughtExceptions { 0 };
+    } inline eh_globals;
+
     struct interrupt_id : public class_lock<interrupt_id>
     {
         locked_pool_allocator<> alloc { 1_KB };
@@ -20,15 +27,23 @@ namespace jw::dpmi::detail
             enum { interrupt, exception } const type;
             bool acknowledged { type == exception };
             constexpr id_t(std::uint64_t i, std::uint32_t v, auto t) noexcept : id(i), vector(v), type(t) { }
+            jw_cxa_eh_globals eh_globals { };
         };
         std::vector<std::shared_ptr<id_t>, locked_pool_allocator<>> current_interrupt { alloc };
 
         static void push_back(auto&&... args)
         { 
             auto* self = get();
+            if (self->current_interrupt.size() == 0) eh_globals = *reinterpret_cast<jw_cxa_eh_globals*>(abi::__cxa_get_globals());
             self->current_interrupt.push_back(std::allocate_shared<id_t>(self->alloc, self->id_count++, std::forward<decltype(args)>(args)...));
+            *reinterpret_cast<jw_cxa_eh_globals*>(abi::__cxa_get_globals()) = self->current_interrupt.back()->eh_globals;
         }
-        static void pop_back() { get()->current_interrupt.pop_back(); }
+        static void pop_back()
+        {
+            auto* self = get();
+            self->current_interrupt.pop_back();
+            *reinterpret_cast<jw_cxa_eh_globals*>(abi::__cxa_get_globals()) = (self->current_interrupt.size() == 0) ? eh_globals : self->current_interrupt.back()->eh_globals;
+        }
 
         static bool is_current_interrupt(const auto* p) noexcept { return p != nullptr and get()->current_interrupt.back()->id == p->id; }
         static auto get_current_interrupt() noexcept
