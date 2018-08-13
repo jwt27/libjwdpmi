@@ -9,6 +9,7 @@
 #include <jw/debug/debug.h>
 #include <jw/dpmi/detail/interrupt_id.h>
 #include <cstring>
+#include <vector>
 
 namespace jw
 {
@@ -16,14 +17,22 @@ namespace jw
     {
         namespace detail
         {
-            std::exception_ptr pending_exception;
+            inline std::vector<std::exception_ptr> pending_exceptions { };
 
-            [[noreturn, gnu::used, gnu::optimize("no-omit-frame-pointer")]]
+            [[gnu::no_caller_saved_registers]]
             void rethrow_cpu_exception()
             {
-                auto e = std::move(pending_exception);
-                pending_exception = nullptr;
-                std::rethrow_exception(e);
+                asm(".cfi_signal_frame");
+
+                try
+                {
+                    std::rethrow_exception(pending_exceptions.back());
+                }
+                catch (...)
+                {
+                    pending_exceptions.pop_back();
+                    throw;
+                }
             }
 
             bool enter_exception_context(exception_num exc) noexcept
@@ -64,13 +73,12 @@ namespace jw
                     if (f->fault_address.segment != get_cs()) return false;                         // and exception happened in our code
                     if (f->flags.v86mode) return false;                                             // and not in real mode (sanity check)
                     if (self->new_type and f->info_bits.host_exception) return false;               // and not in the DPMI host (extra sanity check)
-                    if (detail::pending_exception) return false;                                    // and we're not recursing
                     return true;
                 };
 
                 if (really_throw())
                 {
-                    detail::pending_exception = std::current_exception();
+                    detail::pending_exceptions.emplace_back(std::current_exception());
                     detail::simulate_call(f, detail::rethrow_cpu_exception);
                     success = true;
                 }
@@ -220,7 +228,7 @@ namespace jw
             switch (ev)
             {
             case exception_num::divide_error:             return "Divide error.";
-            case exception_num::trap:                    return "Debug exception.";
+            case exception_num::trap:                     return "Debug exception.";
             case exception_num::non_maskable_interrupt:   return "Non-maskable interrupt.";
             case exception_num::breakpoint:               return "Breakpoint.";
             case exception_num::overflow:                 return "Overflow.";
