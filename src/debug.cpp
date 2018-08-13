@@ -343,13 +343,11 @@ namespace jw
                 return true;
             }
 
-            inline bool set_breakpoint(std::uintptr_t at)
+            inline void set_breakpoint(std::uintptr_t at)
             {
                 auto* ptr = reinterpret_cast<byte*>(at);
-                if (*ptr == 0xcc) return false;
-                breakpoints[at] = *ptr;
+                if (breakpoints.count(at) == 0) breakpoints[at] = *ptr;
                 *ptr = 0xcc;
-                return true;
             }
 
             inline bool clear_breakpoint(std::uintptr_t at)
@@ -1051,8 +1049,8 @@ namespace jw
                             send_packet("");    // not implemented (TODO)
                             return;
                         }
-                        if (set_breakpoint(addr)) send_packet("OK");
-                        else send_packet("");
+                        set_breakpoint(addr);
+                        send_packet("OK");
                     }
                     else            // set watchpoint
                     {
