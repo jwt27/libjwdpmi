@@ -249,7 +249,7 @@ namespace jw
             {
                 std::stringstream s;
                 if (new_type) s << *static_cast<new_exception_frame*>(frame);
-                else s << frame;
+                else s << *frame;
                 s << *reg;
                 return s.str();
             }
