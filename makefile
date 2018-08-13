@@ -21,7 +21,7 @@ DEP := $(SRC:$(SRCDIR)/%.cpp=$(OBJDIR)/%.d)
 ASM := $(SRC:$(SRCDIR)/%.cpp=$(OBJDIR)/%.asm)
 PREPROCESSED := $(SRC:$(SRCDIR)/%.cpp=$(OBJDIR)/%.ii)
 
-.PHONY: all clean
+.PHONY: all clean preprocessed asm
 
 all: $(OUTDIR)/$(OUTPUT)
 
@@ -40,6 +40,10 @@ $(OBJDIR):
 
 $(OUTDIR)/$(OUTPUT): $(OBJ) | $(OUTDIR)
 	$(AR) scru $@ $(OBJ) $(LIBS)
+
+$(OBJDIR)/cpu_exception.% : override CXXFLAGS += -mgeneral-regs-only
+$(OBJDIR)/fpu.% : override CXXFLAGS += -mgeneral-regs-only
+$(OBJDIR)/irq.% : override CXXFLAGS += -mgeneral-regs-only
 
 $(OBJDIR)/%.asm: $(SRCDIR)/%.cpp jwdpmi_config.h | $(OBJDIR)
 	$(CXX) $(CXXFLAGS) -S -o $@ $(INCLUDE) -c $< $(PIPECMD)
