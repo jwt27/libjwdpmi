@@ -37,8 +37,7 @@ namespace jw
 #       ifndef NDEBUG
         namespace detail
         {
-            constexpr bool is_benign_signal(std::int32_t) noexcept;
-            bool all_benign_signals(auto*);
+            constexpr bool is_fault_signal(std::int32_t) noexcept;
             void uninstall_gdb_interface();
             [[noreturn]] void kill();
 
@@ -130,13 +129,13 @@ namespace jw
                     else if (a == 'C')  // continue with signal
                     {
                         frame.flags.trap = false;
-                        if (is_benign_signal(last_stop_signal)) action = cont;
+                        if (not is_fault_signal(last_stop_signal)) action = cont;
                         else action = cont_sig;
                     }
                     else if (a == 'S')  // step with signal
                     {
                         frame.flags.trap = trap_mask == 0;
-                        if (is_benign_signal(last_stop_signal)) action = step;
+                        if (not is_fault_signal(last_stop_signal)) action = step;
                         else action = step_sig;
                     }
                     else if (a == 'r')   // step with range
@@ -222,7 +221,7 @@ namespace jw
             constexpr auto reg_max = regnum::mxcsr;
 #           endif
 
-            constexpr std::uint32_t posix_signal(std::int32_t exc) noexcept
+            inline constexpr std::uint32_t posix_signal(std::int32_t exc) noexcept
             {
                 switch (exc)
                 {
@@ -284,6 +283,34 @@ namespace jw
                     return sigstop;
 
                 default: return sigusr1;
+                }
+            }
+
+            inline constexpr bool is_fault_signal(std::int32_t exc) noexcept
+            {
+                switch (exc)
+                {
+                default:
+                    return false;
+
+                case exception_num::divide_error:
+                case exception_num::overflow:
+                case exception_num::x87_exception:
+                case exception_num::sse_exception:
+                case exception_num::non_maskable_interrupt:
+                case exception_num::double_fault:
+                case exception_num::bound_range_exceeded:
+                case exception_num::x87_segment_not_present:
+                case exception_num::invalid_tss:
+                case exception_num::segment_not_present:
+                case exception_num::stack_segment_fault:
+                case exception_num::general_protection_fault:
+                case exception_num::page_fault:
+                case exception_num::invalid_opcode:
+                case exception_num::device_not_available:
+                case exception_num::alignment_check:
+                case exception_num::machine_check:
+                    return true;
                 }
             }
 
