@@ -1138,8 +1138,6 @@ namespace jw
                     }
 
                     if (debugmsg) std::clog << "leaving exception 0x" << std::hex << exc << ", resuming at 0x" << f->fault_address.offset << '\n';
-
-                    debugger_reentry = false;
                 };
 
                 auto clear_trap_signals = []
@@ -1151,98 +1149,93 @@ namespace jw
                     }
                 };
 
+                if (__builtin_expect(debugger_reentry, false))
+                {
+                    if (exc == 0x01 or exc == 0x03)
+                    {   // breakpoint in debugger code, ignore
+                        if (debugmsg) std::clog << "reentry caused by breakpoint, ignoring.\n";
+                        leave();
+                        f->flags.trap = false;
+                        return true;
+                    }
+                    if (debugmsg) std::clog << "debugger re-entry! " << *static_cast<new_exception_frame*>(f) << *r;
+                    throw cpu_exception { exc, r, f, new_frame_type };
+                }
+
                 try
                 {
-                    if (__builtin_expect(debugger_reentry, false))
+                    debugger_reentry = true;
+                    populate_thread_list();
+                    if (packet_available()) current_thread->signals.insert(packet_received);
+
+                    if (exc == exception_num::breakpoint and current_signal != -1)
                     {
-                        if (exc == 0x01 or exc == 0x03)
-                        {   // breakpoint in debugger code, ignore
-                            if (debugmsg) std::clog << "reentry caused by breakpoint, ignoring.\n";
-                            leave();
-                            return true;
-                        }
-                        // TODO: determine action based on last packet / signal
-                        if (not replied) send_packet("E04"); // last command caused another exception (most likely page fault after a request to read memory)
-                        if (debugmsg) std::clog << "debugger re-entry!\n";
-                        if (debugmsg) std::clog << *static_cast<new_exception_frame*>(f) << *r;
-                        current_thread->frame.info_bits.redirect_elsewhere = true;
-                        leave_exception_context();  // pretend it never happened.
+                        if (debugmsg) std::clog << "break with signal 0x" << std::hex << current_signal << '\n';
+                        current_thread->signals.insert(current_signal);
+                        current_signal = -1;
                     }
-                    else
+                    else current_thread->signals.insert(exc);
+
+                    if (current_thread->signals.count(trap_unmasked))
                     {
-                        debugger_reentry = true;
-                        populate_thread_list();
-                        if (packet_available()) current_thread->signals.insert(packet_received);
-
-                        if (exc == exception_num::breakpoint and current_signal != -1)
-                        {
-                            if (debugmsg) std::clog << "break with signal 0x" << std::hex << current_signal << '\n';
-                            current_thread->signals.insert(current_signal);
-                            current_signal = -1;
-                        }
-                        else current_thread->signals.insert(exc);
-
-                        if (current_thread->signals.count(trap_unmasked))
-                        {
-                            auto size = current_thread->signals.size();
-                            clear_trap_signals();
-                            if (size != current_thread->signals.size()) current_thread->signals.insert(continued); // resume with SIGCONT so gdb won't get confused
-                            current_thread->signals.erase(trap_unmasked);
-                        }
-
-                        if (current_thread->trap_mask > 0)
-                        {
-                            if (all_benign_signals(current_thread))
-                            {
-                                if (debugmsg) std::clog << "trap masked at 0x" << std::hex << f->fault_address.offset << "\n";
-                            }
-                            else
-                            {
-                                current_thread->trap_mask = 0;     // serious fault occured, undo trap masks
-                            }
-                        }
-
-                        if (debugmsg) std::clog << *static_cast<new_exception_frame*>(f) << *r;
-                        if (new_frame_type) current_thread->frame = *static_cast<new_exception_frame*>(f);
-                        else static_cast<old_exception_frame&>(current_thread->frame) = *f;
-                        current_thread->reg = *r;
-
-                        for (auto&&t : threads)
-                        {
-                            if (t.second.action == thread_info::none)
-                            {
-                                if (thread_events_enabled) t.second.set_action('t');
-                                else t.second.set_action('c');
-
-                                if (t.second.thread.lock()->get_state() == thread::detail::starting)
-                                    t.second.signals.insert(thread_started);
-                            }
-
-                            if (current_thread->signals.count(thread_switched) and t.second.action == thread_info::stop)
-                                t.second.signals.insert(thread_suspended);
-                        }
-
-                        current_thread->signals.erase(thread_switched);
-
-                        if (current_thread->action == thread_info::step_range and
-                            current_thread->frame.fault_address.offset >= current_thread->step_range_begin and
-                            current_thread->frame.fault_address.offset <= current_thread->step_range_end)
-                        {
-                            if (debugmsg) std::clog << "range step until 0x" << std::hex << current_thread->step_range_end;
-                            if (debugmsg) std::clog << ", now at 0x" << f->fault_address.offset << '\n';
-                            clear_trap_signals();
-                        }
-
-                        if (debugmsg)
-                        {
-                            std::clog << "signals:";
-                            for (auto&& s : current_thread->signals) std::clog << " 0x" << std::hex << s;
-                            std::clog << '\n';
-                        }
-
-                        if (temp_debugmsg) std::clog << "sending stop reply.\n";
-                        stop_reply();
+                        auto size = current_thread->signals.size();
+                        clear_trap_signals();
+                        if (size != current_thread->signals.size()) current_thread->signals.insert(continued); // resume with SIGCONT so gdb won't get confused
+                        current_thread->signals.erase(trap_unmasked);
                     }
+
+                    if (current_thread->trap_mask > 0)
+                    {
+                        if (all_benign_signals(current_thread))
+                        {
+                            if (debugmsg) std::clog << "trap masked at 0x" << std::hex << f->fault_address.offset << "\n";
+                        }
+                        else
+                        {
+                            current_thread->trap_mask = 0;     // serious fault occured, undo trap masks
+                        }
+                    }
+
+                    if (debugmsg) std::clog << *static_cast<new_exception_frame*>(f) << *r;
+                    if (new_frame_type) current_thread->frame = *static_cast<new_exception_frame*>(f);
+                    else static_cast<old_exception_frame&>(current_thread->frame) = *f;
+                    current_thread->reg = *r;
+
+                    for (auto&&t : threads)
+                    {
+                        if (t.second.action == thread_info::none)
+                        {
+                            if (thread_events_enabled) t.second.set_action('t');
+                            else t.second.set_action('c');
+
+                            if (t.second.thread.lock()->get_state() == thread::detail::starting)
+                                t.second.signals.insert(thread_started);
+                        }
+
+                        if (current_thread->signals.count(thread_switched) and t.second.action == thread_info::stop)
+                            t.second.signals.insert(thread_suspended);
+                    }
+
+                    current_thread->signals.erase(thread_switched);
+
+                    if (current_thread->action == thread_info::step_range and
+                        current_thread->frame.fault_address.offset >= current_thread->step_range_begin and
+                        current_thread->frame.fault_address.offset <= current_thread->step_range_end)
+                    {
+                        if (debugmsg) std::clog << "range step until 0x" << std::hex << current_thread->step_range_end;
+                        if (debugmsg) std::clog << ", now at 0x" << f->fault_address.offset << '\n';
+                        clear_trap_signals();
+                    }
+
+                    if (debugmsg)
+                    {
+                        std::clog << "signals:";
+                        for (auto&& s : current_thread->signals) std::clog << " 0x" << std::hex << s;
+                        std::clog << '\n';
+                    }
+
+                    if (temp_debugmsg) std::clog << "sending stop reply.\n";
+                    stop_reply();
 
                     if (config::enable_gdb_interrupts and current_thread->frame.flags.interrupt) asm("sti");
 
@@ -1256,7 +1249,15 @@ namespace jw
                     if (temp_debugmsg) std::clog << "entering main loop.\n";
                     do
                     {
-                        if (packet_available()) handle_packet();
+                        try
+                        {
+                            if (packet_available()) handle_packet();
+                        }
+                        catch (...)
+                        {
+                            // TODO: determine action based on last packet / signal
+                            if (not replied) send_packet("E04"); // last command caused another exception (most likely page fault after a request to read memory)
+                        }
                         recv_ack();
                     } while (cant_continue());
                     if (temp_debugmsg) std::clog << "leaving main loop.\n";
@@ -1272,6 +1273,7 @@ namespace jw
                 *r = current_thread->reg;
 
                 leave();
+                debugger_reentry = false;
 
                 return current_thread->do_action();
             }
