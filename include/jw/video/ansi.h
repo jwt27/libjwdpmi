@@ -93,7 +93,10 @@ namespace jw::video::ansi
     auto cursor_right(std::uint32_t p)  { return ansi_code { p, 'C' }; }
     auto cursor_left(std::uint32_t p)   { return ansi_code { p, 'D' }; }
 
-    auto set_cursor(vector2i pos)       { return ansi_code { pos[1] + 1, pos[0] + 1, 'H' }; }
+    auto save_cursor_pos()      { return ansi_code { 's' }; }
+    auto restore_cursor_pos()   { return ansi_code { 'u' }; }
+
+    auto set_cursor(vector2i pos) { return ansi_code { pos[1] + 1, pos[0] + 1, 'H' }; }
     auto move_cursor(vector2i pos)
     {
         auto x = pos[0], y = pos[1];
@@ -101,5 +104,17 @@ namespace jw::video::ansi
              + (y < 0 ? cursor_up(std::abs(y))   : cursor_down(y));
     }
 
-    auto clear_screen() { return ansi_code { 2, 'J' }; }
+    auto clear_screen()                 { return ansi_code { 2, 'J' }; }
+    auto clear_line()                   { return ansi_code { 'K' }; }
+    auto insert_lines(std::uint32_t n)  { return ansi_code { n, 'L' }; }
+    auto remove_lines(std::uint32_t n)  { return ansi_code { n, 'M' }; }
+    auto insert_spaces(std::uint32_t n) { return ansi_code { n, '@' }; }
+    auto erase_chars(std::uint32_t n)   { return ansi_code { n, 'P' }; }
+
+    auto set_video_mode(std::uint32_t mode) { return ansi_code { '=', mode, 'h' }; }
+    auto set_80x25_mode() { return set_video_mode(3); }
+    auto set_80x50_mode() { return set_80x25_mode() + set_video_mode(43); }
+
+    auto line_wrap(bool enable)     { return ansi_code { '?',  7, enable ? 'h' : 'l' }; }
+    auto fast_scroll(bool enable)   { return ansi_code { '?', 98, enable ? 'h' : 'l' }; }
 }
