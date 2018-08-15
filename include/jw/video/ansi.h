@@ -13,8 +13,6 @@
 
 namespace jw::video::ansi
 {
-    constexpr char esc = 27;
-
     bool install_check()
     {
         dpmi::realmode_registers r { };
@@ -22,8 +20,6 @@ namespace jw::video::ansi
         r.call_int(0x2f);
         return r.al == 0xff;
     }
-
-    enum color : std::uint8_t { black, red, green, yellow, blue, magenta, cyan, white };
 
     template<typename... T>
     struct ansi_code
@@ -43,22 +39,41 @@ namespace jw::video::ansi
         {
             auto f = out.flags();
             out << std::dec;
-            c.emit(std::make_index_sequence<std::tuple_size_v<decltype(string)>> { }, out);
+            c.emit(std::make_index_sequence<tuple_size()> { }, out);
             out.flags(f);
             return out;
         }
 
         template<typename... U>
-        friend constexpr auto operator+(const ansi_code& lhs, const ansi_code<U...>& rhs)
+        friend constexpr auto operator+(ansi_code lhs, ansi_code<U...> rhs)
         {
+            if (std::get<tuple_size() - 1>(lhs.string) == 'm' and std::get<rhs.first_char()>(rhs.string) == 'm')
+            {
+                std::get<tuple_size() - 1>(lhs.string) = ';';
+                std::get<0>(rhs.string) = '\0';
+                std::get<1>(rhs.string) = '\0';
+            }
             return ansi_code<T..., char, char, U...> { std::tuple_cat(lhs.string, rhs.string) };
         }
 
-    private:
+        constexpr static std::size_t tuple_size() { return std::tuple_size_v<decltype(string)>; }
+
         template<std::size_t i>
         constexpr static bool is_char()
         {
             return std::is_same_v<std::tuple_element_t<i, decltype(string)>, char>;
+        };
+
+        constexpr static std::size_t first_char() { return first_char(std::make_index_sequence<tuple_size()> { }); }
+
+        template<std::size_t... is>
+        constexpr static std::size_t first_char(std::index_sequence<is...>) { return first_char<is...>(); }
+
+        template<std::size_t i, std::size_t... next>
+        constexpr static std::size_t first_char()
+        {
+            if constexpr (i > 1 and is_char<i>()) return i;
+            else return first_char<next...>();
         };
 
         template<std::size_t... is>
@@ -68,15 +83,13 @@ namespace jw::video::ansi
         void emit(std::ostream& out) const
         {
             auto j = std::get<i>(string);
-            if constexpr (not is_char<i>())
-            {
-                if (j != 0) out << j;
-                if constexpr (not is_char<i + 1>()) out << ';';
-            }
-            else out.put(j);
+            if (j != 0) out << j;
+            if constexpr (not is_char<i>()) if constexpr (not is_char<i + 1>()) out << ';';
             if constexpr (sizeof...(next) > 0) emit<next...>(out);
         }
     };
+
+    enum color : std::uint32_t { black, red, green, yellow, blue, magenta, cyan, white };
 
     auto reset()                    { return ansi_code { 0, 'm' }; }
     auto bold(bool enable)          { return ansi_code { enable ? 1 : 22, 'm' }; }
