@@ -10,7 +10,6 @@ INCLUDE := -Iinclude
 LIBS := 
 
 OUTPUT := libjwdpmi.a
-DEPFILE := libjwdpmi.d
 
 SRCDIR := src
 OUTDIR := bin
@@ -30,7 +29,7 @@ preprocessed: $(PREPROCESSED)
 asm: $(ASM)
 
 clean:
-	rm -f $(OBJ) $(DEP) $(OUTDIR)/$(OUTPUT)
+	rm -f $(OBJ) $(DEP) $(ASM) $(PREPROCESSED) $(OUTDIR)/$(OUTPUT)
 
 $(OUTDIR): 
 	mkdir -p $(OUTDIR)
