@@ -126,7 +126,8 @@ namespace jw::video::ansi
 
     auto set_video_mode(std::uint32_t mode) { return ansi_code { '=', mode, 'h' }; }
     auto set_80x25_mode() { return set_video_mode(3); }
-    auto set_80x50_mode() { return set_80x25_mode() + set_video_mode(43); }
+    auto set_80x43_mode() { return set_80x25_mode() + set_video_mode(43); }
+    auto set_80x50_mode() { return set_80x43_mode() + set_video_mode(50); }
 
     auto line_wrap(bool enable)     { return ansi_code { '?',  7, enable ? 'h' : 'l' }; }
     auto fast_scroll(bool enable)   { return ansi_code { '?', 98, enable ? 'h' : 'l' }; }
