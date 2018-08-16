@@ -45,7 +45,7 @@ namespace jw::video::ansi
         }
 
         template<typename... U>
-        friend constexpr auto operator+(ansi_code lhs, ansi_code<U...> rhs)
+        friend constexpr auto operator+(ansi_code lhs, ansi_code<U...> rhs) noexcept
         {
             if (std::get<tuple_size() - 1>(lhs.string) == 'm' and std::get<rhs.first_char()>(rhs.string) == 'm')
             {
@@ -56,21 +56,18 @@ namespace jw::video::ansi
             return ansi_code<T..., char, char, U...> { std::tuple_cat(lhs.string, rhs.string) };
         }
 
-        constexpr static std::size_t tuple_size() { return std::tuple_size_v<decltype(string)>; }
+        constexpr static std::size_t tuple_size() noexcept { return std::tuple_size_v<decltype(string)>; }
 
         template<std::size_t i>
-        constexpr static bool is_char()
-        {
-            return std::is_same_v<std::tuple_element_t<i, decltype(string)>, char>;
-        };
+        constexpr static bool is_char() noexcept { return std::is_same_v<std::tuple_element_t<i, decltype(string)>, char>; };
 
-        constexpr static std::size_t first_char() { return first_char(std::make_index_sequence<tuple_size()> { }); }
+        constexpr static std::size_t first_char() noexcept { return first_char(std::make_index_sequence<tuple_size()> { }); }
 
         template<std::size_t... is>
-        constexpr static std::size_t first_char(std::index_sequence<is...>) { return first_char<is...>(); }
+        constexpr static std::size_t first_char(std::index_sequence<is...>) noexcept { return first_char<is...>(); }
 
         template<std::size_t i, std::size_t... next>
-        constexpr static std::size_t first_char()
+        constexpr static std::size_t first_char() noexcept
         {
             if constexpr (i > 1 and is_char<i>()) return i;
             else return first_char<next...>();
@@ -91,44 +88,44 @@ namespace jw::video::ansi
 
     enum color : std::uint32_t { black, red, green, yellow, blue, magenta, cyan, white };
 
-    auto reset()                    { return ansi_code { 0, 'm' }; }
-    auto bold(bool enable)          { return ansi_code { enable ? 1 : 22, 'm' }; }
-    auto underline(bool enable)     { return ansi_code { enable ? 4 : 24, 'm' }; }
-    auto blink(bool enable)         { return ansi_code { enable ? 5 : 25, 'm' }; }
-    auto fast_blink(bool enable)    { return ansi_code { enable ? 6 : 26, 'm' }; }
-    auto reverse(bool enable)       { return ansi_code { enable ? 7 : 27, 'm' }; }
-    auto invisible(bool enable)     { return ansi_code { enable ? 8 : 28, 'm' }; }
-    auto fg(color c)                { return ansi_code { 30 + c, 'm' }; }
-    auto bg(color c)                { return ansi_code { 40 + c, 'm' }; }
+    constexpr auto reset() noexcept                 { return ansi_code { 0, 'm' }; }
+    constexpr auto bold(bool enable) noexcept       { return ansi_code { enable ? 1 : 22, 'm' }; }
+    constexpr auto underline(bool enable) noexcept  { return ansi_code { enable ? 4 : 24, 'm' }; }
+    constexpr auto blink(bool enable) noexcept      { return ansi_code { enable ? 5 : 25, 'm' }; }
+    constexpr auto fast_blink(bool enable) noexcept { return ansi_code { enable ? 6 : 26, 'm' }; }
+    constexpr auto reverse(bool enable) noexcept    { return ansi_code { enable ? 7 : 27, 'm' }; }
+    constexpr auto invisible(bool enable) noexcept  { return ansi_code { enable ? 8 : 28, 'm' }; }
+    constexpr auto fg(color c) noexcept             { return ansi_code { 30 + c, 'm' }; }
+    constexpr auto bg(color c) noexcept             { return ansi_code { 40 + c, 'm' }; }
 
-    auto cursor_up(std::uint32_t p)     { return ansi_code { p, 'A' }; }
-    auto cursor_down(std::uint32_t p)   { return ansi_code { p, 'B' }; }
-    auto cursor_right(std::uint32_t p)  { return ansi_code { p, 'C' }; }
-    auto cursor_left(std::uint32_t p)   { return ansi_code { p, 'D' }; }
+    constexpr auto cursor_up(std::uint32_t p) noexcept      { return ansi_code { p, 'A' }; }
+    constexpr auto cursor_down(std::uint32_t p) noexcept    { return ansi_code { p, 'B' }; }
+    constexpr auto cursor_right(std::uint32_t p) noexcept   { return ansi_code { p, 'C' }; }
+    constexpr auto cursor_left(std::uint32_t p) noexcept    { return ansi_code { p, 'D' }; }
 
-    auto save_cursor_pos()      { return ansi_code { 's' }; }
-    auto restore_cursor_pos()   { return ansi_code { 'u' }; }
+    constexpr auto save_cursor_pos() noexcept       { return ansi_code { 's' }; }
+    constexpr auto restore_cursor_pos() noexcept    { return ansi_code { 'u' }; }
 
-    auto set_cursor(vector2i pos) { return ansi_code { pos[1] + 1, pos[0] + 1, 'H' }; }
-    auto move_cursor(vector2i pos)
+    constexpr auto set_cursor(vector2i pos) noexcept    { return ansi_code { pos[1] + 1, pos[0] + 1, 'H' }; }
+    constexpr auto move_cursor(vector2i pos) noexcept
     {
         auto x = pos[0], y = pos[1];
         return (x < 0 ? cursor_left(std::abs(x)) : cursor_right(x))
              + (y < 0 ? cursor_up(std::abs(y))   : cursor_down(y));
     }
 
-    auto clear_screen()                 { return ansi_code { 2, 'J' }; }
-    auto clear_line()                   { return ansi_code { 'K' }; }
-    auto insert_lines(std::uint32_t n)  { return ansi_code { n, 'L' }; }
-    auto remove_lines(std::uint32_t n)  { return ansi_code { n, 'M' }; }
-    auto insert_spaces(std::uint32_t n) { return ansi_code { n, '@' }; }
-    auto erase_chars(std::uint32_t n)   { return ansi_code { n, 'P' }; }
+    constexpr auto clear_screen() noexcept                  { return ansi_code { 2, 'J' }; }
+    constexpr auto clear_line() noexcept                    { return ansi_code { 'K' }; }
+    constexpr auto insert_lines(std::uint32_t n) noexcept   { return ansi_code { n, 'L' }; }
+    constexpr auto remove_lines(std::uint32_t n) noexcept   { return ansi_code { n, 'M' }; }
+    constexpr auto insert_spaces(std::uint32_t n) noexcept  { return ansi_code { n, '@' }; }
+    constexpr auto erase_chars(std::uint32_t n) noexcept    { return ansi_code { n, 'P' }; }
 
-    auto set_video_mode(std::uint32_t mode) { return ansi_code { '=', mode, 'h' }; }
-    auto set_80x25_mode() { return set_video_mode(3); }
-    auto set_80x43_mode() { return set_80x25_mode() + set_video_mode(43); }
-    auto set_80x50_mode() { return set_80x43_mode() + set_video_mode(50); }
+    constexpr auto set_video_mode(std::uint32_t mode) noexcept  { return ansi_code { '=', mode, 'h' }; }
+    constexpr auto set_80x25_mode() noexcept                    { return set_video_mode(3); }
+    constexpr auto set_80x43_mode() noexcept                    { return set_80x25_mode() + set_video_mode(43); }
+    constexpr auto set_80x50_mode() noexcept                    { return set_80x43_mode() + set_video_mode(50); }
 
-    auto line_wrap(bool enable)     { return ansi_code { '?',  7, enable ? 'h' : 'l' }; }
-    auto fast_scroll(bool enable)   { return ansi_code { '?', 98, enable ? 'h' : 'l' }; }
+    constexpr auto line_wrap(bool enable) noexcept      { return ansi_code { '?',  7, enable ? 'h' : 'l' }; }
+    constexpr auto fast_scroll(bool enable) noexcept    { return ansi_code { '?', 98, enable ? 'h' : 'l' }; }
 }
