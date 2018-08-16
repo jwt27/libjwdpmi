@@ -83,7 +83,7 @@ namespace jw::video::ansi
         void emit(std::ostream& out) const
         {
             auto j = std::get<i>(string);
-            if (j != 0) out << j;
+            if (__builtin_expect(j != 0, true)) out << j;
             if constexpr (not is_char<i>()) if constexpr (not is_char<i + 1>()) out << ';';
             if constexpr (sizeof...(next) > 0) emit<next...>(out);
         }
