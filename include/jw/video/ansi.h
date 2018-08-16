@@ -10,6 +10,7 @@
 #include <utility>
 #include <tuple>
 #include <cmath>
+#include <charconv>
 
 namespace jw::video::ansi
 {
@@ -37,11 +38,9 @@ namespace jw::video::ansi
 
         friend std::ostream& operator<<(std::ostream& out, const ansi_code& c)
         {
-            auto f = out.flags();
-            out << std::dec;
-            c.emit(std::make_index_sequence<tuple_size()> { }, out);
-            out.flags(f);
-            return out;
+            std::array<char, tuple_size() * 4> str;
+            c.emit(std::make_index_sequence<tuple_size()> { }, str.data());
+            return out << str.data();
         }
 
         template<typename... U>
@@ -74,15 +73,25 @@ namespace jw::video::ansi
         };
 
         template<std::size_t... is>
-        void emit(std::index_sequence<is...>, std::ostream& out) const { emit<is...>(out); }
+        void emit(std::index_sequence<is...>, char* out) const { emit<is...>(out); }
 
         template<std::size_t i, std::size_t... next>
-        void emit(std::ostream& out) const
+        void emit(char* out) const
         {
             auto j = std::get<i>(string);
-            if (__builtin_expect(j != 0, true)) out << j;
-            if constexpr (not is_char<i>()) if constexpr (not is_char<i + 1>()) out << ';';
+
+            if constexpr (not is_char<i>())
+            {
+                if (__builtin_expect(j != 0, true))
+                {
+                    out = std::to_chars(out, out + 4, j).ptr;
+                }
+                if constexpr (not is_char<i + 1>()) *(out++) = ';';
+            }
+            else if (__builtin_expect(j != 0, true)) *(out++) = j;
+
             if constexpr (sizeof...(next) > 0) emit<next...>(out);
+            else *out = '\0';
         }
     };
 
