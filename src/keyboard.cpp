@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
@@ -10,8 +11,6 @@ namespace jw
 {
     namespace io
     {
-        std::streambuf* keyboard::cin { nullptr };
-
         void keyboard::update()
         {
             auto codes = interface->get_scancodes();

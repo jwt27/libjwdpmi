@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
@@ -18,7 +19,7 @@ namespace jw
     {
         struct keyboard final
         {
-            event<void(key_state_pair)> key_changed;
+            chain_event<bool(key_state_pair)> key_changed;
 
             const key_state& get(key k) const { return keys[k]; }
             const key_state& operator[](key k) const { return keys[k]; }
@@ -40,8 +41,8 @@ namespace jw
             std::shared_ptr<keyboard_interface> interface;
             mutable std::unordered_map<key, key_state> keys { };
             std::unique_ptr<std::streambuf> streambuf;
-            static std::streambuf* cin;
-            static bool cin_redirected;
+            static inline std::streambuf* cin { nullptr };
+            static inline bool cin_redirected { false };
         };
     }
 }
