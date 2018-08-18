@@ -12,12 +12,12 @@ namespace jw
 {
     namespace video
     {
-        struct bios
+        struct vga_bios
         {
             virtual void set_mode(vbe_mode m, const crtc_info* = nullptr);
         };
 
-        struct vga : public bios
+        struct vga : public vga_bios
         {
             virtual void set_palette(const px32a* begin, const px32a* end, std::size_t first = 0, bool wait_for_vsync = false);
             virtual void set_palette(const std::vector<px32a>& data, std::size_t first = 0, bool wait_for_vsync = false)

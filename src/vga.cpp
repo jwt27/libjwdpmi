@@ -9,7 +9,7 @@ namespace jw
 {
     namespace video
     {
-        void bios::set_mode(vbe_mode m, const crtc_info *)
+        void vga_bios::set_mode(vbe_mode m, const crtc_info *)
         {
             if (m.dont_clear_video_memory) m.mode |= 0x80;
             dpmi::realmode_registers reg { };
