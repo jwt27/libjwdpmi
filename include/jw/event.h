@@ -66,23 +66,14 @@ namespace jw
         auto operator()(Args&&... args)
         {
             auto& v = subscribers;
-            subscribers.erase(std::remove_if(v.begin(), v.end(), [](auto& i) { return i.expired(); }), v.end());
-            return call(std::is_void<R> { }, std::forward<Args>(args)...);
-        }
-
-    protected:
-        template<typename... Args>
-        void call(std::true_type, Args&&... args)
-        {
-            for (auto i : subscribers) (*i.lock())(std::forward<Args>(args)...);
-        }
-
-        template<typename... Args>
-        std::vector<R> call(std::false_type, Args&&... args)
-        {
-            std::vector<R> result;
-            for (auto i : subscribers) result.push_back((*i.lock())(std::forward<Args>(args)...));
-            return result;
+            [[maybe_unused]] std::conditional_t<std::is_void_v<R>, int, std::vector<R>> result;
+            for (auto i = v.begin(); i != v.end(); i->expired()? i = v.erase(i) : ++i)
+            {
+                auto call = [&] { return (*(i->lock()))(std::forward<Args>(args)...); };
+                if constexpr (std::is_void_v<R>) call();
+                else result.push_back(call());
+            }
+            if constexpr (not std::is_void_v<R>) return result;
         }
 
     private:
