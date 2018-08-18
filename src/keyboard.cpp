@@ -27,27 +27,30 @@ namespace jw
                 keys[key::any_shift] = keys[key::shift_left] | keys[key::shift_right];
                 keys[key::any_win] = keys[key::win_left] | keys[key::win_right];
 
-                interface->set_leds(keys[key::num_lock_state].is_down(),
-                                    keys[key::caps_lock_state].is_down(),
-                                    keys[key::scroll_lock_state].is_down());
-
                 key_changed(k);
             };
 
-            for (auto c : codes)
+            for (auto&& c : codes)
             {
                 auto k = c.decode();
                 handle_key(k);
 
-                static std::unordered_map<key, key> lock_key_table
+                auto set_lock_state = [this, &handle_key](auto k, auto state_key)
                 {
-                    { key::num_lock, key::num_lock_state },
-                    { key::caps_lock, key::caps_lock_state },
-                    { key::scroll_lock, key::scroll_lock_state }
+                    if (keys[k.first].is_up() and k.second.is_down())
+                        handle_key({ state_key, not keys[state_key] });
+
+                    interface->set_leds(keys[key::num_lock_state].is_down(),
+                                        keys[key::caps_lock_state].is_down(),
+                                        keys[key::scroll_lock_state].is_down());
                 };
 
-                if (lock_key_table.count(k.first) && keys[k.first].is_up() && k.second.is_down())
-                    handle_key({ lock_key_table[k.first], !keys[lock_key_table[k.first]] });
+                switch (k.first)
+                {
+                case key::num_lock: set_lock_state(k, key::num_lock_state); break;
+                case key::caps_lock: set_lock_state(k, key::caps_lock_state); break;
+                case key::scroll_lock: set_lock_state(k, key::scroll_lock_state); break;
+                }
             }
         }
 
