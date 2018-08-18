@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
@@ -24,7 +25,8 @@ namespace jw
         callback(const callback& c) = delete;
         callback() = delete;
 
-        R operator()(A... args) { return (*handler_ptr)(std::forward<A>(args)...); }
+        template<typename... Args>
+        R operator()(Args&&... args) { return (*handler_ptr)(std::forward<Args>(args)...); }
 
         std::weak_ptr<handler_t> get_ptr() const { return handler_ptr; }
         operator std::weak_ptr<handler_t>() const { return get_ptr(); }
@@ -60,23 +62,26 @@ namespace jw
             return *this;
         }
 
-        auto operator()(A... args)
+        template<typename... Args>
+        auto operator()(Args&&... args)
         {
             auto& v = subscribers;
             subscribers.erase(std::remove_if(v.begin(), v.end(), [](auto& i) { return i.expired(); }), v.end());
-            return call(std::is_void<R> { }, std::forward<A>(args)...);
+            return call(std::is_void<R> { }, std::forward<Args>(args)...);
         }
 
     protected:
-        void call(std::true_type, A... args)
+        template<typename... Args>
+        void call(std::true_type, Args&&... args)
         {
-            for (auto i : subscribers) (*i.lock())(std::forward<A>(args)...);
+            for (auto i : subscribers) (*i.lock())(std::forward<Args>(args)...);
         }
 
-        std::vector<R> call(std::false_type, A... args)
+        template<typename... Args>
+        std::vector<R> call(std::false_type, Args&&... args)
         {
             std::vector<R> result;
-            for (auto i : subscribers) result.push_back((*i.lock())(std::forward<A>(args)...));
+            for (auto i : subscribers) result.push_back((*i.lock())(std::forward<Args>(args)...));
             return result;
         }
 
