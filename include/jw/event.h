@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <type_traits>
 #include <functional>
 #include <algorithm>
 #include <memory>
@@ -14,9 +15,8 @@ namespace jw
 {
     template <typename sig> class callback;
     template <typename R, typename ... A>
-    class callback<R(A...)>
+    struct callback<R(A...)>
     {
-    public:
         using handler_t = std::function<R(A...)>;
 
         template<typename F>
@@ -41,11 +41,11 @@ namespace jw
     template<typename F, typename Sig = typename std::__function_guide_helper<decltype(&F::operator())>::type>
     callback(F) -> callback<Sig>;
 
+    // General event. All handlers are called, in order of subscription.
     template<typename sig> class event;
     template <typename R, typename ... A>
-    class event<R(A...)>
+    struct event<R(A...)>
     {
-    public:
         using callback_t = callback<R(A...)>;
         using event_handler = typename callback_t::handler_t;
 
@@ -58,7 +58,7 @@ namespace jw
         event& operator-=(callback_t& f)
         {                         
             auto& v = subscribers;
-            subscribers.erase(std::remove_if(v.begin(), v.end(), [&f](auto& i) { return i.expired() || i.lock() == f.get_ptr().lock(); }), v.end());
+            subscribers.erase(std::remove_if(v.begin(), v.end(), [&f](auto& i) { return i.expired() or i.lock() == f.get_ptr().lock(); }), v.end());
             return *this;
         }
 
@@ -74,6 +74,42 @@ namespace jw
                 else result.push_back(call());
             }
             if constexpr (not std::is_void_v<R>) return result;
+        }
+
+    private:
+        std::list<std::weak_ptr<event_handler>> subscribers;
+    };
+
+    // Chaining event. Last subscribed handler is called first.
+    // Each event handler returns a boolean value. The chain ends when a callback returns true.
+    template<typename sig> class chain_event;
+    template <typename R, typename ... A>
+    struct chain_event<R(A...)>
+    {
+        static_assert(std::is_same_v<R, bool>);
+        using callback_t = callback<R(A...)>;
+        using event_handler = typename callback_t::handler_t;
+
+        chain_event& operator+=(callback_t& f)
+        {
+            subscribers.push_front(f.get_ptr());
+            return *this;
+        }
+
+        chain_event& operator-=(callback_t& f)
+        {
+            auto& v = subscribers;
+            subscribers.erase(std::remove_if(v.begin(), v.end(), [&f](auto& i) { return i.expired() or i.lock() == f.get_ptr().lock(); }), v.end());
+            return *this;
+        }
+
+        template<typename... Args>
+        bool operator()(Args&&... args)
+        {
+            auto& v = subscribers;
+            for (auto i = v.begin(); i != v.end(); i->expired() ? i = v.erase(i) : ++i)
+                if ((*(i->lock()))(std::forward<Args>(args)...)) return true;
+            return false;
         }
 
     private:
