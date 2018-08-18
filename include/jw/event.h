@@ -8,7 +8,7 @@
 #include <functional>
 #include <algorithm>
 #include <memory>
-#include <vector>
+#include <list>
 
 namespace jw
 {
@@ -86,7 +86,7 @@ namespace jw
         }
 
     private:
-        std::vector<std::weak_ptr<event_handler>> subscribers;
+        std::list<std::weak_ptr<event_handler>> subscribers;
     };
 }
 
