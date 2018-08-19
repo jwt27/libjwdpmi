@@ -3,7 +3,7 @@
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
-#include <string>
+#include <string_view>
 #include <unordered_map>
 #include <jw/enum_struct.h>
 
@@ -61,14 +61,14 @@ namespace jw
             char to_ascii(const keyboard& kb) const;
             bool is_printable(bool shift, bool caps_lock, bool num_lock) const;
             bool is_printable(const keyboard& kb) const;
-            std::string name() const;
+            std::string_view name() const;
 
         private:
             static std::unordered_map<key, char> ascii_table;
             static std::unordered_map<key, char> ascii_num_table;
             static std::unordered_map<key, char> ascii_caps_table;
             static std::unordered_map<key, char> ascii_shift_table;
-            static std::unordered_map<key, std::string> name_table;
+            static std::unordered_map<key, std::string_view> name_table;
         };
 
 

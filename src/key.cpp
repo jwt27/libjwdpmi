@@ -18,7 +18,7 @@ namespace jw
             return 0;
         }
 
-        std::string key::name() const
+        std::string_view key::name() const
         {
             if (name_table.count(value)) return name_table[value];
             return std::string { to_ascii(false, true, true) };
@@ -171,7 +171,7 @@ namespace jw
             { key::slash, '?' }
         };
 
-        std::unordered_map<key, std::string> key::name_table
+        std::unordered_map<key, std::string_view> key::name_table
         {
             { key::esc, "Esc" },
             { key::f1, "F1" },
