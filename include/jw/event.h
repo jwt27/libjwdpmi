@@ -67,11 +67,16 @@ namespace jw
         {
             auto& v = subscribers;
             [[maybe_unused]] std::conditional_t<std::is_void_v<R>, int, std::vector<R>> result;
-            for (auto i = v.begin(); i != v.end(); i->expired()? i = v.erase(i) : ++i)
+            for (auto i = v.begin(); i != v.end();)
             {
-                auto call = [&] { return (*(i->lock()))(std::forward<Args>(args)...); };
-                if constexpr (std::is_void_v<R>) call();
-                else result.push_back(call());
+                if (not i->expired())
+                {
+                    auto call = [&] { return (*(i->lock()))(std::forward<Args>(args)...); };
+                    if constexpr (std::is_void_v<R>) call();
+                    else result.push_back(call());
+                    ++i;
+                }
+                else i = v.erase(i);
             }
             if constexpr (not std::is_void_v<R>) return result;
         }
@@ -107,8 +112,15 @@ namespace jw
         bool operator()(Args&&... args)
         {
             auto& v = subscribers;
-            for (auto i = v.begin(); i != v.end(); i->expired() ? i = v.erase(i) : ++i)
-                if ((*(i->lock()))(std::forward<Args>(args)...)) return true;
+            for (auto i = v.begin(); i != v.end();)
+            {
+                if (not i->expired())
+                {
+                    if ((*(i->lock()))(std::forward<Args>(args)...)) return true;
+                    ++i;
+                }
+                else i = v.erase(i);
+            }
             return false;
         }
 
