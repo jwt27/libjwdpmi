@@ -14,7 +14,7 @@
 
 namespace jw::video::ansi
 {
-    bool install_check()
+    inline bool install_check()
     {
         dpmi::realmode_registers r { };
         r.ax = 0x1a00;
