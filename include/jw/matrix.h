@@ -34,25 +34,25 @@ namespace jw
         constexpr auto& operator+=(std::ptrdiff_t n) const 
         {
             p += n * direction();
-            if constexpr (D == matrix_iterator_direction::right) if (p.x >= r.width())
+            if constexpr (D == matrix_iterator_direction::right) if (p.x() >= r.width())
             {
-                p.y += p.x / r.width();
-                p.x %= r.width();
+                p.y() += p.x() / r.width();
+                p.x() %= r.width();
             }
-            if constexpr (D == matrix_iterator_direction::left) if (p.x < 0)
+            if constexpr (D == matrix_iterator_direction::left) if (p.x() < 0)
             {
-                p.y -= std::abs(p.x / r.width()) + 1;
-                p.x = r.width() - (std::abs(p.x + 1) % r.width()) - 1;
+                p.y() -= std::abs(p.x() / r.width()) + 1;
+                p.x() = r.width() - (std::abs(p.x() + 1) % r.width()) - 1;
             }
-            if constexpr (D == matrix_iterator_direction::down) if (p.y >= r.height())
+            if constexpr (D == matrix_iterator_direction::down) if (p.y() >= r.height())
             {
-                p.x += p.y / r.height();
-                p.y %= r.height();
+                p.x() += p.y() / r.height();
+                p.y() %= r.height();
             }
-            if constexpr (D == matrix_iterator_direction::up) if (p.y < 0)
+            if constexpr (D == matrix_iterator_direction::up) if (p.y() < 0)
             {
-                p.x -= std::abs(p.y / r.height()) + 1;
-                p.y = r.height() - (std::abs(p.y + 1) % r.height()) - 1;
+                p.x() -= std::abs(p.y() / r.height()) + 1;
+                p.y() = r.height() - (std::abs(p.y() + 1) % r.height()) - 1;
             }
             return *this;
         }
@@ -60,7 +60,7 @@ namespace jw
         constexpr auto& operator++() const noexcept { return *this += 1; }
         constexpr auto& operator++(int) const noexcept { auto copy = matrix_iterator { *this }; *this += 1; return copy; }
 
-        constexpr bool invalid() const noexcept { return (p.x < 0 or p.x >= r.width() or p.y < 0 or p.y >= r.height()); }
+        constexpr bool invalid() const noexcept { return (p.x() < 0 or p.x() >= r.width() or p.y() < 0 or p.y() >= r.height()); }
         constexpr vector2i direction() const noexcept
         {
             if constexpr (D == matrix_iterator_direction::up) return vector2i::up();
@@ -160,8 +160,8 @@ namespace jw
 
         [[gnu::const]] constexpr const auto& position() const noexcept { return pos; }
         [[gnu::const]] constexpr auto size() const noexcept { return std::abs(dim); }
-        [[gnu::const]] constexpr auto width() const noexcept { return size().x; }
-        [[gnu::const]] constexpr auto height() const noexcept { return size().y; }
+        [[gnu::const]] constexpr auto width() const noexcept { return size().x(); }
+        [[gnu::const]] constexpr auto height() const noexcept { return size().y(); }
 
         template<unsigned level = L> constexpr auto& matrix() const noexcept
         {
@@ -229,7 +229,7 @@ namespace jw
     struct matrix_container : public matrix<T>
     {
         matrix_container(vector2i size, std::experimental::pmr::memory_resource* memres = std::experimental::pmr::get_default_resource()) 
-            : matrix<T>(size, nullptr), data(size.x * size.y, std::experimental::pmr::polymorphic_allocator<T> { memres }) { this->ptr = data.data(); }
+            : matrix<T>(size, nullptr), data(size.x() * size.y(), std::experimental::pmr::polymorphic_allocator<T> { memres }) { this->ptr = data.data(); }
         matrix_container(std::size_t w, std::size_t h, std::experimental::pmr::memory_resource* memres = std::experimental::pmr::get_default_resource())
             : matrix_container(vector2i { w,h }, memres) { }
 
