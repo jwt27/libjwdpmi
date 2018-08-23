@@ -70,6 +70,8 @@ namespace jw
         template <typename U, std::enable_if_t<std::is_same_v<decltype(std::declval<T>() * std::declval<U>()), T>, bool> = { }>
         constexpr vector& promoted() noexcept { return *this; }
 
+        template<typename U> auto promote_scalar(const U& scalar) { return static_cast<decltype(std::declval<T>() * std::declval<U>())>(scalar); }
+
         constexpr auto& operator+=(const vector& rhs) noexcept { v += rhs.v; return *this; }
         constexpr auto& operator-=(const vector& rhs) noexcept { return *this += -rhs; }
 
@@ -85,13 +87,13 @@ namespace jw
         template <typename U> constexpr auto& operator+=(const vector<N, U>& rhs) noexcept { auto lhs = promoted<U>(); lhs.v += rhs.template promoted<T>().v; return *this = lhs; }
         template <typename U> constexpr auto& operator-=(const vector<N, U>& rhs) noexcept { return *this += -rhs; }
 
-        template <typename U> constexpr vector& operator*=(const U& rhs) noexcept { auto lhs = promoted<U>(); lhs.v *= rhs; return *this = lhs; }
-        template <typename U> constexpr vector& operator/=(const U& rhs) { auto lhs = promoted<U>(); lhs.v /= rhs; return *this = lhs; }
+        template <typename U> constexpr vector& operator*=(const U& rhs) noexcept { auto lhs = promoted<U>(); lhs.v *= promote_scalar(rhs); return *this = lhs; }
+        template <typename U> constexpr vector& operator/=(const U& rhs) { auto lhs = promoted<U>(); lhs.v /= promote_scalar(rhs); return *this = lhs; }
 
-        template <typename U> friend constexpr auto operator+(vector lhs, const vector<N, U>& rhs) noexcept { return lhs.promoted<U>() += rhs; }
-        template <typename U> friend constexpr auto operator-(vector lhs, const vector<N, U>& rhs) noexcept { return lhs.promoted<U>() -= rhs; }
-        template <typename U> friend constexpr auto operator*(vector lhs, const U& rhs) noexcept { return lhs.promoted<U>() *= rhs; }
-        template <typename U> friend constexpr auto operator/(vector lhs, const U& rhs) { return lhs.promoted<U>() /= rhs; }
+        template <typename U> friend constexpr auto operator+(vector lhs, const vector<N, U>& rhs) noexcept { return lhs += rhs; }
+        template <typename U> friend constexpr auto operator-(vector lhs, const vector<N, U>& rhs) noexcept { return lhs -= rhs; }
+        template <typename U> friend constexpr auto operator*(vector lhs, const U& rhs) noexcept { return lhs *= rhs; }
+        template <typename U> friend constexpr auto operator/(vector lhs, const U& rhs) { return lhs /= rhs; }
         template <typename U> friend constexpr auto operator*(const U& lhs, const vector& rhs) noexcept { return rhs * lhs; }
 
         constexpr auto operator-() const noexcept { return vector { -v }; }
