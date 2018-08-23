@@ -1,8 +1,10 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
 #include <limits>
+#include <experimental/source_location>
 #include <jw/dpmi/memory.h>
 
 namespace jw
@@ -36,6 +38,28 @@ namespace jw
             breakpoint();
 #           endif
         }
+
+        struct assertion_failed : public std::runtime_error
+        {
+            using runtime_error::runtime_error;
+        };
+
+#       ifndef NDEBUG
+        [[gnu::noinline]]
+        inline void throw_assert(bool condition, std::experimental::source_location loc = std::experimental::source_location::current())
+        {
+            if (not condition)
+            {
+                std::stringstream s { };
+                s << "Assertion failed at 0x" << std::hex << __builtin_return_address(0) << " in function " << loc.function_name();
+                s << " (" << loc.file_name() << ':' << std::dec << loc.line() << ')';
+                breakpoint();
+                throw assertion_failed { s.str() };
+            }
+        }
+#       else
+        void throw_assert(bool condition) { }
+#       endif
 
         // Disable the trap flag
         struct trap_mask
