@@ -10,11 +10,6 @@
 
 namespace jw
 {
-    namespace detail
-    {
-        struct empty { };
-    }
-
     template <std::size_t N, typename T>
     struct vector
     {
@@ -23,13 +18,6 @@ namespace jw
         {
             V v;
             std::array<T, N> a;
-            struct
-            {
-                std::conditional_t<N >= 2 and N <= 4, T, detail::empty> x;
-                std::conditional_t<N >= 2 and N <= 4, T, detail::empty> y;
-                std::conditional_t<N >= 3 and N <= 4, T, detail::empty> z;
-                std::conditional_t<N == 4, T, detail::empty> w;
-            };
         };
 
         constexpr vector(V _v) noexcept : v(_v) { };
@@ -42,6 +30,16 @@ namespace jw
 
         constexpr const T& at(std::size_t i) const { return a.at(i); }
         constexpr T& at(std::size_t i) { return a.at(i); }
+
+        std::conditional_t<N >= 2 and N <= 4, T&, void> x() noexcept { return a[0]; }
+        std::conditional_t<N >= 2 and N <= 4, T&, void> y() noexcept { return a[1]; }
+        std::conditional_t<N >= 3 and N <= 4, T&, void> z() noexcept { return a[2]; }
+        std::conditional_t<N == 4, T&, void> w() noexcept { return a[3]; }
+
+        std::conditional_t<N >= 2 and N <= 4, const T&, void> x() const noexcept { return a[0]; }
+        std::conditional_t<N >= 2 and N <= 4, const T&, void> y() const noexcept { return a[1]; }
+        std::conditional_t<N >= 3 and N <= 4, const T&, void> z() const noexcept { return a[2]; }
+        std::conditional_t<N == 4, const T&, void> w() const noexcept { return a[3]; }
 
         constexpr vector() noexcept : a { } { };
         constexpr vector(const vector&) noexcept = default;

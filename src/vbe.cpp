@@ -421,8 +421,8 @@ namespace jw
             dpmi::realmode_registers reg { };
             reg.ax = 0x4f07;
             reg.bx = wait_for_vsync ? 0x80 : 0;
-            reg.cx = pos.x;
-            reg.dx = pos.y;
+            reg.cx = pos.x();
+            reg.dx = pos.y();
             reg.call_int(0x10);
             check_error(reg.ax, __PRETTY_FUNCTION__);
         }
@@ -432,7 +432,7 @@ namespace jw
             if (!vbe2_pm) return vbe::set_display_start(pos, wait_for_vsync);
 
             auto bps = (mode.use_lfb_mode && info.vbe_version >= 0x300) ? mode_info->linear_bytes_per_scanline : mode_info->bytes_per_scanline;
-            auto start = pos.x * (mode_info->bits_per_pixel / 8) + pos.y * bps;
+            auto start = pos.x() * (mode_info->bits_per_pixel / 8) + pos.y() * bps;
             if (mode_info->bits_per_pixel >= 8) start = ((start & 3) << 30 | (start >> 2)); 
             split_uint32_t split_start { start };
 
@@ -464,8 +464,8 @@ namespace jw
                 : "=a" (ax)
                 : "a" (0x4f07)
                 , "b" (wait_for_vsync ? 0x80 : 0)
-                , "c" (pos.x)
-                , "d" (pos.y)
+                , "c" (pos.x())
+                , "d" (pos.y())
                 : "edi", "esi", "cc");
             check_error(ax, __PRETTY_FUNCTION__);
         }
@@ -492,7 +492,7 @@ namespace jw
             if (!mode_info->attr.triple_buffering_supported) return vbe2::schedule_display_start(pos);
 
             auto bps = mode.use_lfb_mode ? mode_info->linear_bytes_per_scanline : mode_info->bytes_per_scanline;
-            auto start = pos.x * (mode_info->bits_per_pixel / 8) + pos.y * bps;
+            auto start = pos.x() * (mode_info->bits_per_pixel / 8) + pos.y() * bps;
 
             if (vbe3_pm)
             {
