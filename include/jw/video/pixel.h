@@ -40,12 +40,14 @@ namespace jw
                 text_attr attr;
 
                 constexpr char_with_attr(char c, byte fcol, byte bcol, bool _blink) noexcept : character(c), attr(fcol, bcol, _blink) { }
+                constexpr char_with_attr(char c, text_attr a) noexcept : character(c), attr(a) { }
                 constexpr char_with_attr(char c) noexcept : character(c), attr() { }
             } value;
             std::uint16_t raw_value;
 
             constexpr text_char() noexcept : text_char(' ') { }
-            constexpr text_char(char c, byte fcol = 7, byte bcol = 0, bool _blink = false) noexcept : value(c, fcol, bcol, _blink) { }
+            constexpr text_char(char c, text_attr a) noexcept : value(c, a) { }
+            constexpr text_char(char c, byte fcol = 7, byte bcol = 0, bool _blink = false) noexcept : text_char(c, { fcol, bcol, _blink }) { }
             constexpr explicit text_char(std::uint16_t v) noexcept : raw_value(v) { }
             constexpr explicit operator std::uint16_t() const noexcept{ return raw_value; }
             constexpr text_char& operator=(char c) noexcept { value.character = c; return *this; }
