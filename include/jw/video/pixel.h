@@ -9,6 +9,15 @@ namespace jw
 {
     namespace video
     {
+        namespace bios_colors
+        {
+            enum color : byte
+            {
+                black, blue, green, cyan, red, magenta, brown, light_gray,
+                dark_gray, light_blue, light_green, light_cyan, light_red, pink, yellow, white
+            };
+        }
+
         union [[gnu::packed]] text_attr
         {
             struct [[gnu::packed]]
