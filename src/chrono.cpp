@@ -5,6 +5,7 @@
 #include <jw/chrono/chrono.h>
 #include <jw/io/ioport.h>
 #include <jw/dpmi/irq_mask.h>
+#include <jw/dpmi/cpu_exception.h>
 
 namespace jw
 {
@@ -17,6 +18,7 @@ namespace jw
 
         void setup::update_tsc()
         {
+            if (__builtin_expect(not have_rdtsc, false)) return;
             static std::uint64_t last_tsc;
             auto tsc = rdtsc();
             std::uint32_t diff = tsc - last_tsc;
@@ -111,13 +113,30 @@ namespace jw
 
         void setup::setup_tsc(std::size_t sample_size, tsc_reference r)
         {
+            if (not have_rdtsc)
+            {
+                using namespace dpmi;
+                exception_handler e { exception_num::invalid_opcode, [] (cpu_registers*, exception_frame* f, bool)
+                {
+                    f->fault_address.offset += 2;   // skip CPUID instruction
+                    return true;
+                } };
+                std::uint32_t cpuid;
+                asm("cpuid" : "=a" (cpuid) : "a" (0) : "ebx", "ecx", "edx");
+                if (cpuid > 0)
+                {
+                    asm("cpuid" : "=d" (cpuid) : "a" (1) : "ebx", "ecx");
+                    if (cpuid & 0b10000) have_rdtsc = true;
+                }
+            }
+
             if (sample_size != 0) tsc_max_sample_size = sample_size;
             if (r != tsc_reference::none && (r != current_tsc_ref() || current_tsc_ref() == tsc_reference::none))
             {
                 preferred_tsc_ref = r;
                 reset_tsc();
             }
-            thread::yield_while([] { return tsc_ticks_per_irq == 0; });
+            if (have_rdtsc) thread::yield_while([] { return tsc_ticks_per_irq == 0; });
         }
 
         void setup::reset_pit()

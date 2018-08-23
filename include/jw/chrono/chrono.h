@@ -76,6 +76,7 @@ namespace jw
             static void reset_rtc();
             static void reset_tsc();
 
+            static inline bool have_rdtsc { false };
             static inline tsc_reference preferred_tsc_ref { tsc_reference::pit };
             static tsc_reference current_tsc_ref()
             {
@@ -124,7 +125,7 @@ namespace jw
             static constexpr bool is_steady { false };
             static time_point now() noexcept
             {
-                if (__builtin_expect(!setup::pit_irq.is_enabled(), false))
+                if (__builtin_expect(not setup::pit_irq.is_enabled(), false))
                 {
                     auto t = std::chrono::duration_cast<duration>(std::chrono::_V2::steady_clock::now().time_since_epoch());
                     return time_point { t };
@@ -161,10 +162,14 @@ namespace jw
 
             static time_point now() noexcept
             {
-                if (__builtin_expect(!setup::rtc_irq.is_enabled() && !setup::pit_irq.is_enabled(), false))
+                if (__builtin_expect(not setup::rtc_irq.is_enabled() and not setup::pit_irq.is_enabled(), false))
                 {
                     auto t = std::chrono::duration_cast<duration>(std::chrono::_V2::high_resolution_clock::now().time_since_epoch());
                     return time_point { t };
+                }
+                if (__builtin_expect(not setup::have_rdtsc, false))
+                {
+                    return time_point { std::chrono::duration_cast<duration>(pit::now().time_since_epoch()) };
                 }
                 return to_time_point(rdtsc());
             }
