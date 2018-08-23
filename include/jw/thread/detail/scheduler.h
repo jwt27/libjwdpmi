@@ -30,8 +30,7 @@ namespace jw
                 friend class task_base;
                 friend void ::jw::thread::yield();
                 friend int ::main(int, const char**);
-                static inline dpmi::locked_pool_allocator<> alloc { 128_KB };
-                static inline std::deque<thread_ptr, dpmi::locked_pool_allocator<>> threads { alloc };
+                static inline std::deque<thread_ptr, dpmi::locked_pool_allocator<>> threads { pool_alloc };
                 static inline thread_ptr current_thread;
                 static inline thread_ptr main_thread;
 
