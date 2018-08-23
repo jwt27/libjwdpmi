@@ -197,7 +197,19 @@ namespace jw
                         if (config.translate_scancodes) *detail::scancode::undo_translation_inserter(scancode_queue) = c;
                         else scancode_queue.push_back(c);
                     } while (get_status().data_available);
-                    if (keyboard_update_thread) keyboard_update_thread->start();
+                    if (keyboard_update_thread)
+                    {
+                        if (keyboard_update_thread->is_running())
+                        {
+                            thread::invoke_main([this]
+                            {
+                                if (scancode_queue.size() == 0) return;
+                                keyboard_update_thread->try_await();
+                                keyboard_update_thread->start();
+                            });
+                        }
+                        else keyboard_update_thread->start();
+                    }
                     dpmi::irq_handler::acknowledge();
                 }
             }, dpmi::no_auto_eoi };
