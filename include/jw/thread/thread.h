@@ -94,5 +94,8 @@ namespace jw
         {
             return yield_while_until(condition, C::now() + duration);
         };
+
+        // Call a function on the main thread.
+        template<typename F> void invoke_main(F&& function) { detail::scheduler::invoke_main(std::forward<F>(function)); }
     }
 }

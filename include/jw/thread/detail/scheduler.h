@@ -41,6 +41,13 @@ namespace jw
                 static auto get_current_thread_id() noexcept { return current_thread->id(); }
                 static const auto& get_threads() { return threads; }
 
+                template<typename F>
+                static void invoke_main(F&& function)
+                {
+                    if (is_current_thread(main_thread.get())) function();
+                    else main_thread->invoke(std::forward<F>(function));
+                }
+
             private:
                 [[gnu::noinline, gnu::noclone, gnu::no_stack_limit]] static void context_switch() noexcept;
                 static void thread_switch(thread_ptr = nullptr);

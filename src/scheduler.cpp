@@ -79,6 +79,12 @@ namespace jw
                 debug::break_with_signal(debug::detail::thread_switched);
                 context_switch();   // switch to a new task context
                 check_exception();  // rethrow pending exception
+
+                while (__builtin_expect(current_thread->invoke_list.size() > 0, false))
+                {
+                    current_thread->invoke_list.front()();
+                    current_thread->invoke_list.pop_front();
+                }
             }
 
             // The actual thread.

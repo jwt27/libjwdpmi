@@ -50,6 +50,7 @@ namespace jw
                 // thread_state get_state() const noexcept;
                 // void suspend() noexcept;
                 // void resume() noexcept;
+                // void invoke(F&& function)
                 // std::string name;
                 // bool allow_orphan;
 

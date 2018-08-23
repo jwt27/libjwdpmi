@@ -54,6 +54,7 @@ namespace jw
                 std::size_t stack_size;
                 std::deque<std::exception_ptr> exceptions { };
                 const std::uint32_t id_num { id_count++ };
+                std::deque<std::function<void()>> invoke_list;
 
             protected:
                 thread_state state { initialized };
@@ -97,6 +98,9 @@ namespace jw
 
                 // Resume this thread, if it was previously suspended.
                 void resume() noexcept { if (state == suspended) state = running; }
+
+                // Invoke a funcion on this thread.
+                template<typename F> void invoke(F&& function) { invoke_list.emplace_back(std::forward<F>(function)); }
                 
                 virtual ~thread()
                 {
