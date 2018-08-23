@@ -26,11 +26,11 @@ namespace jw
 
             void redirect_cin(bool echo = true, std::ostream& echo_stream = std::cout);
             void restore_cin();
-            void update();
+            void update() { do_update(false); }
 
             void auto_update(bool enable)
             {
-                if (enable) interface->set_keyboard_update_thread({ [this]() { update(); } });
+                if (enable) interface->set_keyboard_update_thread({ [this]() { do_update(true); } });
                 else interface->set_keyboard_update_thread({ });
             }
 
@@ -43,6 +43,7 @@ namespace jw
             std::unique_ptr<std::streambuf> streambuf;
             static inline std::streambuf* cin { nullptr };
             static inline bool cin_redirected { false };
+            void do_update(bool);
         };
     }
 }
