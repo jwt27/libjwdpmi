@@ -156,7 +156,7 @@ namespace jw
                 constexpr operator bool() const { return static_cast<bool>(ptr); }
 
                 template<typename... Args>
-                constexpr task_ptr(Args&&... a) : ptr(std::make_shared<task_type>(std::forward<Args>(a)...)) { }
+                constexpr task_ptr(Args&&... a) : ptr(std::allocate_shared<task_type>(detail::pool_alloc, std::forward<Args>(a)...)) { }
 
                 constexpr task_ptr(const task_ptr&) = default;
                 constexpr task_ptr() = default;
