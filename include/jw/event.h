@@ -69,9 +69,9 @@ namespace jw
             [[maybe_unused]] std::conditional_t<std::is_void_v<R>, int, std::vector<R>> result;
             for (auto i = v.begin(); i != v.end();)
             {
-                if (not i->expired())
+                if (auto f = i->lock())
                 {
-                    auto call = [&] { return (*(i->lock()))(std::forward<Args>(args)...); };
+                    auto call = [&] { return (*f)(std::forward<Args>(args)...); };
                     if constexpr (std::is_void_v<R>) call();
                     else result.push_back(call());
                     ++i;
@@ -114,9 +114,9 @@ namespace jw
             auto& v = subscribers;
             for (auto i = v.begin(); i != v.end();)
             {
-                if (not i->expired())
+                if (auto f = i->lock())
                 {
-                    if ((*(i->lock()))(std::forward<Args>(args)...)) return true;
+                    if ((*f)(std::forward<Args>(args)...)) return true;
                     ++i;
                 }
                 else i = v.erase(i);
@@ -128,4 +128,3 @@ namespace jw
         std::list<std::weak_ptr<event_handler>> subscribers;
     };
 }
-
