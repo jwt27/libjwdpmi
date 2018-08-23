@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
@@ -22,6 +23,7 @@ namespace jw
                 void start()
                 {
                     if (this->is_running()) return;
+                    if (exceptions.size() > 0) try_await_while([this] { return true; });
 
                     this->state = starting;
                     if (dpmi::in_irq_context()) this->parent = scheduler::main_thread;
@@ -99,7 +101,8 @@ namespace jw
                 }
 
             public:
-                // Start the task using the specified arguments.
+                // (Re-)start the task using the specified arguments.
+                // May rethrow unhandled exceptions.
                 template <typename... Args>
                 void start(Args&&... args)
                 {

@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
@@ -52,11 +53,13 @@ namespace jw
                 virtual void call() override { std::apply(function, *arguments); }
 
             public:
-                // Start the coroutine thread using the specified arguments.
+                // (Re-)start the coroutine thread using the specified arguments.
+                // May rethrow unhandled exceptions.
                 template <typename... Args>
                 constexpr void start(Args&&... args)
                 {
                     if (this->is_running()) return; // or throw...?
+
                     arguments = std::make_unique<std::tuple<A...>>(std::forward<Args>(args)...);
                     this->result.reset();
                     base::start();
