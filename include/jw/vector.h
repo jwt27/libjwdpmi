@@ -65,12 +65,14 @@ namespace jw
         template <typename U> constexpr vector<N, U> cast() const noexcept { return vector<N, U>{ *this }; }
         template <typename U> constexpr explicit operator vector<N, U>() const noexcept { return cast<U>(); }
 
-        template <typename U, std::enable_if_t<not std::is_same_v<decltype(std::declval<T>() * std::declval<U>()), T>, bool> = { }>
-        constexpr auto promoted() const noexcept { return vector<N, decltype(std::declval<T>() * std::declval<U>())> { *this }; }
-        template <typename U, std::enable_if_t<std::is_same_v<decltype(std::declval<T>() * std::declval<U>()), T>, bool> = { }>
+        template<typename U> using promoted_type = std::conditional_t<std::is_floating_point_v<T>, T, std::conditional_t<std::is_integral_v<T> and std::is_integral_v<U>, T, U>>;
+
+        template <typename U, std::enable_if_t<not std::is_same_v<promoted_type<U>, T>, bool> = { }>
+        constexpr auto promoted() const noexcept { return vector<N, promoted_type<U>> { *this }; }
+        template <typename U, std::enable_if_t<std::is_same_v<promoted_type<U>, T>, bool> = { }>
         constexpr vector& promoted() noexcept { return *this; }
 
-        template<typename U> auto promote_scalar(const U& scalar) { return static_cast<decltype(std::declval<T>() * std::declval<U>())>(scalar); }
+        template<typename U> auto promote_scalar(const U& scalar) { return static_cast<promoted_type<U>>(scalar); }
 
         constexpr auto& operator+=(const vector& rhs) noexcept { v += rhs.v; return *this; }
         constexpr auto& operator-=(const vector& rhs) noexcept { return *this += -rhs; }
