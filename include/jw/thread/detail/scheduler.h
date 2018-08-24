@@ -43,7 +43,7 @@ namespace jw
                 template<typename F>
                 static void invoke_main(F&& function)
                 {
-                    if (is_current_thread(main_thread.get())) function();
+                    if (is_current_thread(main_thread.get()) and not dpmi::in_irq_context()) function();
                     else main_thread->invoke(std::forward<F>(function));
                 }
 
