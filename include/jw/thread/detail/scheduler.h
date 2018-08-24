@@ -54,7 +54,7 @@ namespace jw
                 [[gnu::noinline]] static void set_next_thread() noexcept;
                 static void check_exception();
 
-                [[gnu::used]] static void run_thread() noexcept;
+                [[gnu::force_align_arg_pointer, noreturn]] static void run_thread() noexcept;
 
                 struct init_main { init_main(); } static inline initializer;
             };

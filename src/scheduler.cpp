@@ -32,12 +32,10 @@ namespace jw
             }
 
             // Save the current task context, switch to a new task, and restore its context.
-            // May only be called from thread_switch()!
             void scheduler::context_switch() noexcept
             {
                 asm volatile            // save the current context
                 (
-                    "sub esp, 4;"
                     "push ebp;"
                     "push edi;"
                     "push esi;"
@@ -55,6 +53,8 @@ namespace jw
                 asm volatile            // switch to the new context
                 (
                     "mov esp, eax;"
+                    ".global context_switch_end;"
+                    "context_switch_end:"
                     "pop gs;"
                     "pop fs;"
                     "pop es;"
@@ -62,19 +62,8 @@ namespace jw
                     "pop esi;"
                     "pop edi;"
                     "pop ebp;"
-                    "test dl, dl;"             // if starting a new thread
-                    "jz context_switch_end;"
-                    "and esp, -0x10;"          // align stack to 0x10 bytes
-                    "mov ebp, esp;"
-                    "mov [esp], esp;"
-                    "jmp %2;"                  // jump to run_thread()
-                    ".global context_switch_end;"
-                    "context_switch_end:"
-                    "add esp, 4;"
                     "ret;"
                     :: "a" (current_thread->context)
-                    , "d" (current_thread->state == starting)
-                    , "i" (run_thread)
                     : "esp", "cc", "memory"
                 );
             }
@@ -104,8 +93,6 @@ namespace jw
             }
 
             // The actual thread.
-            // May only be jumped to from context_switch()!
-            [[noreturn]]
             void scheduler::run_thread() noexcept
             {
                 try
@@ -193,6 +180,7 @@ namespace jw
                         current_thread->context = reinterpret_cast<thread_context*>(esp);           // *context points to top of stack
                         if (current_thread->parent == nullptr) current_thread->parent = main_thread;
                         *current_thread->context = *current_thread->parent->context;                // clone parent's context to new stack
+                        current_thread->context->return_address = reinterpret_cast<std::uintptr_t>(run_thread);
                     }
 
                     if (__builtin_expect(current_thread->pending_exceptions() != 0, false)) break;
