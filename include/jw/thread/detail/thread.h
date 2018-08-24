@@ -17,9 +17,9 @@ namespace jw
     {
         namespace detail
         {
-            static inline dpmi::locked_pool_allocator<> pool_alloc { 128_KB };
+            inline dpmi::locked_pool_allocator<>* pool_alloc;
 
-            struct[[gnu::packed]] thread_context
+            struct [[gnu::packed]] thread_context
             {
                 std::uint32_t gs;
                 std::uint32_t fs;
@@ -57,7 +57,7 @@ namespace jw
                 std::size_t stack_size;
                 std::deque<std::exception_ptr> exceptions { };
                 const std::uint32_t id_num { id_count++ };
-                std::deque<std::function<void()>, dpmi::locked_pool_allocator<>> invoke_list { pool_alloc };
+                std::deque<std::function<void()>, dpmi::locked_pool_allocator<>> invoke_list { *pool_alloc };
 
             protected:
                 thread_state state { initialized };

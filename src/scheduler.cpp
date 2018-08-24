@@ -23,6 +23,7 @@ namespace jw
         {
             scheduler::init_main::init_main()
             {
+                pool_alloc = &alloc;
                 main_thread = std::shared_ptr<thread> { new thread(1) };
                 main_thread->state = running;
                 main_thread->parent = main_thread;
