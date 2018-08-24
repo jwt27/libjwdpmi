@@ -37,9 +37,10 @@ namespace jw
             // Save the current task context, switch to a new task, and restore its context.
             void scheduler::context_switch()
             {
+                asm volatile ("sub esp, 0x0c; .cfi_def_cfa esp, 0x10;");
                 asm volatile            // save the current context
                 (
-                    ".cfi_def_cfa esp, 4;"
+                    "add esp, 0x0c; .cfi_adjust_cfa_offset -0x0c;"
                     "push ebp; .cfi_adjust_cfa_offset 4; .cfi_rel_offset ebp, 0;"
                     "push edi; .cfi_adjust_cfa_offset 4; .cfi_rel_offset edi, 0;"
                     "push esi; .cfi_adjust_cfa_offset 4; .cfi_rel_offset esi, 0;"
@@ -48,6 +49,7 @@ namespace jw
                     "push fs; .cfi_adjust_cfa_offset 4; .cfi_rel_offset fs, 0;"
                     "push gs; .cfi_adjust_cfa_offset 4; .cfi_rel_offset gs, 0;"
                     "mov eax, esp;"
+                    "sub esp, 0x10; .cfi_adjust_cfa_offset 0x10;"
                     : "=a" (current_thread->context)
                     :: "esp", "cc", "memory"
                 );
