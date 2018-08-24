@@ -32,17 +32,18 @@ namespace jw
             }
 
             // Save the current task context, switch to a new task, and restore its context.
-            void scheduler::context_switch() noexcept
+            void scheduler::context_switch()
             {
                 asm volatile            // save the current context
                 (
-                    "push ebp;"
-                    "push edi;"
-                    "push esi;"
-                    "push ebx;"
-                    "push es;"
-                    "push fs;"
-                    "push gs;"
+                    ".cfi_def_cfa esp, 4;"
+                    "push ebp; .cfi_adjust_cfa_offset 4; .cfi_rel_offset ebp, 0;"
+                    "push edi; .cfi_adjust_cfa_offset 4; .cfi_rel_offset edi, 0;"
+                    "push esi; .cfi_adjust_cfa_offset 4; .cfi_rel_offset esi, 0;"
+                    "push ebx; .cfi_adjust_cfa_offset 4; .cfi_rel_offset ebx, 0;"
+                    "push es; .cfi_adjust_cfa_offset 4; .cfi_rel_offset es, 0;"
+                    "push fs; .cfi_adjust_cfa_offset 4; .cfi_rel_offset fs, 0;"
+                    "push gs; .cfi_adjust_cfa_offset 4; .cfi_rel_offset gs, 0;"
                     "mov eax, esp;"
                     : "=a" (current_thread->context)
                     :: "esp", "cc", "memory"
@@ -55,13 +56,13 @@ namespace jw
                     "mov esp, eax;"
                     ".global context_switch_end;"
                     "context_switch_end:"
-                    "pop gs;"
-                    "pop fs;"
-                    "pop es;"
-                    "pop ebx;"
-                    "pop esi;"
-                    "pop edi;"
-                    "pop ebp;"
+                    "pop gs; .cfi_restore gs; .cfi_adjust_cfa_offset -4;"
+                    "pop fs; .cfi_restore fs; .cfi_adjust_cfa_offset -4;"
+                    "pop es; .cfi_restore es; .cfi_adjust_cfa_offset -4;"
+                    "pop ebx; .cfi_restore ebx; .cfi_adjust_cfa_offset -4;"
+                    "pop esi; .cfi_restore esi; .cfi_adjust_cfa_offset -4;"
+                    "pop edi; .cfi_restore edi; .cfi_adjust_cfa_offset -4;"
+                    "pop ebp; .cfi_restore ebp; .cfi_adjust_cfa_offset -4;"
                     "ret;"
                     :: "a" (current_thread->context)
                     : "esp", "cc", "memory"
@@ -162,7 +163,7 @@ namespace jw
 
             // Selects a new current_thread.
             // May only be called from context_switch()!
-            void scheduler::set_next_thread() noexcept        // TODO: catch exceptions here (from deque, shared_ptr) and do something sensible
+            void scheduler::set_next_thread()
             {
                 dpmi::interrupt_mask no_interrupts_please { };
                 for(std::size_t i = 0; ; ++i)
