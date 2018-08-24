@@ -135,24 +135,27 @@ namespace jw
                     try { std::rethrow_exception(exc); }
                     catch (...) { std::throw_with_nested(thread_exception { current_thread }); }
                 }
+
                 if (__builtin_expect(current_thread->pending_exceptions() > 0, false))
-                for (auto exc : current_thread->exceptions)
                 {
-                    try { std::rethrow_exception(exc); }
-                    catch (const thread_exception& e)
+                    auto& exceptions = current_thread->exceptions;
+                    for (auto i = exceptions.begin(); i != exceptions.end(); ++i)
                     {
-                        if (e.thread.use_count() > 1) continue; // Only rethrow if exception came from deleted/orphaned threads.
-                        auto& exceptions = current_thread->exceptions;
-                        exceptions.erase(remove_if(exceptions.begin(), exceptions.end(), [&](const auto& i) { return i == exc; }), exceptions.end());
-                        throw;
+                        try { std::rethrow_exception(*i); }
+                        catch (const thread_exception& e)
+                        {
+                            if (e.thread.use_count() > 1) continue; // Only rethrow if exception came from deleted/orphaned threads.
+                            exceptions.erase(i);
+                            throw;
+                        }
+                        catch (terminate_exception& e)
+                        {
+                            auto& exceptions = current_thread->exceptions;
+                            exceptions.erase(i);
+                            throw;
+                        }
+                        catch (...) { }
                     }
-                    catch (terminate_exception& e)
-                    {
-                        auto& exceptions = current_thread->exceptions;
-                        exceptions.erase(remove_if(exceptions.begin(), exceptions.end(), [&](const auto& i) { return i == exc; }), exceptions.end());
-                        throw;
-                    }
-                    catch (...) { }
                 }
                 
                 if (__builtin_expect(current_thread != main_thread && *reinterpret_cast<std::uint32_t*>(current_thread->stack.get()) != 0xDEADBEEF, false))
