@@ -81,7 +81,7 @@ namespace jw
                     threads.push_front(t);
                 }
 
-                if (dpmi::in_irq_context()) return;
+                if (dpmi::in_irq_context() or std::uncaught_exceptions() > 0) return;
 
                 debug::break_with_signal(debug::detail::thread_switched);
                 context_switch();   // switch to a new task context
