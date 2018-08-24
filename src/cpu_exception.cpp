@@ -127,29 +127,14 @@ namespace jw
                 "mov ss, cs:[eax-0x1C];"
                 "mov esp, ebp;"
 
-                "push ebx;"
+                "sub esp, 0x08;"
                 "add ebp, 0x10;"
                 "push ebp;"                 // Pointer to raw_exception_frame
                 "push cs:[eax-0x28];"       // Pointer to self
                 "mov ebx, eax;"
                 "call cs:[ebx-0x24];"       // call_handler();
                 "cli;"
-                "add esp, 0x8;"
-                "pop edx;"
-
-                /*
-                "mov es, dx;"
-                "mov ecx, 0x22;"
-                "mov edi, esi;"
-                "sub edi, 0x88;"
-                "mov esi, esp;"
-                "mov ebp, edi;"
-                "cld;"
-                "rep movsd;"
-
-                "mov ss, dx;"
-                "mov esp, ebp;"
-                */
+                "add esp, 0x10;"
 
                 "test al, al;"              // Check return value
                 "jz chain%=;"               // Chain if false

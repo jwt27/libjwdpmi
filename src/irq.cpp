@@ -90,10 +90,9 @@ namespace jw
                     "mov esp, eax;"
                     "keep_stack%=:"
                     "and esp, -0x10;"               // Align stack
-                    "sub esp, 0x8;"
+                    "sub esp, 0xc;"
                     "push cs:[esi-0x1C];"           // Pass our interrupt vector
                     "call cs:[esi-0x10];"           // Call the entry point
-                    "add esp, 0xc;"
                     "cmp bx, cs:[esi-0x26];"
                     "je ret_same_stack%=;"
                     "mov eax, cs:[esi-0x24];"
