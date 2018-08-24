@@ -36,32 +36,47 @@ namespace jw
             void scheduler::context_switch() noexcept
             {
                 asm volatile            // save the current context
-                    ("sub esp, 4;"
-                     "push ebp; push edi; push esi; push ebx;"
-                     "push es; push fs; push gs;"
-                     "mov eax, esp;"
-                     : "=a" (current_thread->context)
-                     :: "esp", "cc", "memory");
+                (
+                    "sub esp, 4;"
+                    "push ebp;"
+                    "push edi;"
+                    "push esi;"
+                    "push ebx;"
+                    "push es;"
+                    "push fs;"
+                    "push gs;"
+                    "mov eax, esp;"
+                    : "=a" (current_thread->context)
+                    :: "esp", "cc", "memory"
+                );
 
                 set_next_thread();      // select a new current_thread
 
                 asm volatile            // switch to the new context
-                    ("mov esp, eax;"
-                     "pop gs; pop fs; pop es;"
-                     "pop ebx; pop esi; pop edi; pop ebp;"
-                     "test dl, dl;"             // if starting a new thread
-                     "jz context_switch_end;"
-                     "and esp, -0x10;"          // align stack to 0x10 bytes
-                     "mov ebp, esp;"
-                     "mov [esp], esp;"
-                     "jmp %2;"                  // jump to run_thread()
-                     ".global context_switch_end;"
-                     "context_switch_end:"
-                     "add esp, 4;"
-                     :: "a" (current_thread->context)
-                     , "d" (current_thread->state == starting)
-                     , "i" (run_thread)
-                     : "esp", "cc", "memory");
+                (
+                    "mov esp, eax;"
+                    "pop gs;"
+                    "pop fs;"
+                    "pop es;"
+                    "pop ebx;"
+                    "pop esi;"
+                    "pop edi;"
+                    "pop ebp;"
+                    "test dl, dl;"             // if starting a new thread
+                    "jz context_switch_end;"
+                    "and esp, -0x10;"          // align stack to 0x10 bytes
+                    "mov ebp, esp;"
+                    "mov [esp], esp;"
+                    "jmp %2;"                  // jump to run_thread()
+                    ".global context_switch_end;"
+                    "context_switch_end:"
+                    "add esp, 4;"
+                    "ret;"
+                    :: "a" (current_thread->context)
+                    , "d" (current_thread->state == starting)
+                    , "i" (run_thread)
+                    : "esp", "cc", "memory"
+                );
             }
 
             // Switches to the specified task, or the next task in queue if argument is nullptr.

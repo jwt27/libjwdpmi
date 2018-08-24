@@ -28,6 +28,8 @@ namespace jw
                 std::uint32_t esi;
                 std::uint32_t edi;
                 std::uint32_t ebp;
+                unsigned : 32;
+                std::uintptr_t return_address;
                 // eax, ecx, edx are caller-saved.
                 // cs, ds, ss (should) never change.
                 // esp is the pointer to this struct.

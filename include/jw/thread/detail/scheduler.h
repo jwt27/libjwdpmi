@@ -49,7 +49,7 @@ namespace jw
                 }
 
             private:
-                [[gnu::noinline, gnu::noclone, gnu::no_stack_limit]] static void context_switch() noexcept;
+                [[gnu::noinline, gnu::noclone, gnu::no_stack_limit, gnu::naked]] static void context_switch() noexcept;
                 static void thread_switch(thread_ptr = nullptr);
                 [[gnu::noinline]] static void set_next_thread() noexcept;
                 static void check_exception();
