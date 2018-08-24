@@ -24,7 +24,10 @@ namespace jw
             scheduler::init_main::init_main()
             {
                 pool_alloc = &alloc;
-                main_thread = std::shared_ptr<thread> { new thread(1) };
+                using rebind = typename std::allocator_traits<decltype(alloc)>::rebind_alloc<thread>;
+                auto* p = rebind { alloc }.allocate(1);
+                new(p) thread { 1 };
+                main_thread = std::shared_ptr<thread> { p };
                 main_thread->state = running;
                 main_thread->parent = main_thread;
                 main_thread->name = "Main thread";
