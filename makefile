@@ -43,6 +43,7 @@ $(OUTDIR)/$(OUTPUT): $(OBJ) | $(OUTDIR)
 $(OBJDIR)/cpu_exception.% : override CXXFLAGS += -mgeneral-regs-only
 $(OBJDIR)/fpu.% : override CXXFLAGS += -mgeneral-regs-only
 $(OBJDIR)/irq.% : override CXXFLAGS += -mgeneral-regs-only
+$(OBJDIR)/debug.% : override CXXFLAGS += -O3
 
 $(OBJDIR)/%.asm: $(SRCDIR)/%.cpp jwdpmi_config.h | $(OBJDIR)
 	$(CXX) $(CXXFLAGS) -S -o $@ $(INCLUDE) -c $< $(PIPECMD)

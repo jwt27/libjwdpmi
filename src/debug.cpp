@@ -2,8 +2,6 @@
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
-#pragma GCC optimize("loop-nest-optimize", "graphite-identity", "omit-frame-pointer") // ICE with O2+
-
 #include <array>
 #include <cstring>
 #include <sstream>
