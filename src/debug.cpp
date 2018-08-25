@@ -226,6 +226,7 @@ namespace jw
                     // cpu exception -> posix signal
                 case exception_num::trap:
                 case exception_num::breakpoint:
+                case watchpoint_hit:
                     return sigtrap;
 
                 case exception_num::divide_error:
@@ -337,6 +338,7 @@ namespace jw
                 case exception_num::trap:
                 case exception_num::breakpoint:
                 case continued:
+                case watchpoint_hit:
                     return true;
                 }
             }
@@ -350,6 +352,7 @@ namespace jw
 
                 case exception_num::trap:
                 case exception_num::breakpoint:
+                case watchpoint_hit:
                 case thread_switched:
                 case thread_finished:
                 case all_threads_suspended:
@@ -760,18 +763,19 @@ namespace jw
                             }
                             else if (is_trap_signal(signal))
                             {
-                                bool watchpoint_hit = false;
-                                for (auto&& w : watchpoints)
+                                if (signal == watchpoint_hit)
                                 {
-                                    if (w.second.get_state())
+                                    for (auto&& w : watchpoints)
                                     {
-                                        watchpoint_hit = true;
-                                        if (w.second.get_type() == watchpoint::execute) s << "hwbreak:;";
-                                        else s << "watch:" << w.first << ";";
-                                        break;
+                                        if (w.second.get_state())
+                                        {
+                                            if (w.second.get_type() == watchpoint::execute) s << "hwbreak:;";
+                                            else s << "watch:" << w.first << ";";
+                                            break;
+                                        }
                                     }
                                 }
-                                if (not watchpoint_hit) s << "swbreak:;";
+                                else s << "swbreak:;";
                             }
                             if (async) send_notification(s.str());
                             else send_packet(s.str());
@@ -1204,6 +1208,10 @@ namespace jw
                         current_thread->signals.insert(current_signal);
                         current_signal = -1;
                     }
+                    else if (exc == exception_num::trap and [] {for (auto&& w : watchpoints) { if (w.second.get_state()) return true; } return false; }())
+                    {
+                        current_thread->signals.insert(watchpoint_hit);
+                    }
                     else current_thread->signals.insert(exc);
 
                     if (current_thread->signals.count(trap_unmasked))
@@ -1248,7 +1256,8 @@ namespace jw
 
                     current_thread->signals.erase(thread_switched);
 
-                    if (current_thread->action == thread_info::step_range and
+                    if (exc == exception_num::trap and current_thread->signals.count(watchpoint_hit) == 0 and
+                        current_thread->action == thread_info::step_range and
                         current_thread->frame.fault_address.offset >= current_thread->step_range_begin and
                         current_thread->frame.fault_address.offset <= current_thread->step_range_end)
                     {

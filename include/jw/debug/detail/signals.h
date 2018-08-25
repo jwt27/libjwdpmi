@@ -18,7 +18,8 @@ namespace jw
                 thread_started,
                 thread_finished,
                 thread_suspended,
-                all_threads_suspended
+                all_threads_suspended,
+                watchpoint_hit
             };
 
             enum posix_signals : std::int32_t
