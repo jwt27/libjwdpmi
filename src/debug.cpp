@@ -777,6 +777,7 @@ namespace jw
                             }
                             if (async) send_notification(s.str());
                             else send_packet(s.str());
+                            query_thread_id = t_ptr->id();
                         }
 
                         if (signal == all_threads_suspended and supported["no-resumed"] == "+")
@@ -961,7 +962,11 @@ namespace jw
                     auto id = decode(packet[0].substr(1));
                     if (threads.count(id) > 0 or id == all_threads_id)
                     {
-                        if (packet[0][0] == 'g') query_thread_id = id;
+                        if (packet[0][0] == 'g')
+                        {
+                            if (id == all_threads_id) query_thread_id = current_thread_id;
+                            else query_thread_id = id;
+                        }
                         else if (packet[0][0] == 'c') control_thread_id = id;
                         send_packet("OK");
                     }
