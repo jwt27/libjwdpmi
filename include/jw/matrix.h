@@ -21,10 +21,10 @@ namespace jw
         constexpr matrix_iterator& operator=(const matrix_iterator&) noexcept = default;
         constexpr matrix_iterator& operator=(matrix_iterator&&) noexcept = default;
 
-        constexpr auto* operator->() noexcept { return &r(p); }
-        constexpr const auto* operator->() const noexcept { return &r(p); }
-        constexpr auto& operator*() noexcept { return r(p); }
-        constexpr const auto& operator*() const noexcept { return r(p); }
+        constexpr auto* operator->() noexcept { return &r.at(p); }
+        constexpr const auto* operator->() const noexcept { return &r.at(p); }
+        constexpr auto& operator*() noexcept { return r.at(p); }
+        constexpr const auto& operator*() const noexcept { return r.at(p); }
         constexpr auto& operator[](std::ptrdiff_t n) const { return *(matrix_iterator { *this } += n); }
 
         constexpr auto& operator-=(const vector2i& n) const { p -= n; return *this; }   // TODO: rotate
@@ -102,11 +102,11 @@ namespace jw
         constexpr matrix_range& operator=(const matrix_range&) noexcept = delete;
         constexpr matrix_range& operator=(matrix_range&&) noexcept = default;
 
-        constexpr auto range(const vector2i& position, const vector2i& dimensions) const noexcept
+        constexpr auto range(vector2i position, vector2i dimensions) const noexcept
         {
-            auto new_pos = pos + vector2i::max_abs(position, vector2i { 0,0 });
-            auto new_dim = vector2i::min(dimensions, dim - new_pos).copysign(dimensions);
-            return matrix_range { m, pos + new_pos, new_dim };
+            position = pos + vector2i::max_abs(position, vector2i { 0,0 });
+            dimensions = vector2i::min(std::abs(dimensions), size() - position).copysign(dimensions);
+            return matrix_range { m, position, dimensions };
         }
 
         constexpr auto range_abs(const vector2i& topleft, const vector2i& bottomright) const noexcept { return range(topleft, bottomright - topleft); }
@@ -151,24 +151,24 @@ namespace jw
         constexpr auto end() const noexcept { return invalid_matrix_iterator { }; }
 
         constexpr const auto& position() const noexcept { return pos; }
-        constexpr const auto& size() const noexcept { return dim; }
-        constexpr const auto& width() const noexcept { return size().x; }
-        constexpr const auto& height() const noexcept { return size().y; }
+        constexpr auto size() const noexcept { return std::abs(dim); }
+        constexpr auto width() const noexcept { return size().x; }
+        constexpr auto height() const noexcept { return size().y; }
 
     protected:
         constexpr auto& get_wrap(vector2i p, auto* ptr) const
         {
-            p.v %= dim.v;
+            p.v %= size().v;
             if (p.x < 0) p.x = dim.x + p.x;
             if (p.y < 0) p.y = dim.y + p.y;
-            auto offset = pos + p;
-            return *(ptr + offset.x + m->size().x * offset.y);
+            return get(p, ptr);
         }
 
-        constexpr auto& get(const vector2i& p, auto* ptr) const noexcept
+        constexpr auto& get(vector2i p, auto* ptr) const
         {
-            auto offset = pos + p;
-            return *(ptr + offset.x + m->size().x * offset.y);
+            p.copysign(dim);
+            p += pos;
+            return *(ptr + p.x + m->size().x * p.y);
         }
 
         M* m;
