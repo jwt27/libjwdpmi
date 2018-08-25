@@ -726,6 +726,7 @@ namespace jw
                             continue;
                         }
                         else i = t.signals.erase(i);
+                        if (signal == SIGINT) for (auto&&t : threads) t.second.signals.erase(SIGINT);
                         if (temp_debugmsg) std::clog << "handled.\n";
 
                         if (not thread_events_enabled and (signal == thread_started or signal == thread_finished))
