@@ -8,7 +8,10 @@
 
 namespace jw
 {
-    template<typename R>
+    enum class matrix_iterator_direction { up, down, left, right };
+    struct invalid_matrix_iterator { };
+
+    template<typename R, matrix_iterator_direction D>
     struct matrix_iterator
     {
         constexpr matrix_iterator(R& range, const vector2i& pos) noexcept : r(range), p(pos) { }
@@ -18,23 +21,38 @@ namespace jw
         constexpr matrix_iterator& operator=(const matrix_iterator&) noexcept = default;
         constexpr matrix_iterator& operator=(matrix_iterator&&) noexcept = default;
 
-        constexpr auto* operator->() noexcept { return &r.get(p); }
-        constexpr const auto* operator->() const noexcept { return &r.get(p); }
-        constexpr auto& operator*() noexcept { return r.get(p); }
-        constexpr const auto& operator*() const noexcept { return r.get(p); }
-        constexpr auto& operator[](std::ptrdiff_t n) const noexcept  { return *(matrix_iterator { *this } += n); }
+        constexpr auto* operator->() noexcept { return &r(p); }
+        constexpr const auto* operator->() const noexcept { return &r(p); }
+        constexpr auto& operator*() noexcept { return r(p); }
+        constexpr const auto& operator*() const noexcept { return r(p); }
+        constexpr auto& operator[](std::ptrdiff_t n) const { return *(matrix_iterator { *this } += n); }
 
-        constexpr auto& operator-=(const vector2i& n) const noexcept { p -= n; return *this; }
-        constexpr auto& operator+=(const vector2i& n) const noexcept { p += n; return *this; }
+        constexpr auto& operator-=(const vector2i& n) const { p -= n; return *this; }   // TODO: rotate
+        constexpr auto& operator+=(const vector2i& n) const { p += n; return *this; }
 
-        constexpr auto& operator-=(std::ptrdiff_t n) const noexcept { return *this += -n; }
-        constexpr auto& operator+=(std::ptrdiff_t n) const noexcept 
+        constexpr auto& operator-=(std::ptrdiff_t n) const { return *this += -n; }
+        constexpr auto& operator+=(std::ptrdiff_t n) const 
         {
-            p.x += n;
-            if (p.x > r.width())
+            p += n * direction();
+            if constexpr (D == matrix_iterator_direction::right) if (p.x >= r.width())
             {
                 p.y += p.x / r.width();
                 p.x %= r.width();
+            }
+            if constexpr (D == matrix_iterator_direction::left) if (p.x < 0)
+            {
+                p.y -= std::abs(p.x / r.width()) + 1;
+                p.x = r.width() - (std::abs(p.x + 1) % r.width()) - 1;
+            }
+            if constexpr (D == matrix_iterator_direction::down) if (p.y >= r.height())
+            {
+                p.x += p.y / r.height();
+                p.y %= r.height();
+            }
+            if constexpr (D == matrix_iterator_direction::up) if (p.y < 0)
+            {
+                p.x -= std::abs(p.y / r.height()) + 1;
+                p.y = r.height() - (std::abs(p.y + 1) % r.height()) - 1;
             }
             return *this;
         }
@@ -42,8 +60,22 @@ namespace jw
         constexpr auto& operator++() const noexcept { return *this += 1; }
         constexpr auto& operator++(int) const noexcept { auto copy = matrix_iterator { *this }; *this += 1; return copy; }
 
-        friend constexpr bool operator==(const matrix_iterator& lhs, const matrix_iterator& rhs) noexcept { return &(*lhs) == &(*rhs); }
-        friend constexpr bool operator!=(const matrix_iterator& lhs, const matrix_iterator& rhs) noexcept { return !(lhs == rhs); }
+        constexpr bool invalid() const noexcept { return (p.x < 0 or p.x >= r.width() or p.y < 0 or p.y >= r.height()); }
+        constexpr vector2i direction() const noexcept
+        {
+            if constexpr (D == matrix_iterator_direction::up) return vector2i::up();
+            if constexpr (D == matrix_iterator_direction::down) return vector2i::down();
+            if constexpr (D == matrix_iterator_direction::left) return vector2i::left();
+            if constexpr (D == matrix_iterator_direction::right) return vector2i::right();
+        }
+
+        template<typename R2, matrix_iterator_direction D2>
+        friend constexpr bool operator==(const matrix_iterator& lhs, const matrix_iterator<R2, D2>& rhs) noexcept { return &(*lhs) == &(*rhs); }
+        template<typename R2, matrix_iterator_direction D2>
+        friend constexpr bool operator!=(const matrix_iterator& lhs, const matrix_iterator<R2, D2>& rhs) noexcept { return !(lhs == rhs); }
+
+        friend constexpr bool operator==(const matrix_iterator& lhs, const invalid_matrix_iterator&) noexcept { return lhs.invalid(); }
+        friend constexpr bool operator!=(const matrix_iterator& lhs, const invalid_matrix_iterator&) noexcept { return not lhs.invalid(); }
 
         R& r;
         mutable vector2i p;
@@ -52,8 +84,14 @@ namespace jw
     template<typename M>
     struct matrix_range
     {
-        using iterator = matrix_iterator<matrix_range>;
-        friend iterator;
+        using iterator = matrix_iterator<matrix_range, matrix_iterator_direction::right>;
+        using reverse_iterator = matrix_iterator<matrix_range, matrix_iterator_direction::left>;
+        using vertical_iterator = matrix_iterator<matrix_range, matrix_iterator_direction::down>;
+        using reverse_vertical_iterator = matrix_iterator<matrix_range, matrix_iterator_direction::up>;
+        using const_iterator = matrix_iterator<const matrix_range, matrix_iterator_direction::right>;
+        using const_reverse_iterator = matrix_iterator<const matrix_range, matrix_iterator_direction::left>;
+        using const_vertical_iterator = matrix_iterator<const matrix_range, matrix_iterator_direction::down>;
+        using const_reverse_vertical_iterator = matrix_iterator<const matrix_range, matrix_iterator_direction::up>;
 
         constexpr matrix_range(M* matrix, const vector2i& position, const vector2i& dimensions) noexcept 
             : m(matrix), pos(position), dim(dimensions) { }
@@ -88,30 +126,37 @@ namespace jw
         friend constexpr bool operator==(const matrix_range& lhs, const matrix_range& rhs) noexcept { return lhs.m.data() == rhs.m.data() && lhs.pos == rhs.pos && lhs.dim == rhs.dim; }
         friend constexpr bool operator!=(const matrix_range& lhs, const matrix_range& rhs) noexcept { return !(lhs == rhs); }
 
-        constexpr matrix_range& fill(const auto& fill) noexcept
+        constexpr matrix_range& fill(const auto& fill)
         {
             for (auto y = 0; y < height(); ++y)
                 std::fill_n(&(*this)(0, y), width(), fill);
             return *this;
         }
 
-        constexpr matrix_range& assign(const auto& copy) noexcept
+        constexpr matrix_range& assign(const auto& copy)
         {
             for (auto y = 0; y < std::min(height(), copy.height()); ++y)
                 std::copy_n(&copy(0, y), std::min(width(), copy.width()), &(*this)(0, y));
             return *this;
         }
 
-        constexpr auto begin() noexcept { return iterator { *this, { 0, 0 }}; }
-        constexpr auto end() noexcept { return iterator { *this, dim }; }
+        constexpr auto begin() noexcept   { return iterator { *this, { 0, 0 } }; }
+        constexpr auto vbegin() noexcept  { return vertical_iterator { *this, { 0, 0 } }; }
+        constexpr auto rbegin() noexcept  { return vertical_iterator { *this, dim - vector2i { 1, 1 } }; }
+        constexpr auto rvbegin() noexcept { return reverse_vertical_iterator { *this, dim - vector2i { 1, 1 } }; }
+        constexpr auto cbegin() const noexcept   { return const_iterator { *this, { 0, 0 } }; }
+        constexpr auto cvbegin() const noexcept  { return const_vertical_iterator { *this, { 0, 0 } }; }
+        constexpr auto crbegin() const noexcept  { return const_vertical_iterator { *this, dim - vector2i { 1, 1 } }; }
+        constexpr auto crvbegin() const noexcept { return const_reverse_vertical_iterator { *this, dim - vector2i { 1, 1 } }; }
+        constexpr auto end() const noexcept { return invalid_matrix_iterator { }; }
 
-        constexpr auto position() const noexcept { return pos; }
-        constexpr auto size() const noexcept { return dim; }
-        constexpr auto width() const noexcept { return size().x; }
-        constexpr auto height() const noexcept { return size().y; }
+        constexpr const auto& position() const noexcept { return pos; }
+        constexpr const auto& size() const noexcept { return dim; }
+        constexpr const auto& width() const noexcept { return size().x; }
+        constexpr const auto& height() const noexcept { return size().y; }
 
     protected:
-        constexpr auto& get_wrap(vector2i p, auto* ptr) const noexcept
+        constexpr auto& get_wrap(vector2i p, auto* ptr) const
         {
             p.v %= dim.v;
             if (p.x < 0) p.x = dim.x + p.x;
@@ -120,7 +165,7 @@ namespace jw
             return *(ptr + offset.x + m->size().x * offset.y);
         }
 
-        constexpr auto& get(vector2i p, auto* ptr) const noexcept
+        constexpr auto& get(const vector2i& p, auto* ptr) const noexcept
         {
             auto offset = pos + p;
             return *(ptr + offset.x + m->size().x * offset.y);
