@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
@@ -11,39 +12,13 @@ namespace jw
 {
     namespace detail
     {
-        template<unsigned N, typename T, typename = void> struct vector_size { static constexpr std::size_t size { N * sizeof(T) }; };
-        /*
-#       ifdef __MMX__
-        template<unsigned N> struct vector_size<N, std::int32_t,  std::enable_if_t<N <= 2>> { static constexpr std::size_t size { 8 }; };
-        template<unsigned N> struct vector_size<N, std::uint32_t, std::enable_if_t<N <= 2>> { static constexpr std::size_t size { 8 }; };
-        template<unsigned N> struct vector_size<N, std::int16_t,  std::enable_if_t<N <= 4>> { static constexpr std::size_t size { 8 }; };
-        template<unsigned N> struct vector_size<N, std::uint16_t, std::enable_if_t<N <= 4>> { static constexpr std::size_t size { 8 }; };
-        template<unsigned N> struct vector_size<N, std::int8_t,   std::enable_if_t<N <= 8>> { static constexpr std::size_t size { 8 }; };
-        template<unsigned N> struct vector_size<N, std::uint8_t,  std::enable_if_t<N <= 8>> { static constexpr std::size_t size { 8 }; };
-#       endif
-#       ifdef __SSE__
-        template<unsigned N> struct vector_size<N, float, std::enable_if_t<N <= 4>> { static constexpr std::size_t size { 16 }; };
-#       endif
-#       ifdef __SSE2__
-        template<unsigned N, typename = std::enable_if_t<N <= 2>> struct vector_size<N, double> { static constexpr std::size_t size { 16 }; };
-        template<unsigned N, typename = std::enable_if_t<N <= 2>> struct vector_size<N, std::int64_t> { static constexpr std::size_t size { 16 }; };
-        template<unsigned N, typename = std::enable_if_t<N <= 2>> struct vector_size<N, std::uint64_t> { static constexpr std::size_t size { 16 }; };
-        template<unsigned N, typename = std::enable_if_t<N <= 4>> struct vector_size<N, std::int32_t> { static constexpr std::size_t size { 16 }; };
-        template<unsigned N, typename = std::enable_if_t<N <= 4>> struct vector_size<N, std::uint32_t> { static constexpr std::size_t size { 16 }; };
-        template<unsigned N, typename = std::enable_if_t<N <= 8>> struct vector_size<N, std::int16_t> { static constexpr std::size_t size { 16 }; };
-        template<unsigned N, typename = std::enable_if_t<N <= 8>> struct vector_size<N, std::uint16_t> { static constexpr std::size_t size { 16 }; };
-        template<unsigned N, typename = std::enable_if_t<N <= 16>> struct vector_size<N, std::int8_t> { static constexpr std::size_t size { 16 }; };
-        template<unsigned N, typename = std::enable_if_t<N <= 16>> struct vector_size<N, std::uint8_t> { static constexpr std::size_t size { 16 }; };
-#       endif
-        */
-
         struct empty { };
     }
 
-    template <unsigned N, typename T>
+    template <std::size_t N, typename T>
     struct vector
     {
-        using V [[gnu::vector_size(detail::vector_size<N, T>::size)]] = T;
+        using V [[gnu::vector_size(N * sizeof(T))]] = T;
         union
         {
             V v;
@@ -62,8 +37,11 @@ namespace jw
         template<typename... Ts>
         constexpr vector(Ts... args) noexcept : a { static_cast<T>(args)... } { }
 
-        constexpr const T& operator[](std::ptrdiff_t i) const noexcept { return (a[i]); }
-        constexpr T& operator[](std::ptrdiff_t i) noexcept { return (a[i]); }
+        constexpr const T& operator[](std::ptrdiff_t i) const noexcept { return a[i]; }
+        constexpr T& operator[](std::ptrdiff_t i) noexcept { return a[i]; }
+
+        constexpr const T& at(std::size_t i) const { return a.at(i); }
+        constexpr T& at(std::size_t i) { return a.at(i); }
 
         constexpr vector() noexcept : a { } { };
         constexpr vector(const vector&) noexcept = default;
@@ -71,33 +49,59 @@ namespace jw
         constexpr vector& operator=(const vector&) noexcept = default;
         constexpr vector& operator=(vector&&) noexcept = default;
 
-        template <typename U> constexpr vector(const vector<N, U>& rhs) noexcept { for (unsigned i = 0; i < N; ++i) a[i] = static_cast<T>(rhs[i]); };
+        template <typename U> constexpr vector(const vector<N, U>& rhs) noexcept
+        {
+            std::conditional_t<std::is_integral_v<T>, decltype(rhs.rounded()), const vector<N, U>&> rhs2 = [&rhs]
+            {
+                if constexpr (std::is_integral_v<T>) return rhs.rounded();
+                else return rhs;
+            }();
+            for (unsigned i = 0; i < N; ++i) a[i] = static_cast<T>(rhs2[i]);
+        }
 
         template <typename U> constexpr vector& operator=(const vector<N, U>& rhs) noexcept { return *this = rhs.template cast<T>(); };
         template <typename U> constexpr vector& operator=(vector<N, U>&& rhs) noexcept { return *this = rhs.template cast<T>(); };
 
-        template <typename U> constexpr vector<N, U> cast() const noexcept { return vector<N, U>{ std::is_integral<U>::value ? this->rounded() : *this }; }
+        template <typename U> constexpr vector<N, U> cast() const noexcept { return vector<N, U>{ *this }; }
         template <typename U> constexpr explicit operator vector<N, U>() const noexcept { return cast<U>(); }
 
-        template <typename U> constexpr auto promoted() const noexcept { return vector<N, decltype(std::declval<T>() * std::declval<U>())> { *this }; }
+        template<typename U> using promoted_type = std::conditional_t<std::is_floating_point_v<T>, T, std::conditional_t<std::is_integral_v<T> and std::is_integral_v<U>, T, U>>;
+
+        template <typename U, std::enable_if_t<not std::is_same_v<promoted_type<U>, T>, bool> = { }>
+        constexpr auto promoted() const noexcept { return vector<N, promoted_type<U>> { *this }; }
+        template <typename U, std::enable_if_t<std::is_same_v<promoted_type<U>, T>, bool> = { }>
+        constexpr vector& promoted() noexcept { return *this; }
+
+        template<typename U> auto promote_scalar(const U& scalar) { return static_cast<promoted_type<U>>(scalar); }
+
+        constexpr auto& operator+=(const vector& rhs) noexcept { v += rhs.v; return *this; }
+        constexpr auto& operator-=(const vector& rhs) noexcept { return *this += -rhs; }
+
+        constexpr vector& operator*=(const T& rhs) noexcept { v *= rhs; return *this; }
+        constexpr vector& operator/=(const T& rhs) { v /= rhs; return *this; }
+
+        friend constexpr auto operator+(vector lhs, const vector& rhs) noexcept { return lhs += rhs; }
+        friend constexpr auto operator-(vector lhs, const vector& rhs) noexcept { return lhs -= rhs; }
+        friend constexpr auto operator*(vector lhs, const T& rhs) noexcept { return lhs *= rhs; }
+        friend constexpr auto operator/(vector lhs, const T& rhs) { return lhs /= rhs; }
+        friend constexpr auto operator*(const T& lhs, const vector& rhs) noexcept { return rhs * lhs; }
+
         template <typename U> constexpr auto& operator+=(const vector<N, U>& rhs) noexcept { auto lhs = promoted<U>(); lhs.v += rhs.template promoted<T>().v; return *this = lhs; }
         template <typename U> constexpr auto& operator-=(const vector<N, U>& rhs) noexcept { return *this += -rhs; }
 
-        template <typename U> constexpr vector& operator*=(const U& rhs) noexcept { auto lhs = promoted<U>(); lhs.v *= vector<N, U>{ rhs, rhs }.template promoted<T>().v; return *this = lhs; }
-        template <typename U> constexpr vector& operator/=(const U& rhs) noexcept { auto lhs = promoted<U>(); lhs.v /= vector<N, U>{ rhs, rhs }.template promoted<T>().v; return *this = lhs; }
+        template <typename U> constexpr vector& operator*=(const U& rhs) noexcept { auto lhs = promoted<U>(); lhs.v *= promote_scalar(rhs); return *this = lhs; }
+        template <typename U> constexpr vector& operator/=(const U& rhs) { auto lhs = promoted<U>(); lhs.v /= promote_scalar(rhs); return *this = lhs; }
 
-        //template <typename U> friend constexpr auto operator*(const vector& lhs, const vector<N, U>& rhs) { return lhs.x * rhs.x + lhs.y * rhs.y; }
-
-        template <typename U> friend constexpr auto operator+(const vector& lhs, const vector<N, U>& rhs) noexcept { return lhs.promoted<U>() += rhs; }
-        template <typename U> friend constexpr auto operator-(const vector& lhs, const vector<N, U>& rhs) noexcept { return lhs.promoted<U>() -= rhs; }
-        template <typename U> friend constexpr auto operator*(const vector& lhs, const U& rhs) noexcept { return lhs.promoted<U>() *= rhs; }
-        template <typename U> friend constexpr auto operator/(const vector& lhs, const U& rhs) noexcept { return lhs.promoted<U>() /= rhs; }
+        template <typename U> friend constexpr auto operator+(vector lhs, const vector<N, U>& rhs) noexcept { return lhs += rhs; }
+        template <typename U> friend constexpr auto operator-(vector lhs, const vector<N, U>& rhs) noexcept { return lhs -= rhs; }
+        template <typename U> friend constexpr auto operator*(vector lhs, const U& rhs) noexcept { return lhs *= rhs; }
+        template <typename U> friend constexpr auto operator/(vector lhs, const U& rhs) { return lhs /= rhs; }
         template <typename U> friend constexpr auto operator*(const U& lhs, const vector& rhs) noexcept { return rhs * lhs; }
-        template <typename U> friend constexpr auto operator/(const U& lhs, const vector& rhs) noexcept { return rhs / lhs; }
+
         constexpr auto operator-() const noexcept { return vector { -v }; }
 
         template <typename U> friend constexpr bool operator==(const vector& lhs, const vector<N, U>& rhs) noexcept { return rhs.v == lhs.v; }
-        template <typename U> friend constexpr bool operator!=(const vector& lhs, const vector<N, U>& rhs) noexcept { return !(rhs == lhs); }
+        template <typename U> friend constexpr bool operator!=(const vector& lhs, const vector<N, U>& rhs) noexcept { return not (rhs == lhs); }
 
         constexpr auto square_magnitude() const noexcept
         {
@@ -114,8 +118,8 @@ namespace jw
         template<typename U> constexpr auto& scale(const vector<N, U>& other) noexcept { auto lhs = promoted<U>(); lhs.v *= other.template promoted<T>().v; return *this = lhs; }
         template<typename U> constexpr auto scaled(const vector<N, U>& other) const noexcept { return promoted<U>().scale(other); }
 
-        constexpr auto& normalize() noexcept { return *this /= magnitude(); }
-        constexpr auto normalized() const noexcept { return vector<N, decltype(std::declval<T>() / std::declval<decltype(magnitude())>())> { *this }.normalize(); }
+        constexpr auto& normalize() { return *this /= magnitude(); }
+        constexpr auto normalized() const { return vector<N, decltype(std::declval<T>() / std::declval<decltype(magnitude())>())> { *this }.normalize(); }
 
         constexpr auto& round() noexcept { if constexpr (std::is_floating_point_v<T>) v = jw::round(v); return *this; }
         constexpr auto rounded() const noexcept { return vector { *this }.round(); }
