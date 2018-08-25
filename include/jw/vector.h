@@ -239,3 +239,13 @@ namespace jw
     using vector3f = vector<3, float>;
     using vector4f = vector<4, float>;
 }
+
+namespace std
+{
+    template<std::size_t N, typename T>
+    jw::vector<N, T> abs(jw::vector<N, T> a)
+    {
+        for (unsigned i = 0; i < N; ++i) a[i] = std::abs(a[i]);
+        return a;
+    }
+}
