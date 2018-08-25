@@ -54,8 +54,6 @@ namespace jw
                 asm volatile            // switch to the new context
                 (
                     "mov esp, eax;"
-                    ".global context_switch_end;"
-                    "context_switch_end:"
                     "pop gs; .cfi_restore gs; .cfi_adjust_cfa_offset -4;"
                     "pop fs; .cfi_restore fs; .cfi_adjust_cfa_offset -4;"
                     "pop es; .cfi_restore es; .cfi_adjust_cfa_offset -4;"

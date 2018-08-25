@@ -28,8 +28,6 @@ using namespace std::string_literals;
 using namespace jw::dpmi;
 using namespace jw::dpmi::detail;
 
-extern void* context_switch_end asm("context_switch_end");
-
 namespace jw
 {
     namespace debug
@@ -646,8 +644,8 @@ namespace jw
                         return;
                     }
                     auto* reg = thread::detail::thread_details::get_context(t_ptr);
-                    auto r_esp = reinterpret_cast<std::uintptr_t>(reg);
-                    auto* r_eip = &context_switch_end;
+                    auto r_esp = reinterpret_cast<std::uintptr_t>(reg) - sizeof(thread::detail::thread_context);
+                    auto r_eip = reg->return_address;
                     switch (r)
                     {
                     case ebx: encode(out, &reg->ebx); return;
