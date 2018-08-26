@@ -95,8 +95,13 @@ namespace jw
 
                 while (__builtin_expect(current_thread->invoke_list.size() > 0, false))
                 {
-                    current_thread->invoke_list.front()();
-                    current_thread->invoke_list.pop_front();
+                    decltype(thread::invoke_list)::value_type f;
+                    {
+                        dpmi::interrupt_mask no_interrupts_please { };
+                        f = current_thread->invoke_list.front();
+                        current_thread->invoke_list.pop_front();
+                    }
+                    f();
                 }
             }
 
