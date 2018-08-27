@@ -163,7 +163,7 @@ namespace jw
 
         constexpr matrix_range& fill(const auto& fill)
         {
-            for (auto &&i : *this) i = fill;
+            for (auto&& i : *this) i = fill;
             return *this;
         }
 
@@ -180,18 +180,20 @@ namespace jw
         constexpr matrix_range& assign(const auto& copy)
         {
             auto size = vector2i::min(this->size(), copy.size());
-            for (auto y = 0; y < size[1]; ++y)
-                for (auto x = 0; x < size[0]; ++x)
-                    at(x, y) = copy.at(x, y);
+            vector2i p { 0, 0 };
+            for (p.y() = 0; p.y() < size.y(); ++p.y())
+                for (p.x() = 0; p.x() < size.x(); ++p.y())
+                    at(p) = copy.at(p);
             return *this;
         }
 
         constexpr matrix_range& assign_nowrap(const auto& copy)
         {
             auto size = vector2i::min(this->size(), copy.size());
-            for (auto y = 0; y < size[1]; ++y)
-                for (auto x = 0; x < size[0]; ++x)
-                    nowrap(x, y) = copy.nowrap(x, y);
+            vector2i p { 0, 0 };
+            for (p.y() = 0; p.y() < size.y(); ++p.y())
+                for (p.x() = 0; p.x() < size.x(); ++p.x())
+                    nowrap(p) = copy.nowrap(p);
             return *this;
         }
 
