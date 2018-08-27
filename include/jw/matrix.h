@@ -128,10 +128,6 @@ namespace jw
 
         template<typename, typename, unsigned> friend struct matrix_range;
 
-        template<typename R2>
-        constexpr matrix_range(R2&& range, const vector2i& position, const vector2i& dimensions) noexcept 
-            : r(std::forward<R2>(range)), pos(position), dim(dimensions) { }
-
         constexpr matrix_range() noexcept = delete;
         constexpr matrix_range(const matrix_range&) noexcept = default;
         constexpr matrix_range(matrix_range&&) noexcept = default;
@@ -140,7 +136,6 @@ namespace jw
 
         constexpr auto range(vector2i position, vector2i dimensions) const noexcept { return make_range(*this, position, dimensions); }
         constexpr auto range(vector2i position, vector2i dimensions) noexcept { return make_range(*this, position, dimensions); }
-
         constexpr auto range_abs(const vector2i& topleft, const vector2i& bottomright) const noexcept { return range(topleft, bottomright - topleft); }
         constexpr auto range_abs(const vector2i& topleft, const vector2i& bottomright) noexcept { return range(topleft, bottomright - topleft); }
 
@@ -215,36 +210,40 @@ namespace jw
         [[gnu::const]] constexpr auto width() const noexcept { return size().x(); }
         [[gnu::const]] constexpr auto height() const noexcept { return size().y(); }
 
-        template<unsigned level = L> constexpr auto& matrix() const noexcept
+        constexpr auto& matrix() const noexcept
         {
-            if constexpr (level == 0) return r;
-            else return r.template matrix<level - 1>();
+            if constexpr (L <= 1) return r;
+            else return r.matrix();
         }
 
-        template<unsigned level = L> constexpr vector2i abs_pos(vector2i p = { 0, 0 }) const noexcept
+        constexpr vector2i abs_pos(vector2i p = { 0, 0 }) const noexcept
         {
-            if constexpr (level == 0) return p;
-            else return r.template abs_pos<level - 1>(pos + p.copysign(dim));
+            if constexpr (L == 0) return p;
+            else return r.abs_pos(pos + p.copysign(dim));
         }
 
-        template<unsigned level = L> constexpr vector2i abs_pos_wrap(vector2i p = { 0, 0 }) const noexcept
+        constexpr vector2i abs_pos_wrap(vector2i p = { 0, 0 }) const noexcept
         {
             auto s = this->size();
             if (std::abs(p[0]) >= s[0]) p[0] %= s[0];
             if (std::abs(p[1]) >= s[1]) p[1] %= s[1];
             if (p[0] < 0) p[0] += s[0];
             if (p[1] < 0) p[1] += s[1];
-            if constexpr (level == 0) return p;
-            else return r.template abs_pos_wrap<level - 1>(pos + p.copysign(dim));
+            if constexpr (L == 0) return p;
+            else return r.abs_pos_wrap(pos + p.copysign(dim));
         }
 
     protected:
-        template<typename Self>
+        template<typename R2>
+        constexpr matrix_range(R2&& range, const vector2i& position, const vector2i& dimensions) noexcept
+            : r(std::forward<R2>(range)), pos(position), dim(dimensions) { }
+
+        template<unsigned level = L + 1, typename Self>
         constexpr auto make_range(Self&& self, vector2i position, vector2i dimensions) const noexcept
         {
             auto dim_sign = dim.sign();
             dimensions[0] *= dim_sign[0]; dimensions[1] *= dim_sign[1];
-            return matrix_range<std::remove_reference_t<Self>, T, L + 1> { std::forward<Self>(self), position, dimensions };
+            return matrix_range<std::remove_reference_t<Self>, T, level> { std::forward<Self>(self), position, dimensions };
         }
 
         constexpr T& remove_const(const T& t) const noexcept { return const_cast<T&>(t); }
@@ -263,6 +262,11 @@ namespace jw
 
         constexpr matrix(vector2i size, T* data) : matrix_range<matrix<T>, T, 0>(*this, { 0, 0 }, size), ptr(data) { }
         constexpr matrix(std::size_t w, std::size_t h, T* data) : matrix(vector2i { w, h }, data) { }
+
+        constexpr auto range(vector2i position, vector2i dimensions) const noexcept { return this->template make_range<1>(*this, position, dimensions); }
+        constexpr auto range(vector2i position, vector2i dimensions) noexcept { return this->template make_range<1>(*this, position, dimensions); }
+        constexpr auto range_abs(const vector2i& topleft, const vector2i& bottomright) const noexcept { return range(topleft, bottomright - topleft); }
+        constexpr auto range_abs(const vector2i& topleft, const vector2i& bottomright) noexcept { return range(topleft, bottomright - topleft); }
 
         constexpr auto* data() noexcept { return ptr; }
         constexpr const auto* data() const noexcept { return data(); }
