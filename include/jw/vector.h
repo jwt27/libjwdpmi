@@ -23,23 +23,23 @@ namespace jw
         constexpr vector(V _v) noexcept : v(_v) { };
 
         template<typename... Ts>
-        constexpr vector(Ts... args) noexcept : a { static_cast<T>(args)... } { }
+        constexpr vector(Ts... args) noexcept : v { static_cast<T>(args)... } { }
 
-        constexpr const T& operator[](std::ptrdiff_t i) const noexcept { return a[i]; }
-        constexpr T& operator[](std::ptrdiff_t i) noexcept { return a[i]; }
+        constexpr const T& operator[](std::ptrdiff_t i) const noexcept { return v[i]; }
+        constexpr T& operator[](std::ptrdiff_t i) noexcept { return v[i]; }
 
         constexpr const T& at(std::size_t i) const { return a.at(i); }
         constexpr T& at(std::size_t i) { return a.at(i); }
 
-        std::conditional_t<N >= 2 and N <= 4, T&, void> x() noexcept { return a[0]; }
-        std::conditional_t<N >= 2 and N <= 4, T&, void> y() noexcept { return a[1]; }
-        std::conditional_t<N >= 3 and N <= 4, T&, void> z() noexcept { return a[2]; }
-        std::conditional_t<N == 4, T&, void> w() noexcept { return a[3]; }
+        std::conditional_t<N >= 2 and N <= 4, T&, void> x() noexcept { return v[0]; }
+        std::conditional_t<N >= 2 and N <= 4, T&, void> y() noexcept { return v[1]; }
+        std::conditional_t<N >= 3 and N <= 4, T&, void> z() noexcept { return v[2]; }
+        std::conditional_t<N == 4, T&, void> w() noexcept { return v[3]; }
 
-        std::conditional_t<N >= 2 and N <= 4, const T&, void> x() const noexcept { return a[0]; }
-        std::conditional_t<N >= 2 and N <= 4, const T&, void> y() const noexcept { return a[1]; }
-        std::conditional_t<N >= 3 and N <= 4, const T&, void> z() const noexcept { return a[2]; }
-        std::conditional_t<N == 4, const T&, void> w() const noexcept { return a[3]; }
+        std::conditional_t<N >= 2 and N <= 4, const T&, void> x() const noexcept { return v[0]; }
+        std::conditional_t<N >= 2 and N <= 4, const T&, void> y() const noexcept { return v[1]; }
+        std::conditional_t<N >= 3 and N <= 4, const T&, void> z() const noexcept { return v[2]; }
+        std::conditional_t<N == 4, const T&, void> w() const noexcept { return v[3]; }
 
         constexpr vector() noexcept : a { } { };
         constexpr vector(const vector&) noexcept = default;
@@ -54,23 +54,30 @@ namespace jw
                 if constexpr (std::is_integral_v<T>) return rhs.rounded();
                 else return rhs;
             }();
-            for (unsigned i = 0; i < N; ++i) a[i] = static_cast<T>(rhs2[i]);
+            for (unsigned i = 0; i < N; ++i) v[i] = static_cast<T>(rhs2[i]);
         }
 
         template <typename U> constexpr vector& operator=(const vector<N, U>& rhs) noexcept { return *this = rhs.template cast<T>(); };
         template <typename U> constexpr vector& operator=(vector<N, U>&& rhs) noexcept { return *this = rhs.template cast<T>(); };
 
-        template <typename U> constexpr vector<N, U> cast() const noexcept { return vector<N, U>{ *this }; }
+        template <typename U, std::enable_if_t<std::is_same_v<U, T>, bool> = { }> constexpr vector& cast() noexcept { return *this; }
+        template <typename U, std::enable_if_t<std::is_same_v<U, T>, bool> = { } > constexpr const vector& cast() const noexcept { return *this; }
+        template <typename U, std::enable_if_t<not std::is_same_v<U, T>, bool> = { } > constexpr vector<N, U> cast() const noexcept { return vector<N, U>{ *this }; }
         template <typename U> constexpr explicit operator vector<N, U>() const noexcept { return cast<U>(); }
 
-        template<typename U> using promoted_type = std::conditional_t<std::is_floating_point_v<T>, T, std::conditional_t<std::is_integral_v<T> and std::is_integral_v<U>, T, U>>;
+        template<typename U> using promoted_type =
+            std::conditional_t<std::is_floating_point_v<T>, T,
+            std::conditional_t<std::is_integral_v<T> and std::is_integral_v<U>,
+            std::conditional_t<(sizeof(T) < sizeof(U)), T, U>, U>>;
 
         template <typename U, std::enable_if_t<not std::is_same_v<promoted_type<U>, T>, bool> = { }>
         constexpr auto promoted() const noexcept { return vector<N, promoted_type<U>> { *this }; }
         template <typename U, std::enable_if_t<std::is_same_v<promoted_type<U>, T>, bool> = { }>
         constexpr vector& promoted() noexcept { return *this; }
+        template <typename U, std::enable_if_t<std::is_same_v<promoted_type<U>, T>, bool> = { } >
+        constexpr const vector& promoted() const noexcept { return *this; }
 
-        template<typename U> auto promote_scalar(const U& scalar) { return static_cast<promoted_type<U>>(scalar); }
+        template<typename U> auto promote_scalar(const U& scalar) { return static_cast<promoted_type<T>>(scalar); }
 
         constexpr auto& operator+=(const vector& rhs) noexcept { v += rhs.v; return *this; }
         constexpr auto& operator-=(const vector& rhs) noexcept { return *this += -rhs; }
@@ -158,8 +165,8 @@ namespace jw
         {
             for (unsigned i = 0; i < N; ++i)
             {
-                a[i] = std::min(a[i], max.a[i]);
-                a[i] = std::max(a[i], min.a[i]);
+                v[i] = std::min(v[i], max[i]);
+                v[i] = std::max(v[i], min[i]);
             }
             return *this;
         }
@@ -170,7 +177,7 @@ namespace jw
         {
             vector result;
             for (unsigned i = 0; i < N; ++i)
-                result.a[i] = a[i] == 0 ? 0 : a[i] < 0 ? -1 : +1;
+                result[i] = v[i] == 0 ? 0 : v[i] < 0 ? -1 : +1;
             return result;
         }
 
@@ -179,7 +186,7 @@ namespace jw
             if constexpr (std::is_same_v<V, typename vector<N, U>::V>)
                 v = jw::copysign(v, other.v);
             else
-                for (unsigned i = 0; i < N; ++i) a[i] = jw::copysign(a[i], other.a[i]);
+                for (unsigned i = 0; i < N; ++i) v[i] = jw::copysign(v[i], other[i]);
             return *this;
         }
 
@@ -194,7 +201,7 @@ namespace jw
         {
             vector result;
             for (unsigned i = 0; i < N; ++i)
-                result.a[i] = static_cast<T>(std::abs(a.a[i]) > std::abs(b.a[i]) ? a.a[i] : b.a[i]);
+                result[i] = static_cast<T>(std::abs(a[i]) > std::abs(b[i]) ? a[i] : b[i]);
             return result;
         }
 
@@ -202,7 +209,7 @@ namespace jw
         {
             vector result;
             for (unsigned i = 0; i < N; ++i)
-                result.a[i] = static_cast<T>(std::abs(a.a[i]) < std::abs(b.a[i]) ? a.a[i] : b.a[i]);
+                result[i] = static_cast<T>(std::abs(a[i]) < std::abs(b[i]) ? a[i] : b[i]);
             return result;
         }
 
@@ -210,7 +217,7 @@ namespace jw
         {
             vector result;
             for (unsigned i = 0; i < N; ++i)
-                result.a[i] = std::max(static_cast<T>(a.a[i]), static_cast<T>(b.a[i]));
+                result[i] = std::max(static_cast<T>(a[i]), static_cast<T>(b[i]));
             return result;
         }
 
@@ -218,7 +225,7 @@ namespace jw
         {
             vector result;
             for (unsigned i = 0; i < N; ++i)
-                result.a[i] = std::min(static_cast<T>(a.a[i]), static_cast<T>(b.a[i]));
+                result[i] = std::min(static_cast<T>(a[i]), static_cast<T>(b[i]));
             return result;
         }
 
