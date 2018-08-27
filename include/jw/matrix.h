@@ -58,6 +58,7 @@ namespace jw
         }
 
         constexpr bool valid() const noexcept { return steps < max_steps; }
+        constexpr const auto& position() const noexcept { return p; }
 
         constexpr vector2i direction() const noexcept
         {
@@ -196,6 +197,11 @@ namespace jw
                     nowrap(p) = copy.nowrap(p);
             return *this;
         }
+
+        template<typename F> constexpr matrix_range& apply(F&& f) { for (auto i = begin(); i != end(); ++i) f(*i); return *this; }
+        template<typename F> constexpr matrix_range& apply_nowrap(F&& f) { for(auto i = begin(); i != end(); ++i) f(nowrap(i.position())); return *this; }
+        template<typename F> constexpr matrix_range& apply_pos(F&& f) { for (auto i = begin(); i != end(); ++i) f(i.position(), *i); return *this; }
+        template<typename F> constexpr matrix_range& apply_pos_nowrap(F&& f) { for (auto i = begin(); i != end(); ++i) f(i.position(), nowrap(i.position())); return *this; }
 
         constexpr auto begin() noexcept   { return iterator { *this, { 0, 0 } }; }
         constexpr auto vbegin() noexcept  { return vertical_iterator { *this, { 0, 0 } }; }
