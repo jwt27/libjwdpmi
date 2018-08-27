@@ -27,13 +27,65 @@ namespace jw
         constexpr const auto& operator*() const noexcept { return r.at(p); }
         constexpr auto& operator[](std::ptrdiff_t n) const { return *(matrix_iterator { *this } += n); }
 
-        constexpr auto& operator-=(const vector2i& n) const { p -= n; return *this; }   // TODO: rotate
-        constexpr auto& operator+=(const vector2i& n) const { p += n; return *this; }
+        constexpr auto& operator-=(const vector2i& n) const { return *this += -n; }
+        constexpr auto& operator+=(const vector2i& n) const
+        {
+            p += rotate(n);
+            steps += n.x() + n.y() * r.width();
+            check_overflow();
+            return *this;
+        }
 
         constexpr auto& operator-=(std::ptrdiff_t n) const { return *this += -n; }
         constexpr auto& operator+=(std::ptrdiff_t n) const 
         {
             p += n * direction();
+            steps += n;
+            check_overflow();
+            return *this;
+        }
+
+        constexpr auto& operator++(int) const noexcept { auto copy = matrix_iterator { *this }; ++(*this); return copy; }
+        constexpr auto& operator++() const noexcept
+        {
+            p += direction();
+            steps += 1;
+            if constexpr (D == matrix_iterator_direction::right) if (p.x() >= r.width()) { p.y() += 1; p.x() = 0; }
+            if constexpr (D == matrix_iterator_direction::left) if (p.x() < 0) { p.y() -= 1; p.x() = r.width() - 1; }
+            if constexpr (D == matrix_iterator_direction::down) if (p.y() >= r.height()) { p.x() += 1; p.y() = 0; }
+            if constexpr (D == matrix_iterator_direction::up) if (p.y() < 0) { p.x() -= 1; p.y() = r.height() - 1; }
+            return *this;
+        }
+
+        constexpr bool valid() const noexcept { return steps < max_steps; }
+
+        constexpr vector2i direction() const noexcept
+        {
+            if constexpr (D == matrix_iterator_direction::up) return vector2i::up();
+            if constexpr (D == matrix_iterator_direction::down) return vector2i::down();
+            if constexpr (D == matrix_iterator_direction::left) return vector2i::left();
+            if constexpr (D == matrix_iterator_direction::right) return vector2i::right();
+        }
+
+        template<typename R2, matrix_iterator_direction D2>
+        friend constexpr bool operator==(const matrix_iterator& lhs, const matrix_iterator<R2, D2>& rhs) noexcept { return &(*lhs) == &(*rhs); }
+        template<typename R2, matrix_iterator_direction D2>
+        friend constexpr bool operator!=(const matrix_iterator& lhs, const matrix_iterator<R2, D2>& rhs) noexcept { return !(lhs == rhs); }
+
+        friend constexpr bool operator==(const matrix_iterator& lhs, const invalid_matrix_iterator&) noexcept { return not lhs.valid(); }
+        friend constexpr bool operator!=(const matrix_iterator& lhs, const invalid_matrix_iterator&) noexcept { return lhs.valid(); }
+
+    protected:
+        constexpr vector2i rotate(const vector2i& v) const noexcept
+        {
+            if constexpr (D == matrix_iterator_direction::up) return vector2i { -v[1], -v[0] };
+            if constexpr (D == matrix_iterator_direction::down) return vector2i { v[1], v[0] };
+            if constexpr (D == matrix_iterator_direction::left) return -v;
+            if constexpr (D == matrix_iterator_direction::right) return v;
+        }
+
+        constexpr void check_overflow() const
+        {
             if constexpr (D == matrix_iterator_direction::right) if (p.x() >= r.width())
             {
                 p.y() += p.x() / r.width();
@@ -54,31 +106,12 @@ namespace jw
                 p.x() -= std::abs(p.y() / r.height()) + 1;
                 p.y() = r.height() - (std::abs(p.y() + 1) % r.height()) - 1;
             }
-            return *this;
         }
-
-        constexpr auto& operator++() const noexcept { return *this += 1; }
-        constexpr auto& operator++(int) const noexcept { auto copy = matrix_iterator { *this }; *this += 1; return copy; }
-
-        constexpr bool invalid() const noexcept { return (p.x() < 0 or p.x() >= r.width() or p.y() < 0 or p.y() >= r.height()); }
-        constexpr vector2i direction() const noexcept
-        {
-            if constexpr (D == matrix_iterator_direction::up) return vector2i::up();
-            if constexpr (D == matrix_iterator_direction::down) return vector2i::down();
-            if constexpr (D == matrix_iterator_direction::left) return vector2i::left();
-            if constexpr (D == matrix_iterator_direction::right) return vector2i::right();
-        }
-
-        template<typename R2, matrix_iterator_direction D2>
-        friend constexpr bool operator==(const matrix_iterator& lhs, const matrix_iterator<R2, D2>& rhs) noexcept { return &(*lhs) == &(*rhs); }
-        template<typename R2, matrix_iterator_direction D2>
-        friend constexpr bool operator!=(const matrix_iterator& lhs, const matrix_iterator<R2, D2>& rhs) noexcept { return !(lhs == rhs); }
-
-        friend constexpr bool operator==(const matrix_iterator& lhs, const invalid_matrix_iterator&) noexcept { return lhs.invalid(); }
-        friend constexpr bool operator!=(const matrix_iterator& lhs, const invalid_matrix_iterator&) noexcept { return not lhs.invalid(); }
 
         R& r;
         mutable vector2i p;
+        mutable std::size_t steps { 0 };
+        const std::size_t max_steps { static_cast<std::size_t>(r.width() * r.height()) };
     };
 
     template<typename R, typename T, unsigned L>
@@ -102,7 +135,7 @@ namespace jw
         constexpr matrix_range() noexcept = delete;
         constexpr matrix_range(const matrix_range&) noexcept = default;
         constexpr matrix_range(matrix_range&&) noexcept = default;
-        constexpr matrix_range& operator=(const matrix_range&) noexcept = delete;
+        constexpr matrix_range& operator=(const matrix_range&) noexcept = default;
         constexpr matrix_range& operator=(matrix_range&&) noexcept = default;
 
         constexpr auto range(vector2i position, vector2i dimensions) const noexcept { return make_range(*this, position, dimensions); }
@@ -121,7 +154,7 @@ namespace jw
         constexpr const auto& at(std::ptrdiff_t x, std::ptrdiff_t y) const noexcept { return at({ x, y }); }
         constexpr auto& at(std::ptrdiff_t x, std::ptrdiff_t y) noexcept { return at({ x, y }); }
 
-        constexpr const auto& nowrap(vector2i p) const noexcept { return get(p, r); }
+        constexpr const auto& nowrap(vector2i p) const noexcept { return get(p); }
         constexpr auto& nowrap(vector2i p) noexcept { return remove_const(get(p)); }
         constexpr const auto& nowrap(std::ptrdiff_t x, std::ptrdiff_t y) const noexcept { return nowrap({ x, y }); }
         constexpr auto& nowrap(std::ptrdiff_t x, std::ptrdiff_t y) noexcept { return nowrap({ x, y }); }
@@ -139,12 +172,31 @@ namespace jw
             return *this;
         }
 
+        constexpr matrix_range& fill_nowrap(const auto& fill)
+        {
+            for (std::ptrdiff_t y = 0; y < height(); ++y)
+            {
+                auto left = &remove_const(get({ 0,y })), right = &remove_const(get({ width(), y }));
+                std::fill(std::min(left, right), std::max(left, right), fill);
+            }
+            return *this;
+        }
+
         constexpr matrix_range& assign(const auto& copy)
         {
             auto size = vector2i::min(this->size(), copy.size());
             for (auto y = 0; y < size[1]; ++y)
                 for (auto x = 0; x < size[0]; ++x)
                     at(x, y) = copy.at(x, y);
+            return *this;
+        }
+
+        constexpr matrix_range& assign_nowrap(const auto& copy)
+        {
+            auto size = vector2i::min(this->size(), copy.size());
+            for (auto y = 0; y < size[1]; ++y)
+                for (auto x = 0; x < size[0]; ++x)
+                    nowrap(x, y) = copy.nowrap(x, y);
             return *this;
         }
 
@@ -169,6 +221,23 @@ namespace jw
             else return r.template matrix<level - 1>();
         }
 
+        template<unsigned level = L> constexpr vector2i abs_pos(vector2i p = { 0, 0 }) const noexcept
+        {
+            if constexpr (level == 0) return p;
+            else return r.template abs_pos<level - 1>(pos + p.copysign(dim));
+        }
+
+        template<unsigned level = L> constexpr vector2i abs_pos_wrap(vector2i p = { 0, 0 }) const noexcept
+        {
+            auto s = this->size();
+            if (std::abs(p[0]) >= s[0]) p[0] %= s[0];
+            if (std::abs(p[1]) >= s[1]) p[1] %= s[1];
+            if (p[0] < 0) p[0] += s[0];
+            if (p[1] < 0) p[1] += s[1];
+            if constexpr (level == 0) return p;
+            else return r.template abs_pos_wrap<level - 1>(pos + p.copysign(dim));
+        }
+
     protected:
         template<typename Self>
         constexpr auto make_range(Self&& self, vector2i position, vector2i dimensions) const noexcept
@@ -180,25 +249,8 @@ namespace jw
 
         constexpr T& remove_const(const T& t) const noexcept { return const_cast<T&>(t); }
 
-        constexpr const T& get_wrap(vector2i p) const
-        {
-            auto s = this->size();
-            p.v %= s.v;
-            p += s;
-            p.v %= s.v;
-            p.copysign(dim);
-            p += pos;
-            if constexpr (L > 0) return r.get_wrap(p);
-            else return r.base_get(p);
-        }
-
-        constexpr const T& get(vector2i p) const
-        {
-            p.copysign(dim);
-            p += pos;
-            if constexpr (L > 0) return r.get(p);
-            else return r.base_get(p);
-        }
+        constexpr const T& get_wrap(vector2i p) const { return matrix().base_get(abs_pos_wrap(p)); }
+        constexpr const T& get(vector2i p) const { return matrix().base_get(abs_pos(p)); }
 
         std::conditional_t<(L < 2), R&, R> r;
         vector2i pos, dim;
@@ -217,10 +269,7 @@ namespace jw
         constexpr auto data_size() const noexcept { return this->width() * this->height(); }
 
     protected:
-        constexpr const T& base_get(vector2i p) const
-        {
-            return *(ptr + p[0] + this->size()[0] * p[1]);
-        }
+        constexpr const T& base_get(vector2i p) const { return *(ptr + p[0] + this->dim[0] * p[1]); }
 
         T* ptr;
     };
