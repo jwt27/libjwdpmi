@@ -246,4 +246,22 @@ namespace std
         for (unsigned i = 0; i < N; ++i) a[i] = std::abs(a[i]);
         return a;
     }
+
+    template<std::size_t N, typename T>
+    struct hash<jw::vector<N, T>>
+    {
+        using argument_type = jw::vector<N, T>;
+        using result_type = std::size_t;
+        constexpr result_type operator()(const argument_type& v) const noexcept
+        {
+            result_type seed { 0 };
+            for (unsigned i = 0; i < N; ++i)
+            {
+                // algorithm from boost::hash_combine():
+                // https://github.com/boostorg/container_hash/blob/f054fe932f4d5173bfd6dad5bcff5738a7aff0be/include/boost/container_hash/hash.hpp#L313
+                seed ^= hash<T> { }(v[i]) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+            }
+            return seed;
+        }
+    };
 }
