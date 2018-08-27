@@ -98,8 +98,20 @@ namespace jw
 
         constexpr auto operator-() const noexcept { return vector { -v }; }
 
-        template <typename U> friend constexpr bool operator==(const vector& lhs, const vector<N, U>& rhs) noexcept { return rhs.v == lhs.v; }
-        template <typename U> friend constexpr bool operator!=(const vector& lhs, const vector<N, U>& rhs) noexcept { return not (rhs == lhs); }
+        template <typename U> constexpr friend bool operator==(const vector& lhs, const vector<N, U>& rhs) noexcept
+        {
+            auto result { lhs.template promoted<U>().v == rhs.template promoted<T>().v };
+            if constexpr (N == 4) return (result[0] & result[1] & result[2] & result[3]) != 0;
+            if constexpr (N == 3) return (result[0] & result[1] & result[2]) != 0;
+            if constexpr (N == 2) return (result[0] & result[1]) != 0;
+        }
+        template <typename U> constexpr friend bool operator!=(const vector& lhs, const vector<N, U>& rhs) noexcept
+        {
+            auto result { lhs.template promoted<U>().v == rhs.template promoted<T>().v };
+            if constexpr (N == 4) return (result[0] | result[1] | result[2] | result[3]) == 0;
+            if constexpr (N == 3) return (result[0] | result[1] | result[2]) == 0;
+            if constexpr (N == 2) return (result[0] | result[1]) == 0;
+        }
 
         constexpr auto square_magnitude() const noexcept
         {
