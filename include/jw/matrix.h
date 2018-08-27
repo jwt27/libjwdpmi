@@ -224,13 +224,8 @@ namespace jw
 
         constexpr vector2i abs_pos_wrap(vector2i p = { 0, 0 }) const noexcept
         {
-            auto s = this->size();
-            if (std::abs(p[0]) >= s[0]) p[0] %= s[0];
-            if (std::abs(p[1]) >= s[1]) p[1] %= s[1];
-            if (p[0] < 0) p[0] += s[0];
-            if (p[1] < 0) p[1] += s[1];
             if constexpr (L == 0) return p;
-            else return r.abs_pos_wrap(pos + p.copysign(dim));
+            else return r.abs_pos_wrap(pos + p.wrap({ 0,0 }, size()).copysign(dim));
         }
 
     protected:

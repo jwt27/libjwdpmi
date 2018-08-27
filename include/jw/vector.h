@@ -173,6 +173,29 @@ namespace jw
 
         template<typename U> constexpr auto clamped(const vector<N, U>& min, const vector<N, U>& max) const noexcept { return vector<N, U> { *this }.clamp(min, max); }
 
+        constexpr vector& wrap(const vector& topleft, const vector& size)
+        {
+            *this -= topleft;
+            for (unsigned i = 0; i < N; ++i)
+            {
+                if (std::abs(v[i]) >= size[i]) v[i] = jw::remainder(v[i], size[i]);
+                if (v[i] < 0) v[i] += size[i];
+            }
+            *this += topleft;
+            return *this;
+        }
+
+        template<typename U> constexpr auto wrapped(const vector<N, U>& topleft, const vector<N, U>& size) const noexcept { return vector<N, U> { *this }.wrap(topleft, size); }
+
+        constexpr vector& wrap_abs(const vector& a, const vector& b)
+        {
+            auto min = min_abs(a, b);
+            auto size = max_abs(a, b) + vector { 1,1 } - min;
+            return wrap(min, size);
+        }
+
+        template<typename U> constexpr auto wrapped_abs(const vector<N, U>& a, const vector<N, U>& b) const noexcept { return vector<N, U> { *this }.wrap(a, b); }
+
         constexpr auto sign() const noexcept
         {
             vector result;
