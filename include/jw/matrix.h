@@ -186,7 +186,7 @@ namespace jw
             vector2i p { 0, 0 };
             for (p.y() = 0; p.y() < size.y(); ++p.y())
                 for (p.x() = 0; p.x() < size.x(); ++p.x())
-                    get_maybe_wrap(p) = copy.get_maybe_wrap(p);
+                    remove_const(get_maybe_wrap(p)) = copy.get_maybe_wrap(p);
             return *this;
         }
 
