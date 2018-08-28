@@ -21,10 +21,11 @@ namespace jw
         constexpr matrix_iterator& operator=(const matrix_iterator&) noexcept = default;
         constexpr matrix_iterator& operator=(matrix_iterator&&) noexcept = default;
 
-        constexpr auto* operator->() noexcept { return &r.at(p); }
-        constexpr const auto* operator->() const noexcept { return &r.at(p); }
-        constexpr auto& operator*() noexcept { return r.at(p); }
-        constexpr const auto& operator*() const noexcept { return r.at(p); }
+        constexpr auto* operator->() noexcept { return &r.remove_const(r.get_maybe_wrap(p)); }
+        constexpr const auto* operator->() const noexcept { return &r.get_maybe_wrap(p); }
+        constexpr auto& operator*() noexcept { return r.remove_const(r.get_maybe_wrap(p)); }
+        constexpr const auto& operator*() const noexcept { return r.get_maybe_wrap(p); }
+
         constexpr auto& operator[](std::ptrdiff_t n) const { return *(matrix_iterator { *this } += n); }
 
         constexpr auto& operator-=(const vector2i& n) const { return *this += -n; }
@@ -128,6 +129,7 @@ namespace jw
         using const_reverse_vertical_iterator = matrix_iterator<const matrix_range, matrix_iterator_direction::up>;
 
         template<typename, typename, unsigned> friend struct matrix_range;
+        template<typename, matrix_iterator_direction> friend struct matrix_iterator;
 
         constexpr matrix_range() noexcept = delete;
         constexpr matrix_range(const matrix_range&) noexcept = default;
@@ -183,8 +185,8 @@ namespace jw
             auto size = vector2i::min(this->size(), copy.size());
             vector2i p { 0, 0 };
             for (p.y() = 0; p.y() < size.y(); ++p.y())
-                for (p.x() = 0; p.x() < size.x(); ++p.y())
-                    at(p) = copy.at(p);
+                for (p.x() = 0; p.x() < size.x(); ++p.x())
+                    get_maybe_wrap(p) = copy.get_maybe_wrap(p);
             return *this;
         }
 
@@ -232,8 +234,14 @@ namespace jw
 
         constexpr vector2i abs_pos_wrap(vector2i p = { 0, 0 }) const noexcept
         {
-            if constexpr (L == 0) return p;
+            if constexpr (L == 0) return p.wrap({ 0,0 }, size());
             else return r.abs_pos_wrap(pos + p.wrap({ 0,0 }, size()).copysign(dim));
+        }
+
+        constexpr vector2i abs_pos_maybe_wrap(vector2i p = { 0, 0 }) const noexcept
+        {
+            if constexpr (L == 0) return p;
+            else return r.abs_pos_wrap(pos + p.copysign(dim));
         }
 
     protected:
@@ -251,9 +259,11 @@ namespace jw
 
         constexpr T& remove_const(const T& t) const noexcept { return const_cast<T&>(t); }
 
+        constexpr const T& get_maybe_wrap(vector2i p) const { return matrix().base_get(abs_pos_maybe_wrap(p)); }
         constexpr const T& get_wrap(vector2i p) const { return matrix().base_get(abs_pos_wrap(p)); }
         constexpr const T& get(vector2i p) const { return matrix().base_get(abs_pos(p)); }
 
+        static constexpr unsigned level = L;
         std::conditional_t<(L < 2), R&, R> r;
         vector2i pos, dim;
     };
