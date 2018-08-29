@@ -24,4 +24,15 @@ namespace jw
     };
 
     [[noreturn]] void terminate();
+
+#   ifdef __MMX__
+    static constexpr bool mmx = true;
+#   else
+    static constexpr bool mmx = false;
+#   endif
+#   ifdef __SSE__
+    static constexpr bool sse = true;
+#   else
+    static constexpr bool sse = false;
+#   endif
 }
