@@ -276,13 +276,31 @@ namespace jw
                 }
             }
 
+            template<typename U>
+            static constexpr auto vector_shift(std::uint16_t noalpha = 255) noexcept
+            {
+                return reinterpret_cast<__m64>((V<4, std::uint16_t> { U::bx, U::gx, U::rx, U::has_alpha ? U::ax : noalpha } + 1) / 8);
+            }
+
+            template<typename U>
+            static constexpr auto vector_max(float noalpha = 1) noexcept
+            {
+                return reinterpret_cast<__m128>(V<4, float> { U::bx, U::gx, U::rx, U::has_alpha ? U::ax : noalpha });
+            }
+
+            template<typename U = P>
+            static constexpr bool byte_aligned()
+            {
+                return std::is_same_v<U, bgra_8888> or std::is_same_v<U, bgra_8880> or std::is_same_v<U, bgra_6668> or std::is_same_v<U, bgr_8880>;
+            }
+
             template <typename U>
             constexpr pixel<U> cast_to() const noexcept
             {
                 if constexpr (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>)
                 {
-                    constexpr __m128 maxp = { P::bx, P::gx, P::rx, P::has_alpha ? P::ax : 1 };
-                    constexpr __m128 maxu = { U::bx, U::gx, U::rx, U::has_alpha ? U::ax : 0 };
+                    constexpr __m128 maxp = vector_max<P>(1);
+                    constexpr __m128 maxu = vector_max<U>(0);
 
                     __m128 src = m128();
                     src = _mm_div_ps(_mm_mul_ps(src, maxu), maxp);
@@ -299,8 +317,8 @@ namespace jw
                 }
                 else
                 {
-                    constexpr V<4, std::uint16_t> maxp = { (P::bx + 1) / 8, (P::gx + 1) / 8, (P::rx + 1) / 8, P::has_alpha ? (P::ax + 1) / 8 : 1 };
-                    constexpr V<4, std::uint16_t> maxu = { (U::bx + 1) / 8, (U::gx + 1) / 8, (U::rx + 1) / 8, U::has_alpha ? (U::ax + 1) / 8 : 0 };
+                    constexpr __m64 maxp = vector_shift<P>(255);
+                    constexpr __m64 maxu = vector_shift<U>(255);
 
                     __m64 src = m64();
                     src = _mm_srl_pi16(_mm_sll_pi16(src, maxu), maxp);
