@@ -265,27 +265,22 @@ namespace jw
             }
 
             template <typename U = P>
-            static constexpr pixel<U> m128(auto value) noexcept
+            static constexpr pixel<U> m128(__m128 value) noexcept
             {
-                static_assert(std::is_same_v<typename U::T, float>);
-                return pixel<U> { std::move(reinterpret_cast<pixel<U>&&>(value)) };
+                if constexpr (std::is_floating_point_v<typename U::T>) return pixel<U> { std::move(reinterpret_cast<pixel<U>&&>(value)) };
+                else return m64<U>(_mm_cvtps_pi16(value));
             }
 
             constexpr __m128 m128() const noexcept
             {
-                static_assert(std::is_same_v<typename P::T, float>);
-                if constexpr (P::has_alpha) return *reinterpret_cast<const __m128*>(this);
-                else
-                {
-                    auto v = *reinterpret_cast<const __m128*>(this);
-                    return v; // _mm_add_ps(v, _mm_and_ps(_mm_cmpeq_ps(v, _mm_set1_ps(0)), _mm_set1_ps(std::numeric_limits<float>::epsilon())));
-                }
+                if constexpr (std::is_floating_point_v<typename P::T>) return *reinterpret_cast<const __m128*>(this);
+                else return _mm_cvtpu16_ps(m64());
             }
 
             template<typename U>
             static constexpr auto vector_shift(std::uint16_t noalpha = 255) noexcept
             {
-                return reinterpret_cast<__m64>((V<4, std::uint16_t> { U::bx, U::gx, U::rx, U::has_alpha ? U::ax : noalpha } + 1) / 8);
+                return reinterpret_cast<__m64>((V<4, std::uint16_t> { U::bx, U::gx, U::rx, static_cast<std::uint16_t>(U::has_alpha ? U::ax : noalpha) } + 1) / 8);
             }
 
             template<typename U>
@@ -310,16 +305,7 @@ namespace jw
 
                     __m128 src = m128();
                     src = _mm_div_ps(_mm_mul_ps(src, maxu), maxp);
-
-                    if constexpr (std::is_integral_v<typename U::T>)
-                    {
-                        auto bottom = _mm_cvtps_pi32(src);
-                        auto top = _mm_cvtps_pi32(_mm_movehl_ps(src, src));
-                        auto dst = _mm_packs_pi32(bottom, top);
-
-                        return m64<U>(dst);
-                    }
-                    else return m128<U>(src);
+                    return m128<U>(src);
                 }
                 else
                 {
