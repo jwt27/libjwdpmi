@@ -3,6 +3,8 @@
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
+#include <mmintrin.h>
+#include <xmmintrin.h>
 #include <jw/common.h>
 #include <jw/math.h>
 
@@ -194,6 +196,9 @@ namespace jw
         {
             using T = typename P::T;
 
+            template<std::size_t N, typename T>
+            using V [[gnu::vector_size(N * sizeof(T))]] = T;
+
             template<typename T>
             union vector
             {
@@ -225,86 +230,55 @@ namespace jw
                 this->r = v.r;
                 if constexpr (V::has_alpha) this->a = v.a;
                 return *this;
-            };
+            }
 
-            template <typename V, typename U, std::enable_if_t<V::has_alpha && U::has_alpha, bool> = { }>
-            constexpr pixel<U> cast() const noexcept
+            template <typename U>
+            constexpr pixel<U> cast_to() const noexcept
             {
-                using max_T = decltype(max<U>(U::ax));
-                if constexpr (std::is_floating_point<max_T>::value)
+                if constexpr (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>)
                 {
-                    using vec = vector<max_T>;
-                    vec maxp { max<U>(V::rx), max<U>(V::gx), max<U>(V::bx), max<U>(V::ax) };
-                    vec maxu { max<U>(U::rx), max<U>(U::gx), max<U>(U::bx), max<U>(U::ax) };
-                    vec src { this->r, this->g, this->b, this->a };
-                    src.v *= maxu.v;
-                    src.v /= maxp.v;
-                    return pixel<U> { }.template assign_round<U>(src);
-                }
-                else 
-                {
-                    using UT = typename U::T;
-                    pixel<U> result { };
-                    result.b = static_cast<UT>(this->b * max<U>(U::bx) / max<U>(V::bx));
-                    result.g = static_cast<UT>(this->g * max<U>(U::gx) / max<U>(V::gx));
-                    result.r = static_cast<UT>(this->r * max<U>(U::rx) / max<U>(V::rx));
-                    result.a = static_cast<UT>(this->a * max<U>(U::ax) / max<U>(V::ax));
-                    return result;
-                }
-            };
+                    constexpr __m128 maxp = { P::bx, P::gx, P::rx, P::has_alpha ? P::ax : 1 };
+                    constexpr __m128 maxu = { U::bx, U::gx, U::rx, U::has_alpha ? U::ax : 0 };
 
-            template <typename V, typename U, std::enable_if_t<!V::has_alpha && U::has_alpha, bool> = { }>
-            constexpr pixel<U> cast() const noexcept
-            { 
-                using max_T = decltype(max<U>(U::ax));
-                if constexpr (std::is_floating_point<max_T>::value)
-                {
-                    using vec = vector<max_T>;
-                    vec maxp { max<U>(V::rx), max<U>(V::gx), max<U>(V::bx), 1 };
-                    vec maxu { max<U>(U::rx), max<U>(U::gx), max<U>(U::bx), max<U>(V::ax) };
-                    vec src { this->r, this->g, this->b, 1 };
-                    src.v *= maxu.v;
-                    src.v /= maxp.v;
-                    return pixel<U> { }.template assign_round<U>(src);
+                    __m128 src;
+                    if constexpr (P::has_alpha) src = _mm_set_ps(this->b, this->g, this->r, this->a);
+                    else                        src = _mm_set_ps(this->b, this->g, this->r, 1);
+
+                    src = _mm_div_ps(_mm_mul_ps(src, maxu), maxp);
+
+                    if constexpr (std::is_integral_v<typename U::T>)
+                    {
+                        auto bottom = _mm_cvtps_pi16(src);
+                        auto top = _mm_cvtps_pi32(_mm_movehl_ps(src, src));
+                        auto dst = reinterpret_cast<V<8, byte>>(_mm_packs_pu16(_mm_packs_pi32(top, bottom), _mm_setzero_si64()));
+
+                        if constexpr (U::has_alpha) { pixel<U> result {dst[2], dst[1], dst[0], dst[3]}; _mm_empty(); return result; }
+                        else                        { pixel<U> result {dst[2], dst[1], dst[0], U::ax};  _mm_empty(); return result; }
+                    }
+                    else
+                    {
+                        if constexpr (U::has_alpha) return pixel<U> {src[2], src[1], src[0], src[3]};
+                        else                        return pixel<U> {src[2], src[1], src[0], U::ax};
+                    }
                 }
                 else
                 {
-                    using UT = typename U::T;
-                    pixel<U> result { };
-                    result.b = static_cast<UT>(this->b * max<U>(U::bx) / max<U>(V::bx));
-                    result.g = static_cast<UT>(this->g * max<U>(U::gx) / max<U>(V::gx));
-                    result.r = static_cast<UT>(this->r * max<U>(U::rx) / max<U>(V::rx));
-                    result.a = U::ax;
-                    return result;
-                }
-            };
+                    constexpr V<4, std::uint16_t> maxp = { (P::bx + 1) / 8, (P::gx + 1) / 8, (P::rx + 1) / 8, P::has_alpha ? (P::ax + 1) / 8 : 1 };
+                    constexpr V<4, std::uint16_t> maxu = { (U::bx + 1) / 8, (U::gx + 1) / 8, (U::rx + 1) / 8, U::has_alpha ? (U::ax + 1) / 8 : 0 };
 
-            template <typename V, typename U, std::enable_if_t<!U::has_alpha, bool> = { }>
-            constexpr pixel<U> cast() const noexcept
-            { 
-                using max_T = decltype(max<U>(U::ax));
-                if constexpr (std::is_floating_point<max_T>::value)
-                {
-                    using vec = vector<max_T>;
-                    vec maxp { max<U>(V::rx), max<U>(V::gx), max<U>(V::bx), 1 };
-                    vec maxu { max<U>(U::rx), max<U>(U::gx), max<U>(U::bx), 0 };
-                    vec src { this->r, this->g, this->b, 0 };
-                    src.v *= maxu.v;
-                    src.v /= maxp.v;
-                    return pixel<U> { }.template assign_round<U>(src);
-                }
-                else
-                {
-                    using UT = typename U::T;
-                    pixel<U> result { };
-                    result.b = static_cast<UT>(this->b * max<U>(U::bx) / max<U>(V::bx));
-                    result.g = static_cast<UT>(this->g * max<U>(U::gx) / max<U>(V::gx));
-                    result.r = static_cast<UT>(this->r * max<U>(U::rx) / max<U>(V::rx));
-                    return result;
-                }
-            };
+                    __m64 src;
+                    if constexpr (P::has_alpha) src = _mm_set_pi8(0, 0, 0, 0, this->b, this->g, this->r, this->a);
+                    else                        src = _mm_set_pi8(0, 0, 0, 0, this->b, this->g, this->r, U::ax);
 
-            template <typename U> constexpr pixel<U> cast_to() const noexcept { return cast<P, U>(); }
+                    src = _mm_unpacklo_pi8(_mm_setzero_si64(), src);
+                    src = _mm_srl_pi16(_mm_sll_pi16(src, reinterpret_cast<__m64>(maxu)), reinterpret_cast<__m64>(maxp));
+                    auto dst = reinterpret_cast<V<8, byte>>(_mm_packs_pu16(src, _mm_setzero_si64()));
+
+                    if constexpr (U::has_alpha) { pixel<U> result { dst[2], dst[1], dst[0], dst[3] }; _mm_empty(); return result; }
+                    else                        { pixel<U> result { dst[2], dst[1], dst[0], U::ax };  _mm_empty(); return result; }
+                }
+            }
+
             template <typename U> constexpr operator pixel<U>() const noexcept { return cast_to<U>(); }
 
             template <typename U> constexpr pixel& operator=(const pixel<U>& other) noexcept { return blend(other); }
