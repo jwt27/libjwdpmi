@@ -214,6 +214,12 @@ namespace jw
             constexpr pixel(const pixel& p) noexcept = default;
             constexpr pixel(pixel&& p) noexcept = default;
 
+            template <typename U> constexpr operator pixel<U>() const noexcept { return cast_to<U>(); }
+            template <typename U> constexpr pixel& operator=(const pixel<U>& other) noexcept { return blend(other); }
+            template <typename U> constexpr pixel& operator=(pixel<U>&& other) noexcept { return *this = std::move(other.template cast_to<P>()); }
+            constexpr pixel& operator=(const pixel& other) noexcept { return blend(other); }
+            constexpr pixel& operator=(pixel&& o) noexcept = default;
+
             template<typename V>
             constexpr pixel& assign_round(const auto& v) noexcept
             { 
@@ -325,13 +331,6 @@ namespace jw
                     return m64<U>(src);
                 }
             }
-
-            template <typename U> constexpr operator pixel<U>() const noexcept { return cast_to<U>(); }
-
-            template <typename U> constexpr pixel& operator=(const pixel<U>& other) noexcept { return blend(other); }
-            template <typename U> constexpr pixel& operator=(pixel<U>&& other) noexcept { return *this = std::move(other.template cast_to<P>()); }
-            constexpr pixel& operator=(const pixel& other) noexcept { return blend(other); }
-            constexpr pixel& operator=(pixel&& o) noexcept = default;
 
             template <typename U, std::enable_if_t<(std::is_integral<typename U::T>::value && std::is_integral<typename P::T>::value), bool> = { }> 
             static constexpr std::int16_t max(auto max) noexcept { return max + 1; }
