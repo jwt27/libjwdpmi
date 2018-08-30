@@ -233,6 +233,76 @@ namespace jw
             }
 
             template <typename U>
+            constexpr pixel<U> m64(auto value) const noexcept
+            {
+                auto v = reinterpret_cast<V<8, byte>>(value);
+                if constexpr (U::has_alpha)
+                {
+                    if constexpr (U::bx == 255 and U::gx == 255 and U::rx == 255 and U::ax == 255)
+                    {
+                        pixel<U> result { std::move(reinterpret_cast<pixel<U>&&>(v)) };
+                        _mm_empty();
+                        return result;
+                    }
+                    else
+                    {
+                        pixel<U> result { v[2], v[1], v[0], v[3] };
+                        _mm_empty();
+                        return result;
+                    }
+                }
+                else
+                {
+                    if constexpr (P::bx == 255 and P::gx == 255 and P::rx == 255)
+                    {
+                        pixel<U> result { std::move(reinterpret_cast<pixel<U>&&>(v)) };
+                        _mm_empty();
+                        return result;
+                    }
+                    else
+                    {
+                        pixel<U> result { v[2], v[1], v[0] };
+                        _mm_empty();
+                        return result;
+                    }
+                }
+            }
+
+            constexpr __m64 m64() const noexcept
+            {
+                if constexpr (P::has_alpha)
+                {
+                    if constexpr (P::bx == 255 and P::gx == 255 and P::rx == 255 and P::ax == 255)
+                        return *reinterpret_cast<const __m64*>(this);
+                    else return _mm_set_pi8(0, 0, 0, 0, this->b, this->g, this->r, this->a);
+                }
+                else
+                {
+                    if constexpr (P::bx == 255 and P::gx == 255 and P::rx == 255)
+                        return *reinterpret_cast<const __m64*>(this);
+                    else return _mm_set_pi8(0, 0, 0, 0, this->b, this->g, this->r, 0);
+                }
+            }
+
+            template <typename U>
+            constexpr pixel<U> m128(auto value) const noexcept
+            {
+                static_assert(std::is_same_v<typename U::T, float>);
+                return pixel<U> { std::move(reinterpret_cast<pixel<U>&&>(value)) };
+            }
+
+            constexpr __m128 m128() const noexcept
+            {
+                static_assert(std::is_same_v<typename P::T, float>);
+                if constexpr (P::has_alpha) return *reinterpret_cast<const __m128*>(this);
+                else
+                {
+                    auto v = *reinterpret_cast<const __m128*>(this);
+                    return _mm_add_ps(v, _mm_and_ps(_mm_cmpeq_ps(v, _mm_set1_ps(0)), _mm_set1_ps(std::numeric_limits<float>::epsilon())));
+                }
+            }
+
+            template <typename U>
             constexpr pixel<U> cast_to() const noexcept
             {
                 if constexpr (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>)
@@ -240,42 +310,30 @@ namespace jw
                     constexpr __m128 maxp = { P::bx, P::gx, P::rx, P::has_alpha ? P::ax : 1 };
                     constexpr __m128 maxu = { U::bx, U::gx, U::rx, U::has_alpha ? U::ax : 0 };
 
-                    __m128 src;
-                    if constexpr (P::has_alpha) src = _mm_set_ps(this->b, this->g, this->r, this->a);
-                    else                        src = _mm_set_ps(this->b, this->g, this->r, 1);
-
+                    __m128 src = m128();
                     src = _mm_div_ps(_mm_mul_ps(src, maxu), maxp);
 
                     if constexpr (std::is_integral_v<typename U::T>)
                     {
-                        auto bottom = _mm_cvtps_pi16(src);
+                        auto bottom = _mm_cvtps_pi32(src);
                         auto top = _mm_cvtps_pi32(_mm_movehl_ps(src, src));
                         auto dst = reinterpret_cast<V<8, byte>>(_mm_packs_pu16(_mm_packs_pi32(top, bottom), _mm_setzero_si64()));
 
-                        if constexpr (U::has_alpha) { pixel<U> result {dst[2], dst[1], dst[0], dst[3]}; _mm_empty(); return result; }
-                        else                        { pixel<U> result {dst[2], dst[1], dst[0], U::ax};  _mm_empty(); return result; }
+                        return m64<U>(dst);
                     }
-                    else
-                    {
-                        if constexpr (U::has_alpha) return pixel<U> {src[2], src[1], src[0], src[3]};
-                        else                        return pixel<U> {src[2], src[1], src[0], U::ax};
-                    }
+                    else return m128<U>(src);
                 }
                 else
                 {
                     constexpr V<4, std::uint16_t> maxp = { (P::bx + 1) / 8, (P::gx + 1) / 8, (P::rx + 1) / 8, P::has_alpha ? (P::ax + 1) / 8 : 1 };
                     constexpr V<4, std::uint16_t> maxu = { (U::bx + 1) / 8, (U::gx + 1) / 8, (U::rx + 1) / 8, U::has_alpha ? (U::ax + 1) / 8 : 0 };
 
-                    __m64 src;
-                    if constexpr (P::has_alpha) src = _mm_set_pi8(0, 0, 0, 0, this->b, this->g, this->r, this->a);
-                    else                        src = _mm_set_pi8(0, 0, 0, 0, this->b, this->g, this->r, U::ax);
-
+                    __m64 src = m64();
                     src = _mm_unpacklo_pi8(_mm_setzero_si64(), src);
                     src = _mm_srl_pi16(_mm_sll_pi16(src, reinterpret_cast<__m64>(maxu)), reinterpret_cast<__m64>(maxp));
                     auto dst = reinterpret_cast<V<8, byte>>(_mm_packs_pu16(src, _mm_setzero_si64()));
 
-                    if constexpr (U::has_alpha) { pixel<U> result { dst[2], dst[1], dst[0], dst[3] }; _mm_empty(); return result; }
-                    else                        { pixel<U> result { dst[2], dst[1], dst[0], U::ax };  _mm_empty(); return result; }
+                    return m64<U>(dst);
                 }
             }
 
