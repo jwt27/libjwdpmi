@@ -215,7 +215,7 @@ namespace jw
             constexpr pixel(pixel&& p) noexcept = default;
 
             template <typename U> constexpr operator pixel<U>() const noexcept { return cast_to<U>(); }
-            template <typename U> constexpr pixel& operator=(const pixel<U>& other) noexcept { return blend(other); }
+            template <typename U> constexpr pixel& operator=(const pixel<U>& other) noexcept { return *this = std::move(other.template cast_to<P>()); }
             template <typename U> constexpr pixel& operator=(pixel<U>&& other) noexcept { return *this = std::move(other.template cast_to<P>()); }
             constexpr pixel& operator=(const pixel& other) noexcept { return blend(other); }
             constexpr pixel& operator=(pixel&& o) noexcept = default;
