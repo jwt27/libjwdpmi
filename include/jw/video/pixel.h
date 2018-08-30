@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
@@ -208,7 +209,7 @@ namespace jw
             constexpr pixel(const pixel& p) noexcept = default;
             constexpr pixel(pixel&& p) noexcept = default;
 
-            template<typename V, std::enable_if_t<V::has_alpha, bool> = { }>
+            template<typename V>
             constexpr pixel& assign_round(const auto& v) noexcept
             { 
                 if constexpr (std::is_integral<typename V::T>::value)
@@ -216,29 +217,13 @@ namespace jw
                     this->b = jw::round(v.b);
                     this->g = jw::round(v.g);
                     this->r = jw::round(v.r);
-                    this->a = jw::round(v.a);
+                    if constexpr (V::has_alpha) this->a = jw::round(v.a);
                     return *this;
                 }
                 this->b = v.b;
                 this->g = v.g;
                 this->r = v.r;
-                this->a = v.a;
-                return *this;
-            };
-
-            template<typename V, std::enable_if_t<!V::has_alpha, bool> = { }>
-            constexpr pixel& assign_round(const auto& v) noexcept
-            { 
-                if constexpr (std::is_integral<typename V::T>::value)
-                {
-                    this->b = jw::round(v.b);
-                    this->g = jw::round(v.g);
-                    this->r = jw::round(v.r);
-                    return *this;
-                }
-                this->b = v.b;
-                this->g = v.g;
-                this->r = v.r;
+                if constexpr (V::has_alpha) this->a = v.a;
                 return *this;
             };
 
@@ -394,9 +379,9 @@ namespace jw
                     vec dest { this->r, this->g, this->b, 0 };
                     vec srca { src.a, src.a, src.a, src.a };
 
-                    if (!std::is_same<V, U>::value) src.v *= maxp.v;
+                    if constexpr (not std::is_same<V, U>::value) src.v *= maxp.v;
                     src.v *= srca.v;
-                    if (!std::is_same<V, U>::value) src.v /= maxu.v;
+                    if constexpr (not std::is_same<V, U>::value) src.v /= maxu.v;
                     ax.v -= srca.v;
                     dest.v *= ax.v;
                     dest.v += src.v;
