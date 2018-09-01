@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <string_view>
 #include <set>
+#include <unwind.h>
 #include <jw/dpmi/fpu.h>
 #include <jw/dpmi/dpmi.h>
 #include <jw/debug/debug.h>
@@ -1419,5 +1420,18 @@ namespace jw
             void notify_gdb_thread_event(debug_signals) { }
         }
 #       endif
+
+        _Unwind_Reason_Code unwind_print_trace(_Unwind_Context* c, void*)
+        {
+            std::clog << " --> 0x" << std::hex << _Unwind_GetIP(c);
+            return _URC_NO_REASON;
+        }
+
+        void print_backtrace() noexcept
+        {
+            std::clog << "Backtrace";
+            _Unwind_Backtrace(unwind_print_trace, nullptr);
+            std::clog << '\n';
+        }
     }
 }

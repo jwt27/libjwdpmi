@@ -39,6 +39,9 @@ namespace jw
 #           endif
         }
 
+        // Unwind stack and print backtrace.
+        void print_backtrace() noexcept;
+
         struct assertion_failed : public std::runtime_error
         {
             using runtime_error::runtime_error;

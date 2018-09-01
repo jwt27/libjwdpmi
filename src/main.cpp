@@ -74,12 +74,6 @@ namespace jw
         }
     }
 
-    _Unwind_Reason_Code unwind_trace(_Unwind_Context* c, void*)
-    {
-        std::clog << " --> 0x" << std::hex << _Unwind_GetIP(c);
-        return _URC_NO_REASON;
-    }
-
     std::terminate_handler original_terminate_handler;
     [[noreturn]] void terminate_handler() noexcept
     {
@@ -92,9 +86,7 @@ namespace jw
             catch (...) { std::cerr << "unknown exception.\n"; }
         }
         else std::cerr << "std::terminate called.\n";
-        std::clog << "Backtrace";
-        _Unwind_Backtrace(unwind_trace, nullptr);
-        std::clog << '\n';
+        debug::print_backtrace();
 
         debug::break_with_signal(SIGTERM);
         std::abort();
