@@ -25,6 +25,9 @@ namespace jw
                     data->increase_stack_size->start();
                 }
 
+                auto exception_msg = [] { std::cerr << "EXCEPTION AT INTERRUPT ENTRY POINT" << std::endl; };
+                auto hang = [] { do { } while (true); };
+
                 auto i = vec_to_irq(vec);
                 if ((i == 7 || i == 15) && !in_service()[i]) goto spurious;
 
@@ -37,7 +40,8 @@ namespace jw
                 
                     data->entries.at(vec)->call();
                 }
-                catch (...) { std::cerr << "OOPS" << std::endl; } // TODO: exception handling
+                catch (const std::exception& e) { exception_msg(); print_exception(e); hang(); }
+                catch (...) { exception_msg(); hang(); }
 
                 spurious:
                 asm("cli");
@@ -49,13 +53,16 @@ namespace jw
 
             void irq_controller::call()
             {
+                auto exception_msg = [this] { std::cerr << "EXCEPTION IN INTERRUPT HANDLER " << std::hex << vec << std::endl; };
+                auto hang = [] { do { } while (true); };
                 for (auto f : handler_chain)
                 {
                     try
                     {
                         if (f->flags & always_call || !is_acknowledged()) f->handler_ptr();
                     }
-                    catch (...) { std::cerr << "EXCEPTION OCCURED IN INTERRUPT HANDLER " << std::hex << vec << std::endl; } // TODO: exceptions
+                    catch (const std::exception& e) { exception_msg(); print_exception(e); hang(); }
+                    catch (...) { exception_msg(); hang(); }
                 }
                 if (flags & always_chain || !is_acknowledged())
                 {
