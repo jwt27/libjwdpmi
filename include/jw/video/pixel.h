@@ -69,6 +69,17 @@ namespace jw
             static constexpr T ax = 1.0f;
         };
 
+        struct alignas(0x10) bgra_fff0
+        {
+            using T = float;
+            T b, g, r, a;
+
+            static constexpr T rx = 1.0f;
+            static constexpr T gx = 1.0f;
+            static constexpr T bx = 1.0f;
+            static constexpr T ax = 0.0f;
+        };
+
         struct alignas(4) bgra_8888
         {
             using T = std::uint8_t;
@@ -157,7 +168,62 @@ namespace jw
             static constexpr T ax = 0;
         };
 
-        struct px { };
+        struct alignas(2)[[gnu::packed]] bgra_4444
+        {
+            using T = unsigned;
+            T b : 4;
+            T g : 4;
+            T r : 4;
+            T a : 4;
+
+            static constexpr T rx = 15;
+            static constexpr T gx = 15;
+            static constexpr T bx = 15;
+            static constexpr T ax = 15;
+        };
+
+        struct [[gnu::packed]] bgr_3320
+        {
+            using T = unsigned;
+            T b : 3;
+            T g : 3;
+            T r : 2;
+
+            static constexpr T rx = 7;
+            static constexpr T gx = 7;
+            static constexpr T bx = 3;
+            static constexpr T ax = 0;
+        };
+
+        struct [[gnu::packed]] bgra_2321
+        {
+            using T = unsigned;
+            T b : 2;
+            T g : 3;
+            T r : 2;
+            T a : 1;
+
+            static constexpr T rx = 3;
+            static constexpr T gx = 7;
+            static constexpr T bx = 3;
+            static constexpr T ax = 1;
+        };
+
+        struct[[gnu::packed]] bgra_2222
+        {
+            using T = unsigned;
+            T b : 2;
+            T g : 2;
+            T r : 2;
+            T a : 2;
+
+            static constexpr T rx = 3;
+            static constexpr T gx = 3;
+            static constexpr T bx = 3;
+            static constexpr T ax = 3;
+        };
+
+        struct [[gnu::packed]] px { };
 
         template<typename P>
         struct alignas(P) [[gnu::packed]] pixel : public P, public px
@@ -449,22 +515,32 @@ namespace jw
             template<typename T> constexpr auto cast(const auto& pal) { const auto& p = pal[value]; return T { p.r, p.g, p.b, p.a }; }
         };
 
-        using pxf = pixel<bgra_ffff>;
-        using px32a = pixel<bgra_8888>;
-        using px32n = pixel<bgra_8880>;
-        using px24 = pixel<bgr_8880>;
-        using px16 = pixel<bgr_5650>;
-        using px16a = pixel<bgra_5551>;
-        using px16n = pixel<bgra_5551>;
-        using pxvga = pixel<bgra_6668>;
+        using pxf    = pixel<bgra_ffff>;     // floating-point for use with SSE
+        using pxfn   = pixel<bgra_fff0>;     // floating-point, no alpha
+        using px32a  = pixel<bgra_8888>;     // 24-bit, 8-bit alpha channel
+        using px32n  = pixel<bgra_8880>;     // 24-bit, no alpha, 4 bytes wide
+        using px24   = pixel<bgr_8880>;      // 24-bit, 3 bytes wide
+        using px16   = pixel<bgr_5650>;      // 16-bit, typical 5:6:5 format
+        using px16a  = pixel<bgra_5551>;     // 15-bit with 1-bit alpha
+        using px16n  = pixel<bgra_5550>;     // 15-bit, no alpha, equal 5:5:5 format
+        using px16aa = pixel<bgra_4444>;     // 12-bit, 4-bit alpha, equal 4:4:4 format
+        using px8aa  = pixel<bgra_2222>;     // 6-bit 2:2:2, 2-bit alpha
+        using px8a   = pixel<bgra_2321>;     // 7-bit 2:3:2, 1-bit alpha
+        using px8n   = pixel<bgr_3320>;      // 8-bit 2:3:3, no alpha
+        using pxvga  = pixel<bgra_6668>;     // VGA DAC palette format
 
-        static_assert(sizeof(pxf  ) == 16, "check sizeof pixel");
-        static_assert(sizeof(px32a) ==  4, "check sizeof pixel");
-        static_assert(sizeof(px32n) ==  4, "check sizeof pixel");
-        static_assert(sizeof(px24 ) ==  3, "check sizeof pixel");
-        static_assert(sizeof(px16 ) ==  2, "check sizeof pixel");
-        static_assert(sizeof(px16a) ==  2, "check sizeof pixel");
-        static_assert(sizeof(px16n) ==  2, "check sizeof pixel");
-        static_assert(sizeof(pxvga) ==  4, "check sizeof pixel");
+        static_assert(sizeof(pxf   ) == 16);
+        static_assert(sizeof(pxfn  ) == 16);
+        static_assert(sizeof(px32a ) ==  4);
+        static_assert(sizeof(px32n ) ==  4);
+        static_assert(sizeof(px24  ) ==  3);
+        static_assert(sizeof(px16  ) ==  2);
+        static_assert(sizeof(px16aa) ==  2);
+        static_assert(sizeof(px16a ) ==  2);
+        static_assert(sizeof(px16n ) ==  2);
+        static_assert(sizeof(px8aa ) ==  1);
+        static_assert(sizeof(px8a  ) ==  1);
+        static_assert(sizeof(px8n  ) ==  1);
+        static_assert(sizeof(pxvga ) ==  4);
     }
 }
