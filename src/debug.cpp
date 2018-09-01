@@ -1183,6 +1183,14 @@ namespace jw
                     }
                 };
 
+                if (__builtin_expect(f->fault_address.segment != get_cs(), false))
+                {
+                    if (exc == exception_num::trap) return true; // only debug our own code
+                    std::cerr << "Can't debug this. CS != 0x" << std::hex << get_cs() << '\n';
+                    std::cerr << cpu_exception { exc, r, f, new_frame_type }.what();
+                    return false;
+                }
+
                 if (__builtin_expect(debugger_reentry, false))
                 {
                     if (exc == 0x01 or exc == 0x03)
