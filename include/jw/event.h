@@ -56,7 +56,7 @@ namespace jw
         }
 
         event& operator-=(callback_t& f)
-        {                         
+        {
             auto& v = subscribers;
             subscribers.erase(std::remove_if(v.begin(), v.end(), [&f](auto& i) { return i.expired() or i.lock() == f.get_ptr().lock(); }), v.end());
             return *this;
