@@ -10,7 +10,7 @@
 
 #include <jw/io/key.h>
 #include <jw/io/detail/scancode.h>
-#include <jw/io/keyboard_interface.h>
+#include <jw/io/ps2_interface.h>
 #include <jw/event.h>
 
 namespace jw
@@ -34,11 +34,11 @@ namespace jw
                 else interface->set_keyboard_update_thread({ });
             }
 
-            keyboard(std::shared_ptr<keyboard_interface> intf) : interface(intf) { }
+            keyboard(std::shared_ptr<ps2_interface> intf = std::make_shared<ps2_interface>()) : interface(intf) { }
             ~keyboard() { restore_cin(); }
 
         private:
-            std::shared_ptr<keyboard_interface> interface;
+            std::shared_ptr<ps2_interface> interface;
             mutable std::unordered_map<key, key_state> keys { };
             std::unique_ptr<std::streambuf> streambuf;
             static inline std::streambuf* cin { nullptr };

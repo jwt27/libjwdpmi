@@ -6,8 +6,8 @@
 #pragma once
 #include <atomic>
 #include <mutex>
+#include <jw/io/detail/scancode.h>
 #include <jw/io/io_error.h>
-#include <jw/io/keyboard_interface.h>
 #include <jw/dpmi/irq.h>
 #include <jw/dpmi/lock.h>
 #include <jw/io/ioport.h>
@@ -17,25 +17,30 @@
 // TODO: clean this up
 // TODO: keyboard commands enum, instead of using raw hex values
 // TODO: save and restore keyboard settings on exit!
+// TODO: mouse interface too.
 
 namespace jw
 {
     namespace io
     {     
-        class ps2_interface : public keyboard_interface, dpmi::class_lock<ps2_interface>    // TODO: mouse interface too.
+        enum keyboard_leds : byte
         {
-            static bool initialized;
+            scroll_lock_led = 0b001,
+            num_lock_led = 0b010,
+            caps_lock_led = 0b100
+        };
 
-        public:
-            virtual std::deque<detail::scancode> get_scancodes() override;
+        struct ps2_interface : dpmi::class_lock<ps2_interface>
+        {
+            std::deque<detail::scancode> get_scancodes();
 
             scancode_set current_scancode_set;
-            virtual scancode_set get_scancode_set() override { return current_scancode_set; }
-            virtual void set_scancode_set(byte set) override;
+            scancode_set get_scancode_set() { return current_scancode_set; }
+            void set_scancode_set(byte set) ;
 
-            virtual void set_typematic(byte, byte) override { /* TODO */ }
+            void set_typematic(byte, byte) { /* TODO */ }
 
-            virtual void enable_typematic(bool enable) override
+            void enable_typematic(bool enable)
             {
                 if (get_scancode_set() != set3) return;
                 byte cmd = enable ? 0xFA : 0xF8;
@@ -43,14 +48,22 @@ namespace jw
             }
 
             keyboard_leds current_led_state;
-            virtual void set_leds(keyboard_leds state) override
+            void set_leds(bool num, bool caps, bool scroll)
+            {
+                set_leds(static_cast<keyboard_leds>(
+                    (num ? keyboard_leds::num_lock_led : 0) |
+                    (caps ? keyboard_leds::caps_lock_led : 0) |
+                    (scroll ? keyboard_leds::scroll_lock_led : 0)));
+            }
+
+            void set_leds(keyboard_leds state)
             {
                 if (state == current_led_state) return;
                 command<send_data, recv_kb_ack, send_data, recv_kb_ack>({ 0xED, state });
                 current_led_state = state;
             }
 
-            virtual void set_keyboard_update_thread(thread::task<void()> t) override
+            void set_keyboard_update_thread(thread::task<void()> t)
             {
                 keyboard_update_thread = t;
                 keyboard_update_thread->name = "Keyboard auto-update thread";
@@ -90,6 +103,13 @@ namespace jw
             }
 
             void reset();
+
+            enum keyboard_response
+            {
+                ACK = 0xFA,
+                RESEND = 0xFE,
+                ERROR = 0xFC
+            };
 
             enum cmd_sequence_element
             {
@@ -183,6 +203,7 @@ namespace jw
             const out_port<byte> command_port { 0x64 };
             const io_port<byte> data_port { 0x60 };
             std::mutex mutex;
+            static bool initialized;
 
             controller_status get_status()
             {
