@@ -18,7 +18,7 @@ namespace jw
             reg.call_int(0x10);
         }
 
-        void vga::set_palette(const px32a* begin, const px32a* end, std::size_t first, bool)
+        void vga::set_palette(const px32n* begin, const px32n* end, std::size_t first, bool)
         {
             dac_write_index.write(first);
             if (dac_bits == 8)
@@ -42,9 +42,9 @@ namespace jw
             }
         }
 
-        std::vector<px32a> vga::get_palette()
+        std::vector<px32n> vga::get_palette()
         {
-            std::vector<px32a> result { };
+            std::vector<px32n> result { };
             dac_read_index.write(0);
             if (dac_bits == 8)
             {
@@ -53,7 +53,7 @@ namespace jw
                     auto r = dac_data.read();
                     auto g = dac_data.read();
                     auto b = dac_data.read();
-                    result.push_back(px32a { r, g, b, px32a::ax });
+                    result.emplace_back(r, g, b);
                 }
             }
             else
@@ -63,10 +63,9 @@ namespace jw
                     auto r = dac_data.read();
                     auto g = dac_data.read();
                     auto b = dac_data.read();
-                    result.push_back(pxvga { r, g, b, pxvga::ax });
+                    result.emplace_back(pxvga { r, g, b });
                 }
             }
-            result[0].a = 0;
             return result;
         }
     }

@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #include <memory>
@@ -34,7 +35,7 @@ namespace jw
 
         void vbe::check_error(split_uint16_t ax, const char* function_name)
         {
-            if (ax == 0x004f) return;
+            if (__builtin_expect(ax == 0x004f, true)) return;
             std::stringstream msg { };
             msg << function_name << ": ";
 
@@ -489,7 +490,7 @@ namespace jw
 
         void vbe3::schedule_display_start(vector2i pos)
         {
-            if (!mode_info->attr.triple_buffering_supported) return vbe2::schedule_display_start(pos);
+            if (not mode_info->attr.triple_buffering_supported) return set_display_start(pos);
 
             auto bps = mode.use_lfb_mode ? mode_info->linear_bytes_per_scanline : mode_info->bytes_per_scanline;
             auto start = pos.x() * (mode_info->bits_per_pixel / 8) + pos.y() * bps;
@@ -589,7 +590,7 @@ namespace jw
             return reg.bh;
         }
 
-        void vbe2::set_palette(const px32a* begin, const px32a* end, std::size_t first, bool wait_for_vsync)
+        void vbe2::set_palette(const px32n* begin, const px32n* end, std::size_t first, bool wait_for_vsync)
         {
             //return vga::set_palette(begin, end, first, wait_for_vsync);
             auto size = std::min(static_cast<std::size_t>(end - begin), std::size_t { 256 });
@@ -633,7 +634,7 @@ namespace jw
                 else
                 {
                     for (std::size_t i = 0; i < size; ++i)
-                        new(dos_data.get_ptr() + i) px32a { std::move(begin[i]) };
+                        new(dos_data.get_ptr() + i) px32n { std::move(begin[i]) };
                 }
 
                 dpmi::realmode_registers reg { };
@@ -648,9 +649,9 @@ namespace jw
             }
         }
 
-        void vbe3::set_palette(const px32a* begin, const px32a* end, std::size_t first, bool wait_for_vsync)
+        void vbe3::set_palette(const px32n* begin, const px32n* end, std::size_t first, bool wait_for_vsync)
         {
-            if (!vbe3_pm) return vbe2::set_palette(begin, end, first, wait_for_vsync);
+            if (not vbe3_pm) return vbe2::set_palette(begin, end, first, wait_for_vsync);
 
             std::unique_ptr<std::vector<pxvga>> copy;
             const px* ptr = &*begin;
@@ -660,7 +661,7 @@ namespace jw
                 ptr = copy->data();
             }
 
-            dpmi::linear_memory data_mem { dpmi::get_ds(), static_cast<const px32a*>(ptr),  static_cast<std::size_t>(end - begin) };
+            dpmi::linear_memory data_mem { dpmi::get_ds(), static_cast<const px32n*>(ptr),  static_cast<std::size_t>(end - begin) };
             std::uint16_t ax;
             asm volatile(
                 "push es;"
@@ -678,9 +679,9 @@ namespace jw
             check_error(ax, __PRETTY_FUNCTION__);
         }
 
-        std::vector<px32a> vbe2::get_palette()
+        std::vector<px32n> vbe2::get_palette()
         {
-            dpmi::dos_memory<px32a> dos_data { 256 };
+            dpmi::dos_memory<px32n> dos_data { 256 };
 
             dpmi::realmode_registers reg { };
             reg.ax = 0x4f09;
@@ -694,27 +695,11 @@ namespace jw
             else try { check_error(reg.ax, __PRETTY_FUNCTION__); }
             catch (const error&) { return vga::get_palette(); }
 
-            std::vector<px32a> result;
+            std::vector<px32n> result;
             result.reserve(256);
             auto* ptr = dos_data.get_ptr();
-            if (dac_bits < 8)
-            {
-                for (auto i = 0; i < 256; ++i)
-                {
-                    result.push_back(*(reinterpret_cast<pxvga*>(ptr) + i));
-                    result[i].a = px32a::ax;
-                }
-            }
-            else
-            {
-                for (auto i = 0; i < 256; ++i)
-                {
-                    result.push_back(ptr[i]);
-                    result[i].a = px32a::ax;
-                }
-
-            }
-            result[0].a = 0;
+            if (dac_bits < 8) for (auto i = 0; i < 256; ++i) result.push_back(*(reinterpret_cast<pxvga*>(ptr) + i));
+            else for (auto i = 0; i < 256; ++i) result.push_back(ptr[i]);
             return result;
         }
 

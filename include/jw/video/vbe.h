@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
@@ -65,8 +66,8 @@ namespace jw
             using vbe::set_palette;
             virtual void init() override;
             virtual void set_display_start(vector2i pos, bool wait_for_vsync = false) override;
-            virtual void set_palette(const px32a* begin, const px32a* end, std::size_t first = 0, bool wait_for_vsync = false) override;
-            virtual std::vector<px32a> get_palette() override;
+            virtual void set_palette(const px32n* begin, const px32n* end, std::size_t first = 0, bool wait_for_vsync = false) override;
+            virtual std::vector<px32n> get_palette() override;
         };
 
         struct vbe3 : public vbe2
@@ -88,7 +89,7 @@ namespace jw
             //virtual void enable_stereo()
             //virtual void disable_stereo()
             virtual std::uint8_t set_palette_format(std::uint8_t bits_per_channel) override;
-            virtual void set_palette(const px32a* begin, const px32a* end, std::size_t first = 0, bool wait_for_vsync = false) override;
+            virtual void set_palette(const px32n* begin, const px32n* end, std::size_t first = 0, bool wait_for_vsync = false) override;
             virtual std::uint32_t get_closest_pixel_clock(std::uint32_t desired_clock, std::uint16_t mode_num);
         };
 
