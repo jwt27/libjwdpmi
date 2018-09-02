@@ -18,8 +18,6 @@ namespace jw
 {
     namespace io
     {
-        bool ps2_interface::initialized { false };
-
         std::deque<detail::scancode> ps2_interface::get_scancodes()
         {
             dpmi::irq_mask disable_irq { 1 };
@@ -34,7 +32,7 @@ namespace jw
             config.keyboard_interrupt = true;
             write_config();
 
-            set_scancode_set(set2);
+            set_scancode_set(set3);
             enable_typematic(true);
 
             irq_handler.enable();
@@ -42,26 +40,34 @@ namespace jw
 
         ps2_interface::ps2_interface()
         {
-            if (initialized) throw std::runtime_error("Only one ps2_interface instance allowed.");
-
-            dpmi::irq_mask irq1_disable { 1 };
-            config.translate_scancodes = true;
-            read_config();
-            initial_config = config;
-
-            reset();
-
-            initialized = true;
+            if (instance_ptr) throw std::runtime_error("Only one ps2_interface instance allowed.");
         }
 
         ps2_interface::~ps2_interface()
         {
+            reset_keyboard();
+        }
+
+        void ps2_interface::init_keyboard()
+        {
+            if (keyboard_initialized) throw std::runtime_error("Only one keyboard instance allowed.");
+            dpmi::irq_mask irq1_disable { 1 };
+            config.translate_scancodes = true;
+            read_config();
+            initial_config = config;
+            reset();
+            keyboard_initialized = true;
+        }
+
+        void ps2_interface::reset_keyboard()
+        {
+            if (not keyboard_initialized) return;
             irq_handler.disable();
             set_scancode_set(set2);
             config = initial_config;
             config.translate_scancodes = true;
             write_config();                 // restore PS/2 configuration data
-            initialized = false;
+            keyboard_initialized = false;
         }
 
         void ps2_interface::set_scancode_set(byte set)

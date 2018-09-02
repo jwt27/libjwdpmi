@@ -16,7 +16,7 @@ namespace jw
         {
             try
             {
-                auto codes = interface->get_scancodes();
+                auto codes = ps2->get_scancodes();
                 if (codes.size() == 0) return;
 
                 auto handle_key = [this, async](key_state_pair k)
@@ -43,7 +43,7 @@ namespace jw
                         if (keys[k.first].is_up() and k.second.is_down())
                             handle_key({ state_key, not keys[state_key] });
 
-                        interface->set_leds(keys[key::num_lock_state].is_down(),
+                        ps2->set_leds(keys[key::num_lock_state].is_down(),
                             keys[key::caps_lock_state].is_down(),
                             keys[key::scroll_lock_state].is_down());
                     };

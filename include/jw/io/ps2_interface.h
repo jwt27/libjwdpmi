@@ -16,7 +16,6 @@
 
 // TODO: clean this up
 // TODO: keyboard commands enum, instead of using raw hex values
-// TODO: save and restore keyboard settings on exit!
 // TODO: mouse interface too.
 
 namespace jw
@@ -69,10 +68,20 @@ namespace jw
                 keyboard_update_thread->name = "Keyboard auto-update thread";
             }
 
-            ps2_interface();
+            void init_keyboard();
+            void reset_keyboard();
+
+            static auto& instance()
+            {
+                if (not instance_ptr) instance_ptr.reset(new ps2_interface { });
+                return instance_ptr;
+            }
             virtual ~ps2_interface();
 
         private:
+            static inline std::unique_ptr<ps2_interface> instance_ptr;
+            ps2_interface();
+
             void write_to_controller(byte b)
             {
                 thread::yield_while([this]() { return get_status().busy; });
@@ -203,7 +212,7 @@ namespace jw
             const out_port<byte> command_port { 0x64 };
             const io_port<byte> data_port { 0x60 };
             std::mutex mutex;
-            static bool initialized;
+            inline static bool keyboard_initialized { false };
 
             controller_status get_status()
             {

@@ -30,15 +30,15 @@ namespace jw
 
             void auto_update(bool enable)
             {
-                if (enable) interface->set_keyboard_update_thread({ [this]() { do_update(true); } });
-                else interface->set_keyboard_update_thread({ });
+                if (enable) ps2->set_keyboard_update_thread({ [this]() { do_update(true); } });
+                else ps2->set_keyboard_update_thread({ });
             }
 
-            keyboard(std::shared_ptr<ps2_interface> intf = std::make_shared<ps2_interface>()) : interface(intf) { }
-            ~keyboard() { restore_cin(); }
+            keyboard() { ps2->init_keyboard(); }
+            ~keyboard() { restore_cin(); ps2->reset_keyboard(); }
 
         private:
-            std::shared_ptr<ps2_interface> interface;
+            ps2_interface* ps2 { ps2_interface::instance().get() };
             mutable std::unordered_map<key, key_state> keys { };
             std::unique_ptr<std::streambuf> streambuf;
             static inline std::streambuf* cin { nullptr };
