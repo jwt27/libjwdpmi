@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #include <cstring>
@@ -12,6 +13,7 @@
 #include <jw/dpmi/detail/alloc.h>
 #include <jw/debug/detail/signals.h>
 #include <jw/io/rs232.h>
+#include <jw/io/ps2_interface.h>
 #include <cxxabi.h>
 #include <unwind.h>
 #include <../jwdpmi_config.h>
@@ -77,6 +79,7 @@ namespace jw
     std::terminate_handler original_terminate_handler;
     [[noreturn]] void terminate_handler() noexcept
     {
+
         if (auto exc = std::current_exception())
         {
             std::cerr << "std::terminate called after throwing an exception:\n";
@@ -86,6 +89,7 @@ namespace jw
             catch (...) { std::cerr << "unknown exception.\n"; }
         }
         else std::cerr << "std::terminate called.\n";
+        io::ps2_interface::instance().reset();
         debug::print_backtrace();
 
         debug::break_with_signal(SIGTERM);
