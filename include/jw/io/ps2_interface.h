@@ -103,20 +103,52 @@ namespace jw
                 recv_ctrl_any,      // receive any controller data
                 recv_ctrl_ack,      // receive controller data, expect ACK
                 recv_ctrl_data,     // receive controller data, expect non-ACK
-                end_sequence        // end of sequence
             };
-            
-            template<cmd_sequence_element = nop> constexpr void do_ps2_command(const byte*&, byte&) { }
 
-            template<cmd_sequence_element cmd = nop, cmd_sequence_element next = end_sequence, cmd_sequence_element... etc> 
-            void ps2_command(const byte* in, byte& out)
+            template<cmd_sequence_element cmd, cmd_sequence_element... next>
+            void do_ps2_command(const byte* in, byte& out)
             {
-                if (cmd == end_sequence) return;
-                do_ps2_command<cmd>(in, out);
-                ps2_command<next, etc...>(in, out);
+                [[maybe_unused]] auto check_data = [](byte b)
+                {
+                    switch (b)
+                    {
+                    case ACK:
+                        std::cerr << "PS/2 interface: unexpected ACK!" << std::endl;
+                        [[fallthrough]];
+                    case RESEND:
+                        throw io_error("Keyboard on fire.");
+                    default:
+                        return;
+                    }
+                };
+
+                [[maybe_unused]] auto check_ack = [](byte b)
+                {
+                    switch (b)
+                    {
+                    case ACK:
+                        return;
+                    default:
+                        std::cerr << "PS/2 interface: expected ACK, got this: " << std::hex << static_cast<unsigned>(b) << std::endl;
+                        [[fallthrough]];
+                    case RESEND:
+                        throw io_error("Keyboard on fire.");
+                    }
+                };
+
+                if constexpr (cmd == send_cmd) write_to_controller(*(in++));
+                if constexpr (cmd == send_data) write_to_keyboard(*(in++));
+                if constexpr (cmd == recv_discard_any) read_from_controller();
+                if constexpr (cmd == recv_kb_any) out = read_from_keyboard();
+                if constexpr (cmd == recv_kb_ack) check_ack(read_from_keyboard());
+                if constexpr (cmd == recv_kb_data) check_data(out = read_from_keyboard());
+                if constexpr (cmd == recv_ctrl_any) out = read_from_controller();
+                if constexpr (cmd == recv_ctrl_ack) check_ack(read_from_controller());
+                if constexpr (cmd == recv_ctrl_data) check_data(out = read_from_controller());
+                if constexpr (sizeof...(next) > 0) do_ps2_command<next...>(in, out);
             }
 
-            template<cmd_sequence_element... cmd>
+            template<cmd_sequence_element... seq>
             byte command(const std::initializer_list<byte>& data)
             {
                 retry:
@@ -125,7 +157,7 @@ namespace jw
                     std::unique_lock<std::mutex> lock { mutex };
                     dpmi::irq_mask no_irq { 1 };
                     byte result { keyboard_response::ERROR };
-                    ps2_command<cmd...>(data.begin(), result);
+                    do_ps2_command<seq...>(data.begin(), result);
                     return result;
                 }
                 catch (const io_error&)
@@ -213,44 +245,6 @@ namespace jw
                     dpmi::irq_handler::acknowledge();
                 }
             }, dpmi::no_auto_eoi };
-
-            void check_data(byte b) const
-            {
-                switch (b)
-                {
-                case ACK:
-                    std::cerr << "PS/2 interface: unexpected ACK!" << std::endl;
-                    [[fallthrough]];
-                case RESEND:
-                    throw io_error("Keyboard on fire.");
-                default:
-                    return;
-                }
-            }
-
-            void check_ack(byte b) const
-            {
-                switch (b)
-                {
-                case ACK:
-                    return;
-                default:
-                    std::cerr << "PS/2 interface: expected ACK, got this: " << std::hex << static_cast<unsigned>(b) << std::endl;
-                    [[fallthrough]];
-                case RESEND:
-                    throw io_error("Keyboard on fire.");
-                }
-            }
         };
-
-        template<> inline void ps2_interface::do_ps2_command<ps2_interface::send_cmd>(const byte*& in, byte&) { write_to_controller(*(in++)); }
-        template<> inline void ps2_interface::do_ps2_command<ps2_interface::send_data>(const byte*& in, byte&) { write_to_keyboard(*(in++)); }
-        template<> inline void ps2_interface::do_ps2_command<ps2_interface::recv_discard_any>(const byte*&, byte&) { read_from_controller(); }
-        template<> inline void ps2_interface::do_ps2_command<ps2_interface::recv_kb_any>(const byte*&, byte& out) { out = read_from_keyboard(); }
-        template<> inline void ps2_interface::do_ps2_command<ps2_interface::recv_kb_ack>(const byte*&, byte&) { check_ack(read_from_keyboard()); }
-        template<> inline void ps2_interface::do_ps2_command<ps2_interface::recv_kb_data>(const byte*&, byte& out) { check_data(out = read_from_keyboard()); }
-        template<> inline void ps2_interface::do_ps2_command<ps2_interface::recv_ctrl_any>(const byte*&, byte& out) { out = read_from_controller(); }
-        template<> inline void ps2_interface::do_ps2_command<ps2_interface::recv_ctrl_ack>(const byte*&, byte&) { check_ack(read_from_controller()); }
-        template<> inline void ps2_interface::do_ps2_command<ps2_interface::recv_ctrl_data>(const byte*&, byte& out) { check_data(out = read_from_controller()); }
     }
 }
