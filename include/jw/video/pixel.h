@@ -3,6 +3,8 @@
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
+#include <type_traits>
+#include <vector>
 #include <mmintrin.h>
 #include <xmmintrin.h>
 #include <jw/common.h>
@@ -72,7 +74,8 @@ namespace jw
         struct alignas(0x10) bgra_fff0
         {
             using T = float;
-            T b, g, r, a;
+            T b, g, r;
+            unsigned : sizeof(float);
 
             static constexpr T rx = 1.0f;
             static constexpr T gx = 1.0f;
@@ -91,10 +94,11 @@ namespace jw
             static constexpr T ax = 255;
         };
 
-        struct [[gnu::packed]] bgra_8880
+        struct [[gnu::packed]] alignas(4) bgra_8880
         {
             using T = std::uint8_t;
-            T b, g, r, a;
+            T b, g, r;
+            T : 8;
 
             static constexpr T rx = 255;
             static constexpr T gx = 255;
@@ -120,6 +124,8 @@ namespace jw
             T g : 6, : 2;
             T r : 6, : 2;
             T a : 8;
+
+            constexpr bgra_6668(T vb, T vg, T vr, T va) noexcept : b(vb), g(vg), r(vr), a(va) { }
 
             static constexpr T rx = 63;
             static constexpr T gx = 63;
@@ -182,12 +188,12 @@ namespace jw
             static constexpr T ax = 15;
         };
 
-        struct [[gnu::packed]] bgr_3320
+        struct [[gnu::packed]] bgr_2330
         {
             using T = unsigned;
-            T b : 3;
+            T b : 2;
             T g : 3;
-            T r : 2;
+            T r : 3;
 
             static constexpr T rx = 7;
             static constexpr T gx = 7;
@@ -526,7 +532,7 @@ namespace jw
         using px16aa = pixel<bgra_4444>;     // 12-bit, 4-bit alpha, equal 4:4:4 format
         using px8aa  = pixel<bgra_2222>;     // 6-bit 2:2:2, 2-bit alpha
         using px8a   = pixel<bgra_2321>;     // 7-bit 2:3:2, 1-bit alpha
-        using px8n   = pixel<bgr_3320>;      // 8-bit 2:3:3, no alpha
+        using px8n   = pixel<bgr_2330>;      // 8-bit 3:3:2, no alpha
         using pxvga  = pixel<bgra_6668>;     // VGA DAC palette format
 
         static_assert(sizeof(pxf   ) == 16);
