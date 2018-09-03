@@ -548,5 +548,14 @@ namespace jw
         static_assert(sizeof(px8a  ) ==  1);
         static_assert(sizeof(px8n  ) ==  1);
         static_assert(sizeof(pxvga ) ==  4);
+
+        inline auto generate_px8n_palette()
+        {
+            std::vector<px32n> result;
+            result.reserve(256);
+            for (auto i = 0; i < 256; ++i)
+                result.emplace_back(reinterpret_cast<px8n&>(i));
+            return result;
+        }
     }
 }
