@@ -60,6 +60,406 @@ namespace jw
         };
         static_assert(sizeof(text_char) == 2 && alignof(text_char) == 2, "text_char has incorrect size or alignment.");
 
+        struct [[gnu::packed]] px { };
+
+        template<typename P>
+        struct alignas(P) [[gnu::packed, gnu::may_alias]] pixel : public P, public px
+        {
+            template<typename> friend struct pixel;
+
+            using T = std::conditional_t<std::is_integral_v<typename P::T>, unsigned, typename P::T>;
+
+            template<std::size_t N, typename VT>
+            using V [[gnu::vector_size(N * sizeof(VT)), gnu::may_alias]] = VT;
+
+            constexpr pixel() noexcept = default;
+            template<typename U = P, typename PT = typename U::T, std::enable_if_t<pixel<U>::has_alpha(), bool> = { }>
+            constexpr pixel(T cr, T cg, T cb, T ca) noexcept : P { static_cast<PT>(cb), static_cast<PT>(cg), static_cast<PT>(cr), static_cast<PT>(ca) } { }
+            template<typename U = P, typename PT = typename U::T, std::enable_if_t<pixel<U>::has_alpha(), bool> = { } >
+            constexpr pixel(T cr, T cg, T cb) noexcept : P { static_cast<PT>(cb), static_cast<PT>(cg), static_cast<PT>(cr), U::ax } { }
+            template<typename U = P, typename PT = typename U::T, std::enable_if_t<not pixel<U>::has_alpha(), bool> = { } >
+            constexpr pixel(T cr, T cg, T cb, T) noexcept : P { static_cast<PT>(cb), static_cast<PT>(cg), static_cast<PT>(cr) } { }
+            template<typename U = P, typename PT = typename U::T, std::enable_if_t<not pixel<U>::has_alpha(), bool> = { } >
+            constexpr pixel(T cr, T cg, T cb) noexcept : P { static_cast<PT>(cb), static_cast<PT>(cg), static_cast<PT>(cr) } { }
+
+            constexpr pixel(const pixel& p) noexcept = default;
+            constexpr pixel(pixel&& p) noexcept = default;
+            constexpr pixel& operator=(const pixel&) noexcept = default;
+            constexpr pixel& operator=(pixel&&) noexcept = default;
+
+            template <typename U> constexpr operator pixel<U>() const noexcept { return cast_to<U>(); }
+
+            static constexpr bool has_alpha() { return P::ax > 0; }
+
+            template<typename U>
+            constexpr pixel& blend(const pixel<U>& other)
+            {
+                if constexpr (not pixel<U>::has_alpha())
+                {
+                    *this = other.template cast_to<P>();
+                }
+                else if constexpr (sse and (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>))
+                {
+                    *this = m128(m128_blend<U>(m128(), other.m128()));
+                    if constexpr (std::is_integral_v<typename U::T>) _mm_empty();
+                }
+                else if constexpr (mmx and std::is_integral_v<typename P::T> and std::is_integral_v<typename U::T>)
+                {
+                    *this = m64(m64_blend<U>(m64(), other.m64()));
+                }
+                else
+                {
+                    using VT = std::conditional_t<std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>, float, std::uint32_t>;
+                    V<4, VT> src = other.template vector<VT>();
+                    V<4, VT> dst = vector<VT>();
+                    *this = vector<VT>(vector_blend<U, VT>(dst, src));
+                }
+                return *this;
+            }
+
+            template<typename U>
+            constexpr pixel& blend_straight(const pixel<U>& other)
+            {
+                if constexpr (not pixel<U>::has_alpha())
+                {
+                    *this = other.template cast_to<P>();
+                }
+                else if constexpr (sse and (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>))
+                {
+                    *this = m128(m128_blend<U>(m128_premul(m128()), m128_premul(other.m128())));
+                    if constexpr (std::is_integral_v<typename U::T>) _mm_empty();
+                }
+                else if constexpr (mmx and std::is_integral_v<typename P::T> and std::is_integral_v<typename U::T>)
+                {
+                    *this = m64(m64_blend<U>(m64_premul(m64()), m64_premul(other.m64())));
+                }
+                else
+                {
+                    using VT = std::conditional_t<std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>, float, std::uint32_t>;
+                    V<4, VT> src = vector_premul<VT>(other.template vector<VT>());
+                    V<4, VT> dst = vector_premul<VT>(vector<VT>());
+                    *this = vector<VT>(vector_blend<U, VT>(dst, src));
+                }
+                return *this;
+            }
+
+            constexpr pixel& premultiply_alpha()
+            {
+                if constexpr (not has_alpha()) return *this;
+                if constexpr (sse and std::is_floating_point_v<typename P::T>) *this = m128(m128_premul(m128()));
+                else if constexpr (mmx and not std::is_floating_point_v<typename P::T>) *this = m64(m64_premul(m64()));
+                else
+                {
+                    using VT = std::conditional_t<std::is_floating_point_v<typename P::T>, float, std::uint8_t>;
+                    *this = vector<VT>(vector_premul<VT>(vector<VT>()));
+                }
+                return *this;
+            }
+
+        private:
+            template <typename U>
+            constexpr pixel<U> cast_to() const
+            {
+                constexpr bool not_constexpr = true;// not is_constexpr(this->b);
+                if constexpr (not_constexpr and sse and (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>))
+                {
+                    auto result = pixel<U>::m128(m128_cast_to<U>(m128()));
+                    if constexpr (std::is_integral_v<typename P::T>) _mm_empty();
+                    return result;
+                }
+                else if constexpr (not_constexpr and mmx and (sse or (std::is_integral_v<typename P::T> and std::is_integral_v<typename U::T>)))
+                {
+                    return pixel<U>::m64(m64_cast_to<U>(m64()));
+                }
+                else
+                {
+                    using VT = std::conditional_t<std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>, float, std::uint32_t>;
+                    return pixel<U>::template vector<VT>(vector_cast_to<U, VT>(vector<VT>()));
+                }
+            }
+
+            static constexpr pixel m64(auto value) noexcept // V4HI
+            {
+                static_assert(not std::is_floating_point_v<typename P::T>);
+                auto v = _mm_packs_pu16(value, _mm_setzero_si64());
+                if constexpr (byte_aligned())
+                {
+                    auto v2 = _mm_cvtsi64_si32(v);
+                    pixel result { *reinterpret_cast<pixel*>(&v2) };
+                    _mm_empty();
+                    return result;
+                }
+                else
+                {
+                    auto v2 = reinterpret_cast<V<8, byte>&>(v);
+                    pixel result { v2[2], v2[1], v2[0], v2[3] };
+                    _mm_empty();
+                    return result;
+                }
+            }
+
+            constexpr __m64 m64() const noexcept    // V4HI
+            {
+                static_assert(not std::is_floating_point_v<typename P::T>);
+                __m64 v;
+                if constexpr (byte_aligned()) v = _mm_cvtsi32_si64(*reinterpret_cast<const int*>(this));
+                else if constexpr (has_alpha()) v = _mm_setr_pi8(this->b, this->g, this->r, this->a, 0, 0, 0, 0);
+                else v = _mm_setr_pi8(this->b, this->g, this->r, 0, 0, 0, 0, 0);
+                auto r = _mm_unpacklo_pi8(v, _mm_setzero_si64());
+                return r;
+            }
+
+            static constexpr pixel m128(__m128 value) noexcept  // V4SF
+            {
+                if constexpr (std::is_floating_point_v<typename P::T>) return *reinterpret_cast<pixel*>(&value);
+                else return m64(_mm_cvtps_pi16(value));
+            }
+
+            constexpr __m128 m128() const noexcept  // V4SF
+            {
+                if constexpr (std::is_floating_point_v<typename P::T>) return *reinterpret_cast<const __m128*>(this);
+                else return _mm_cvtpu16_ps(m64());
+            }
+
+            template<typename VT = std::uint16_t>
+            static constexpr pixel vector(V<4, VT> src) noexcept
+            {
+                if constexpr ((std::is_same_v<VT, float> and std::is_same_v<T, float>) or (sizeof(VT) == 1 and byte_aligned()))
+                {
+                    return *reinterpret_cast<pixel*>(&src);
+                }
+                return pixel { static_cast<T>(src[2]), static_cast<T>(src[1]), static_cast<T>(src[0]), static_cast<T>(src[3]) };
+            }
+
+            template<typename VT = std::uint16_t>
+            constexpr V<4, VT> vector() const noexcept
+            {
+                V<4, VT> src;
+                if constexpr ((std::is_same_v<VT, float> and std::is_same_v<T, float>) or (sizeof(VT) == 1 and byte_aligned()))
+                {
+                    src = *reinterpret_cast<const V<4, VT>*>(this);
+                    if constexpr (has_alpha()) src = V<4, VT> { src[0], src[1], src[2], 1 };
+                }
+                else if constexpr (has_alpha()) src = V<4, VT> { static_cast<VT>(this->b), static_cast<VT>(this->g), static_cast<VT>(this->r), static_cast<VT>(this->a), };
+                else src = V<4, VT> { static_cast<VT>(this->b), static_cast<VT>(this->g), static_cast<VT>(this->r), 1 };
+                return src;
+            }
+
+            template <typename U>
+            static constexpr __m128 m128_cast_to(__m128 src) noexcept
+            {
+                constexpr __m128 cast = reinterpret_cast<__m128>(pixel<U>::template vector_max<float>(P::ax) * (1.0f / vector_max<float>(U::ax or 1.0f)));
+                src = _mm_mul_ps(src, cast);
+                if constexpr (pixel<U>::has_alpha() and not has_alpha()) src = _mm_setr_ps(src[0], src[1], src[2], static_cast<float>(U::ax));
+                return src;
+            }
+
+            template <typename U>
+            static constexpr __m64 m64_cast_to(__m64 src) noexcept
+            {
+                constexpr auto mullo = reinterpret_cast<__m64>(pixel<U>::template vector_max<std::uint16_t>());
+                constexpr auto mulhi = reinterpret_cast<__m64>(vector_max_reciprocal<17, std::uint16_t, 15>());
+                auto vector_max_contains = [](std::uint16_t value)
+                {
+                    auto v = vector_max<std::uint16_t>();
+                    for (auto i = 0; i < 4; ++i) if (v[i] == value) return true;
+                    return false;
+                };
+
+                src = _mm_mullo_pi16(src, mullo);
+                auto dst = _mm_mulhi_pi16(src, mulhi);
+                dst = _mm_srli_pi16(_mm_adds_pu8(dst, _mm_set1_pi16(1)), 1);
+
+                if constexpr (vector_max_contains(1))
+                {
+                    constexpr auto is1 = reinterpret_cast<__m64>(vector_max<std::uint16_t>() == 1);
+                    auto v1 = _mm_and_si64(src, is1);
+                    dst = _mm_or_si64(_mm_andnot_si64(is1, dst), v1);
+                }
+                if constexpr (vector_max_contains(3))
+                {
+                    constexpr auto mulhi3 = reinterpret_cast<__m64>(vector_max_reciprocal<16, std::uint16_t, 15>());
+                    constexpr auto is3 = reinterpret_cast<__m64>(vector_max<std::uint16_t>() == 3);
+                    auto v3 = _mm_mulhi_pi16(_mm_and_si64(src, is3), mulhi3);
+                    dst = _mm_or_si64(_mm_andnot_si64(is3, dst), v3);
+                }
+                if constexpr (pixel<U>::has_alpha() and not has_alpha()) dst = _mm_insert_pi16(dst, U::ax, 3);
+                return dst;
+            }
+
+            template <typename U, typename VT>
+            static constexpr V<4, VT> vector_cast_to(V<4, VT> src) noexcept
+            {
+                if constexpr (std::is_floating_point_v<VT>)
+                {
+                    src *= pixel<U>::template vector_max<VT>(P::ax) * (1.0f / vector_max<VT>(U::ax or 1.0f));
+                }
+                else
+                {
+                    constexpr auto rbits = (sizeof(VT) - 1) * 8;
+                    src *= pixel<U>::template vector_max<VT>(P::ax | 1);
+                    src *= vector_max_reciprocal<rbits, VT>(U::ax | 1);
+                    src += 1 << (rbits - 1);
+                    src >>= rbits;
+                }
+                if constexpr (has_alpha()) return src;
+                else return V<4, VT> { src[0], src[1], src[2], static_cast<VT>(U::ax) };
+            }
+
+            static constexpr __m128 m128_premul(__m128 src) noexcept
+            {
+                if constexpr (not has_alpha()) return src;
+                constexpr auto ax = reinterpret_cast<__m128>(1.0f / V<4, float> { P::ax, P::ax, P::ax, 1 });
+                auto srca = _mm_setr_ps(src[3], src[3], src[3], 1);
+                src = _mm_mul_ps(src, srca);
+                src = _mm_mul_ps(src, ax);
+                return src;
+            }
+
+            static constexpr __m64 m64_premul(__m64 src) noexcept
+            {
+                if constexpr (not has_alpha()) return src;
+                auto a = _mm_shuffle_pi16(src, shuffle_mask(3, 3, 3, 3));
+                src = _mm_mullo_pi16(src, a);
+                if constexpr (P::ax == 3)
+                {
+                    constexpr auto ax = vector_reciprocal<16, std::uint16_t, 15>(P::ax);
+                    src = _mm_mulhi_pi16(src, reinterpret_cast<__m64>(ax));
+                }
+                else if constexpr (P::ax > 3)
+                {
+                    constexpr auto ax = vector_reciprocal<17, std::uint16_t, 15>(P::ax);
+                    src = _mm_mulhi_pi16(src, reinterpret_cast<__m64>(ax));
+                    src = _mm_srli_pi16(_mm_adds_pu8(src, _mm_set1_pi16(1)), 1);
+                }
+                src = _mm_insert_pi16(src, a[0], 3);
+                return src;
+            }
+
+            template <typename VT>
+            static constexpr V<4, VT> vector_premul(V<4, VT> src) noexcept
+            {
+                if constexpr (not has_alpha()) return src;
+                auto a = V<4, VT> { src[3], src[3], src[3], 1 };
+                if constexpr (std::is_floating_point_v<VT>)
+                {
+                    constexpr auto ax = 1.0f / V<4, float> { P::ax, P::ax, P::ax, 1 };
+                    src *= a * ax;
+                }
+                else
+                {
+                    constexpr auto rbits = (sizeof(VT) - 1) * 8;
+                    constexpr auto ax = vector_reciprocal<rbits, VT>(P::ax, P::ax, P::ax, 1);
+                    src *= a;
+                    src *= ax;
+                    src += 1 << (rbits - 1);
+                    src >>= rbits;
+                }
+                return src;
+            }
+
+            template <typename U>
+            constexpr __m128 m128_blend(__m128 dst, __m128 src)
+            {
+                constexpr auto ax = reinterpret_cast<__m128>(1.0f / V<4, float> { U::ax, U::ax, U::ax, U::ax });
+                auto a = _mm_sub_ps(_mm_set1_ps(U::ax), _mm_set1_ps(src[3]));
+
+                if constexpr (not std::is_same_v<P, U>) src = pixel<U>::template m128_cast_to<P>(src);
+                dst = _mm_mul_ps(dst, a);
+                dst = _mm_mul_ps(dst, ax);
+                dst = _mm_add_ps(dst, src);
+                return dst;
+            }
+
+            template <typename U>
+            constexpr __m64 m64_blend(__m64 dst, __m64 src)
+            {
+                //auto a = _mm_sub_pi16(_mm_set1_pi16(U::ax), _mm_shuffle_pi16(src, shuffle_mask(3, 3, 3, 3)));
+                auto a = _mm_set1_pi16(U::ax - reinterpret_cast<V<4, std::uint16_t>>(src)[3]);
+
+                if constexpr (not std::is_same_v<P, U>) src = pixel<U>::template m64_cast_to<P>(src);
+                dst = _mm_mullo_pi16(dst, a);
+                if constexpr (U::ax == 3)
+                {
+                    constexpr auto ax = vector_reciprocal<16, std::uint16_t, 15>(U::ax);
+                    dst = _mm_mulhi_pi16(dst, reinterpret_cast<__m64>(ax));
+                }
+                else if constexpr (U::ax != 1)
+                {
+                    constexpr auto ax = vector_reciprocal<17, std::uint16_t, 15>(U::ax);
+                    dst = _mm_mulhi_pi16(dst, reinterpret_cast<__m64>(ax));
+                    dst = _mm_srli_pi16(_mm_adds_pu8(dst, _mm_set1_pi16(1)), 1);
+                }
+                dst = _mm_adds_pu16(dst, src);
+                return dst;
+            }
+
+            template <typename U, typename VT>
+            static constexpr V<4, VT> vector_blend(V<4, VT> dst, V<4, VT> src) noexcept
+            {
+                if constexpr (not std::is_same_v<P, U>) src = pixel<U>::template vector_cast_to<P, VT>(src);
+                if constexpr (std::is_floating_point_v<VT>)
+                {
+                    constexpr auto ax = 1.0f / U::ax;
+                    dst *= static_cast<VT>(U::ax - src[3]) * ax;
+                    dst += src;
+                }
+                else
+                {
+                    constexpr auto rbits = (sizeof(VT) - 1) * 8;
+                    constexpr auto ax = vector_reciprocal<rbits, VT>(U::ax);
+                    dst *= static_cast<VT>(U::ax - src[3]);
+                    dst *= ax;
+                    dst += 1 << (rbits - 1);
+                    dst >>= rbits;
+                    dst += src;
+                }
+                return dst;
+            }
+
+            template<std::size_t bits, typename VT = std::uint16_t, std::size_t maxbits = bits>
+            static constexpr auto vector_reciprocal(VT v0, VT v1, VT v2, VT v3) noexcept
+            {
+                auto r = [](VT v) -> VT { return std::min(((1ul << bits) + v - 1) / v, (1ul << maxbits) - 1); };
+                return V<4, VT> { r(v0), r(v1), r(v2), r(v3)};
+            }
+
+            template<std::size_t bits, typename VT = std::uint16_t, std::size_t maxbits = bits>
+            static constexpr auto vector_reciprocal(VT v0) noexcept
+            {
+                return vector_reciprocal<bits, VT, maxbits>(v0, v0, v0, v0);
+            }
+
+            template<typename VT = float>
+            static constexpr auto vector_max(VT noalpha = 1) noexcept
+            {
+                return V<4, VT> { P::bx, P::gx, P::rx, static_cast<VT>(has_alpha() ? P::ax : noalpha) };
+            }
+
+            template<std::size_t bits, typename VT = std::uint16_t, std::size_t maxbits = bits>
+            static constexpr auto vector_max_reciprocal(VT noalpha = 1) noexcept
+            {
+                return vector_reciprocal<bits, VT, maxbits>(P::bx, P::gx, P::rx, static_cast<VT>(has_alpha() ? P::ax : noalpha));
+            }
+
+            template<typename T> constexpr bool is_constexpr(T value) { return __builtin_constant_p(value); }
+            static constexpr auto shuffle_mask(int v0, int v1, int v2, int v3) noexcept { return (v0 & 3) | ((v1 & 3) << 2) | ((v2 & 3) << 4) | ((v3 & 3) << 6); }
+            static constexpr bool byte_aligned() noexcept { return P::byte_aligned; }
+        };
+
+        struct [[gnu::packed]] px8
+        {
+            byte value { };
+
+            constexpr px8() noexcept = default;
+            constexpr px8(byte v) : value(v) { }
+            constexpr px8& operator=(byte p) { value = (p == 0 ? value : p); return *this; }
+            constexpr px8& operator=(const px8& p) { value = (p.value == 0 ? value : p.value); return *this; }
+            constexpr operator byte() { return value; }
+
+            template<typename T> constexpr auto cast(const auto& pal) { const auto& p = pal[value]; return T { p.r, p.g, p.b }; }
+        };
+
         struct alignas(0x10) bgra_ffff
         {
             using T = float;
@@ -69,6 +469,7 @@ namespace jw
             static constexpr T gx = 1.0f;
             static constexpr T bx = 1.0f;
             static constexpr T ax = 1.0f;
+            static constexpr bool byte_aligned = false;
         };
 
         struct alignas(0x10) bgra_fff0
@@ -81,6 +482,7 @@ namespace jw
             static constexpr T gx = 1.0f;
             static constexpr T bx = 1.0f;
             static constexpr T ax = 0.0f;
+            static constexpr bool byte_aligned = false;
         };
 
         struct alignas(4) bgra_8888
@@ -92,6 +494,7 @@ namespace jw
             static constexpr T gx = 255;
             static constexpr T bx = 255;
             static constexpr T ax = 255;
+            static constexpr bool byte_aligned = true;
         };
 
         struct [[gnu::packed]] alignas(4) bgra_8880
@@ -104,6 +507,7 @@ namespace jw
             static constexpr T gx = 255;
             static constexpr T bx = 255;
             static constexpr T ax = 0;
+            static constexpr bool byte_aligned = true;
         };
 
         struct [[gnu::packed]] bgr_8880
@@ -115,6 +519,7 @@ namespace jw
             static constexpr T gx = 255;
             static constexpr T bx = 255;
             static constexpr T ax = 0;
+            static constexpr bool byte_aligned = true;
         };
 
         struct [[gnu::packed]] bgra_6668
@@ -131,6 +536,7 @@ namespace jw
             static constexpr T gx = 63;
             static constexpr T bx = 63;
             static constexpr T ax = 255;
+            static constexpr bool byte_aligned = true;
         };
 
         struct alignas(2) [[gnu::packed]] bgr_5650
@@ -144,6 +550,7 @@ namespace jw
             static constexpr T gx = 63;
             static constexpr T bx = 31;
             static constexpr T ax = 0;
+            static constexpr bool byte_aligned = false;
         };
 
         struct alignas(2) [[gnu::packed]] bgra_5551
@@ -158,6 +565,7 @@ namespace jw
             static constexpr T gx = 31;
             static constexpr T bx = 31;
             static constexpr T ax = 1;
+            static constexpr bool byte_aligned = false;
         };
 
         struct alignas(2) [[gnu::packed]] bgra_5550
@@ -172,6 +580,7 @@ namespace jw
             static constexpr T gx = 31;
             static constexpr T bx = 31;
             static constexpr T ax = 0;
+            static constexpr bool byte_aligned = false;
         };
 
         struct alignas(2)[[gnu::packed]] bgra_4444
@@ -186,6 +595,7 @@ namespace jw
             static constexpr T gx = 15;
             static constexpr T bx = 15;
             static constexpr T ax = 15;
+            static constexpr bool byte_aligned = false;
         };
 
         struct [[gnu::packed]] bgr_2330
@@ -199,6 +609,7 @@ namespace jw
             static constexpr T gx = 7;
             static constexpr T bx = 3;
             static constexpr T ax = 0;
+            static constexpr bool byte_aligned = false;
         };
 
         struct [[gnu::packed]] bgra_2321
@@ -213,6 +624,7 @@ namespace jw
             static constexpr T gx = 7;
             static constexpr T bx = 3;
             static constexpr T ax = 1;
+            static constexpr bool byte_aligned = false;
         };
 
         struct[[gnu::packed]] bgra_2222
@@ -227,298 +639,7 @@ namespace jw
             static constexpr T gx = 3;
             static constexpr T bx = 3;
             static constexpr T ax = 3;
-        };
-
-        struct [[gnu::packed]] px { };
-
-        template<typename P>
-        struct alignas(P) [[gnu::packed]] pixel : public P, public px
-        {
-            using T = typename P::T;
-
-            template<std::size_t N, typename T>
-            using V [[gnu::vector_size(N * sizeof(T))]] = T;
-
-            template<typename T>
-            union vector
-            {
-                using V [[gnu::vector_size(4 * sizeof(T))]] = T;
-                V v;
-                struct { T b, g, r, a; };
-                constexpr vector(auto cr, auto cg, auto cb, auto ca) noexcept : b(cb), g(cg), r(cr), a(ca) { }
-            };
-
-            constexpr pixel() noexcept = default;
-            template<typename U = P, std::enable_if_t<pixel<U>::has_alpha(), bool> = { }>
-            constexpr pixel(T cr, T cg, T cb, T ca) noexcept : P { cb, cg, cr, ca } { }
-            template<typename U = P, std::enable_if_t<pixel<U>::has_alpha(), bool> = { } >
-            constexpr pixel(T cr, T cg, T cb) noexcept : P { cb, cg, cr, P::ax } { }
-            template<typename U = P, std::enable_if_t<not pixel<U>::has_alpha(), bool> = { } >
-            constexpr pixel(T cr, T cg, T cb, T) noexcept : P { cb, cg, cr } { }
-            template<typename U = P, std::enable_if_t<not pixel<U>::has_alpha(), bool> = { } >
-            constexpr pixel(T cr, T cg, T cb) noexcept : P { cb, cg, cr } { }
-
-            constexpr pixel(const pixel& p) noexcept = default;
-            constexpr pixel(pixel&& p) noexcept = default;
-
-            template <typename U> constexpr operator pixel<U>() const noexcept { return cast_to<U>(); }
-            template <typename U> constexpr pixel& operator=(const pixel<U>& other) noexcept { return *this = std::move(other.template cast_to<P>()); }
-            template <typename U> constexpr pixel& operator=(pixel<U>&& other) noexcept { return *this = std::move(other.template cast_to<P>()); }
-            constexpr pixel& operator=(const pixel& other) noexcept { return blend(other); }
-            constexpr pixel& operator=(pixel&& o) noexcept = default;
-
-            constexpr pixel& assign_round(const auto& v) noexcept
-            { 
-                if constexpr (std::is_integral_v<typename P::T>)
-                {
-                    this->b = jw::round(v.b);
-                    this->g = jw::round(v.g);
-                    this->r = jw::round(v.r);
-                    if constexpr (has_alpha()) this->a = jw::round(v.a);
-                    return *this;
-                }
-                this->b = v.b;
-                this->g = v.g;
-                this->r = v.r;
-                if constexpr (has_alpha()) this->a = v.a;
-                return *this;
-            }
-
-            static constexpr pixel m64(auto value) noexcept
-            {
-                auto v = reinterpret_cast<V<8, byte>>(_mm_packs_pu16(value, _mm_setzero_si64()));
-                if constexpr (byte_aligned())
-                {
-                    pixel result { std::move(reinterpret_cast<pixel&&>(v)) };
-                    _mm_empty();
-                    return result;
-                }
-                else
-                {
-                    pixel result { v[2], v[1], v[0], v[3] };
-                    _mm_empty();
-                    return result;
-                }
-            }
-
-            constexpr __m64 m64() const noexcept
-            {
-                auto ret = [] (auto v) { return _mm_unpacklo_pi8(v, _mm_setzero_si64()); };
-                if constexpr (byte_aligned()) return ret(*reinterpret_cast<const __m64*>(this));
-                else if constexpr (P::has_alpha) return ret(_mm_setr_pi8(this->b, this->g, this->r, this->a, 0, 0, 0, 0));
-                else return ret(_mm_setr_pi8(this->b, this->g, this->r, 0, 0, 0, 0, 0));
-            }
-
-            static constexpr pixel m128(__m128 value) noexcept
-            {
-                if constexpr (std::is_floating_point_v<typename P::T>) return *reinterpret_cast<pixel*>(value);
-                else return m64(_mm_cvtps_pi16(value));
-            }
-
-            constexpr __m128 m128() const noexcept
-            {
-                if constexpr (std::is_floating_point_v<typename P::T>) return *reinterpret_cast<const __m128*>(this);
-                else return _mm_cvtpu16_ps(m64());
-            }
-
-            static constexpr auto vector_shift(std::uint16_t noalpha = 255) noexcept
-            {
-                return reinterpret_cast<__m64>((V<4, std::uint16_t> { P::bx, P::gx, P::rx, static_cast<std::uint16_t>(has_alpha() ? P::ax : noalpha) } + 1) / 8);
-            }
-
-            static constexpr auto vector_max(float noalpha = 1) noexcept
-            {
-                return reinterpret_cast<__m128>(V<4, float> { P::bx, P::gx, P::rx, has_alpha() ? P::ax : noalpha });
-            }
-
-            static constexpr bool byte_aligned()
-            {
-                return std::is_same_v<P, bgra_8888> or std::is_same_v<P, bgra_8880> or std::is_same_v<P, bgra_6668> or std::is_same_v<P, bgr_8880>;
-            }
-
-            static constexpr bool has_alpha() { return P::ax > 0; }
-
-            template <typename U>
-            constexpr pixel<U> cast_to() const noexcept
-            {
-                if constexpr (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>)
-                {
-                    constexpr __m128 maxp = vector_max(1);
-                    constexpr __m128 maxu = pixel<U>::vector_max(0);
-
-                    __m128 src = m128();
-                    src = _mm_div_ps(_mm_mul_ps(src, maxu), maxp);
-                    return pixel<U>::m128(src);
-                }
-                else
-                {
-                    constexpr __m64 maxp = vector_shift(255);
-                    constexpr __m64 maxu = pixel<U>::vector_shift(255);
-
-                    __m64 src = m64();
-                    src = _mm_srl_pi16(_mm_sll_pi16(src, maxu), maxp);
-                    return pixel<U>::m64(src);
-                }
-            }
-
-            template <typename U, std::enable_if_t<(std::is_integral<typename U::T>::value && std::is_integral<typename P::T>::value), bool> = { }> 
-            static constexpr std::int16_t max(auto max) noexcept { return max + 1; }
-            template <typename U, std::enable_if_t<(std::is_floating_point<typename U::T>::value || std::is_floating_point<typename P::T>::value), bool> = { }> 
-            static constexpr float max(auto max) noexcept { return max; }
-
-            template<typename V, typename U, std::enable_if_t<not pixel<U>::has_alpha(), bool> = { }>
-            constexpr pixel& blend(const pixel<U>& src)
-            {
-                auto copy = src.template cast_to<V>();
-                return assign_round<V>(copy);
-            }
-
-            template<typename V, typename U, std::enable_if_t<not pixel<V>::has_alpha() and pixel<U>::has_alpha(), bool> = { }>
-            constexpr pixel& blend(const pixel<U>& other)
-            {
-                using max_T = decltype(max<U>(U::ax));
-
-                if constexpr (std::is_integral<max_T>::value)
-                {
-                #ifndef __SSE__
-                    this->b = ((other.b * max<U>(V::bx) * other.a) / max<U>(U::bx) + this->b * (other.ax - other.a)) / max<U>(U::ax);
-                    this->g = ((other.g * max<U>(V::gx) * other.a) / max<U>(U::gx) + this->g * (other.ax - other.a)) / max<U>(U::ax);
-                    this->r = ((other.r * max<U>(V::rx) * other.a) / max<U>(U::rx) + this->r * (other.ax - other.a)) / max<U>(U::ax);
-                    return *this;
-                #endif
-                    using vec = vector<float>;
-                    vec maxa { max<U>(U::ax), max<U>(U::ax), max<U>(U::ax), max<U>(U::ax) };
-                    vec ax { U::ax, U::ax, U::ax, U::ax };
-                    vec dest { this->r, this->g, this->b, 0 };
-                    vec srca { other.a, other.a, other.a, other.a };
-                    if constexpr (std::is_same<V, U>::value)
-                    {
-                        vec src { other.r, other.g, other.b, other.a };
-
-                        src.v *= srca.v;
-                        ax.v -= srca.v;
-                        dest.v *= ax.v;
-                        dest.v += src.v;
-                        dest.v /= maxa.v;
-                        return assign_round(dest);
-                    }
-                    else
-                    {
-                        vec maxu { max<U>(U::rx), max<U>(U::gx), max<U>(U::bx), max<U>(U::ax) };
-                        vec src { other.r * max<U>(V::rx), other.g * max<U>(V::gx), other.b * max<U>(V::bx), other.a };
-
-                        src.v *= srca.v;
-                        src.v /= maxu.v;
-                        ax.v -= srca.v;
-                        dest.v *= ax.v;
-                        dest.v += src.v;
-                        dest.v /= maxa.v;
-                        return assign_round(dest);
-                    }
-                }
-                else
-                {
-                    using vec = vector<max_T>;
-                    vec maxp { max<U>(V::rx), max<U>(V::gx), max<U>(V::bx), 0 };
-                    vec maxu { max<U>(U::rx), max<U>(U::gx), max<U>(U::bx), max<U>(U::ax) };
-                    vec maxa { max<U>(U::ax), max<U>(U::ax), max<U>(U::ax), max<U>(U::ax) };
-                    vec ax { U::ax, U::ax, U::ax, U::ax };
-
-                    vec src { other.r, other.g, other.b, other.a };
-                    vec dest { this->r, this->g, this->b, 0 };
-                    vec srca { src.a, src.a, src.a, src.a };
-
-                    if constexpr (not std::is_same_v<V, U>) src.v *= maxp.v;
-                    src.v *= srca.v;
-                    if constexpr (not std::is_same_v<V, U>) src.v /= maxu.v;
-                    ax.v -= srca.v;
-                    dest.v *= ax.v;
-                    dest.v += src.v;
-                    dest.v /= maxa.v;
-                    return assign_round(dest);
-                }
-            }
-
-            template<typename V, typename U, std::enable_if_t<pixel<V>::has_alpha() and pixel<U>::has_alpha(), bool> = { }>
-            constexpr pixel& blend(const pixel<U>& other)
-            {
-                using max_T = decltype(max<U>(U::ax));
-                if constexpr (std::is_integral<max_T>::value)
-                {
-                #ifndef __SSE__
-                    this->b = ((other.b * max<U>(V::bx) * other.a) / max<U>(U::bx) + this->b * (other.ax - other.a)) / max<U>(U::ax);
-                    this->g = ((other.g * max<U>(V::gx) * other.a) / max<U>(U::gx) + this->g * (other.ax - other.a)) / max<U>(U::ax);
-                    this->r = ((other.r * max<U>(V::rx) * other.a) / max<U>(U::rx) + this->r * (other.ax - other.a)) / max<U>(U::ax);
-                    this->a = ((other.a * max<U>(V::ax) * other.a) / max<U>(U::ax) + this->a * (other.ax - other.a)) / max<U>(U::ax);
-                    return *this;
-                #endif
-                    using vec = vector<float>;
-                    vec maxa { max<U>(U::ax), max<U>(U::ax), max<U>(U::ax), max<U>(U::ax) };
-                    vec ax { U::ax, U::ax, U::ax, U::ax };
-                    vec dest { this->r, this->g, this->b, this->a };
-                    vec srca { other.a, other.a, other.a, other.a };
-                    if constexpr (std::is_same<P, U>::value)
-                    {
-                        vec src { other.r, other.g, other.b, other.a };
-
-                        src.v *= srca.v;
-                        ax.v -= srca.v;
-                        dest.v *= ax.v;
-                        dest.v += src.v;
-                        dest.v /= maxa.v;
-                        return assign_round(dest);
-                    }
-                    else
-                    {
-                        vec maxu { max<U>(U::rx), max<U>(U::gx), max<U>(U::bx), max<U>(U::ax) };
-                        vec src { other.r * max<U>(V::rx), other.g * max<U>(V::gx), other.b * max<U>(V::bx), other.a * max<U>(V::ax) };
-
-                        src.v *= srca.v;
-                        src.v /= maxu.v;
-                        ax.v -= srca.v;
-                        dest.v *= ax.v;
-                        dest.v += src.v;
-                        dest.v /= maxa.v;
-                        return assign_round(dest);
-                    }
-                }
-                else
-                {
-                    using vec = vector<max_T>;
-                    vec maxp { max<U>(V::rx), max<U>(V::gx), max<U>(V::bx), max<U>(V::ax) };
-                    vec maxu { max<U>(U::rx), max<U>(U::gx), max<U>(U::bx), max<U>(U::ax) };
-                    vec maxa { max<U>(U::ax), max<U>(U::ax), max<U>(U::ax), max<U>(U::ax) };
-                    vec ax { U::ax, U::ax, U::ax, U::ax };
-
-                    vec src { other.r, other.g, other.b, other.a };
-                    vec dest { this->r, this->g, this->b, this->a };
-                    vec srca { src.a, src.a, src.a, src.a };
-
-                    if constexpr (not std::is_same_v<V, U>) src.v *= maxp.v;
-                    src.v *= srca.v;
-                    if constexpr (not std::is_same_v<V, U>) src.v /= maxu.v;
-                    ax.v -= srca.v;
-                    dest.v *= ax.v;
-                    dest.v += src.v;
-                    dest.v /= maxa.v;
-                    return assign_round(dest);
-                }
-            }
-
-            constexpr pixel& blend(const auto& other) { return blend<P>(other); }
-        };
-
-        struct [[gnu::packed]] px8
-        {
-            byte value { };
-
-            constexpr px8() noexcept = default;
-            constexpr px8(byte v) : value(v) { }
-            constexpr px8& operator=(byte p) { value = (p == 0 ? value : p); return *this; }
-            constexpr px8& operator=(const px8& p) { value = (p.value == 0 ? value : p.value); return *this; }
-            constexpr operator byte() { return value; }
-
-            template<typename T> constexpr auto cast(const auto& pal) { const auto& p = pal[value]; return T { p.r, p.g, p.b, p.a }; }
+            static constexpr bool byte_aligned = false;
         };
 
         using pxf    = pixel<bgra_ffff>;     // floating-point for use with SSE
