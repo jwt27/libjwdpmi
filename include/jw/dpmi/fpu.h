@@ -7,6 +7,7 @@
 #include <memory>
 #include <atomic>
 #include <deque>
+#include <xmmintrin.h>
 #include <jw/dpmi/irq_check.h>
 #include <jw/dpmi/lock.h>
 #include <jw/dpmi/alloc.h>
@@ -20,18 +21,31 @@ namespace jw
 {
     namespace dpmi
     {
-        union alignas(0x08) [[gnu::packed]] fpu_register
+        union alignas(0x08) [[gnu::packed]] long_fpu_register
         {
+            byte value[0x10];
             long double value_ld;
             double value_d;
             float value_f;
             split_int64_t mmx;
+            __m64 m64;
         };
-        static_assert(sizeof(fpu_register) == 0x10);
+        static_assert(sizeof(long_fpu_register) == 0x10);
+
+        union [[gnu::packed]] short_fpu_register
+        {
+            byte value[10];
+            double value_d;
+            float value_f;
+            split_int64_t mmx;
+            __m64 m64;
+        };
+        static_assert(sizeof(short_fpu_register) == 10);
 
         union alignas(0x10) [[gnu::packed]] sse_register
         {
             std::array<float, 4> value;
+            __m128 m128;
         };
         static_assert(sizeof(sse_register) == 0x10);
 
@@ -39,7 +53,7 @@ namespace jw
         {
             union
             {
-                struct
+                struct [[gnu::packed]]
                 {
                     std::uint16_t fctrl;
                     unsigned : 16;
@@ -53,7 +67,7 @@ namespace jw
                     std::uintptr_t fooff;
                     selector foseg;
                     unsigned : 16;
-                    byte st[10][8];
+                    short_fpu_register st[8];
                 };
                 std::array<byte, 108> raw;
             };
@@ -65,7 +79,7 @@ namespace jw
         {
             union
             {
-                struct //[[gnu::packed]]
+                struct [[gnu::packed]]
                 {
                     std::uint16_t fctrl;
                     std::uint16_t fstat;
@@ -80,7 +94,7 @@ namespace jw
                     unsigned : 16;
                     std::uint32_t mxcsr;
                     std::uint32_t mxcsr_mask;
-                    fpu_register st[8];
+                    long_fpu_register st[8];
                     sse_register xmm[16];
                 };
                 std::array<byte, 512> raw;
