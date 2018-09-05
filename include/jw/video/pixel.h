@@ -62,6 +62,12 @@ namespace jw
 
         struct [[gnu::packed]] px { };
 
+#       ifdef __MMX__
+#          define MMX_NOINLINE [[gnu::noinline]]
+#       else
+#          define MMX_NOINLINE
+#       endif
+
         template<typename P>
         struct alignas(P) [[gnu::packed, gnu::may_alias]] pixel : public P, public px
         {
@@ -92,7 +98,7 @@ namespace jw
             static constexpr bool has_alpha() { return P::ax > 0; }
 
             template<typename U>
-            constexpr pixel& blend(const pixel<U>& other)
+            MMX_NOINLINE constexpr pixel& blend(const pixel<U>& other)
             {
                 if constexpr (not pixel<U>::has_alpha())
                 {
@@ -118,7 +124,7 @@ namespace jw
             }
 
             template<typename U>
-            constexpr pixel& blend_straight(const pixel<U>& other)
+            MMX_NOINLINE constexpr pixel& blend_straight(const pixel<U>& other)
             {
                 if constexpr (not pixel<U>::has_alpha())
                 {
@@ -143,7 +149,7 @@ namespace jw
                 return *this;
             }
 
-            constexpr pixel& premultiply_alpha()
+            MMX_NOINLINE constexpr pixel& premultiply_alpha()
             {
                 if constexpr (not has_alpha()) return *this;
                 if constexpr (sse and std::is_floating_point_v<typename P::T>) *this = m128(m128_premul(m128()));
@@ -158,7 +164,7 @@ namespace jw
 
         private:
             template <typename U>
-            constexpr pixel<U> cast_to() const
+            MMX_NOINLINE constexpr pixel<U> cast_to() const
             {
                 constexpr bool not_constexpr = true;// not is_constexpr(this->b);
                 if constexpr (not_constexpr and sse and (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>))
@@ -447,6 +453,8 @@ namespace jw
             static constexpr bool byte_aligned() noexcept { return P::byte_aligned; }
         };
 
+#       undef MMX_NOINLINE
+
         struct [[gnu::packed]] px8
         {
             byte value { };
@@ -583,7 +591,7 @@ namespace jw
             static constexpr bool byte_aligned = false;
         };
 
-        struct alignas(2)[[gnu::packed]] bgra_4444
+        struct alignas(2) [[gnu::packed]] bgra_4444
         {
             using T = unsigned;
             T b : 4;
@@ -627,7 +635,7 @@ namespace jw
             static constexpr bool byte_aligned = false;
         };
 
-        struct[[gnu::packed]] bgra_2222
+        struct [[gnu::packed]] bgra_2222
         {
             using T = unsigned;
             T b : 2;
