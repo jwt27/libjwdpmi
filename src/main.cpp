@@ -105,6 +105,7 @@ namespace jw
     }
 }
 
+[[gnu::force_align_arg_pointer]]
 int main(int argc, const char** argv)
 {
     patch__cxa_allocate_exception(init_malloc);
