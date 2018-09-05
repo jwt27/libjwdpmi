@@ -73,20 +73,20 @@ namespace jw
         {
             template<typename> friend struct pixel;
 
-            using T = std::conditional_t<std::is_integral_v<typename P::T>, unsigned, typename P::T>;
-
             template<std::size_t N, typename VT>
             using V [[gnu::vector_size(N * sizeof(VT)), gnu::may_alias]] = VT;
 
+            static constexpr auto cast_PT(auto v) { return static_cast<typename P::T>(v); }
+
             constexpr pixel() noexcept = default;
-            template<typename U = P, typename PT = typename U::T, std::enable_if_t<pixel<U>::has_alpha(), bool> = { }>
-            constexpr pixel(T cr, T cg, T cb, T ca) noexcept : P { static_cast<PT>(cb), static_cast<PT>(cg), static_cast<PT>(cr), static_cast<PT>(ca) } { }
-            template<typename U = P, typename PT = typename U::T, std::enable_if_t<pixel<U>::has_alpha(), bool> = { } >
-            constexpr pixel(T cr, T cg, T cb) noexcept : P { static_cast<PT>(cb), static_cast<PT>(cg), static_cast<PT>(cr), U::ax } { }
-            template<typename U = P, typename PT = typename U::T, std::enable_if_t<not pixel<U>::has_alpha(), bool> = { } >
-            constexpr pixel(T cr, T cg, T cb, T) noexcept : P { static_cast<PT>(cb), static_cast<PT>(cg), static_cast<PT>(cr) } { }
-            template<typename U = P, typename PT = typename U::T, std::enable_if_t<not pixel<U>::has_alpha(), bool> = { } >
-            constexpr pixel(T cr, T cg, T cb) noexcept : P { static_cast<PT>(cb), static_cast<PT>(cg), static_cast<PT>(cr) } { }
+            template<typename Q = pixel, std::enable_if_t<Q::has_alpha(), bool> = { }>
+            constexpr pixel(auto cr, auto cg, auto cb, auto ca) noexcept : P { cast_PT(cb), cast_PT(cg), cast_PT(cr), cast_PT(ca) } { }
+            template<typename Q = pixel, std::enable_if_t<Q::has_alpha(), bool> = { }>
+            constexpr pixel(auto cr, auto cg, auto cb) noexcept : pixel { cr, cg, cb, P::ax } { }
+            template<typename Q = pixel, std::enable_if_t<not Q::has_alpha(), bool> = { }>
+            constexpr pixel(auto cr, auto cg, auto cb, auto) noexcept : pixel { cr, cg, cb } { }
+            template<typename Q = pixel, std::enable_if_t<not Q::has_alpha(), bool> = { }>
+            constexpr pixel(auto cr, auto cg, auto cb) noexcept : P { cast_PT(cb), cast_PT(cg), cast_PT(cr) } { }
 
             constexpr pixel(const pixel& p) noexcept = default;
             constexpr pixel(pixel&& p) noexcept = default;
@@ -184,7 +184,7 @@ namespace jw
                 }
             }
 
-            static constexpr pixel m64(auto value) noexcept // V4HI
+            static constexpr pixel m64(__m64 value) noexcept // V4HI
             {
                 static_assert(not std::is_floating_point_v<typename P::T>);
                 auto v = _mm_packs_pu16(value, _mm_setzero_si64());
@@ -230,18 +230,18 @@ namespace jw
             template<typename VT = std::uint16_t>
             static constexpr pixel vector(V<4, VT> src) noexcept
             {
-                if constexpr ((std::is_same_v<VT, float> and std::is_same_v<T, float>) or (sizeof(VT) == 1 and byte_aligned()))
+                if constexpr ((std::is_same_v<VT, float> and std::is_same_v<typename P::T, float>) or (sizeof(VT) == 1 and byte_aligned()))
                 {
                     return *reinterpret_cast<pixel*>(&src);
                 }
-                return pixel { static_cast<T>(src[2]), static_cast<T>(src[1]), static_cast<T>(src[0]), static_cast<T>(src[3]) };
+                return pixel { src[2], src[1], src[0], src[3] };
             }
 
             template<typename VT = std::uint16_t>
             constexpr V<4, VT> vector() const noexcept
             {
                 V<4, VT> src;
-                if constexpr ((std::is_same_v<VT, float> and std::is_same_v<T, float>) or (sizeof(VT) == 1 and byte_aligned()))
+                if constexpr ((std::is_same_v<VT, float> and std::is_same_v<typename P::T, float>) or (sizeof(VT) == 1 and byte_aligned()))
                 {
                     src = *reinterpret_cast<const V<4, VT>*>(this);
                     if constexpr (has_alpha()) src = V<4, VT> { src[0], src[1], src[2], 1 };
