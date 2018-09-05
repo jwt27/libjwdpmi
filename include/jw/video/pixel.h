@@ -469,6 +469,37 @@ namespace jw
             template<typename T> constexpr auto cast(const auto& pal) { const auto& p = pal[value]; return T { p.r, p.g, p.b }; }
         };
 
+        template<std::size_t bbits, std::size_t gbits, std::size_t rbits, std::size_t abits, std::size_t align = 1, bool is_byte_aligned = false>
+        struct alignas(align) [[gnu::packed]] bgra
+        {
+            using T = unsigned;
+            T b : bbits;
+            T g : gbits;
+            T r : rbits;
+            T a : abits;
+
+            static constexpr T rx = (1 << rbits) - 1;
+            static constexpr T gx = (1 << gbits) - 1;
+            static constexpr T bx = (1 << bbits) - 1;
+            static constexpr T ax = (1 << abits) - 1;
+            static constexpr bool byte_aligned = is_byte_aligned;
+        };
+
+        template<std::size_t bbits, std::size_t gbits, std::size_t rbits, std::size_t align = 1, bool is_byte_aligned = false>
+        struct alignas(align) [[gnu::packed]] bgr
+        {
+            using T = unsigned;
+            T b : bbits;
+            T g : gbits;
+            T r : rbits;
+
+            static constexpr T rx = (1 << rbits) - 1;
+            static constexpr T gx = (1 << gbits) - 1;
+            static constexpr T bx = (1 << bbits) - 1;
+            static constexpr T ax = 0;
+            static constexpr bool byte_aligned = is_byte_aligned;
+        };
+
         struct alignas(0x10) bgra_ffff
         {
             using T = float;
@@ -494,35 +525,11 @@ namespace jw
             static constexpr bool byte_aligned = false;
         };
 
-        struct alignas(4) bgra_8888
-        {
-            using T = std::uint8_t;
-            T b, g, r, a;
-
-            static constexpr T rx = 255;
-            static constexpr T gx = 255;
-            static constexpr T bx = 255;
-            static constexpr T ax = 255;
-            static constexpr bool byte_aligned = true;
-        };
-
         struct [[gnu::packed]] alignas(4) bgra_8880
         {
             using T = std::uint8_t;
             T b, g, r;
             T : 8;
-
-            static constexpr T rx = 255;
-            static constexpr T gx = 255;
-            static constexpr T bx = 255;
-            static constexpr T ax = 0;
-            static constexpr bool byte_aligned = true;
-        };
-
-        struct [[gnu::packed]] bgr_8880
-        {
-            using T = std::uint8_t;
-            T b, g, r;
 
             static constexpr T rx = 255;
             static constexpr T gx = 255;
@@ -548,35 +555,6 @@ namespace jw
             static constexpr bool byte_aligned = true;
         };
 
-        struct alignas(2) [[gnu::packed]] bgr_5650
-        {
-            using T = unsigned;
-            T b : 5;
-            T g : 6;
-            T r : 5;
-
-            static constexpr T rx = 31;
-            static constexpr T gx = 63;
-            static constexpr T bx = 31;
-            static constexpr T ax = 0;
-            static constexpr bool byte_aligned = false;
-        };
-
-        struct alignas(2) [[gnu::packed]] bgra_5551
-        {
-            using T = unsigned;
-            T b : 5;
-            T g : 5;
-            T r : 5;
-            T a : 1;
-
-            static constexpr T rx = 31;
-            static constexpr T gx = 31;
-            static constexpr T bx = 31;
-            static constexpr T ax = 1;
-            static constexpr bool byte_aligned = false;
-        };
-
         struct alignas(2) [[gnu::packed]] bgra_5550
         {
             using T = unsigned;
@@ -592,64 +570,15 @@ namespace jw
             static constexpr bool byte_aligned = false;
         };
 
-        struct alignas(2) [[gnu::packed]] bgra_4444
-        {
-            using T = unsigned;
-            T b : 4;
-            T g : 4;
-            T r : 4;
-            T a : 4;
+        using bgra_8888 = bgra<8, 8, 8, 8, 4, true>;
+        using bgra_5551 = bgra<5, 5, 5, 1, 2, false>;
+        using bgra_4444 = bgra<4, 4, 4, 4, 2, false>;
+        using bgra_2222 = bgra<2, 2, 2, 2, 1, false>;
+        using bgra_2321 = bgra<2, 3, 2, 1, 1, false>;
 
-            static constexpr T rx = 15;
-            static constexpr T gx = 15;
-            static constexpr T bx = 15;
-            static constexpr T ax = 15;
-            static constexpr bool byte_aligned = false;
-        };
-
-        struct [[gnu::packed]] bgr_2330
-        {
-            using T = unsigned;
-            T b : 2;
-            T g : 3;
-            T r : 3;
-
-            static constexpr T rx = 7;
-            static constexpr T gx = 7;
-            static constexpr T bx = 3;
-            static constexpr T ax = 0;
-            static constexpr bool byte_aligned = false;
-        };
-
-        struct [[gnu::packed]] bgra_2321
-        {
-            using T = unsigned;
-            T b : 2;
-            T g : 3;
-            T r : 2;
-            T a : 1;
-
-            static constexpr T rx = 3;
-            static constexpr T gx = 7;
-            static constexpr T bx = 3;
-            static constexpr T ax = 1;
-            static constexpr bool byte_aligned = false;
-        };
-
-        struct [[gnu::packed]] bgra_2222
-        {
-            using T = unsigned;
-            T b : 2;
-            T g : 2;
-            T r : 2;
-            T a : 2;
-
-            static constexpr T rx = 3;
-            static constexpr T gx = 3;
-            static constexpr T bx = 3;
-            static constexpr T ax = 3;
-            static constexpr bool byte_aligned = false;
-        };
+        using bgr_8880 = bgr<8, 8, 8, 1, true>;
+        using bgr_5650 = bgr<5, 6, 5, 2, false>;
+        using bgr_2330 = bgr<2, 3, 3, 1, false>;
 
         using pxf    = pixel<bgra_ffff>;     // floating-point for use with SSE
         using pxfn   = pixel<bgra_fff0>;     // floating-point, no alpha
