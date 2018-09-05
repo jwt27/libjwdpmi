@@ -452,7 +452,6 @@ namespace jw
                 , "c" (split_start.lo)
                 , "d" (split_start.hi)
                 : "edi", "esi", "esp", "cc");
-            check_error(ax, __PRETTY_FUNCTION__);
         }
 
         void vbe3::set_display_start(vector2i pos, bool wait_for_vsync)
