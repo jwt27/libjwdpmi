@@ -156,7 +156,7 @@ namespace jw
                 else if constexpr (mmx and not std::is_floating_point_v<typename P::T>) *this = m64(m64_premul(m64()));
                 else
                 {
-                    using VT = std::conditional_t<std::is_floating_point_v<typename P::T>, float, std::uint8_t>;
+                    using VT = std::conditional_t<std::is_floating_point_v<typename P::T>, float, std::uint32_t>;
                     *this = vector<VT>(vector_premul<VT>(vector<VT>()));
                 }
                 return *this;
@@ -263,11 +263,11 @@ namespace jw
             template <typename U>
             static constexpr __m64 m64_cast_to(__m64 src) noexcept
             {
-                constexpr auto mullo = reinterpret_cast<__m64>(pixel<U>::template vector_max<std::uint16_t>());
-                constexpr auto mulhi = reinterpret_cast<__m64>(vector_max_reciprocal<17, std::uint16_t, 15>());
+                constexpr auto mullo = reinterpret_cast<__m64>(pixel<U>::template vector_max<std::uint16_t>(P::ax));
+                constexpr auto mulhi = reinterpret_cast<__m64>(vector_max_reciprocal<17, std::uint16_t, 15>(U::ax | 1));
                 auto vector_max_contains = [](std::uint16_t value)
                 {
-                    auto v = vector_max<std::uint16_t>();
+                    auto v = vector_max<std::uint16_t>(U::ax | 1);
                     for (auto i = 0; i < 4; ++i) if (v[i] == value) return true;
                     return false;
                 };
@@ -278,13 +278,13 @@ namespace jw
 
                 if constexpr (vector_max_contains(1))
                 {
-                    constexpr auto is1 = reinterpret_cast<__m64>(vector_max<std::uint16_t>() == 1);
+                    constexpr auto is1 = reinterpret_cast<__m64>(vector_max<std::uint16_t>(U::ax) == 1);
                     auto v1 = _mm_and_si64(src, is1);
                     dst = _mm_or_si64(_mm_andnot_si64(is1, dst), v1);
                 }
                 if constexpr (vector_max_contains(3))
                 {
-                    constexpr auto mulhi3 = reinterpret_cast<__m64>(vector_max_reciprocal<16, std::uint16_t, 15>());
+                    constexpr auto mulhi3 = reinterpret_cast<__m64>(vector_max_reciprocal<16, std::uint16_t, 15>(U::ax | 1));
                     constexpr auto is3 = reinterpret_cast<__m64>(vector_max<std::uint16_t>() == 3);
                     auto v3 = _mm_mulhi_pi16(_mm_and_si64(src, is3), mulhi3);
                     dst = _mm_or_si64(_mm_andnot_si64(is3, dst), v3);
@@ -325,6 +325,7 @@ namespace jw
             static constexpr __m64 m64_premul(__m64 src) noexcept
             {
                 if constexpr (not has_alpha()) return src;
+                auto scalar_a = reinterpret_cast<V<4, std::uint16_t>>(src)[3];
                 auto a = _mm_shuffle_pi16(src, shuffle_mask(3, 3, 3, 3));
                 src = _mm_mullo_pi16(src, a);
                 if constexpr (P::ax == 3)
@@ -338,7 +339,7 @@ namespace jw
                     src = _mm_mulhi_pi16(src, reinterpret_cast<__m64>(ax));
                     src = _mm_srli_pi16(_mm_adds_pu8(src, _mm_set1_pi16(1)), 1);
                 }
-                src = _mm_insert_pi16(src, a[0], 3);
+                src = _mm_insert_pi16(src, scalar_a, 3);
                 return src;
             }
 
@@ -396,7 +397,7 @@ namespace jw
                     dst = _mm_mulhi_pi16(dst, reinterpret_cast<__m64>(ax));
                     dst = _mm_srli_pi16(_mm_adds_pu8(dst, _mm_set1_pi16(1)), 1);
                 }
-                dst = _mm_adds_pu16(dst, src);
+                dst = _mm_adds_pu8(dst, src);
                 return dst;
             }
 
