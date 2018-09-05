@@ -98,7 +98,7 @@ namespace jw
             static constexpr bool has_alpha() { return P::ax > 0; }
 
             template<typename U>
-            MMX_NOINLINE constexpr pixel& blend(const pixel<U>& other)
+            MMX_NOINLINE [[gnu::hot, gnu::sseregparm]] constexpr pixel& blend(const pixel<U>& other)
             {
                 if constexpr (not pixel<U>::has_alpha())
                 {
@@ -124,7 +124,7 @@ namespace jw
             }
 
             template<typename U>
-            MMX_NOINLINE constexpr pixel& blend_straight(const pixel<U>& other)
+            MMX_NOINLINE [[gnu::hot, gnu::sseregparm]] constexpr pixel& blend_straight(const pixel<U>& other)
             {
                 if constexpr (not pixel<U>::has_alpha())
                 {
@@ -149,7 +149,7 @@ namespace jw
                 return *this;
             }
 
-            MMX_NOINLINE constexpr pixel& premultiply_alpha()
+            MMX_NOINLINE [[gnu::hot, gnu::sseregparm]] constexpr pixel& premultiply_alpha()
             {
                 if constexpr (not has_alpha()) return *this;
                 if constexpr (sse and std::is_floating_point_v<typename P::T>) *this = m128(m128_premul(m128()));
@@ -164,7 +164,7 @@ namespace jw
 
         private:
             template <typename U>
-            MMX_NOINLINE constexpr pixel<U> cast_to() const
+            MMX_NOINLINE [[gnu::hot, gnu::sseregparm]] constexpr pixel<U> cast_to() const
             {
                 constexpr bool not_constexpr = true;// not is_constexpr(this->b);
                 if constexpr (not_constexpr and sse and (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>))
