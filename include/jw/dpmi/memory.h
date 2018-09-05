@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
@@ -43,10 +44,79 @@ namespace jw
             return round_down_to_page_size(num_bytes) + ((num_bytes & (page - 1)) == 0 ? 0 : page);
         }
 
-        union ldt_access_rights;
+        enum segment_type
+        {
+            const_data_segment = 0b000,
+            data_segment = 0b001,
+            stack_segment = 0b011,
+            code_segment = 0b101,
+            conforming_code_segment = 0b111
+        };
+
+        union ldt_access_rights
+        {
+            struct[[gnu::packed]]
+            {
+                unsigned has_been_accessed : 1;
+                segment_type type : 3;
+                unsigned system_segment : 1;            // should be 1
+                unsigned privilege_level : 2;           // must be 3 for user space
+                unsigned is_present : 1;                // must be 1
+                unsigned : 4;
+                unsigned available_for_system_use : 1;  // should be 0
+                unsigned : 1;                           // must be 0
+                unsigned is_32_bit : 1;
+                unsigned is_page_granular : 1;          // byte granular otherwise. note: this is automatically set by dpmi function set_selector_limit.
+            };
+            ldt_access_rights() noexcept = default;
+
+            ldt_access_rights(selector sel)
+            {
+                std::uint32_t r;
+                bool z;
+                asm("lar %k1, %2;"
+                    : "=@ccz" (z)
+                    , "=r" (r)
+                    : "rm" (static_cast<std::uint32_t>(sel)));
+                if (!z) throw dpmi_error(invalid_segment, __PRETTY_FUNCTION__);
+                access_rights = r >> 8;
+            }
+
+            void set(selector sel) const
+            {
+                dpmi_error_code error;
+                bool c;
+                asm volatile(
+                    "int 0x31;"
+                    : "=@ccc" (c)
+                    , "=a" (error)
+                    : "a" (0x0009)
+                    , "b" (sel)
+                    , "c" (access_rights)
+                    : "memory");
+                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+            }
+
+            ldt_access_rights(auto ldt) : ldt_access_rights(ldt->get_selector()) { }
+            void set(auto ldt) { set(ldt->get_selector()); }
+
+        private:
+            std::uint16_t access_rights { 0x0010 };
+        };
 
         struct ldt_entry
         {
+            union
+            {
+                struct
+                {
+                    std::uint16_t limit;
+                    std::uint16_t base_lo;
+                    std::uint8_t base_hi0;
+                    std::uint8_t base_hi1;
+                } segment;
+            } descriptor;
+
             ldt_entry(selector s) : sel(s) { }
 
             ldt_entry(std::uintptr_t linear_base, std::size_t limit)
@@ -235,66 +305,6 @@ namespace jw
         {
             return near_to_linear(reinterpret_cast<std::uintptr_t>(address), sel);
         }
-
-        enum segment_type
-        {
-            const_data_segment = 0b000,
-            data_segment = 0b001,
-            stack_segment = 0b011,
-            code_segment = 0b101,
-            conforming_code_segment = 0b111
-        };
-
-        union [[gnu::packed]] ldt_access_rights
-        {
-            struct [[gnu::packed]]
-            {
-                unsigned has_been_accessed : 1;
-                segment_type type : 3;
-                unsigned system_segment : 1;            // should be 1
-                unsigned privilege_level : 2;           // must be 3 for user space
-                unsigned is_present : 1;                // must be 1
-                unsigned : 4;
-                unsigned available_for_system_use : 1;  // should be 0
-                unsigned : 1;                           // must be 0
-                unsigned is_32_bit : 1;
-                unsigned is_page_granular : 1;          // byte granular otherwise. note: this is automatically set by dpmi function set_selector_limit.
-            };
-            ldt_access_rights() noexcept = default;
-
-            ldt_access_rights(selector sel) 
-            {
-                std::uint32_t r;
-                bool z;
-                asm("lar %k1, %2;"
-                    : "=@ccz" (z)
-                    , "=r" (r)
-                    : "rm" (static_cast<std::uint32_t>(sel)));
-                if (!z) throw dpmi_error(invalid_segment, __PRETTY_FUNCTION__);
-                access_rights = r >> 8;
-            }
-
-            void set(selector sel) const
-            {
-                dpmi_error_code error;
-                bool c;
-                asm volatile(
-                    "int 0x31;"
-                    : "=@ccc" (c)
-                    , "=a" (error)
-                    : "a" (0x0009)
-                    , "b" (sel)
-                    , "c" (access_rights)
-                    : "memory");
-                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
-            }
-
-            ldt_access_rights(auto ldt) : ldt_access_rights(ldt->get_selector()) { }
-            void set(auto ldt) { set(ldt->get_selector()); }
-
-        private:
-            std::uint16_t access_rights { 0x0010 };
-        };
 
         struct linear_memory
         {
