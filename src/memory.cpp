@@ -104,18 +104,9 @@ namespace jw
 
         ldt_access_rights descriptor::get_access_rights() { return ldt_access_rights { sel.value }; }
 
-        descriptor descriptor::clone_segment(selector s)
-        {
-            descriptor ldt { s };
-            ldt.allocate();
-            ldt.segment.privilege_level = 3;
-            ldt.write();
-            return ldt;
-        }
-
         descriptor descriptor::create_segment(std::uintptr_t linear_base, std::size_t limit)
         {
-            descriptor ldt = clone_segment(get_ds());
+            descriptor ldt = create_alias(get_ds());
             ldt.allocate();
             ldt.set_base(linear_base);
             ldt.set_limit(limit);
