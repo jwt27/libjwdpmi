@@ -4,6 +4,7 @@
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
 #include <jw/dpmi/memory.h>
+#include <jw/dpmi/cpu_exception.h>
 
 namespace jw
 {
@@ -40,20 +41,20 @@ namespace jw
             if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
         }
 
-        ldt_access_rights ldt_entry::get_access_rights() { return ldt_access_rights { sel }; }
+        ldt_access_rights descriptor::get_access_rights() { return ldt_access_rights { sel }; }
 
-        ldt_entry ldt_entry::clone_segment(selector s)
+        descriptor descriptor::clone_segment(selector s)
         {
-            ldt_entry ldt { s };
+            descriptor ldt { s };
             ldt.allocate();
             ldt.segment.privilege_level = 3;
             ldt.write();
             return ldt;
         }
 
-        ldt_entry ldt_entry::create_segment(std::uintptr_t linear_base, std::size_t limit)
+        descriptor descriptor::create_segment(std::uintptr_t linear_base, std::size_t limit)
         {
-            ldt_entry ldt = clone_segment(get_ds());
+            descriptor ldt = clone_segment(get_ds());
             ldt.allocate();
             ldt.set_base(linear_base);
             ldt.set_limit(limit);
@@ -61,7 +62,7 @@ namespace jw
             return ldt;
         }
 
-        ldt_entry ldt_entry::create_alias(selector s)
+        descriptor descriptor::create_alias(selector s)
         {
             selector new_sel;
             bool c;
@@ -73,15 +74,15 @@ namespace jw
                 , "b" (s)
                 : "memory");
             if (c) throw dpmi_error(new_sel, __PRETTY_FUNCTION__);
-            ldt_entry ldt { new_sel };
+            descriptor ldt { new_sel };
             ldt.no_alloc = false;
             return ldt;
         }
 
-        ldt_entry ldt_entry::create_call_gate(selector code_seg, std::uintptr_t entry_point)
+        descriptor descriptor::create_call_gate(selector code_seg, std::uintptr_t entry_point)
         {
             split_uint32_t entry { reinterpret_cast<std::uintptr_t>(entry_point) };
-            ldt_entry ldt { };
+            descriptor ldt { };
             ldt.allocate();
             auto& c = ldt.call_gate;
             c.not_system_segment = false;
@@ -96,7 +97,7 @@ namespace jw
             return ldt;
         }
 
-        ldt_entry::~ldt_entry()
+        descriptor::~descriptor()
         {
             if (no_alloc) return;
             dpmi_error_code error;
@@ -110,7 +111,7 @@ namespace jw
                 : "memory");
         }
 
-        void ldt_entry::read() const
+        void descriptor::read() const
         {
             dpmi_error_code error;
             bool c;
@@ -129,7 +130,7 @@ namespace jw
             if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
         }
 
-        void ldt_entry::write()
+        void descriptor::write()
         {
             dpmi_error_code error;
             bool c;
@@ -148,7 +149,7 @@ namespace jw
             if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
         }
 
-        std::uintptr_t ldt_entry::get_base(selector seg)
+        std::uintptr_t descriptor::get_base(selector seg)
         {
             dpmi_error_code error;
             split_uint32_t base;
@@ -166,7 +167,7 @@ namespace jw
             return base;
         }
 
-        void ldt_entry::set_base(selector seg, std::uintptr_t linear_base)
+        void descriptor::set_base(selector seg, std::uintptr_t linear_base)
         {
             dpmi_error_code error;
             split_uint32_t base { linear_base };
@@ -184,7 +185,7 @@ namespace jw
             if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
         }
 
-        std::size_t ldt_entry::get_limit(selector sel)
+        std::size_t descriptor::get_limit(selector sel)
         {
             std::size_t limit;
             bool z;
@@ -197,7 +198,7 @@ namespace jw
             return limit;
         }
 
-        void ldt_entry::set_limit(selector sel, std::size_t limit)
+        void descriptor::set_limit(selector sel, std::size_t limit)
         {
             dpmi_error_code error;
             split_uint32_t _limit = (limit >= 1_MB) ? round_up_to_page_size(limit) - 1 : limit;
@@ -215,7 +216,7 @@ namespace jw
             if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
         }
 
-        void ldt_entry::allocate()
+        void descriptor::allocate()
         {
             selector s;
             bool c;

@@ -86,7 +86,7 @@ namespace jw
             std::uint16_t access_rights { 0x0010 };
         };
 
-        struct [[gnu::packed]] alignas(8) ldt_entry
+        struct [[gnu::packed]] alignas(8) descriptor
         {
             union
             {
@@ -122,13 +122,13 @@ namespace jw
                 } call_gate;
             };
 
-            ldt_entry(selector s) : sel(s) { read(); }
-            ~ldt_entry();
+            descriptor(selector s) : sel(s) { read(); }
+            ~descriptor();
 
-            static ldt_entry clone_segment(selector s);
-            static ldt_entry create_segment(std::uintptr_t linear_base, std::size_t limit);
-            static ldt_entry create_alias(selector s);
-            static ldt_entry create_call_gate(selector code_seg, std::uintptr_t entry_point);
+            static descriptor clone_segment(selector s);
+            static descriptor create_segment(std::uintptr_t linear_base, std::size_t limit);
+            static descriptor create_alias(selector s);
+            static descriptor create_call_gate(selector code_seg, std::uintptr_t entry_point);
 
             auto get_selector() const noexcept { return sel; }
             void set_base(auto b) { set_base(sel, b); read(); }
@@ -147,7 +147,7 @@ namespace jw
             static void set_limit(selector sel, std::size_t limit);
 
         private:
-            ldt_entry() { }
+            descriptor() { }
             void allocate();
 
             selector sel;
@@ -191,7 +191,7 @@ namespace jw
 
         [[gnu::pure]] inline std::intptr_t linear_to_near(std::uintptr_t address, selector sel = get_ds())
         {
-            return address - ldt_entry::get_base(sel);
+            return address - descriptor::get_base(sel);
         }
 
         template <typename T>
@@ -202,7 +202,7 @@ namespace jw
 
         [[gnu::pure]] inline std::uintptr_t near_to_linear(std::uintptr_t address, selector sel = get_ds())
         {
-            return address + ldt_entry::get_base(sel);
+            return address + descriptor::get_base(sel);
         }
 
         template <typename T>
@@ -240,7 +240,7 @@ namespace jw
             linear_memory(std::uintptr_t address, std::size_t num_bytes) noexcept
                 : addr(address), size(num_bytes) { }
 
-            linear_memory(std::shared_ptr<ldt_entry> l) noexcept
+            linear_memory(std::shared_ptr<descriptor> l) noexcept
                 : ldt(l), addr(ldt->get_base()), size(ldt->get_limit()) { }
 
             linear_memory(const linear_memory&) noexcept = default;
@@ -286,21 +286,21 @@ namespace jw
                 if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
             }
 
-            virtual std::weak_ptr<ldt_entry> get_ldt_entry()
+            virtual std::weak_ptr<descriptor> get_descriptor()
             {
-                if (not ldt) ldt = std::make_shared<ldt_entry>(ldt_entry::create_segment(addr, size));
+                if (not ldt) ldt = std::make_shared<descriptor>(descriptor::create_segment(addr, size));
                 return ldt;
             }
 
             virtual selector get_selector()
             {
-                return get_ldt_entry().lock()->get_selector();
+                return get_descriptor().lock()->get_selector();
             }
 
-            virtual bool requires_new_selector() const noexcept { return ldt_entry::get_base(get_ds()) < addr; }
+            virtual bool requires_new_selector() const noexcept { return descriptor::get_base(get_ds()) < addr; }
 
         protected:
-            std::shared_ptr<ldt_entry> ldt;
+            std::shared_ptr<descriptor> ldt;
             std::uintptr_t addr;
             std::size_t size;
         };
@@ -452,10 +452,10 @@ namespace jw
 
             bool is_valid_address(std::uintptr_t address)
             {
-                if (address <= ldt_entry::get_base(get_ds())) return false;
+                if (address <= descriptor::get_base(get_ds())) return false;
                 //if (get_selector_limit() < linear_to_near(address + size)) set_selector_limit(get_ds(), address + size);
-                while (ldt_entry::get_limit(get_ds()) < static_cast<std::uintptr_t>(linear_to_near(address + size)))
-                    ldt_entry::set_limit(get_ds(), ldt_entry::get_limit(get_ds()) * 2);
+                while (descriptor::get_limit(get_ds()) < static_cast<std::uintptr_t>(linear_to_near(address + size)))
+                    descriptor::set_limit(get_ds(), descriptor::get_limit(get_ds()) * 2);
                 return true;
             }
 
@@ -588,10 +588,10 @@ namespace jw
                 else return addr != null_handle;
             };
 
-            virtual std::weak_ptr<ldt_entry> get_ldt_entry() override
+            virtual std::weak_ptr<descriptor> get_descriptor() override
             {
                 if (dos_handle == null_dos_handle) alloc_selector();
-                if (!ldt) ldt = std::make_shared<ldt_entry>(dos_handle);
+                if (!ldt) ldt = std::make_shared<descriptor>(dos_handle);
                 return ldt;
             }
 

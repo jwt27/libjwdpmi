@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #include <jw/dpmi/realmode.h>
@@ -130,8 +131,8 @@ namespace jw
             auto* ptr = linear_memory(get_cs(), start, size).get_ptr<byte>();
             std::copy_n(ptr, size, code.data());
             auto cs_limit = reinterpret_cast<std::size_t>(code.data() + size);
-            if (ldt_entry::get_limit(get_cs()) < cs_limit) 
-                ldt_entry::set_limit(get_cs(), cs_limit);
+            if (descriptor::get_limit(get_cs()) < cs_limit) 
+                descriptor::set_limit(get_cs(), cs_limit);
 
             reg_pool.push_back({ });
             reg_ptr = &reg_pool.back();
