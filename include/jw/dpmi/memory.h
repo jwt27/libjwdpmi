@@ -157,6 +157,7 @@ namespace jw
             [[gnu::pure]] auto get_limit() const { return get_limit(sel); }
             ldt_access_rights get_access_rights();
             void set_access_rights(const auto& r) { r.set(sel); read(); }
+            void set_selector_privilege(unsigned priv) { sel.privilege_level = priv; }
 
             void read() const;
             void write();

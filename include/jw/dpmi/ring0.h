@@ -21,6 +21,7 @@ namespace jw::dpmi
                 {
                     cs = descriptor::create_alias(get_cs());
                     cs->segment.privilege_level = 0;
+                    cs->set_selector_privilege(0);
                     cs->write();
                     gate = descriptor::create_call_gate(cs->get_selector(), reinterpret_cast<std::uintptr_t>(ring0_entry_point));
                     gate->call_gate.privilege_level = 3;
