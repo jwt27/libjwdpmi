@@ -75,33 +75,9 @@ namespace jw
                 unsigned is_page_granular : 1;          // byte granular otherwise. note: this is automatically set by dpmi function set_selector_limit.
             };
             ldt_access_rights() noexcept = default;
+            ldt_access_rights(selector sel);
 
-            ldt_access_rights(selector sel)
-            {
-                std::uint32_t r;
-                bool z;
-                asm("lar %k1, %2;"
-                    : "=@ccz" (z)
-                    , "=r" (r)
-                    : "rm" (static_cast<std::uint32_t>(sel)));
-                if (!z) throw dpmi_error(invalid_segment, __PRETTY_FUNCTION__);
-                access_rights = r >> 8;
-            }
-
-            void set(selector sel) const
-            {
-                dpmi_error_code error;
-                bool c;
-                asm volatile(
-                    "int 0x31;"
-                    : "=@ccc" (c)
-                    , "=a" (error)
-                    : "a" (0x0009)
-                    , "b" (sel)
-                    , "c" (access_rights)
-                    : "memory");
-                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
-            }
+            void set(selector sel) const;
 
             ldt_access_rights(auto ldt) : ldt_access_rights(ldt->get_selector()) { }
             void set(auto ldt) { set(ldt->get_selector()); }
@@ -147,73 +123,12 @@ namespace jw
             };
 
             ldt_entry(selector s) : sel(s) { read(); }
+            ~ldt_entry();
 
-            static auto clone_segment(selector s)
-            {
-                ldt_entry ldt { s };
-                ldt.allocate();
-                ldt.write();
-                return ldt;
-            }
-
-            static auto create_segment(std::uintptr_t linear_base, std::size_t limit)
-            {
-                ldt_entry ldt = clone_segment(get_ds());
-                ldt.allocate();
-                ldt.set_base(linear_base);
-                ldt.set_limit(limit);
-                ldt.read();
-                return ldt;
-            }
-
-            static auto create_alias(selector s)
-            {
-                selector new_sel;
-                bool c;
-                asm volatile(
-                    "int 0x31;"
-                    : "=@ccc" (c)
-                    , "=a" (new_sel)
-                    : "a" (0x000A)
-                    , "b" (s)
-                    : "memory");
-                if (c) throw dpmi_error(new_sel, __PRETTY_FUNCTION__);
-                ldt_entry ldt { new_sel };
-                ldt.no_alloc = false;
-                return ldt;
-            }
-
-            static auto create_call_gate(selector code_seg, auto* entry_point)
-            {
-                split_uint32_t entry { reinterpret_cast<std::uintptr_t>(entry_point) };
-                ldt_entry ldt { };
-                ldt.allocate();
-                auto& c = ldt.call_gate;
-                c.not_system_segment = false;
-                c.privilege_level = 3;
-                c.type = call_gate32;
-                c.is_present = true;
-                c.cs = code_seg;
-                c.offset_lo = entry.lo;
-                c.offset_hi = entry.hi;
-                c.stack_params = 0;
-                ldt.write();
-                return ldt;
-            }
-
-            ~ldt_entry()
-            {
-                if (no_alloc) return;
-                dpmi_error_code error;
-                bool c;
-                asm volatile(
-                    "int 0x31;"
-                    : "=@ccc" (c)
-                    , "=a" (error)
-                    : "a" (0x0001)
-                    , "b" (sel)
-                    : "memory");
-            }
+            static ldt_entry clone_segment(selector s);
+            static ldt_entry create_segment(std::uintptr_t linear_base, std::size_t limit);
+            static ldt_entry create_alias(selector s);
+            static ldt_entry create_call_gate(selector code_seg, std::uintptr_t entry_point);
 
             auto get_selector() const noexcept { return sel; }
             void set_base(auto b) { set_base(sel, b); read(); }
@@ -223,129 +138,17 @@ namespace jw
             ldt_access_rights get_access_rights();
             void set_access_rights(const auto& r) { r.set(sel); read(); }
 
-            void read() const
-            {
-                dpmi_error_code error;
-                bool c;
-                asm volatile(
-                    "push es;"
-                    "push ds;"
-                    "pop es;"
-                    "int 0x31;"
-                    "pop es;"
-                    : "=@ccc" (c)
-                    , "=a" (error)
-                    : "a" (0x000b)
-                    , "b" (sel)
-                    , "D" (this)
-                    : "memory");
-                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
-            }
+            void read() const;
+            void write();
 
-            void write()
-            {
-                dpmi_error_code error;
-                bool c;
-                asm volatile(
-                    "push es;"
-                    "push ds;"
-                    "pop es;"
-                    "int 0x31;"
-                    "pop es;"
-                    : "=@ccc" (c)
-                    , "=a" (error)
-                    : "a" (0x000c)
-                    , "b" (sel)
-                    , "D" (this)
-                    : "memory");
-                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
-            }
-
-            [[gnu::pure]] static std::uintptr_t get_base(selector seg = get_ds())
-            {
-                dpmi_error_code error;
-                split_uint32_t base;
-                bool c;
-
-                asm("int 0x31;"
-                    : "=@ccc" (c)
-                    , "=a" (error)
-                    , "=c" (base.hi)
-                    , "=d" (base.lo)
-                    : "a" (0x0006)
-                    , "b" (seg));
-                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
-
-                return base;
-            }
-
-            static void set_base(selector seg, std::uintptr_t linear_base)
-            {
-                dpmi_error_code error;
-                split_uint32_t base { linear_base };
-                bool c;
-
-                asm volatile(
-                    "int 0x31;"
-                    : "=@ccc" (c)
-                    , "=a" (error)
-                    : "a" (0x0007)
-                    , "b" (seg)
-                    , "c" (base.hi)
-                    , "d" (base.lo)
-                    : "memory");
-                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
-            }
-
-            static std::size_t get_limit(selector sel = get_ds())
-            {
-                std::size_t limit;
-                bool z;
-                asm("lsl %1, %2;"
-                    : "=@ccz" (z)
-                    , "=r" (limit)
-                    : "rm" (static_cast<std::uint32_t>(sel))
-                    : "cc");
-                if (!z) throw dpmi_error(invalid_segment, __PRETTY_FUNCTION__);
-                return limit;
-            }
-
-            static void set_limit(selector sel, std::size_t limit)
-            {
-                dpmi_error_code error;
-                split_uint32_t _limit = (limit >= 1_MB) ? round_up_to_page_size(limit) - 1 : limit;
-                bool c;
-
-                asm volatile(
-                    "int 0x31;"
-                    : "=@ccc" (c)
-                    , "=a" (error)
-                    : "a" (0x0008)
-                    , "b" (sel)
-                    , "c" (_limit.hi)
-                    , "d" (_limit.lo)
-                    : "memory");
-                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
-            }
+            [[gnu::pure]] static std::uintptr_t get_base(selector seg = get_ds());
+            static void set_base(selector seg, std::uintptr_t linear_base);
+            static std::size_t get_limit(selector sel = get_ds());
+            static void set_limit(selector sel, std::size_t limit);
 
         private:
             ldt_entry() { }
-
-            void allocate()
-            {
-                selector s;
-                bool c;
-                asm volatile(
-                    "int 0x31;"
-                    : "=@ccc" (c)
-                    , "=a" (s)
-                    : "a" (0x0000)
-                    , "c" (1)
-                    : "memory");
-                if (c) throw dpmi_error(s, __PRETTY_FUNCTION__);
-                no_alloc = false;
-                sel = s;
-            }
+            void allocate();
 
             selector sel;
             bool no_alloc { true };
