@@ -11,6 +11,23 @@ namespace jw
 {
     namespace dpmi
     {
+        struct selector_bits
+        {
+            union
+            {
+                struct
+                {
+                    unsigned privilege_level : 2;
+                    bool local : 1;
+                    unsigned index : 13;
+                };
+                selector value;
+            };
+            selector_bits() noexcept = default;
+            constexpr selector_bits(selector sel) noexcept : value(sel) { };
+            constexpr operator selector() const noexcept { return value; }
+        };
+
         //DPMI 0.9 AX=0604
         [[gnu::pure]] inline std::size_t get_page_size()
         {
