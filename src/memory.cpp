@@ -14,6 +14,67 @@ namespace jw
         bool device_memory_base::device_map_supported { true };
         bool mapped_dos_memory_base::dos_map_supported { true };
 
+        linear_memory gdt, ldt;
+
+        bool direct_ldt_access()
+        {
+            enum { unknown, yes, no } static have_access { unknown };
+
+            if (__builtin_expect(have_access == unknown, false))
+            {
+                try
+                {
+                    have_access = no;
+
+                    struct [[gnu::packed]]
+                    {
+                        std::uint16_t limit;
+                        std::uint32_t base;
+                    } gdtr;
+                    selector ldtr;
+
+                    asm("sgdt %0":"=m"(gdtr));
+                    asm("sldt %w0":"=rm"(ldtr));
+
+                    std::clog << "gdtr base=" << std::hex << gdtr.base << " limit=" << gdtr.limit << '\n';
+                    std::clog << "ldtr selector=" << ldtr << '\n';
+
+                    gdt = linear_memory { gdtr.base, gdtr.limit };
+                    std::clog << "gdt descriptor=" << *reinterpret_cast<std::uint64_t*>(gdt.get_descriptor().lock().get()) << '\n';
+                    descriptor_data ldt_desc;
+                    selector_bits ldt_selector = ldtr;
+
+                    asm("push gs;"
+                        "mov gs, %w1;"
+                        "lea eax, [%2*8];"
+                        "mov edx, gs:[eax];"
+                        "mov %0, edx;"
+                        "mov edx, gs:[eax+4];"
+                        "mov %0+4, edx;"
+                        "pop gs;"
+                        : "+m" (*reinterpret_cast<std::uint32_t*>(&ldt_desc))
+                        : "r" (gdt.get_selector())
+                        , "r" (ldt_selector.index)
+                        : "eax", "edx");
+
+                    ldt_selector.privilege_level = 3;
+                    split_uint32_t base;
+                    base.lo = ldt_desc.segment.base_lo;
+                    base.hi.lo = ldt_desc.segment.base_hi_lo;
+                    base.hi.hi = ldt_desc.segment.base_hi_hi;
+                    split_uint32_t limit { };
+                    limit.lo = ldt_desc.segment.limit_lo;
+                    limit.hi = ldt_desc.segment.limit_hi;
+                    ldt = linear_memory { base, limit };
+
+                    have_access = yes;
+                }
+                catch (const cpu_exception&) { throw; }
+                catch (const dpmi_error&) { throw; }
+            }
+            return have_access == yes;
+        }
+
         ldt_access_rights::ldt_access_rights(selector sel)
         {
             std::uint32_t r;
@@ -41,7 +102,7 @@ namespace jw
             if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
         }
 
-        ldt_access_rights descriptor::get_access_rights() { return ldt_access_rights { sel }; }
+        ldt_access_rights descriptor::get_access_rights() { return ldt_access_rights { sel.value }; }
 
         descriptor descriptor::clone_segment(selector s)
         {
@@ -59,6 +120,8 @@ namespace jw
             ldt.set_base(linear_base);
             ldt.set_limit(limit);
             ldt.read();
+            ldt.segment.is_present = true;
+            ldt.write();
             return ldt;
         }
 
@@ -107,46 +170,64 @@ namespace jw
                 : "=@ccc" (c)
                 , "=a" (error)
                 : "a" (0x0001)
-                , "b" (sel)
-                : "memory");
+                , "b" (sel));
         }
 
         void descriptor::read() const
         {
-            dpmi_error_code error;
-            bool c;
-            asm volatile(
-                "push es;"
-                "push ds;"
-                "pop es;"
-                "int 0x31;"
-                "pop es;"
-                : "=@ccc" (c)
-                , "=a" (error)
-                : "a" (0x000b)
-                , "b" (sel)
-                , "D" (this)
-                : "memory");
-            if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+            if (direct_ldt_access())
+            {
+                selector_bits s { sel };
+                auto& table = s.local ? ldt : gdt;
+                auto* p = table.get_ptr<descriptor_data>() + s.index;
+                *static_cast<descriptor_data*>(const_cast<descriptor*>(this)) = *p;
+            }
+            else
+            {
+                dpmi_error_code error;
+                bool c;
+                asm volatile(
+                    "push es;"
+                    "push ds;"
+                    "pop es;"
+                    "int 0x31;"
+                    "pop es;"
+                    : "=@ccc" (c)
+                    , "=a" (error)
+                    : "a" (0x000b)
+                    , "b" (sel)
+                    , "D" (static_cast<const descriptor_data*>(this))
+                    : "memory");
+                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+            }
         }
 
         void descriptor::write()
         {
-            dpmi_error_code error;
-            bool c;
-            asm volatile(
-                "push es;"
-                "push ds;"
-                "pop es;"
-                "int 0x31;"
-                "pop es;"
-                : "=@ccc" (c)
-                , "=a" (error)
-                : "a" (0x000c)
-                , "b" (sel)
-                , "D" (this)
-                : "memory");
-            if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+            if (direct_ldt_access())
+            {
+                selector_bits s { sel };
+                auto& table = s.local ? ldt : gdt;
+                auto* p = table.get_ptr<descriptor_data>() + s.index;
+                *p = *static_cast<descriptor_data*>(this);
+            }
+            else
+            {
+                dpmi_error_code error;
+                bool c;
+                asm volatile(
+                    "push es;"
+                    "push ds;"
+                    "pop es;"
+                    "int 0x31;"
+                    "pop es;"
+                    : "=@ccc" (c)
+                    , "=a" (error)
+                    : "a" (0x000c)
+                    , "b" (sel)
+                    , "D" (static_cast<descriptor_data*>(this)));
+                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+            }
         }
 
         std::uintptr_t descriptor::get_base(selector seg)
