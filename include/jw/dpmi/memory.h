@@ -11,13 +11,13 @@ namespace jw
 {
     namespace dpmi
     {
-        struct selector_bits
+        struct [[gnu::packed]] selector_bits
         {
             union
             {
                 struct
                 {
-                    unsigned privilege_level : 2;
+                    mutable unsigned privilege_level : 2;
                     bool local : 1;
                     unsigned index : 13;
                 };
@@ -103,11 +103,11 @@ namespace jw
             std::uint16_t access_rights { 0x0010 };
         };
 
-        struct [[gnu::packed]] alignas(8) descriptor
+        struct [[gnu::packed]] descriptor_data
         {
             union
             {
-                struct[[gnu::packed]]
+                struct [[gnu::packed]]
                 {
                     std::uint16_t limit_lo;
                     std::uint16_t base_lo;
@@ -125,7 +125,7 @@ namespace jw
                     std::uint8_t base_hi_hi;
                 } segment;
 
-                struct[[gnu::packed]]
+                struct [[gnu::packed]]
                 {
                     std::uint16_t offset_lo;
                     selector cs;
@@ -138,7 +138,11 @@ namespace jw
                     std::uint16_t offset_hi;
                 } call_gate;
             };
+        };
+        static_assert(sizeof(descriptor_data) == 8);
 
+        struct [[gnu::packed]] alignas(8) descriptor : descriptor_data
+        {
             descriptor(selector s) : sel(s) { read(); }
             ~descriptor();
 
@@ -167,7 +171,7 @@ namespace jw
             descriptor() { }
             void allocate();
 
-            selector sel;
+            selector_bits sel;
             bool no_alloc { true };
         };
             
