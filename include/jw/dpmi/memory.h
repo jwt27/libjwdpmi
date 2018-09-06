@@ -86,7 +86,7 @@ namespace jw
             std::uint16_t access_rights { 0x0010 };
         };
 
-        struct[[gnu::packed]] alignas(8) ldt_entry
+        struct [[gnu::packed]] alignas(8) ldt_entry
         {
             union
             {
@@ -141,9 +141,9 @@ namespace jw
             void read() const;
             void write();
 
-            [[gnu::pure]] static std::uintptr_t get_base(selector seg = get_ds());
+            [[gnu::pure]] static std::uintptr_t get_base(selector seg);
             static void set_base(selector seg, std::uintptr_t linear_base);
-            static std::size_t get_limit(selector sel = get_ds());
+            static std::size_t get_limit(selector sel);
             static void set_limit(selector sel, std::size_t limit);
 
         private:
@@ -239,6 +239,9 @@ namespace jw
 
             linear_memory(std::uintptr_t address, std::size_t num_bytes) noexcept
                 : addr(address), size(num_bytes) { }
+
+            linear_memory(std::shared_ptr<ldt_entry> l) noexcept
+                : ldt(l), addr(ldt->get_base()), size(ldt->get_limit()) { }
 
             linear_memory(const linear_memory&) noexcept = default;
             linear_memory& operator=(const linear_memory&) noexcept = default;
