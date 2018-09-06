@@ -46,6 +46,7 @@ namespace jw
         {
             ldt_entry ldt { s };
             ldt.allocate();
+            ldt.segment.privilege_level = 3;
             ldt.write();
             return ldt;
         }
