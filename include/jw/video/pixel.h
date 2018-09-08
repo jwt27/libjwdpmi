@@ -325,8 +325,9 @@ namespace jw
             static constexpr __m64 m64_premul(__m64 src) noexcept
             {
                 if constexpr (not has_alpha()) return src;
+                constexpr auto mask = shuffle_mask(3, 3, 3, 3);
                 auto scalar_a = reinterpret_cast<V<4, std::uint16_t>>(src)[3];
-                auto a = _mm_shuffle_pi16(src, shuffle_mask(3, 3, 3, 3));
+                auto a = _mm_shuffle_pi16(src, mask);
                 src = _mm_mullo_pi16(src, a);
                 if constexpr (P::ax == 3)
                 {
@@ -450,7 +451,7 @@ namespace jw
             }
 
             template<typename T> constexpr bool is_constexpr(T value) { return __builtin_constant_p(value); }
-            static constexpr auto shuffle_mask(int v0, int v1, int v2, int v3) noexcept { return (v0 & 3) | ((v1 & 3) << 2) | ((v2 & 3) << 4) | ((v3 & 3) << 6); }
+            static constexpr std::uint8_t shuffle_mask(int v0, int v1, int v2, int v3) noexcept { return (v0 & 3) | ((v1 & 3) << 2) | ((v2 & 3) << 4) | ((v3 & 3) << 6); }
             static constexpr bool byte_aligned() noexcept { return P::byte_aligned; }
         };
 
