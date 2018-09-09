@@ -107,12 +107,18 @@ namespace jw
         descriptor descriptor::create_segment(std::uintptr_t linear_base, std::size_t limit)
         {
             descriptor ldt = create_alias(get_ds());
-            ldt.allocate();
             ldt.set_base(linear_base);
             ldt.set_limit(limit);
             ldt.read();
-            ldt.segment.is_present = true;
-            ldt.write();
+            return ldt;
+        }
+
+        descriptor descriptor::create_code_segment(std::uintptr_t linear_base, std::size_t limit)
+        {
+            descriptor ldt = create_alias(get_cs());
+            ldt.set_base(linear_base);
+            ldt.set_limit(limit);
+            ldt.read();
             return ldt;
         }
 

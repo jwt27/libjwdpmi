@@ -147,6 +147,7 @@ namespace jw
             ~descriptor();
 
             static descriptor create_segment(std::uintptr_t linear_base, std::size_t limit);
+            static descriptor create_code_segment(std::uintptr_t linear_base, std::size_t limit);
             static descriptor create_alias(selector s);
             static descriptor create_call_gate(selector code_seg, std::uintptr_t entry_point);
 
