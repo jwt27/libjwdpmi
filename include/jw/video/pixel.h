@@ -62,12 +62,12 @@ namespace jw
 
         struct [[gnu::packed]] px { };
 
-#       ifdef __MMX__
-#          define MMX_NOINLINE [[gnu::noinline]]
-#       else
-#          define MMX_NOINLINE
-#       endif
 #       define PIXEL_FUNCTION [[gnu::hot, gnu::sseregparm, gnu::always_inline]]
+#       ifdef __MMX__
+#          define MMX_FUNCTION [[gnu::hot, gnu::sseregparm, gnu::noinline]]
+#       else
+#          define MMX_FUNCTION PIXEL_FUNCTION
+#       endif
 
         template<typename P>
         struct alignas(P) [[gnu::packed, gnu::may_alias]] pixel : public P, public px
@@ -107,12 +107,15 @@ namespace jw
                 }
                 else if constexpr (sse and (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>))
                 {
-                    *this = m128(m128_blend<U>(m128(), other.m128()));
+                    auto do_blend = [this, &other]() PIXEL_FUNCTION { *this = m128(m128_blend<U>(m128(), other.m128())); };
+                    if constexpr (std::is_integral_v<typename P::T> or std::is_integral_v<typename U::T>)
+                         [&do_blend]() MMX_FUNCTION { do_blend(); }();
+                    else [&do_blend]() PIXEL_FUNCTION { do_blend(); }();
                     if constexpr (std::is_integral_v<typename U::T>) _mm_empty();
                 }
                 else if constexpr (mmx and std::is_integral_v<typename P::T> and std::is_integral_v<typename U::T>)
                 {
-                    *this = m64(m64_blend<U>(m64(), other.m64()));
+                    [this, &other]() MMX_FUNCTION { *this = m64(m64_blend<U>(m64(), other.m64())); }();
                 }
                 else
                 {
@@ -133,12 +136,15 @@ namespace jw
                 }
                 else if constexpr (sse and (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>))
                 {
-                    *this = m128(m128_blend<U>(m128_premul(m128()), m128_premul(other.m128())));
+                    auto do_blend = [this, &other]() PIXEL_FUNCTION {*this = m128(m128_blend<U>(m128_premul(m128()), m128_premul(other.m128()))); };
+                    if constexpr (std::is_integral_v<typename P::T> or std::is_integral_v<typename U::T>)
+                         [&do_blend]() MMX_FUNCTION { do_blend(); }();
+                    else [&do_blend]() PIXEL_FUNCTION { do_blend(); }();
                     if constexpr (std::is_integral_v<typename U::T>) _mm_empty();
                 }
                 else if constexpr (mmx and std::is_integral_v<typename P::T> and std::is_integral_v<typename U::T>)
                 {
-                    *this = m64(m64_blend<U>(m64_premul(m64()), m64_premul(other.m64())));
+                    [this, &other]() MMX_FUNCTION { *this = m64(m64_blend<U>(m64_premul(m64()), m64_premul(other.m64()))); }();
                 }
                 else
                 {
@@ -170,13 +176,14 @@ namespace jw
                 constexpr bool not_constexpr = true;// not is_constexpr(this->b);
                 if constexpr (not_constexpr and sse and (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>))
                 {
-                    auto result = pixel<U>::m128(m128_cast_to<U>(m128()));
-                    if constexpr (std::is_integral_v<typename P::T>) _mm_empty();
-                    return result;
+                    auto do_cast = [this]() PIXEL_FUNCTION { return pixel<U>::m128(m128_cast_to<U>(m128())); };
+                    if constexpr (std::is_integral_v<typename P::T> or std::is_integral_v<typename U::T>)
+                        return [&do_cast]() MMX_FUNCTION { auto r = do_cast(); _mm_empty(); return r; }();
+                    else return [&do_cast]() PIXEL_FUNCTION { return do_cast(); }();
                 }
                 else if constexpr (not_constexpr and mmx and (sse or (std::is_integral_v<typename P::T> and std::is_integral_v<typename U::T>)))
                 {
-                    return pixel<U>::m64(m64_cast_to<U>(m64()));
+                    return [this]() MMX_FUNCTION { return pixel<U>::m64(m64_cast_to<U>(m64())); }();
                 }
                 else
                 {
