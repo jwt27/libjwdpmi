@@ -263,7 +263,7 @@ namespace jw
                 : addr(address), size(num_bytes) { }
 
             linear_memory(std::shared_ptr<descriptor> l) noexcept
-                : ldt(l), addr(ldt->get_base()), size(ldt->get_limit()) { }
+                : ldt(l), addr(ldt->get_base()), size((ldt->get_limit() + 1) * (ldt->segment.is_page_granular ? get_page_size() : 0)) { }
 
             linear_memory(const linear_memory&) noexcept = default;
             linear_memory& operator=(const linear_memory&) noexcept = default;
