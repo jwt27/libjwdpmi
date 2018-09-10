@@ -19,6 +19,7 @@
 #include <jw/debug/detail/signals.h>
 #include <jw/io/rs232.h>
 #include <jw/alloc.h>
+#include <jw/dpmi/ring0.h>
 #include <../jwdpmi_config.h>
 
 // TODO: optimize
@@ -1183,10 +1184,10 @@ namespace jw
                     }
                 };
 
-                if (__builtin_expect(f->fault_address.segment != get_cs(), false))
+                if (__builtin_expect(f->fault_address.segment != ring3_cs and f->fault_address.segment != ring0_cs, false))
                 {
-                    if (exc == exception_num::trap) return true; // only debug our own code
-                    std::cerr << "Can't debug this. CS != 0x" << std::hex << get_cs() << '\n';
+                    if (exc == exception_num::trap) return true; // keep stepping until we get back to our own code
+                    std::cerr << "Can't debug this. CS is neither 0x" << std::hex << ring3_cs << " nor 0x" << ring0_cs << '\n';
                     std::cerr << cpu_exception { exc, r, f, new_frame_type }.what();
                     return false;
                 }

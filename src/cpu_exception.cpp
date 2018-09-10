@@ -6,6 +6,7 @@
 #include <jw/dpmi/cpu_exception.h>
 #include <jw/debug/debug.h>
 #include <jw/dpmi/detail/interrupt_id.h>
+#include <jw/dpmi/ring0.h>
 #include <cstring>
 #include <vector>
 
@@ -68,9 +69,9 @@ namespace jw
                 auto really_throw = [&]
                 {
                     if constexpr (not config::enable_throwing_from_cpu_exceptions) return false;    // Only throw if this option is enabled
-                    if (f->fault_address.segment != get_cs()) return false;                         // and exception happened in our code
+                    if (f->fault_address.segment != detail::ring3_cs
+                        and f->fault_address.segment != detail::ring0_cs) return false;             // and exception happened in our code
                     if (f->flags.v86mode) return false;                                             // and not in real mode (sanity check)
-                    if (self->new_type and f->info_bits.host_exception) return false;               // and not in the DPMI host (extra sanity check)
                     return true;
                 };
 

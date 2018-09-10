@@ -8,16 +8,24 @@
 
 namespace jw::dpmi
 {
-    inline selector ring0_cs { 0 };
-    inline selector ring3_cs { get_cs() };
+    namespace detail
+    {
+        inline selector ring0_cs { 0 };
+        inline selector ring3_cs { get_cs() };
+    }
+
+    struct no_ring0_access : std::runtime_error
+    {
+        no_ring0_access() : runtime_error("Switch to ring 0 failed.") { }
+    };
 
     struct ring0_privilege
     {
         ring0_privilege()
         {
-            try
+            if (detail::ring0_cs == 0)
             {
-                if (ring0_cs == 0)
+                try
                 {
                     cs = descriptor::clone_segment(get_cs());
                     cs->segment.code_segment.privilege_level = 0;
@@ -27,23 +35,19 @@ namespace jw::dpmi
                     gate->call_gate.privilege_level = 3;
                     gate->call_gate.stack_params = 0;
                     cs->write();
-                    ring0_cs = gate->get_selector();
-                    entry.segment = ring0_cs;
+                    detail::ring0_cs = gate->get_selector();
+                    entry.segment = detail::ring0_cs;
+                }
+                catch (...)
+                {
+                    detail::ring0_cs = 0;
+                    cs.reset();
+                    gate.reset();
+                    std::throw_with_nested(no_ring0_access { });
                 }
             }
-            catch (const dpmi_error& e)
-            {
-                dont_leave = true;
-                return;
-            }
-            catch (const cpu_exception& e)
-            {
-                if (e.code().value() != exception_num::general_protection_fault) throw;
-                dont_leave = true;
-                return;
-            }
 
-            if (get_cs() != ring0_cs) enter();
+            if (get_cs() != detail::ring0_cs) enter();
             else dont_leave = true;
         }
         ~ring0_privilege() { if (not dont_leave) leave(); }
@@ -64,16 +68,20 @@ namespace jw::dpmi
                 , "m" (esp));
         }
 
+#       pragma GCC diagnostic push
+#       pragma GCC diagnostic ignored "-Wstrict-aliasing"
         [[gnu::naked, gnu::noinline]] void leave()
         {
             asm("mov eax, esp;"
-                "push ds;"
-                "push eax;"
-                "push %0;"
-                "push [eax];"
+                "push ds;"      //  SS
+                "push eax;"     //  ESP
+                "push %0;"      //  CS
+                "push [eax];"   //  EIP
                 "retf;"
-                :: "m" (ring3_cs));
+                :: "m" (reinterpret_cast<std::uint32_t&>(detail::ring3_cs))
+                : "eax");
         }
+#       pragma GCC diagnostic pop
 
         [[gnu::naked]] static void ring0_entry_point()
         {
@@ -82,7 +90,7 @@ namespace jw::dpmi
                 "pop ss;"
                 "mov esp, %0;"
                 "ret;"
-                ::"m"(esp));
+                ::"m" (esp));
         }
     };
 }
