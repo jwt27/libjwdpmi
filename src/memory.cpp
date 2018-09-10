@@ -39,25 +39,25 @@ namespace jw
                     std::clog << "gdtr base=" << std::hex << gdtr.base << " limit=" << gdtr.limit << '\n';
                     std::clog << "ldtr selector=" << ldtr << '\n';
 
-                    gdt = linear_memory { gdtr.base, gdtr.limit };
+                    gdt = linear_memory { gdtr.base, gdtr.limit + 1u };
                     std::clog << "gdt descriptor=" << *reinterpret_cast<std::uint64_t*>(gdt.get_descriptor().lock().get()) << '\n';
                     descriptor_data ldt_desc;
                     selector_bits ldt_selector = ldtr;
 
-                    asm("push gs;"
+                    asm("mov bx, gs;"
                         "mov gs, %w1;"
-                        "lea eax, [%2*8];"
-                        "mov edx, gs:[eax];"
+                        "mov edx, gs:[%2*8];"
                         "mov %0, edx;"
-                        "mov edx, gs:[eax+4];"
+                        "mov edx, gs:[%2*8+4];"
                         "mov %0+4, edx;"
-                        "pop gs;"
-                        : "+m" (*reinterpret_cast<std::uint32_t*>(&ldt_desc))
+                        "mov gs, bx;"
+                        : "+m" (reinterpret_cast<std::uint32_t&>(ldt_desc))
                         : "r" (gdt.get_selector())
                         , "r" (ldt_selector.index)
-                        : "eax", "edx");
+                        : "ebx", "edx");
 
-                    ldt_selector.privilege_level = 3;
+                    std::clog << "ldt descriptor=" << *reinterpret_cast<std::uint64_t*>(&ldt_desc) << '\n';
+
                     split_uint32_t base;
                     base.lo = ldt_desc.segment.base_lo;
                     base.hi.lo = ldt_desc.segment.base_hi_lo;
@@ -65,7 +65,7 @@ namespace jw
                     split_uint32_t limit { };
                     limit.lo = ldt_desc.segment.limit_lo;
                     limit.hi = ldt_desc.segment.limit_hi;
-                    ldt = linear_memory { base, limit };
+                    ldt = linear_memory { base, limit + 1u };
 
                     have_access = yes;
                 }
@@ -126,7 +126,7 @@ namespace jw
 
         descriptor descriptor::create_segment(std::uintptr_t linear_base, std::size_t limit)
         {
-            descriptor ldt = create_alias(get_ds());
+            descriptor ldt = clone_segment(get_ds());
             ldt.set_base(linear_base);
             ldt.set_limit(limit);
             ldt.read();
@@ -135,28 +135,19 @@ namespace jw
 
         descriptor descriptor::create_code_segment(std::uintptr_t linear_base, std::size_t limit)
         {
-            descriptor ldt = create_alias(get_cs());
+            descriptor ldt = clone_segment(get_cs());
             ldt.set_base(linear_base);
             ldt.set_limit(limit);
             ldt.read();
             return ldt;
         }
 
-        descriptor descriptor::create_alias(selector s)
+        descriptor descriptor::clone_segment(selector s)
         {
-            selector new_sel;
-            bool c;
-            asm volatile(
-                "int 0x31;"
-                : "=@ccc" (c)
-                , "=a" (new_sel)
-                : "a" (0x000A)
-                , "b" (s)
-                : "memory");
-            if (c) throw dpmi_error(new_sel, __PRETTY_FUNCTION__);
-            descriptor ldt { new_sel };
-            ldt.no_alloc = false;
-            return ldt;
+            descriptor d { s };
+            d.allocate();
+            d.write();
+            return d;
         }
 
         descriptor descriptor::create_call_gate(selector code_seg, std::uintptr_t entry_point)
