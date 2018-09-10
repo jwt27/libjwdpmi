@@ -112,16 +112,43 @@ namespace jw
                     std::uint16_t limit_lo;
                     std::uint16_t base_lo;
                     std::uint8_t base_hi_lo;
-                    unsigned has_been_accessed : 1;
-                    segment_type type : 3;
-                    unsigned not_system_segment : 1;
-                    unsigned privilege_level : 2;           // must be 3 for user space
-                    unsigned is_present : 1;                // must be 1
+                    union
+                    {
+                        struct [[gnu::packed]]
+                        {
+                            bool has_been_accessed : 1;
+                            bool is_writable : 1;
+                            bool expands_downward : 1;
+                            bool is_code_segment : 1;
+                            bool not_system_segment : 1;
+                            unsigned privilege_level : 2;
+                            bool is_present : 1;
+                        } code_segment;
+                        struct [[gnu::packed]]
+                        {
+                            bool has_been_accessed : 1;
+                            bool is_readable : 1;
+                            bool is_conforming : 1;
+                            bool is_code_segment : 1;
+                            bool not_system_segment : 1;
+                            unsigned privilege_level : 2;
+                            bool is_present : 1;
+                        } data_segment;
+                        struct [[gnu::packed]]
+                        {
+                            bool has_been_accessed : 1;
+                            unsigned : 2;
+                            bool is_code_segment : 1;
+                            bool not_system_segment : 1;
+                            unsigned privilege_level : 2;
+                            bool is_present : 1;
+                        } any_segment;
+                    };
                     unsigned limit_hi : 4;
-                    unsigned available_for_system_use : 1;  // should be 0
+                    bool available_for_system_use : 1;      // should be 0
                     unsigned : 1;                           // must be 0
-                    unsigned is_32_bit : 1;
-                    unsigned is_page_granular : 1;          // byte granular otherwise. note: this is automatically set by dpmi function set_selector_limit.
+                    bool is_32_bit : 1;
+                    bool is_page_granular : 1;          // byte granular otherwise. note: this is automatically set by dpmi function set_selector_limit.
                     std::uint8_t base_hi_hi;
                 } segment;
 
