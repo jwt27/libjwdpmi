@@ -89,8 +89,8 @@ namespace jw
             catch (...) { std::cerr << "unknown exception.\n"; }
         }
         else std::cerr << "std::terminate called.\n";
-        io::ps2_interface::instance().reset();
         debug::print_backtrace();
+        io::detail::ps2_interface_instance.reset();
 
         debug::break_with_signal(SIGTERM);
         std::abort();
