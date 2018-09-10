@@ -104,6 +104,26 @@ namespace jw
 
         ldt_access_rights descriptor::get_access_rights() { return ldt_access_rights { sel.value }; }
 
+        descriptor::descriptor(descriptor&& d) noexcept
+            : descriptor_data(static_cast<descriptor_data>(d)), sel(d.sel), no_alloc(d.no_alloc)
+        {
+            d.no_alloc = true;
+        }
+
+        descriptor& descriptor::operator=(descriptor&& d)
+        {
+            deallocate();
+            new(this) descriptor(std::move(d));
+            return *this;
+        }
+
+        descriptor& descriptor::operator=(const descriptor_data& d)
+        {
+            *static_cast<descriptor_data*>(this) = d;
+            write();
+            return *this;
+        }
+
         descriptor descriptor::create_segment(std::uintptr_t linear_base, std::size_t limit)
         {
             descriptor ldt = create_alias(get_ds());
@@ -159,15 +179,8 @@ namespace jw
 
         descriptor::~descriptor()
         {
-            if (no_alloc) return;
-            dpmi_error_code error;
-            bool c;
-            asm volatile(
-                "int 0x31;"
-                : "=@ccc" (c)
-                , "=a" (error)
-                : "a" (0x0001)
-                , "b" (sel));
+            try { deallocate(); }
+            catch(...) { }
         }
 
         void descriptor::read() const
@@ -296,6 +309,7 @@ namespace jw
 
         void descriptor::allocate()
         {
+            if (not no_alloc) deallocate();
             selector s;
             bool c;
             asm volatile(
@@ -308,6 +322,21 @@ namespace jw
             if (c) throw dpmi_error(s, __PRETTY_FUNCTION__);
             no_alloc = false;
             sel = s;
+        }
+
+        void descriptor::deallocate()
+        {
+            if (no_alloc) return;
+            dpmi_error_code error;
+            bool c;
+            asm volatile(
+                "int 0x31;"
+                : "=@ccc" (c)
+                , "=a" (error)
+                : "a" (0x0001)
+                , "b" (sel));
+            if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+            no_alloc = true;
         }
 
         void memory_base::old_alloc()

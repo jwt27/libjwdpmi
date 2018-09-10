@@ -173,6 +173,15 @@ namespace jw
             descriptor(selector s) : sel(s) { read(); }
             ~descriptor();
 
+            descriptor(const descriptor&) = delete;
+            descriptor(const descriptor_data&) = delete;
+            descriptor(descriptor_data&&) = delete;
+            descriptor& operator=(const descriptor&) = delete;
+
+            descriptor(descriptor&& d) noexcept;
+            descriptor& operator=(descriptor&& d);
+            descriptor& operator=(const descriptor_data& d);
+
             static descriptor create_segment(std::uintptr_t linear_base, std::size_t limit);
             static descriptor create_code_segment(std::uintptr_t linear_base, std::size_t limit);
             static descriptor create_alias(selector s);
@@ -198,6 +207,7 @@ namespace jw
         private:
             descriptor() { }
             void allocate();
+            void deallocate();
 
             selector_bits sel;
             bool no_alloc { true };
