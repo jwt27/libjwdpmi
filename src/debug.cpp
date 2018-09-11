@@ -1187,8 +1187,8 @@ namespace jw
                 if (__builtin_expect(f->fault_address.segment != ring3_cs and f->fault_address.segment != ring0_cs, false))
                 {
                     if (exc == exception_num::trap) return true; // keep stepping until we get back to our own code
-                    std::cerr << "Can't debug this. CS is neither 0x" << std::hex << ring3_cs << " nor 0x" << ring0_cs << '\n';
-                    std::cerr << cpu_exception { exc, r, f, new_frame_type }.what();
+                    std::cerr << "Can't debug this! CS is neither 0x" << std::hex << ring3_cs << " nor 0x" << ring0_cs << ".\n";
+                    std::cerr << cpu_exception { exc, r, f, new_frame_type }.what() << '\n';
                     return false;
                 }
 
@@ -1400,6 +1400,7 @@ namespace jw
 
             [[noreturn]] void kill()
             {
+                asm(".cfi_signal_frame");
                 uninstall_gdb_interface();
                 jw::terminate();
             }
