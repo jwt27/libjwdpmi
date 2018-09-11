@@ -12,6 +12,8 @@ namespace jw::dpmi
     {
         inline selector ring0_cs { 0 };
         inline selector ring3_cs { get_cs() };
+        inline selector ring0_ss { 0 };
+        inline selector ring3_ss { get_ss() };
     }
 
     struct no_ring0_access : std::runtime_error
@@ -27,21 +29,27 @@ namespace jw::dpmi
             {
                 try
                 {
-                    cs = descriptor::clone_segment(get_cs());
+                    cs = descriptor::clone_segment(detail::ring3_cs);
                     cs->segment.code_segment.privilege_level = 0;
                     cs->set_selector_privilege(0);
+                    detail::ring0_cs = cs->get_selector();
                     cs->write();
-                    gate = descriptor::create_call_gate(cs->get_selector(), reinterpret_cast<std::uintptr_t>(ring0_entry_point));
+                    ss = descriptor::clone_segment(detail::ring3_ss);
+                    ss->segment.code_segment.privilege_level = 0;
+                    ss->set_selector_privilege(0);
+                    detail::ring0_ss = ss->get_selector();
+                    ss->write();
+                    gate = descriptor::create_call_gate(detail::ring0_cs, reinterpret_cast<std::uintptr_t>(ring0_entry_point));
                     gate->call_gate.privilege_level = 3;
                     gate->call_gate.stack_params = 0;
-                    cs->write();
-                    detail::ring0_cs = gate->get_selector();
-                    entry.segment = detail::ring0_cs;
+                    gate->write();
+                    entry.segment = gate->get_selector();
                 }
                 catch (...)
                 {
                     detail::ring0_cs = 0;
                     cs.reset();
+                    ss.reset();
                     gate.reset();
                     std::throw_with_nested(no_ring0_access { });
                 }
@@ -55,6 +63,7 @@ namespace jw::dpmi
 
     private:
         inline static std::optional<descriptor> cs;
+        inline static std::optional<descriptor> ss;
         inline static std::optional<descriptor> gate;
         inline static far_ptr32 entry;
         inline static std::uintptr_t esp;
@@ -73,24 +82,25 @@ namespace jw::dpmi
         [[gnu::naked, gnu::noinline]] void leave()
         {
             asm("mov eax, esp;"
-                "push ds;"      //  SS
+                "push %0;"      //  SS
                 "push eax;"     //  ESP
-                "push %0;"      //  CS
+                "push %1;"      //  CS
                 "push [eax];"   //  EIP
                 "retf;"
-                :: "m" (reinterpret_cast<std::uint32_t&>(detail::ring3_cs))
+                :: "m" (reinterpret_cast<std::uint32_t&>(detail::ring3_ss))
+                , "m" (reinterpret_cast<std::uint32_t&>(detail::ring3_cs))
                 : "eax");
         }
-#       pragma GCC diagnostic pop
 
         [[gnu::naked]] static void ring0_entry_point()
         {
             asm("add esp, 0x10;"
-                "push ds;"
-                "pop ss;"
-                "mov esp, %0;"
+                "mov ss, %0;"
+                "mov esp, %1;"
                 "ret;"
-                ::"m" (esp));
+                :: "m" (reinterpret_cast<std::uint32_t&>(detail::ring0_ss))
+                , "m" (esp));
         }
+#       pragma GCC diagnostic pop
     };
 }
