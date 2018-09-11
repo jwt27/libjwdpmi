@@ -123,7 +123,7 @@ namespace jw
                             bool not_system_segment : 1;
                             unsigned privilege_level : 2;
                             bool is_present : 1;
-                        } code_segment;
+                        } data_segment;
                         struct [[gnu::packed]]
                         {
                             bool has_been_accessed : 1;
@@ -133,7 +133,7 @@ namespace jw
                             bool not_system_segment : 1;
                             unsigned privilege_level : 2;
                             bool is_present : 1;
-                        } data_segment;
+                        } code_segment;
                         struct [[gnu::packed]]
                         {
                             bool has_been_accessed : 1;
@@ -170,6 +170,7 @@ namespace jw
 
         struct [[gnu::packed]] alignas(8) descriptor : descriptor_data
         {
+            // Does not allocate a new descriptor
             descriptor(selector s) : sel(s) { read(); }
             ~descriptor();
 
