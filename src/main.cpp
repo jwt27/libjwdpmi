@@ -14,6 +14,7 @@
 #include <jw/debug/detail/signals.h>
 #include <jw/io/rs232.h>
 #include <jw/io/ps2_interface.h>
+#include <jw/dpmi/ring0.h>
 #include <cxxabi.h>
 #include <unwind.h>
 #include <../jwdpmi_config.h>
@@ -79,7 +80,7 @@ namespace jw
     std::terminate_handler original_terminate_handler;
     [[noreturn]] void terminate_handler() noexcept
     {
-
+        dpmi::ring0_privilege::force_leave();
         if (auto exc = std::current_exception())
         {
             std::cerr << "std::terminate called after throwing an exception:\n";

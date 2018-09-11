@@ -58,8 +58,12 @@ namespace jw::dpmi
             if (get_cs() != detail::ring0_cs) enter();
             else dont_leave = true;
         }
-        ~ring0_privilege() { if (not dont_leave) leave(); }
+        ~ring0_privilege() { if (not dont_leave) force_leave(); }
 
+        static void force_leave()
+        {
+            if (get_cs() == detail::ring0_cs) leave();
+        }
 
     private:
         inline static std::optional<descriptor> cs;
@@ -69,7 +73,7 @@ namespace jw::dpmi
         inline static std::uintptr_t esp;
         bool dont_leave { false };
         
-        [[gnu::naked, gnu::noinline]] void enter()
+        [[gnu::naked, gnu::noinline]] static void enter()
         {
             asm("mov %1, esp;"
                 "call fword ptr %0;"
@@ -79,7 +83,7 @@ namespace jw::dpmi
 
 #       pragma GCC diagnostic push
 #       pragma GCC diagnostic ignored "-Wstrict-aliasing"
-        [[gnu::naked, gnu::noinline]] void leave()
+        [[gnu::naked, gnu::noinline]] static void leave()
         {
             asm("mov eax, esp;"
                 "push %0;"      //  SS
