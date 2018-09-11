@@ -18,7 +18,14 @@ namespace jw
         {
             inline std::vector<std::exception_ptr> pending_exceptions { };
 
-            [[gnu::no_caller_saved_registers]]
+            [[noreturn, gnu::no_caller_saved_registers]]
+            void kill()
+            {
+                asm(".cfi_signal_frame");
+                jw::terminate();
+            }
+
+            [[noreturn, gnu::no_caller_saved_registers]]
             void rethrow_cpu_exception()
             {
                 asm(".cfi_signal_frame");
@@ -81,7 +88,14 @@ namespace jw
                     detail::simulate_call(f, detail::rethrow_cpu_exception);
                     success = true;
                 }
-                else std::cerr << "CAUGHT EXCEPTION IN CPU EXCEPTION HANDLER " << self->exc << std::endl; // HACK
+                else
+                {
+                    std::cerr << "CAUGHT EXCEPTION IN CPU EXCEPTION HANDLER 0x" << std::hex << self->exc << std::endl;
+                    try { std::rethrow_exception(std::current_exception()); }
+                    catch (const std::exception& e) { print_exception(e); }
+                    catch (...) { }
+                    detail::simulate_call(f, detail::kill);
+                }
             }
             if (*reinterpret_cast<volatile std::uint32_t*>(stack.begin()) != 0xDEADBEEF) std::cerr << "STACK OVERFLOW\n"; // another HACK
             detail::leave_exception_context();

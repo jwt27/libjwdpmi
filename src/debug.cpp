@@ -16,6 +16,7 @@
 #include <jw/dpmi/dpmi.h>
 #include <jw/debug/debug.h>
 #include <jw/dpmi/cpu_exception.h>
+#include <jw/dpmi/detail/cpu_exception.h>
 #include <jw/debug/detail/signals.h>
 #include <jw/io/rs232.h>
 #include <jw/alloc.h>
@@ -37,7 +38,6 @@ namespace jw
         {
             constexpr bool is_fault_signal(std::int32_t) noexcept;
             void uninstall_gdb_interface();
-            [[noreturn]] void kill();
 
             struct rs232_streambuf_internals : public io::detail::rs232_streambuf
             {
@@ -1134,7 +1134,7 @@ namespace jw
                 {
                     if (debugmsg) std::clog << "KILL signal received.";
                     for (auto&&t : threads) t.second.set_action('c');
-                    simulate_call(&current_thread->frame, kill);
+                    simulate_call(&current_thread->frame, dpmi::detail::kill);
                     s << "X" << std::setw(2) << posix_signal(current_thread->last_stop_signal);
                     send_packet(s.str());
                     uninstall_gdb_interface();
@@ -1396,13 +1396,6 @@ namespace jw
                 s << "W" << std::setw(2) << static_cast<std::uint32_t>(result);
                 send_packet(s.str());
                 uninstall_gdb_interface();
-            }
-
-            [[noreturn]] void kill()
-            {
-                asm(".cfi_signal_frame");
-                uninstall_gdb_interface();
-                jw::terminate();
             }
         }
 

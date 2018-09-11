@@ -99,7 +99,8 @@ namespace jw
             };
 
             void setup_exception_throwers();
-            void leave_exception_context() noexcept;
+
+            [[noreturn, gnu::no_caller_saved_registers]] void kill();
 
             inline void simulate_call(exception_frame* frame, void(*func)()) noexcept
             {
