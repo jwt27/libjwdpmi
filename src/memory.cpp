@@ -14,7 +14,7 @@ namespace jw
         bool device_memory_base::device_map_supported { true };
         bool mapped_dos_memory_base::dos_map_supported { true };
 
-        linear_memory gdt, ldt;
+        std::optional<descriptor> gdt, ldt;
 
         bool direct_ldt_access()
         {
@@ -36,27 +36,19 @@ namespace jw
                     asm("sgdt %0":"=m"(gdtr));
                     asm("sldt %w0":"=rm"(ldtr));
 
-                    std::clog << "gdtr base=" << std::hex << gdtr.base << " limit=" << gdtr.limit << '\n';
-                    std::clog << "ldtr selector=" << ldtr << '\n';
-
-                    gdt = linear_memory { gdtr.base, gdtr.limit + 1u };
-                    std::clog << "gdt descriptor=" << *reinterpret_cast<std::uint64_t*>(gdt.get_descriptor().lock().get()) << '\n';
+                    gdt = descriptor::create_segment(gdtr.base, gdtr.limit);
                     descriptor_data ldt_desc;
                     selector_bits ldt_selector = ldtr;
 
                     asm("mov bx, gs;"
                         "mov gs, %w1;"
-                        "mov edx, gs:[%2*8];"
-                        "mov %0, edx;"
+                        "mov eax, gs:[%2*8];"
                         "mov edx, gs:[%2*8+4];"
-                        "mov %0+4, edx;"
                         "mov gs, bx;"
-                        : "+m" (reinterpret_cast<std::uint32_t&>(ldt_desc))
-                        : "r" (gdt.get_selector())
+                        : "=&A" (ldt_desc)
+                        : "r" (gdt->get_selector())
                         , "r" (ldt_selector.index)
-                        : "ebx", "edx");
-
-                    std::clog << "ldt descriptor=" << *reinterpret_cast<std::uint64_t*>(&ldt_desc) << '\n';
+                        : "ebx");
 
                     split_uint32_t base;
                     base.lo = ldt_desc.segment.base_lo;
@@ -65,12 +57,12 @@ namespace jw
                     split_uint32_t limit { };
                     limit.lo = ldt_desc.segment.limit_lo;
                     limit.hi = ldt_desc.segment.limit_hi;
-                    ldt = linear_memory { base, limit + 1u };
+                    ldt = descriptor::create_segment(base, limit);
 
                     have_access = yes;
                 }
-                catch (const cpu_exception&) { throw; }
-                catch (const dpmi_error&) { throw; }
+                catch (const cpu_exception&) { }
+                catch (const dpmi_error&) { }
             }
             return have_access == yes;
         }
@@ -176,12 +168,19 @@ namespace jw
 
         void descriptor::read() const
         {
-            if (direct_ldt_access())
+            if (__builtin_expect(direct_ldt_access(), true))
             {
                 selector_bits s { sel };
                 auto& table = s.local ? ldt : gdt;
-                auto* p = table.get_ptr<descriptor_data>() + s.index;
-                *static_cast<descriptor_data*>(const_cast<descriptor*>(this)) = *p;
+                asm("mov bx, gs;"
+                    "mov gs, %w1;"
+                    "mov eax, gs:[%2*8];"
+                    "mov edx, gs:[%2*8+4];"
+                    "mov gs, bx;"
+                    : "=&A" (static_cast<descriptor_data&>(*const_cast<descriptor*>(this)))
+                    : "r" (table->get_selector())
+                    , "r" (s.index)
+                    : "ebx");
             }
             else
             {
@@ -205,12 +204,19 @@ namespace jw
 
         void descriptor::write()
         {
-            if (direct_ldt_access())
+            if (__builtin_expect(direct_ldt_access(), true))
             {
                 selector_bits s { sel };
                 auto& table = s.local ? ldt : gdt;
-                auto* p = table.get_ptr<descriptor_data>() + s.index;
-                *p = *static_cast<descriptor_data*>(this);
+                asm("mov bx, gs;"
+                    "mov gs, %w1;"
+                    "mov gs:[%2*8], eax;"
+                    "mov gs:[%2*8+4], edx;"
+                    "mov gs, bx;"
+                    :: "A" (static_cast<descriptor_data&>(*this))
+                    , "r" (table->get_selector())
+                    , "r" (s.index)
+                    : "ebx");
             }
             else
             {
@@ -576,6 +582,5 @@ namespace jw
             if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
             size = num_bytes;
         }
+    }
 }
-}
-
