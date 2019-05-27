@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
@@ -37,12 +38,12 @@ namespace jw
             // Save the current task context, switch to a new task, and restore its context.
             void scheduler::context_switch()
             {
-                asm volatile 
+                asm volatile    // provide some stack space to access current_thread (a shared_ptr)
                 (
                     ".cfi_def_cfa esp, 4; .cfi_rel_offset eip, 0;"
                     "sub esp, 0x0c; .cfi_adjust_cfa_offset 0x0c;"
                 );
-                asm volatile            // save the current context
+                asm volatile
                 (
                     "add esp, 0x0c; .cfi_adjust_cfa_offset -0x0c;"
                     "push ebp; .cfi_adjust_cfa_offset 4; .cfi_rel_offset ebp, 0;"
@@ -52,17 +53,10 @@ namespace jw
                     "push es; .cfi_adjust_cfa_offset 4; .cfi_rel_offset es, 0;"
                     "push fs; .cfi_adjust_cfa_offset 4; .cfi_rel_offset fs, 0;"
                     "push gs; .cfi_adjust_cfa_offset 4; .cfi_rel_offset gs, 0;"
-                    "mov eax, esp;"
+                    "mov [%0], esp;"
                     "sub esp, 0x10; .cfi_adjust_cfa_offset 0x10;"
-                    : "=a" (current_thread->context)
-                    :: "esp", "cc", "memory"
-                );
-
-                set_next_thread();      // select a new current_thread
-
-                asm volatile            // switch to the new context
-                (
-                    "mov esp, eax;"
+                    "call %1;"
+                    "mov esp, [%0];"
                     "pop gs; .cfi_restore gs; .cfi_adjust_cfa_offset -4;"
                     "pop fs; .cfi_restore fs; .cfi_adjust_cfa_offset -4;"
                     "pop es; .cfi_restore es; .cfi_adjust_cfa_offset -4;"
@@ -71,8 +65,9 @@ namespace jw
                     "pop edi; .cfi_restore edi; .cfi_adjust_cfa_offset -4;"
                     "pop ebp; .cfi_restore ebp; .cfi_adjust_cfa_offset -4;"
                     "ret; .cfi_restore eip; .cfi_adjust_cfa_offset -4;"
-                    :: "a" (current_thread->context)
-                    : "esp", "cc", "memory"
+                    :: "r" (&current_thread->context)
+                    , "i" (set_next_thread)
+                    : "cc", "memory"
                 );
             }
 
