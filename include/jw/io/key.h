@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
@@ -57,6 +58,9 @@ namespace jw
             using E::E;
             using E::operator=;
 
+            constexpr key(const key&) = default;
+            constexpr key& operator=(const key&) = default;
+
             char to_ascii(bool shift, bool caps_lock, bool num_lock) const;
             char to_ascii(const keyboard& kb) const;
             bool is_printable(bool shift, bool caps_lock, bool num_lock) const;
@@ -84,6 +88,9 @@ namespace jw
             };
             using E::E;
             using E::operator=;
+
+            constexpr key_state(const key_state&) = default;
+            constexpr key_state& operator=(const key_state&) = default;
 
             constexpr bool is_down() const noexcept { return value & down; }
             constexpr bool is_up() const noexcept { return !is_down(); }

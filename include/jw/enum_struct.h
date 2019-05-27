@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
@@ -35,13 +36,9 @@ namespace std                                                                   
     template<>                                                                      \
     struct hash<T>                                                                  \
     {                                                                               \
-        using argument_type = T;                                                    \
-        using underlying_type = typename T::underlying_type;                        \
-        using result_type = typename std::hash<underlying_type>::result_type;       \
-                                                                                    \
-        result_type operator()(const argument_type& arg) const noexcept             \
+        std::size_t operator()(const T& arg) const noexcept                         \
         {                                                                           \
-            return std::hash<underlying_type>()(arg.value);                         \
+            return std::hash<T::underlying_type>()(arg.value);                      \
         }                                                                           \
     };                                                                              \
 }
