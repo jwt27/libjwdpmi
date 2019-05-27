@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
@@ -99,20 +100,20 @@ namespace jw
             {
                 auto v = std::make_unique<vbe3>();
                 v->init();
-                return std::move(v);
+                return v;
             }
             catch (const vbe::not_supported&) { }
             try
             {
                 auto v = std::make_unique<vbe2>();
                 v->init();
-                return std::move(v);
+                return v;
             }
             catch (const vbe::not_supported&) { }
 
             auto v = std::make_unique<vbe>();
             v->init();
-            return std::move(v);
+            return v;
         }
     }
 }
