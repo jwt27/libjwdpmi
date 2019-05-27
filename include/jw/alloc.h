@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
@@ -12,7 +13,7 @@ namespace jw
         constexpr allocator_delete() = default;
         constexpr allocator_delete(auto&& other) : Alloc(std::forward<decltype(other)>(other)) { }
         using traits = std::allocator_traits<Alloc>;
-        void operator()(auto*& p)
+        void operator()(auto* p)
         {
             if (p == nullptr) return;
             traits::destroy(*this, p);
