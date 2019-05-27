@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
@@ -53,7 +54,7 @@ namespace jw
         };
     }
 
-    template<typename T, std::size_t N> using split_int[[gnu::aligned([] { return std::min(N / 8, 4ul); }())]] = detail::split_int<T, N>;
+    template<typename T, std::size_t N> using split_int [[gnu::aligned(N / 8 < 4 ? N / 8 : 4)]] = detail::split_int<T, N>;
 
     using split_uint16_t = split_int<unsigned, 16>;
     using split_uint32_t = split_int<unsigned, 32>;
