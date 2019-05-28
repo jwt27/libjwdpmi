@@ -62,11 +62,19 @@ namespace jw
 
         struct [[gnu::packed]] px { };
 
-#       define PIXEL_FUNCTION [[gnu::hot, gnu::sseregparm, gnu::always_inline]]
-#       ifdef __MMX__
-#          define MMX_FUNCTION [[gnu::hot, gnu::sseregparm, gnu::noinline]]
+#       ifdef __SSE__
+#           define PIXEL_FUNCTION [[gnu::hot, gnu::sseregparm, gnu::always_inline]]
 #       else
-#          define MMX_FUNCTION PIXEL_FUNCTION
+#           define PIXEL_FUNCTION [[gnu::hot, gnu::always_inline]]
+#       endif
+#       ifdef __MMX__
+#           ifdef __SSE__
+#               define MMX_FUNCTION [[gnu::hot, gnu::sseregparm, gnu::noinline]]
+#           else
+#               define MMX_FUNCTION [[gnu::hot, gnu::noinline]]
+#           endif
+#       else
+#           define MMX_FUNCTION PIXEL_FUNCTION
 #       endif
 
         template<typename P>
