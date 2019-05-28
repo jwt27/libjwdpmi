@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
@@ -49,7 +50,7 @@ namespace jw
                 }
 
             private:
-                [[gnu::noinline, gnu::noclone, gnu::no_stack_limit, gnu::naked]] static void context_switch();
+                [[gnu::noinline, gnu::noclone, gnu::no_stack_limit, gnu::naked]] static void context_switch(thread_context**);
                 static void thread_switch(thread_ptr = nullptr);
                 [[gnu::noinline]] static void set_next_thread();
                 static void check_exception();

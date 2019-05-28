@@ -36,37 +36,32 @@ namespace jw
             }
 
             // Save the current task context, switch to a new task, and restore its context.
-            void scheduler::context_switch()
-            {
-                asm volatile    // provide some stack space to access current_thread (a shared_ptr)
-                (
-                    ".cfi_def_cfa esp, 4; .cfi_rel_offset eip, 0;"
-                    "sub esp, 0x0c; .cfi_adjust_cfa_offset 0x0c;"
-                );
+            void scheduler::context_switch(thread_context**)
+            {   // &current_thread->context is a parameter so the shared_ptr access is resolved on the call site
                 asm volatile
                 (
-                    "add esp, 0x0c; .cfi_adjust_cfa_offset -0x0c;"
-                    "push ebp; .cfi_adjust_cfa_offset 4; .cfi_rel_offset ebp, 0;"
-                    "push edi; .cfi_adjust_cfa_offset 4; .cfi_rel_offset edi, 0;"
-                    "push esi; .cfi_adjust_cfa_offset 4; .cfi_rel_offset esi, 0;"
-                    "push ebx; .cfi_adjust_cfa_offset 4; .cfi_rel_offset ebx, 0;"
-                    "push es; .cfi_adjust_cfa_offset 4; .cfi_rel_offset es, 0;"
-                    "push fs; .cfi_adjust_cfa_offset 4; .cfi_rel_offset fs, 0;"
-                    "push gs; .cfi_adjust_cfa_offset 4; .cfi_rel_offset gs, 0;"
-                    "mov [%0], esp;"
-                    "sub esp, 0x10; .cfi_adjust_cfa_offset 0x10;"
-                    "call %1;"
-                    "mov esp, [%0];"
-                    "pop gs; .cfi_restore gs; .cfi_adjust_cfa_offset -4;"
-                    "pop fs; .cfi_restore fs; .cfi_adjust_cfa_offset -4;"
-                    "pop es; .cfi_restore es; .cfi_adjust_cfa_offset -4;"
-                    "pop ebx; .cfi_restore ebx; .cfi_adjust_cfa_offset -4;"
-                    "pop esi; .cfi_restore esi; .cfi_adjust_cfa_offset -4;"
-                    "pop edi; .cfi_restore edi; .cfi_adjust_cfa_offset -4;"
-                    "pop ebp; .cfi_restore ebp; .cfi_adjust_cfa_offset -4;"
-                    "ret; .cfi_restore eip; .cfi_adjust_cfa_offset -4;"
-                    :: "r" (&current_thread->context)
-                    , "i" (set_next_thread)
+                    "                   .cfi_def_cfa esp, 4; .cfi_rel_offset eip, 0;"
+                    "push ebp;          .cfi_adjust_cfa_offset 4; .cfi_rel_offset ebp, 0;"
+                    "push edi;          .cfi_adjust_cfa_offset 4; .cfi_rel_offset edi, 0;"
+                    "push esi;          .cfi_adjust_cfa_offset 4; .cfi_rel_offset esi, 0;"
+                    "push ebx;          .cfi_adjust_cfa_offset 4; .cfi_rel_offset ebx, 0;"
+                    "push es;           .cfi_adjust_cfa_offset 4; .cfi_rel_offset es, 0;"
+                    "push fs;           .cfi_adjust_cfa_offset 4; .cfi_rel_offset fs, 0;"
+                    "push gs;           .cfi_adjust_cfa_offset 4; .cfi_rel_offset gs, 0;"
+                    "mov eax, [esp+0x20];"
+                    "mov [eax], esp;"
+                    "call %0;"
+                    "mov eax, [esp+0x20];"
+                    "mov esp, [eax];"
+                    "pop gs;            .cfi_restore gs; .cfi_adjust_cfa_offset -4;"
+                    "pop fs;            .cfi_restore fs; .cfi_adjust_cfa_offset -4;"
+                    "pop es;            .cfi_restore es; .cfi_adjust_cfa_offset -4;"
+                    "pop ebx;           .cfi_restore ebx; .cfi_adjust_cfa_offset -4;"
+                    "pop esi;           .cfi_restore esi; .cfi_adjust_cfa_offset -4;"
+                    "pop edi;           .cfi_restore edi; .cfi_adjust_cfa_offset -4;"
+                    "pop ebp;           .cfi_restore ebp; .cfi_adjust_cfa_offset -4;"
+                    "ret;               .cfi_restore eip; .cfi_adjust_cfa_offset -4;"
+                    :: "i" (set_next_thread)
                     : "cc", "memory"
                 );
             }
@@ -85,7 +80,7 @@ namespace jw
                 if (dpmi::in_irq_context() or std::uncaught_exceptions() > 0) return;
 
                 debug::break_with_signal(debug::detail::thread_switched);
-                context_switch();   // switch to a new task context
+                context_switch(&current_thread->context);   // switch to a new task context
                 check_exception();  // rethrow pending exception
 
                 while (__builtin_expect(current_thread->invoke_list.size() > 0, false))
