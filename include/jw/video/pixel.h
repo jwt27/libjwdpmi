@@ -305,7 +305,15 @@ namespace jw
                     auto v3 = _mm_mulhi_pi16(_mm_and_si64(src, is3), mulhi3);
                     dst = _mm_or_si64(_mm_andnot_si64(is3, dst), v3);
                 }
-                if constexpr (pixel<U>::has_alpha() and not has_alpha()) dst = _mm_insert_pi16(dst, U::ax, 3);
+                if constexpr (pixel<U>::has_alpha() and not has_alpha())
+                {
+                    if constexpr (sse) dst = _mm_insert_pi16(dst, U::ax, 3);
+                    else
+                    {
+                        dst = _mm_and_si64(dst, _mm_setr_pi16(0xffff, 0xffff, 0xffff, 0));
+                        dst = _mm_or_si64(dst, _mm_setr_pi16(0, 0, 0, U::ax));
+                    }
+                }
                 return dst;
             }
 
