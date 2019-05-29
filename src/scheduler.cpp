@@ -51,8 +51,7 @@ namespace jw
                     "mov eax, [esp+0x20];"
                     "mov [eax], esp;"
                     "call %0;"
-                    "mov eax, [esp+0x20];"
-                    "mov esp, [eax];"
+                    "mov esp, eax;"
                     "pop gs;            .cfi_restore gs; .cfi_adjust_cfa_offset -4;"
                     "pop fs;            .cfi_restore fs; .cfi_adjust_cfa_offset -4;"
                     "pop es;            .cfi_restore es; .cfi_adjust_cfa_offset -4;"
@@ -168,7 +167,7 @@ namespace jw
 
             // Selects a new current_thread.
             // May only be called from context_switch()!
-            void scheduler::set_next_thread()
+            thread_context* scheduler::set_next_thread()
             {
                 dpmi::interrupt_mask no_interrupts_please { };
                 for(std::size_t i = 0; ; ++i)
@@ -191,13 +190,14 @@ namespace jw
 
                     if (__builtin_expect(current_thread->pending_exceptions() != 0, false)) break;
                     if (__builtin_expect(current_thread->awaiting && current_thread->awaiting->pending_exceptions() != 0, false)) break;
-                    if (__builtin_expect(current_thread->state != suspended, true)) return;
+                    if (__builtin_expect(current_thread->state != suspended, true)) break;
                     if (i > threads.size())
                     {
                         debug::break_with_signal(debug::detail::all_threads_suspended);
                         i = 0;
                     }
                 }
+                return current_thread->context;
             }
         }
     }
