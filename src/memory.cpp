@@ -144,10 +144,10 @@ namespace jw
 
         descriptor descriptor::create_call_gate(selector code_seg, std::uintptr_t entry_point)
         {
-            split_uint32_t entry { reinterpret_cast<std::uintptr_t>(entry_point) };
-            descriptor ldt { };
-            ldt.allocate();
-            auto& c = ldt.call_gate;
+            split_uint32_t entry { entry_point };
+            descriptor d { };
+            d.allocate();
+            auto& c = d.call_gate;
             c.not_system_segment = false;
             c.privilege_level = 3;
             c.type = call_gate32;
@@ -156,8 +156,8 @@ namespace jw
             c.offset_lo = entry.lo;
             c.offset_hi = entry.hi;
             c.stack_params = 0;
-            ldt.write();
-            return ldt;
+            d.write();
+            return d;
         }
 
         descriptor::~descriptor()
@@ -273,8 +273,20 @@ namespace jw
             if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
         }
 
+        std::size_t descriptor::get_limit() const
+        {
+            split_uint32_t v { };
+            v.hi = segment.limit_hi;
+            v.lo = segment.limit_lo;
+            if (segment.is_page_granular) return v << 12 | ((1 << 12) - 1);
+            return v;
+        }
+
         std::size_t descriptor::get_limit(selector sel)
         {
+            if (selector_bits { sel }.privilege_level < selector_bits { get_cs() }.privilege_level)
+                return descriptor { sel }.get_limit();
+
             std::size_t limit;
             bool z;
             asm("lsl %1, %2;"

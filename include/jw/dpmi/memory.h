@@ -192,7 +192,7 @@ namespace jw
             void set_base(auto b) { set_base(sel, b); read(); }
             [[gnu::pure]] auto get_base() const { return get_base(sel); }
             void set_limit(auto l) { set_limit(sel, l); read(); }
-            [[gnu::pure]] auto get_limit() const { return get_limit(sel); }
+            std::size_t get_limit() const;
             ldt_access_rights get_access_rights();
             void set_access_rights(const auto& r) { r.set(sel); read(); }
             void set_selector_privilege(unsigned priv) { sel.privilege_level = priv; }

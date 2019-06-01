@@ -4,7 +4,6 @@
 #pragma once
 #include <optional>
 #include <jw/dpmi/memory.h>
-#include <jw/dpmi/cpu_exception.h>
 
 namespace jw::dpmi
 {
@@ -23,7 +22,7 @@ namespace jw::dpmi
 
     struct ring0_privilege
     {
-        ring0_privilege()
+        [[gnu::noinline]] ring0_privilege()
         {
             if (detail::ring0_cs == 0)
             {
@@ -54,11 +53,10 @@ namespace jw::dpmi
                     std::throw_with_nested(no_ring0_access { });
                 }
             }
-
             if (get_cs() != detail::ring0_cs) enter();
             else dont_leave = true;
         }
-        ~ring0_privilege() { if (not dont_leave) force_leave(); }
+        [[gnu::noinline]] ~ring0_privilege() { if (not dont_leave) force_leave(); }
 
         static void force_leave()
         {
@@ -75,36 +73,45 @@ namespace jw::dpmi
         
         [[gnu::naked, gnu::noinline]] static void enter()
         {
-            asm("mov %1, esp;"
-                "call fword ptr %0;"
-                :: "m" (entry)
-                , "m" (esp));
+            asm volatile
+            (
+                "mov %0, esp;"
+                "call fword ptr %1;"
+                : "=m" (esp)
+                : "m" (entry)
+            );
         }
 
 #       pragma GCC diagnostic push
 #       pragma GCC diagnostic ignored "-Wstrict-aliasing"
         [[gnu::naked, gnu::noinline]] static void leave()
         {
-            asm("mov eax, esp;"
-                "push %0;"      //  SS
-                "push eax;"     //  ESP
-                "push %1;"      //  CS
-                "push [eax];"   //  EIP
+            asm
+            (
+                "lea eax, [esp+4];"
+                "push %0;"          //  SS
+                "push eax;"         //  ESP
+                "push %1;"          //  CS
+                "push [eax-4];"     //  EIP
                 "retf;"
                 :: "m" (reinterpret_cast<std::uint32_t&>(detail::ring3_ss))
                 , "m" (reinterpret_cast<std::uint32_t&>(detail::ring3_cs))
-                : "eax");
+                : "eax"
+            );
         }
+#       pragma GCC diagnostic pop
 
         [[gnu::naked]] static void ring0_entry_point()
         {
-            asm("add esp, 0x10;"
-                "mov ss, %0;"
+            asm
+            (
+                "add esp, 0x10;"
+                "mov ss, %w0;"
                 "mov esp, %1;"
                 "ret;"
-                :: "m" (reinterpret_cast<std::uint32_t&>(detail::ring0_ss))
-                , "m" (esp));
+                :: "m" (detail::ring0_ss)
+                , "m" (esp)
+            );
         }
-#       pragma GCC diagnostic pop
     };
 }
