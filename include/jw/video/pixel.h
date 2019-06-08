@@ -115,15 +115,17 @@ namespace jw
                 }
                 else if constexpr (sse and (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>))
                 {
-                    auto do_blend = [this, &other]() PIXEL_FUNCTION { *this = m128(m128_blend<U>(m128(), other.m128())); };
+                    auto do_blend = [this, &other]() PIXEL_FUNCTION
+                    {
+                        *this = m128(m128_blend<U>(m128(), other.m128()));
+                    };
                     if constexpr (std::is_integral_v<typename P::T> or std::is_integral_v<typename U::T>)
-                         [&do_blend]() MMX_FUNCTION { do_blend(); }();
-                    else [&do_blend]() PIXEL_FUNCTION { do_blend(); }();
-                    if constexpr (std::is_integral_v<typename U::T>) _mm_empty();
+                        mmx_function { [&do_blend] { do_blend(); } }();
+                    else do_blend();
                 }
                 else if constexpr (mmx and std::is_integral_v<typename P::T> and std::is_integral_v<typename U::T>)
                 {
-                    [this, &other]() MMX_FUNCTION { *this = m64(m64_blend<U>(m64(), other.m64())); }();
+                    mmx_function { [this, &other] { *this = m64(m64_blend<U>(m64(), other.m64())); } }();
                 }
                 else
                 {
@@ -144,15 +146,17 @@ namespace jw
                 }
                 else if constexpr (sse and (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>))
                 {
-                    auto do_blend = [this, &other]() PIXEL_FUNCTION {*this = m128(m128_blend<U>(m128_premul(m128()), m128_premul(other.m128()))); };
+                    auto do_blend = [this, &other]() PIXEL_FUNCTION
+                    {
+                        *this = m128(m128_blend<U>(m128_premul(m128()), m128_premul(other.m128())));
+                    };
                     if constexpr (std::is_integral_v<typename P::T> or std::is_integral_v<typename U::T>)
-                         [&do_blend]() MMX_FUNCTION { do_blend(); }();
-                    else [&do_blend]() PIXEL_FUNCTION { do_blend(); }();
-                    if constexpr (std::is_integral_v<typename U::T>) _mm_empty();
+                        mmx_function { [&do_blend] { do_blend(); } }();
+                    else do_blend();
                 }
                 else if constexpr (mmx and std::is_integral_v<typename P::T> and std::is_integral_v<typename U::T>)
                 {
-                    [this, &other]() MMX_FUNCTION { *this = m64(m64_blend<U>(m64_premul(m64()), m64_premul(other.m64()))); }();
+                    mmx_function { [this, &other] { *this = m64(m64_blend<U>(m64_premul(m64()), m64_premul(other.m64()))); } }();
                 }
                 else
                 {
@@ -168,7 +172,10 @@ namespace jw
             {
                 if constexpr (not has_alpha()) return *this;
                 if constexpr (sse and std::is_floating_point_v<typename P::T>) *this = m128(m128_premul(m128()));
-                else if constexpr (mmx and not std::is_floating_point_v<typename P::T>) *this = m64(m64_premul(m64()));
+                else if constexpr (mmx and not std::is_floating_point_v<typename P::T>)
+                {
+                    mmx_function { [this] { *this = m64(m64_premul(m64())); } }();
+                }
                 else
                 {
                     using VT = std::conditional_t<std::is_floating_point_v<typename P::T>, float, std::uint32_t>;
@@ -181,17 +188,19 @@ namespace jw
             template <typename U>
             PIXEL_FUNCTION constexpr pixel<U> cast_to() const
             {
-                constexpr bool not_constexpr = true;// not is_constexpr(this->b);
-                if constexpr (not_constexpr and sse and (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>))
+                if constexpr (sse and (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>))
                 {
-                    auto do_cast = [this]() PIXEL_FUNCTION { return pixel<U>::m128(m128_cast_to<U>(m128())); };
+                    auto do_cast = [this]() PIXEL_FUNCTION
+                    {
+                        return pixel<U>::m128(m128_cast_to<U>(m128()));
+                    };
                     if constexpr (std::is_integral_v<typename P::T> or std::is_integral_v<typename U::T>)
-                        return [&do_cast]() MMX_FUNCTION { auto r = do_cast(); _mm_empty(); return r; }();
-                    else return [&do_cast]() PIXEL_FUNCTION { return do_cast(); }();
+                        return mmx_function { [&do_cast] { return do_cast(); } }();
+                    else return do_cast();
                 }
-                else if constexpr (not_constexpr and mmx and (sse or (std::is_integral_v<typename P::T> and std::is_integral_v<typename U::T>)))
+                else if constexpr (mmx and (sse or (std::is_integral_v<typename P::T> and std::is_integral_v<typename U::T>)))
                 {
-                    return [this]() MMX_FUNCTION { return pixel<U>::m64(m64_cast_to<U>(m64())); }();
+                    return mmx_function { [this] { return pixel<U>::m64(m64_cast_to<U>(m64())); } }();
                 }
                 else
                 {
@@ -199,6 +208,18 @@ namespace jw
                     return pixel<U>::template vector<VT>(vector_cast_to<U, VT>(vector<VT>()));
                 }
             }
+
+            template<typename F>
+            struct mmx_function
+            {
+                F f;
+                constexpr mmx_function(F&& func) noexcept : f(std::forward<F>(func)) { }
+                template<typename... T> MMX_FUNCTION auto operator()(T&& ... args) const
+                {
+                    struct mmx_guard { ~mmx_guard() { _mm_empty(); } } guard { };
+                    return f(std::forward<T>(args)...);
+                }
+            };
 
             PIXEL_FUNCTION static constexpr pixel m64(__m64 value) noexcept // V4HI
             {
@@ -208,14 +229,12 @@ namespace jw
                 {
                     auto v2 = _mm_cvtsi64_si32(v);
                     pixel result { *reinterpret_cast<pixel*>(&v2) };
-                    _mm_empty();
                     return result;
                 }
                 else
                 {
                     auto v2 = reinterpret_cast<V<8, byte>&>(v);
                     pixel result { v2[2], v2[1], v2[0], v2[3] };
-                    _mm_empty();
                     return result;
                 }
             }
