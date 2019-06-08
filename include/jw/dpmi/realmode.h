@@ -71,6 +71,7 @@ namespace jw
             template <std::uint16_t dpmi_function>
             void call(int_vector interrupt)
             {
+                FORCE_FRAME_POINTER;
                 selector new_reg_ds = get_ds();
                 realmode_registers* new_reg;
                 dpmi_error_code error;
@@ -90,7 +91,7 @@ namespace jw
                     , "b" (interrupt)
                     , "D" (this)
                     , "c" (0)
-                    : "esp", "memory");
+                    : "memory");
                 if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
                 copy_from(new_reg_ds, new_reg);
             }
@@ -101,6 +102,7 @@ namespace jw
                 auto ptr = linear_memory { new_reg_ds, new_reg };
                 if (__builtin_expect(ptr.requires_new_selector(), false))
                 {
+                    FORCE_FRAME_POINTER;
                     asm("push es;"
                         "push ds;"
                         "pop es;"
@@ -113,7 +115,7 @@ namespace jw
                         , "c" (sizeof(realmode_registers))
                         , "S" (new_reg)
                         , "D" (this)
-                        : "esp", "memory");
+                        : "memory");
                 }
                 else *this = *(ptr.get_ptr<realmode_registers>());
             }

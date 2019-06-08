@@ -439,6 +439,7 @@ namespace jw
 
             dpmi::selector mmio = vbe2_mmio ? vbe2_mmio->get_selector() : dpmi::get_ds();
             std::uint16_t ax;
+            FORCE_FRAME_POINTER;
             asm volatile(
                 "push es;"
                 "mov es, %w2;"
@@ -451,7 +452,7 @@ namespace jw
                 , "b" (wait_for_vsync ? 0x80 : 0)
                 , "c" (split_start.lo)
                 , "d" (split_start.hi)
-                : "edi", "esi", "esp", "cc");
+                : "edi", "esi", "cc");
         }
 
         void vbe3::set_display_start(vector2i pos, bool wait_for_vsync)
@@ -604,6 +605,7 @@ namespace jw
                 }
 
                 dpmi::selector mmio = vbe2_mmio ? vbe2_mmio->get_selector() : dpmi::get_ds();
+                FORCE_FRAME_POINTER;
                 asm volatile(
                     "push ds;"
                     "push es;"
@@ -620,7 +622,7 @@ namespace jw
                     , "c" (size)
                     , "d" (first)
                     , "D" (ptr)
-                    : "esi", "esp", "cc");
+                    : "esi", "cc");
             }
             else
             {
@@ -662,6 +664,7 @@ namespace jw
 
             dpmi::linear_memory data_mem { dpmi::get_ds(), static_cast<const px32n*>(ptr),  static_cast<std::size_t>(end - begin) };
             std::uint16_t ax;
+            FORCE_FRAME_POINTER;
             asm volatile(
                 "push es;"
                 "mov es, %w1;"
@@ -674,7 +677,7 @@ namespace jw
                 , "c" (std::min(end - begin, std::ptrdiff_t { 256 }))
                 , "d" (first)
                 , "D" (0)
-                : "esi", "esp", "cc");
+                : "esi", "cc");
             check_error(ax, __PRETTY_FUNCTION__);
         }
 

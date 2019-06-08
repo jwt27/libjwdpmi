@@ -217,24 +217,26 @@ namespace jw
         // Call a function which returns with RETF
         inline void call_far(far_ptr32 ptr)
         {
+            FORCE_FRAME_POINTER;
             asm volatile(
                 "pusha;"
                 "call fword ptr %0;"
                 "popa;"
                 :: "m" (ptr)
-                :"esp", "memory");
+                : "memory");
         }
 
         // Call a function which returns with IRET
         inline void call_far_iret(far_ptr32 ptr)
         {
+            FORCE_FRAME_POINTER;
             asm volatile(
                 "pusha;"
                 "pushf;"
                 "call fword ptr %0;"
                 "popa;"
                 :: "m" (ptr)
-                :"esp", "memory");
+                : "memory");
         }
 
         // Yield execution to the host (used when running in a multi-tasking OS)
