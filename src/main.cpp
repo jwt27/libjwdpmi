@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
@@ -14,6 +15,7 @@
 #include <jw/debug/detail/signals.h>
 #include <jw/io/rs232.h>
 #include <jw/io/ps2_interface.h>
+#include <jw/dpmi/ring0.h>
 #include <cxxabi.h>
 #include <unwind.h>
 #include <../jwdpmi_config.h>
@@ -44,7 +46,7 @@ namespace jw
 
     extern "C" void* irq_safe_malloc(std::size_t n)
     {
-        if (dpmi::in_irq_context()) return nullptr;
+        if (dpmi::in_irq_context() or dpmi::get_cs() == dpmi::detail::ring0_cs) return nullptr;
         return std::malloc(n);
     }
 
@@ -79,7 +81,7 @@ namespace jw
     std::terminate_handler original_terminate_handler;
     [[noreturn]] void terminate_handler() noexcept
     {
-
+        dpmi::ring0_privilege::force_leave();
         if (auto exc = std::current_exception())
         {
             std::cerr << "std::terminate called after throwing an exception:\n";
@@ -89,8 +91,8 @@ namespace jw
             catch (...) { std::cerr << "unknown exception.\n"; }
         }
         else std::cerr << "std::terminate called.\n";
-        io::ps2_interface::instance().reset();
         debug::print_backtrace();
+        io::detail::ps2_interface_instance.reset();
 
         debug::break_with_signal(SIGTERM);
         std::abort();
@@ -197,7 +199,7 @@ namespace jw
         return reinterpret_cast<void*>(b);
     };
 
-    if (dpmi::in_irq_context())
+    if (dpmi::in_irq_context() or dpmi::get_cs() == dpmi::detail::ring0_cs)
     {
         if (new_alloc_initialized == yes) return aligned_ptr(new_alloc->allocate(n));
         else throw std::bad_alloc { };

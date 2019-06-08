@@ -1,8 +1,10 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
 #include <jw/dpmi/memory.h>
+#include <jw/dpmi/cpu_exception.h>
 
 namespace jw
 {
@@ -12,7 +14,339 @@ namespace jw
         bool device_memory_base::device_map_supported { true };
         bool mapped_dos_memory_base::dos_map_supported { true };
 
-        ldt_access_rights ldt_entry::get_access_rights() { return ldt_access_rights { sel }; }
+        std::optional<descriptor> gdt, ldt;
+
+        bool direct_ldt_access()
+        {
+            enum { unknown, yes, no } static have_access { unknown };
+
+            if (__builtin_expect(have_access == unknown, false))
+            {
+                try
+                {
+                    have_access = no;
+
+                    struct [[gnu::packed]]
+                    {
+                        std::uint16_t limit;
+                        std::uint32_t base;
+                    } gdtr;
+                    selector ldtr;
+
+                    asm("sgdt %0":"=m"(gdtr));
+                    asm("sldt %w0":"=rm"(ldtr));
+
+                    gdt = descriptor::create_segment(gdtr.base, gdtr.limit);
+                    descriptor_data ldt_desc;
+                    selector_bits ldt_selector = ldtr;
+
+                    asm("mov bx, gs;"
+                        "mov gs, %w1;"
+                        "mov eax, gs:[%2*8];"
+                        "mov edx, gs:[%2*8+4];"
+                        "mov gs, bx;"
+                        : "=&A" (ldt_desc)
+                        : "r" (gdt->get_selector())
+                        , "r" (ldt_selector.index)
+                        : "ebx");
+
+                    split_uint32_t base;
+                    base.lo = ldt_desc.segment.base_lo;
+                    base.hi.lo = ldt_desc.segment.base_hi_lo;
+                    base.hi.hi = ldt_desc.segment.base_hi_hi;
+                    split_uint32_t limit { };
+                    limit.lo = ldt_desc.segment.limit_lo;
+                    limit.hi = ldt_desc.segment.limit_hi;
+                    ldt = descriptor::create_segment(base, limit);
+
+                    have_access = yes;
+                }
+                catch (const cpu_exception&) { }
+                catch (const dpmi_error&) { }
+            }
+            return have_access == yes;
+        }
+
+        ldt_access_rights::ldt_access_rights(selector sel)
+        {
+            std::uint32_t r;
+            bool z;
+            asm("lar %k1, %2;"
+                : "=@ccz" (z)
+                , "=r" (r)
+                : "rm" (static_cast<std::uint32_t>(sel)));
+            if (!z) throw dpmi_error(invalid_segment, __PRETTY_FUNCTION__);
+            access_rights = r >> 8;
+        }
+
+        void ldt_access_rights::set(selector sel) const
+        {
+            dpmi_error_code error;
+            bool c;
+            asm volatile(
+                "int 0x31;"
+                : "=@ccc" (c)
+                , "=a" (error)
+                : "a" (0x0009)
+                , "b" (sel)
+                , "c" (access_rights)
+                : "memory");
+            if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+        }
+
+        ldt_access_rights descriptor::get_access_rights() { return ldt_access_rights { sel.value }; }
+
+        descriptor::descriptor(descriptor&& d) noexcept
+            : descriptor_data(static_cast<descriptor_data>(d)), sel(d.sel), no_alloc(d.no_alloc)
+        {
+            d.no_alloc = true;
+        }
+
+        descriptor& descriptor::operator=(descriptor&& d)
+        {
+            deallocate();
+            new(this) descriptor(std::move(d));
+            return *this;
+        }
+
+        descriptor& descriptor::operator=(const descriptor_data& d)
+        {
+            *static_cast<descriptor_data*>(this) = d;
+            write();
+            return *this;
+        }
+
+        descriptor descriptor::create_segment(std::uintptr_t linear_base, std::size_t limit)
+        {
+            descriptor ldt = clone_segment(get_ds());
+            ldt.set_base(linear_base);
+            ldt.set_limit(limit);
+            ldt.read();
+            return ldt;
+        }
+
+        descriptor descriptor::create_code_segment(std::uintptr_t linear_base, std::size_t limit)
+        {
+            descriptor ldt = clone_segment(get_cs());
+            ldt.set_base(linear_base);
+            ldt.set_limit(limit);
+            ldt.read();
+            return ldt;
+        }
+
+        descriptor descriptor::clone_segment(selector s)
+        {
+            descriptor d { s };
+            d.allocate();
+            d.write();
+            return d;
+        }
+
+        descriptor descriptor::create_call_gate(selector code_seg, std::uintptr_t entry_point)
+        {
+            split_uint32_t entry { entry_point };
+            descriptor d { };
+            d.allocate();
+            auto& c = d.call_gate;
+            c.not_system_segment = false;
+            c.privilege_level = 3;
+            c.type = call_gate32;
+            c.is_present = true;
+            c.cs = code_seg;
+            c.offset_lo = entry.lo;
+            c.offset_hi = entry.hi;
+            c.stack_params = 0;
+            d.write();
+            return d;
+        }
+
+        descriptor::~descriptor()
+        {
+            try { deallocate(); }
+            catch(...) { }
+        }
+
+        void descriptor::read() const
+        {
+            if (__builtin_expect(direct_ldt_access(), true))
+            {
+                selector_bits s { sel };
+                auto& table = s.local ? ldt : gdt;
+                asm("mov bx, gs;"
+                    "mov gs, %w1;"
+                    "mov eax, gs:[%2*8];"
+                    "mov edx, gs:[%2*8+4];"
+                    "mov gs, bx;"
+                    : "=&A" (static_cast<descriptor_data&>(*const_cast<descriptor*>(this)))
+                    : "r" (table->get_selector())
+                    , "r" (s.index)
+                    : "ebx");
+            }
+            else
+            {
+                dpmi_error_code error;
+                bool c;
+                asm volatile(
+                    "push es;"
+                    "push ds;"
+                    "pop es;"
+                    "int 0x31;"
+                    "pop es;"
+                    : "=@ccc" (c)
+                    , "=a" (error)
+                    : "a" (0x000b)
+                    , "b" (sel)
+                    , "D" (static_cast<const descriptor_data*>(this))
+                    : "memory");
+                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+            }
+        }
+
+        void descriptor::write()
+        {
+            if (__builtin_expect(direct_ldt_access(), true))
+            {
+                selector_bits s { sel };
+                auto& table = s.local ? ldt : gdt;
+                asm("mov bx, gs;"
+                    "mov gs, %w1;"
+                    "mov gs:[%2*8], eax;"
+                    "mov gs:[%2*8+4], edx;"
+                    "mov gs, bx;"
+                    :: "A" (static_cast<descriptor_data&>(*this))
+                    , "r" (table->get_selector())
+                    , "r" (s.index)
+                    : "ebx");
+            }
+            else
+            {
+                dpmi_error_code error;
+                bool c;
+                asm volatile(
+                    "push es;"
+                    "push ds;"
+                    "pop es;"
+                    "int 0x31;"
+                    "pop es;"
+                    : "=@ccc" (c)
+                    , "=a" (error)
+                    : "a" (0x000c)
+                    , "b" (sel)
+                    , "D" (static_cast<descriptor_data*>(this)));
+                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+            }
+        }
+
+        std::uintptr_t descriptor::get_base(selector seg)
+        {
+            dpmi_error_code error;
+            split_uint32_t base;
+            bool c;
+
+            asm("int 0x31;"
+                : "=@ccc" (c)
+                , "=a" (error)
+                , "=c" (base.hi)
+                , "=d" (base.lo)
+                : "a" (0x0006)
+                , "b" (seg));
+            if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+
+            return base;
+        }
+
+        void descriptor::set_base(selector seg, std::uintptr_t linear_base)
+        {
+            dpmi_error_code error;
+            split_uint32_t base { linear_base };
+            bool c;
+
+            asm volatile(
+                "int 0x31;"
+                : "=@ccc" (c)
+                , "=a" (error)
+                : "a" (0x0007)
+                , "b" (seg)
+                , "c" (base.hi)
+                , "d" (base.lo)
+                : "memory");
+            if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+        }
+
+        std::size_t descriptor::get_limit() const
+        {
+            split_uint32_t v { };
+            v.hi = segment.limit_hi;
+            v.lo = segment.limit_lo;
+            if (segment.is_page_granular) return v << 12 | ((1 << 12) - 1);
+            return v;
+        }
+
+        std::size_t descriptor::get_limit(selector sel)
+        {
+            if (selector_bits { sel }.privilege_level < selector_bits { get_cs() }.privilege_level)
+                return descriptor { sel }.get_limit();
+
+            std::size_t limit;
+            bool z;
+            asm("lsl %1, %2;"
+                : "=@ccz" (z)
+                , "=r" (limit)
+                : "rm" (static_cast<std::uint32_t>(sel))
+                : "cc");
+            if (!z) throw dpmi_error(invalid_segment, __PRETTY_FUNCTION__);
+            return limit;
+        }
+
+        void descriptor::set_limit(selector sel, std::size_t limit)
+        {
+            dpmi_error_code error;
+            split_uint32_t _limit = (limit >= 1_MB) ? round_up_to_page_size(limit) - 1 : limit;
+            bool c;
+
+            asm volatile(
+                "int 0x31;"
+                : "=@ccc" (c)
+                , "=a" (error)
+                : "a" (0x0008)
+                , "b" (sel)
+                , "c" (_limit.hi)
+                , "d" (_limit.lo)
+                : "memory");
+            if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+        }
+
+        void descriptor::allocate()
+        {
+            if (not no_alloc) deallocate();
+            selector s;
+            bool c;
+            asm volatile(
+                "int 0x31;"
+                : "=@ccc" (c)
+                , "=a" (s)
+                : "a" (0x0000)
+                , "c" (1)
+                : "memory");
+            if (c) throw dpmi_error(s, __PRETTY_FUNCTION__);
+            no_alloc = false;
+            sel = s;
+        }
+
+        void descriptor::deallocate()
+        {
+            if (no_alloc) return;
+            dpmi_error_code error;
+            bool c;
+            asm volatile(
+                "int 0x31;"
+                : "=@ccc" (c)
+                , "=a" (error)
+                : "a" (0x0001)
+                , "b" (sel));
+            if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+            no_alloc = true;
+        }
 
         void memory_base::old_alloc()
         {

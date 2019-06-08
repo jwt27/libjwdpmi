@@ -6,6 +6,7 @@
 #include <jw/dpmi/cpu_exception.h>
 #include <jw/debug/debug.h>
 #include <jw/dpmi/detail/interrupt_id.h>
+#include <jw/dpmi/ring0.h>
 #include <cstring>
 #include <vector>
 
@@ -17,7 +18,14 @@ namespace jw
         {
             inline std::vector<std::exception_ptr> pending_exceptions { };
 
-            [[gnu::no_caller_saved_registers]]
+            [[noreturn, gnu::no_caller_saved_registers]]
+            void kill()
+            {
+                asm(".cfi_signal_frame");
+                jw::terminate();
+            }
+
+            [[noreturn, gnu::no_caller_saved_registers]]
             void rethrow_cpu_exception()
             {
                 asm(".cfi_signal_frame");
@@ -68,9 +76,9 @@ namespace jw
                 auto really_throw = [&]
                 {
                     if constexpr (not config::enable_throwing_from_cpu_exceptions) return false;    // Only throw if this option is enabled
-                    if (f->fault_address.segment != get_cs()) return false;                         // and exception happened in our code
+                    if (f->fault_address.segment != detail::ring3_cs
+                        and f->fault_address.segment != detail::ring0_cs) return false;             // and exception happened in our code
                     if (f->flags.v86mode) return false;                                             // and not in real mode (sanity check)
-                    if (self->new_type and f->info_bits.host_exception) return false;               // and not in the DPMI host (extra sanity check)
                     return true;
                 };
 
@@ -80,7 +88,14 @@ namespace jw
                     detail::simulate_call(f, detail::rethrow_cpu_exception);
                     success = true;
                 }
-                else std::cerr << "CAUGHT EXCEPTION IN CPU EXCEPTION HANDLER " << self->exc << std::endl; // HACK
+                else
+                {
+                    std::cerr << "CAUGHT EXCEPTION IN CPU EXCEPTION HANDLER 0x" << std::hex << self->exc << std::endl;
+                    try { std::rethrow_exception(std::current_exception()); }
+                    catch (const std::exception& e) { print_exception(e); }
+                    catch (...) { }
+                    detail::simulate_call(f, detail::kill);
+                }
             }
             if (*reinterpret_cast<volatile std::uint32_t*>(stack.begin()) != 0xDEADBEEF) std::cerr << "STACK OVERFLOW\n"; // another HACK
             detail::leave_exception_context();
@@ -174,8 +189,8 @@ namespace jw
             auto* ptr = linear_memory(get_cs(), start, size).get_ptr<byte>();
             std::copy_n(ptr, size, code.data());
             auto cs_limit = reinterpret_cast<std::size_t>(code.data() + size);
-            if (ldt_entry::get_limit(get_cs()) < cs_limit) 
-                ldt_entry::set_limit(get_cs(), cs_limit);
+            if (descriptor::get_limit(get_cs()) < cs_limit) 
+                descriptor::set_limit(get_cs(), cs_limit);
 
             asm volatile(
                 "mov %w0, ds;"

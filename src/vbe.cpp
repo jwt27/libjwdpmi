@@ -173,8 +173,8 @@ namespace jw
             byte* pm_table_ptr = pm_table.get_ptr();
             vbe2_pm_interface.assign(pm_table_ptr, pm_table_ptr + reg.cx);
             auto cs_limit = reinterpret_cast<std::size_t>(vbe2_pm_interface.data() + reg.cx);
-            if (dpmi::ldt_entry::get_limit(dpmi::get_cs()) < cs_limit) 
-                dpmi::ldt_entry::set_limit(dpmi::get_cs(), cs_limit);
+            if (dpmi::descriptor::get_limit(dpmi::get_cs()) < cs_limit) 
+                dpmi::descriptor::set_limit(dpmi::get_cs(), cs_limit);
 
             {
                 auto* ptr = reinterpret_cast<std::uint16_t*>(vbe2_pm_interface.data());
@@ -192,7 +192,7 @@ namespace jw
                         auto* size = io_list + 2;
                         vbe2_mmio = std::make_unique<dpmi::device_memory<byte>>(*size, *addr);
                         auto ar = dpmi::ldt_access_rights { dpmi::get_ds() };
-                        vbe2_mmio->get_ldt_entry().lock()->set_access_rights(ar);
+                        vbe2_mmio->get_descriptor().lock()->set_access_rights(ar);
                     }
                 }
             }
@@ -229,7 +229,7 @@ namespace jw
                 pmid->bda_selector = bios_data_area->get_selector();
                 ldt_access_rights ar { get_ds() };
                 ar.is_32_bit = false;
-                bios_data_area->get_ldt_entry().lock()->set_access_rights(ar);
+                bios_data_area->get_descriptor().lock()->set_access_rights(ar);
 
                 a000 = std::make_unique<mapped_dos_memory<byte>>(64_KB, far_ptr16 { 0xA000, 0 });
                 b000 = std::make_unique<mapped_dos_memory<byte>>(64_KB, far_ptr16 { 0xB000, 0 });
@@ -239,16 +239,16 @@ namespace jw
                 pmid->b800_selector = b800->get_selector();
 
                 video_bios_code = { video_bios->get_address(), bios_size };
-                video_bios->get_ldt_entry().lock()->set_access_rights(ar);
+                video_bios->get_descriptor().lock()->set_access_rights(ar);
                 ar = ldt_access_rights { get_cs() };
                 ar.is_32_bit = false;
-                video_bios_code.get_ldt_entry().lock()->set_access_rights(ar);
+                video_bios_code.get_descriptor().lock()->set_access_rights(ar);
                 pmid->data_selector = video_bios->get_selector();
 
                 vbe3_stack = std::make_unique<memory<byte>>(4_KB);
                 ar = ldt_access_rights { get_ss() };
                 ar.is_32_bit = false;
-                vbe3_stack->get_ldt_entry().lock()->set_access_rights(ar);
+                vbe3_stack->get_descriptor().lock()->set_access_rights(ar);
                 far_ptr32 stack_ptr { vbe3_stack->get_selector(), (vbe3_stack->get_size() - 0x10) & -0x10 };
                 far_ptr16 entry_point { video_bios_code.get_selector(), pmid->init_entry_point };
 
@@ -284,11 +284,11 @@ namespace jw
                 std::copy_n(code_start, code_size, std::back_inserter(vbe3_call_wrapper));
                 vbe3_call_wrapper_mem = { get_ds(), vbe3_call_wrapper.data(), vbe3_call_wrapper.size() };
                 ar = ldt_access_rights { get_cs() };
-                vbe3_call_wrapper_mem.get_ldt_entry().lock()->set_access_rights(ar);
+                vbe3_call_wrapper_mem.get_descriptor().lock()->set_access_rights(ar);
                 vbe3_call.segment = vbe3_call_wrapper_mem.get_selector();
                 auto cs_limit = reinterpret_cast<std::size_t>(vbe3_call_wrapper.data() + code_size);
-                if (ldt_entry::get_limit(get_cs()) < cs_limit) 
-                    ldt_entry::set_limit(get_cs(), cs_limit);
+                if (descriptor::get_limit(get_cs()) < cs_limit) 
+                    descriptor::set_limit(get_cs(), cs_limit);
 
                 asm volatile("call fword ptr [vbe3_call];":::"eax", "ebx", "ecx", "edx", "esi", "edi", "cc");
 

@@ -40,7 +40,7 @@ namespace jw
 
         ps2_interface::ps2_interface()
         {
-            if (instance_ptr) throw std::runtime_error("Only one ps2_interface instance allowed.");
+            if (detail::ps2_interface_instance) throw std::runtime_error("Only one ps2_interface instance allowed.");
         }
 
         ps2_interface::~ps2_interface()

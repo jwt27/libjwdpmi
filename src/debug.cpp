@@ -16,9 +16,11 @@
 #include <jw/dpmi/dpmi.h>
 #include <jw/debug/debug.h>
 #include <jw/dpmi/cpu_exception.h>
+#include <jw/dpmi/detail/cpu_exception.h>
 #include <jw/debug/detail/signals.h>
 #include <jw/io/rs232.h>
 #include <jw/alloc.h>
+#include <jw/dpmi/ring0.h>
 #include <../jwdpmi_config.h>
 
 // TODO: optimize
@@ -36,7 +38,6 @@ namespace jw
         {
             constexpr bool is_fault_signal(std::int32_t) noexcept;
             void uninstall_gdb_interface();
-            [[noreturn]] void kill();
 
             struct rs232_streambuf_internals : public io::detail::rs232_streambuf
             {
@@ -1133,7 +1134,7 @@ namespace jw
                 {
                     if (debugmsg) std::clog << "KILL signal received.";
                     for (auto&&t : threads) t.second.set_action('c');
-                    simulate_call(&current_thread->frame, kill);
+                    simulate_call(&current_thread->frame, dpmi::detail::kill);
                     s << "X" << std::setw(2) << posix_signal(current_thread->last_stop_signal);
                     send_packet(s.str());
                     uninstall_gdb_interface();
@@ -1183,11 +1184,11 @@ namespace jw
                     }
                 };
 
-                if (__builtin_expect(f->fault_address.segment != get_cs(), false))
+                if (__builtin_expect(f->fault_address.segment != ring3_cs and f->fault_address.segment != ring0_cs, false))
                 {
-                    if (exc == exception_num::trap) return true; // only debug our own code
-                    std::cerr << "Can't debug this. CS != 0x" << std::hex << get_cs() << '\n';
-                    std::cerr << cpu_exception { exc, r, f, new_frame_type }.what();
+                    if (exc == exception_num::trap) return true; // keep stepping until we get back to our own code
+                    std::cerr << "Can't debug this! CS is neither 0x" << std::hex << ring3_cs << " nor 0x" << ring0_cs << ".\n";
+                    std::cerr << cpu_exception { exc, r, f, new_frame_type }.what() << '\n';
                     return false;
                 }
 
@@ -1395,12 +1396,6 @@ namespace jw
                 s << "W" << std::setw(2) << static_cast<std::uint32_t>(result);
                 send_packet(s.str());
                 uninstall_gdb_interface();
-            }
-
-            [[noreturn]] void kill()
-            {
-                uninstall_gdb_interface();
-                jw::terminate();
             }
         }
 
