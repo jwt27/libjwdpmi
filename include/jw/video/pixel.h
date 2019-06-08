@@ -111,28 +111,39 @@ namespace jw
             {
                 if constexpr (not pixel<U>::has_alpha())
                 {
-                    *this = other.template cast_to<P>();
+                    return *this = other.template cast_to<P>();
                 }
-                else if constexpr (sse and (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>))
-                {
-                    auto do_blend = [this, &other]() PIXEL_FUNCTION
-                    {
-                        *this = m128(m128_blend<U>(m128(), other.m128()));
-                    };
-                    if constexpr (std::is_integral_v<typename P::T> or std::is_integral_v<typename U::T>)
-                        mmx_function { [&do_blend] { do_blend(); } }();
-                    else do_blend();
-                }
-                else if constexpr (mmx and std::is_integral_v<typename P::T> and std::is_integral_v<typename U::T>)
-                {
-                    mmx_function { [this, &other] { *this = m64(m64_blend<U>(m64(), other.m64())); } }();
-                }
-                else
+                auto do_blend_vector = [this, &other]
                 {
                     using VT = std::conditional_t<std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>, float, std::uint32_t>;
                     V<4, VT> src = other.template vector<VT>();
                     V<4, VT> dst = vector<VT>();
                     *this = vector<VT>(vector_blend<U, VT>(dst, src));
+                };
+                if (std::is_constant_evaluated()) do_blend_vector();
+                else
+                {
+                    if constexpr (sse and (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>))
+                    {
+                        auto do_blend = [this, &other]() PIXEL_FUNCTION
+                        {
+                            *this = m128(m128_blend<U>(m128(), other.m128()));
+                        };
+                        if constexpr (std::is_integral_v<typename P::T> or std::is_integral_v<typename U::T>)
+                            mmx_function { [&do_blend] { do_blend(); } }();
+                        else do_blend();
+                    }
+                    else if constexpr (mmx and std::is_integral_v<typename P::T> and std::is_integral_v<typename U::T>)
+                    {
+                        mmx_function { [this, &other] { *this = m64(m64_blend<U>(m64(), other.m64())); } }();
+                    }
+                    else
+                    {
+                        using VT = std::conditional_t<std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>, float, std::uint32_t>;
+                        V<4, VT> src = other.template vector<VT>();
+                        V<4, VT> dst = vector<VT>();
+                        *this = vector<VT>(vector_blend<U, VT>(dst, src));
+                    }
                 }
                 return *this;
             }
@@ -142,28 +153,34 @@ namespace jw
             {
                 if constexpr (not pixel<U>::has_alpha())
                 {
-                    *this = other.template cast_to<P>();
+                    return *this = other.template cast_to<P>();
                 }
-                else if constexpr (sse and (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>))
-                {
-                    auto do_blend = [this, &other]() PIXEL_FUNCTION
-                    {
-                        *this = m128(m128_blend<U>(m128_premul(m128()), m128_premul(other.m128())));
-                    };
-                    if constexpr (std::is_integral_v<typename P::T> or std::is_integral_v<typename U::T>)
-                        mmx_function { [&do_blend] { do_blend(); } }();
-                    else do_blend();
-                }
-                else if constexpr (mmx and std::is_integral_v<typename P::T> and std::is_integral_v<typename U::T>)
-                {
-                    mmx_function { [this, &other] { *this = m64(m64_blend<U>(m64_premul(m64()), m64_premul(other.m64()))); } }();
-                }
-                else
+
+                auto do_blend_vector = [this, &other]
                 {
                     using VT = std::conditional_t<std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>, float, std::uint32_t>;
                     V<4, VT> src = vector_premul<VT>(other.template vector<VT>());
                     V<4, VT> dst = vector_premul<VT>(vector<VT>());
                     *this = vector<VT>(vector_blend<U, VT>(dst, src));
+                };
+                if (std::is_constant_evaluated()) do_blend_vector();
+                else
+                {
+                    if constexpr (sse and (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>))
+                    {
+                        auto do_blend = [this, &other]() PIXEL_FUNCTION
+                        {
+                            *this = m128(m128_blend<U>(m128_premul(m128()), m128_premul(other.m128())));
+                        };
+                        if constexpr (std::is_integral_v<typename P::T> or std::is_integral_v<typename U::T>)
+                            mmx_function { [&do_blend] { do_blend(); } }();
+                        else do_blend();
+                    }
+                    else if constexpr (mmx and std::is_integral_v<typename P::T> and std::is_integral_v<typename U::T>)
+                    {
+                        mmx_function { [this, &other] { *this = m64(m64_blend<U>(m64_premul(m64()), m64_premul(other.m64()))); } }();
+                    }
+                    else do_blend_vector();
                 }
                 return *this;
             }
@@ -171,15 +188,19 @@ namespace jw
             PIXEL_FUNCTION constexpr pixel& premultiply_alpha()
             {
                 if constexpr (not has_alpha()) return *this;
-                if constexpr (sse and std::is_floating_point_v<typename P::T>) *this = m128(m128_premul(m128()));
-                else if constexpr (mmx and not std::is_floating_point_v<typename P::T>)
-                {
-                    mmx_function { [this] { *this = m64(m64_premul(m64())); } }();
-                }
-                else
+
+                auto do_premul_vector = [this]
                 {
                     using VT = std::conditional_t<std::is_floating_point_v<typename P::T>, float, std::uint32_t>;
                     *this = vector<VT>(vector_premul<VT>(vector<VT>()));
+                };
+                if (std::is_constant_evaluated()) do_premul_vector();
+                else
+                {
+                    if constexpr (sse and std::is_floating_point_v<typename P::T>)* this = m128(m128_premul(m128()));
+                    else if constexpr (mmx and not std::is_floating_point_v<typename P::T>)
+                        mmx_function { [this] { *this = m64(m64_premul(m64())); } }();
+                    else do_premul_vector();
                 }
                 return *this;
             }
@@ -188,6 +209,13 @@ namespace jw
             template <typename U>
             PIXEL_FUNCTION constexpr pixel<U> cast_to() const
             {
+                auto do_cast_vector = [this]()
+                {
+                    using VT = std::conditional_t<std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>, float, std::uint32_t>;
+                    return pixel<U>::template vector<VT>(vector_cast_to<U, VT>(vector<VT>()));
+                };
+                if (std::is_constant_evaluated()) return do_cast_vector();
+
                 if constexpr (sse and (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>))
                 {
                     auto do_cast = [this]() PIXEL_FUNCTION
@@ -202,11 +230,7 @@ namespace jw
                 {
                     return mmx_function { [this] { return pixel<U>::m64(m64_cast_to<U>(m64())); } }();
                 }
-                else
-                {
-                    using VT = std::conditional_t<std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>, float, std::uint32_t>;
-                    return pixel<U>::template vector<VT>(vector_cast_to<U, VT>(vector<VT>()));
-                }
+                else return do_cast_vector();
             }
 
             template<typename F>
