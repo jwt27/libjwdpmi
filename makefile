@@ -1,6 +1,7 @@
 CXXFLAGS += -masm=intel
 CXXFLAGS += -std=gnu++17 -fconcepts
 CXXFLAGS += -Wall -Wextra
+CXXFLAGS += -Wno-address-of-packed-member
 CXXFLAGS += -fasynchronous-unwind-tables
 CXXFLAGS += -fnon-call-exceptions
 CXXFLAGS += -mcld
