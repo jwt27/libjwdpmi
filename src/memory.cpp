@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
@@ -505,10 +506,10 @@ namespace jw
             if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
         }
 
-        void mapped_dos_memory_base::new_alloc(std::uintptr_t dos_linear_address)
+        void mapped_dos_memory_base::new_alloc(std::uintptr_t dos_physical_address)
         {
-            auto addr_start = round_down_to_page_size(dos_linear_address);
-            offset = dos_linear_address - addr_start;
+            auto addr_start = round_down_to_page_size(dos_physical_address);
+            offset = dos_physical_address - addr_start;
             auto pages = round_up_to_page_size(size) / get_page_size();
             auto offset_in_block = round_up_to_page_size(addr) - addr;
             addr += offset + offset_in_block;

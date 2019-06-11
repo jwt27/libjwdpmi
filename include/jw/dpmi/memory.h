@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
@@ -214,17 +215,17 @@ namespace jw
             bool no_alloc { true };
         };
             
-        inline constexpr std::uintptr_t conventional_to_linear(std::uint16_t segment, std::uint16_t offset) noexcept
+        inline constexpr std::uintptr_t conventional_to_physical(std::uint16_t segment, std::uint16_t offset) noexcept
         {
             return (static_cast<std::uint32_t>(segment) << 4) + offset;
         }
 
-        inline constexpr std::uintptr_t conventional_to_linear(far_ptr16 addr) noexcept
+        inline constexpr std::uintptr_t conventional_to_physical(far_ptr16 addr) noexcept
         {
-            return conventional_to_linear(addr.segment, addr.offset);
+            return conventional_to_physical(addr.segment, addr.offset);
         }
 
-        inline constexpr far_ptr16 linear_to_conventional(std::uintptr_t address) noexcept
+        inline constexpr far_ptr16 physical_to_conventional(std::uintptr_t address) noexcept
         {
             return far_ptr16(address >> 4, address & 0x0f); //TODO: round?
         }
@@ -613,14 +614,14 @@ namespace jw
         struct mapped_dos_memory_base : public memory_base
         {
             using base = memory_base;
-            mapped_dos_memory_base(std::size_t num_bytes, std::uintptr_t dos_linear_address) 
+            mapped_dos_memory_base(std::size_t num_bytes, std::uintptr_t dos_physical_address)
                 : base(no_alloc_tag { }, round_up_to_page_size(num_bytes) + get_page_size())
-                , dos_addr(linear_to_conventional(dos_linear_address))
+                , dos_addr(physical_to_conventional(dos_physical_address))
             {
-                allocate(dos_linear_address);
+                allocate(dos_physical_address);
             }
 
-            mapped_dos_memory_base(std::size_t num_bytes, far_ptr16 address) : mapped_dos_memory_base(num_bytes, conventional_to_linear(address)) { }
+            mapped_dos_memory_base(std::size_t num_bytes, far_ptr16 address) : mapped_dos_memory_base(num_bytes, conventional_to_physical(address)) { }
 
             mapped_dos_memory_base(const base&) = delete;
             mapped_dos_memory_base(const mapped_dos_memory_base&) = delete;
@@ -670,8 +671,8 @@ namespace jw
             selector dos_handle { null_dos_handle }; // this is actually a PM selector.
             far_ptr16 dos_addr;
 
-            void allocate(std::uintptr_t dos_linear_address)
-            {
+            void allocate(std::uintptr_t dos_physical_address)
+            {   // According to DPMI specs, this should be a linear address. This makes no sense however, and all dpmi hosts treat it as physical address.
                 try
                 {
                     if (dos_map_supported)
@@ -682,10 +683,11 @@ namespace jw
                     if (dos_map_supported)
                     {
                         base::allocate(false, false);
-                        new_alloc(dos_linear_address);
+                        new_alloc(dos_physical_address);
                         return;
                     }
-                    addr = dos_linear_address;
+                    //addr = dos_physical_address;    // Pretend it's a linear address anyway?
+                    throw dpmi_error { unsupported_function, __PRETTY_FUNCTION__ }; // TODO: alternative solution if alloc fails
                 }
                 catch (...)
                 {
@@ -694,7 +696,7 @@ namespace jw
             }
 
         private:
-            void new_alloc(std::uintptr_t dos_linear_address);
+            void new_alloc(std::uintptr_t dos_physical_address);
             void alloc_selector();
         };
 
@@ -721,7 +723,7 @@ namespace jw
                 {
                     base::deallocate();
                     dos_resize(round_up_to_paragraph_size(num_bytes));
-                    base::allocate(conventional_to_linear(dos_addr));
+                    base::allocate(conventional_to_physical(dos_addr));
                 }
                 catch (...)
                 {
@@ -738,7 +740,7 @@ namespace jw
                 {
                     deallocate();
                     dos_alloc(round_up_to_paragraph_size(num_bytes));
-                    base::allocate(conventional_to_linear(dos_addr));
+                    base::allocate(conventional_to_physical(dos_addr));
                 }
                 catch (...)
                 {
