@@ -486,7 +486,7 @@ namespace jw
         {
             auto addr_start = round_down_to_page_size(physical_address);
             auto offset = physical_address - addr_start;
-            auto pages = round_up_to_page_size(size) / get_page_size();
+            auto pages = round_up_to_page_size(size) / page_size;
             auto offset_in_block = round_up_to_page_size(addr) - addr;
             offset += offset_in_block;
             addr += offset;
@@ -510,7 +510,7 @@ namespace jw
         {
             auto addr_start = round_down_to_page_size(dos_physical_address);
             offset = dos_physical_address - addr_start;
-            auto pages = round_up_to_page_size(size) / get_page_size();
+            auto pages = round_up_to_page_size(size) / page_size;
             auto offset_in_block = round_up_to_page_size(addr) - addr;
             addr += offset + offset_in_block;
             size -= offset + offset_in_block;

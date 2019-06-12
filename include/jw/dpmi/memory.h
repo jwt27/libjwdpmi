@@ -30,11 +30,8 @@ namespace jw
         };
 
         //DPMI 0.9 AX=0604
-        [[gnu::pure]] inline std::size_t get_page_size()
+        inline const std::size_t page_size = []
         {
-            static std::size_t page_size { 0 };
-            if (__builtin_expect(page_size > 0, true)) return page_size;
-
             dpmi_error_code error;
             split_uint32_t size;
             bool c;
@@ -47,18 +44,17 @@ namespace jw
                 : "a" (0x0604));
             if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
 
-            page_size = size;
-            return page_size;
+            return size;
+        }();
+
+        inline std::size_t round_down_to_page_size(std::size_t num_bytes)
+        {
+            return num_bytes & -page_size;
         }
 
-        [[gnu::pure]] inline std::size_t round_down_to_page_size(std::size_t num_bytes)
+        inline std::size_t round_up_to_page_size(std::size_t num_bytes)
         {
-            return num_bytes & -get_page_size();
-        }
-
-        [[gnu::pure]] inline std::size_t round_up_to_page_size(std::size_t num_bytes)
-        {
-            auto page = get_page_size();
+            auto page = page_size;
             return round_down_to_page_size(num_bytes) + ((num_bytes & (page - 1)) == 0 ? 0 : page);
         }
 
@@ -191,7 +187,7 @@ namespace jw
 
             auto get_selector() const noexcept { return sel; }
             void set_base(auto b) { set_base(sel, b); read(); }
-            [[gnu::pure]] auto get_base() const { return get_base(sel); }
+            auto get_base() const { return get_base(sel); }
             void set_limit(auto l) { set_limit(sel, l); read(); }
             std::size_t get_limit() const;
             ldt_access_rights get_access_rights();
@@ -201,7 +197,7 @@ namespace jw
             void read() const;
             void write();
 
-            [[gnu::pure]] static std::uintptr_t get_base(selector seg);
+            static std::uintptr_t get_base(selector seg);
             static void set_base(selector seg, std::uintptr_t linear_base);
             static std::size_t get_limit(selector sel);
             static void set_limit(selector sel, std::size_t limit);
@@ -250,24 +246,24 @@ namespace jw
             return num_paragraphs << 4;
         }
 
-        [[gnu::pure]] inline std::intptr_t linear_to_near(std::uintptr_t address, selector sel = get_ds())
+        inline std::intptr_t linear_to_near(std::uintptr_t address, selector sel = get_ds())
         {
             return address - descriptor::get_base(sel);
         }
 
         template <typename T>
-        [[gnu::pure]] inline T* linear_to_near(std::uintptr_t address, selector sel = get_ds())
+        inline T* linear_to_near(std::uintptr_t address, selector sel = get_ds())
         {
             return reinterpret_cast<T*>(linear_to_near(address, sel));
         }
 
-        [[gnu::pure]] inline std::uintptr_t near_to_linear(std::uintptr_t address, selector sel = get_ds())
+        inline std::uintptr_t near_to_linear(std::uintptr_t address, selector sel = get_ds())
         {
             return address + descriptor::get_base(sel);
         }
 
         template <typename T>
-        [[gnu::pure]] inline std::uintptr_t near_to_linear(T* address, selector sel = get_ds())
+        inline std::uintptr_t near_to_linear(T* address, selector sel = get_ds())
         {
             return near_to_linear(reinterpret_cast<std::uintptr_t>(address), sel);
         }
@@ -278,13 +274,13 @@ namespace jw
             virtual std::size_t get_size() const noexcept { return size; }
 
             template <typename T>
-            [[gnu::pure]] T* get_ptr(selector sel = get_ds())
+            T* get_ptr(selector sel = get_ds())
             {
                 return linear_to_near<T>(addr, sel);
             }
 
             template <typename T>
-            [[gnu::pure]] const T* get_ptr(selector sel = get_ds()) const
+            const T* get_ptr(selector sel = get_ds()) const
             {
                 return get_ptr<const T>(sel);
             }
@@ -302,7 +298,7 @@ namespace jw
                 : addr(address), size(num_bytes) { }
 
             linear_memory(std::shared_ptr<descriptor> l) noexcept
-                : ldt(l), addr(ldt->get_base()), size((ldt->get_limit() + 1) * (ldt->segment.is_page_granular ? get_page_size() : 0)) { }
+                : ldt(l), addr(ldt->get_base()), size((ldt->get_limit() + 1) * (ldt->segment.is_page_granular ? page_size : 0)) { }
 
             linear_memory(const linear_memory&) noexcept = default;
             linear_memory& operator=(const linear_memory&) noexcept = default;
@@ -540,7 +536,7 @@ namespace jw
             // using this function, but it does do so with the DPMI 1.0 function 0508. It's probably
             // an oversight , but we can use this to preserve write-combining on framebuffer memory.
             device_memory_base(std::size_t num_bytes, std::uintptr_t physical_address, bool use_old_alloc = false)
-                : base(no_alloc_tag { }, round_up_to_page_size(num_bytes) + get_page_size())
+                : base(no_alloc_tag { }, round_up_to_page_size(num_bytes) + page_size)
             {
                 allocate(physical_address, use_old_alloc);
             }
@@ -619,7 +615,7 @@ namespace jw
         {
             using base = memory_base;
             mapped_dos_memory_base(std::size_t num_bytes, std::uintptr_t dos_physical_address)
-                : base(no_alloc_tag { }, round_up_to_page_size(num_bytes) + get_page_size())
+                : base(no_alloc_tag { }, round_up_to_page_size(num_bytes) + page_size)
                 , dos_addr(physical_to_conventional(dos_physical_address))
             {
                 allocate(dos_physical_address);
@@ -667,7 +663,7 @@ namespace jw
             }
 
         protected:
-            mapped_dos_memory_base(no_alloc_tag, std::size_t num_bytes) : base(no_alloc_tag { }, round_up_to_page_size(num_bytes) + get_page_size()) { }
+            mapped_dos_memory_base(no_alloc_tag, std::size_t num_bytes) : base(no_alloc_tag { }, round_up_to_page_size(num_bytes) + page_size) { }
 
             static bool dos_map_supported;
             std::ptrdiff_t offset { 0 };
@@ -776,13 +772,13 @@ namespace jw
             template<typename... Args>
             memory_t(std::size_t num_elements, Args&&... args) : base(num_elements * sizeof(T), std::forward<Args>(args)...) { }
             
-            [[gnu::pure]] auto* get_ptr(selector sel = get_ds()) { return base::template get_ptr<T>(sel); }
-            [[gnu::pure]] auto* operator->() noexcept { return get_ptr(); }
+            auto* get_ptr(selector sel = get_ds()) { return base::template get_ptr<T>(sel); }
+            auto* operator->() noexcept { return get_ptr(); }
             auto& operator*() noexcept { return *get_ptr(); }
             auto& operator[](std::ptrdiff_t i) noexcept { return *(get_ptr() + i); }
 
-            [[gnu::pure]] const auto* get_ptr(selector sel = get_ds()) const { return base::template get_ptr<T>(sel); }
-            [[gnu::pure]] const auto* operator->() const noexcept { return get_ptr(); }
+            const auto* get_ptr(selector sel = get_ds()) const { return base::template get_ptr<T>(sel); }
+            const auto* operator->() const noexcept { return get_ptr(); }
             const auto& operator*() const noexcept { return *get_ptr(); }
             const auto& operator[](std::ptrdiff_t i) const noexcept { return *(get_ptr() + i); }
 
