@@ -535,6 +535,10 @@ namespace jw
         {
             using base = memory_base;
 
+            // 'use_old_alloc' in this context means to use the DPMI 0.9 function 0800.
+            // This is useful because HDPMI does not set the cache-disable/write-through flags when
+            // using this function, but it does do so with the DPMI 1.0 function 0508. It's probably
+            // an oversight , but we can use this to preserve write-combining on framebuffer memory.
             device_memory_base(std::size_t num_bytes, std::uintptr_t physical_address, bool use_old_alloc = false)
                 : base(no_alloc_tag { }, round_up_to_page_size(num_bytes) + get_page_size())
             {
@@ -764,6 +768,11 @@ namespace jw
         template <typename T, typename base = memory_base>
         struct memory_t : public base
         {
+            // Constructor arguments for each memory class:
+            // memory(std::size_t num_elements, bool committed = true)
+            // device_memory(std::size_t num_elements, std::uintptr_t physical_address, bool use_old_alloc = false)
+            // mapped_dos_memory(std::size_t num_elements, std::uintptr_t dos_physical_address)
+            // dos_memory(std::size_t num_elements)
             template<typename... Args>
             memory_t(std::size_t num_elements, Args&&... args) : base(num_elements * sizeof(T), std::forward<Args>(args)...) { }
             
