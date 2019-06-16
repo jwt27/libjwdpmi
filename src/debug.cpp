@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
@@ -1091,8 +1092,8 @@ namespace jw
                     {
                         watchpoint::watchpoint_type w;
                         if (z == '1') w = watchpoint::execute;
-                        else if (z == '2') w = watchpoint::read_write;
-                        else if (z == '3') w = watchpoint::read;
+                        else if (z == '2') w = watchpoint::write;
+                        else if (z == '3') w = watchpoint::read_write;
                         else if (z == '4') w = watchpoint::read_write;
                         else
                         {

@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
@@ -89,13 +90,15 @@ namespace jw
             enum watchpoint_type
             {
                 execute,
-                read,
+                write,
                 read_write
             };
 
             template<typename T>
-            watchpoint(T* ptr, watchpoint_type t) : watchpoint(near_to_linear(ptr), sizeof(T), t) 
-            { static_assert(sizeof(T) == 4 || sizeof(T) == 2 || sizeof(T) == 1); }
+            watchpoint(T* ptr, watchpoint_type t) : watchpoint(dpmi::near_to_linear(ptr), sizeof(T), t)
+            {
+                static_assert(sizeof(T) == 4 or sizeof(T) == 2 or sizeof(T) == 1);
+            }
 
             watchpoint(auto* ptr, watchpoint_type t, std::size_t size) : watchpoint(dpmi::near_to_linear(ptr), size, t) { }
 
@@ -186,7 +189,7 @@ namespace jw
 
         private:
         #ifndef NDEBUG
-            const std::uint32_t null_handle { std::numeric_limits<std::uint32_t>::max() };
+            static constexpr std::uint32_t null_handle { std::numeric_limits<std::uint32_t>::max() };
             std::uint32_t handle { null_handle };
         #endif
             watchpoint_type type;
