@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
@@ -170,22 +171,22 @@ namespace jw::audio
 
             void operator()(const long_control_change& msg)
             {
-                out << midi { control_change { { msg.channel }, msg.controller, static_cast<byte>(msg.value.hi) } };
-                out << midi { control_change { { msg.channel }, static_cast<byte>(msg.controller + 32), static_cast<byte>(msg.value.lo) } };
+                (*this)(control_change { { msg.channel }, msg.controller, static_cast<byte>(msg.value.hi) });
+                (*this)(control_change { { msg.channel }, static_cast<byte>(msg.controller + 0x20), static_cast<byte>(msg.value.lo) });
             }
 
             void operator()(const rpn_change& msg)
             {
-                out << midi { control_change { { msg.channel }, 0x65, static_cast<byte>(msg.parameter.hi) } };
-                out << midi { control_change { { msg.channel }, 0x64, static_cast<byte>(msg.parameter.lo) } };
-                out << midi { long_control_change { { msg.channel }, 0x06, msg.value } };
+                (*this)(control_change { { msg.channel }, 0x65, static_cast<byte>(msg.parameter.hi) });
+                (*this)(control_change { { msg.channel }, 0x64, static_cast<byte>(msg.parameter.lo) });
+                (*this)(long_control_change { { msg.channel }, 0x06, msg.value });
             }
 
             void operator()(const nrpn_change& msg)
             {
-                out << midi { control_change { { msg.channel }, 0x63, static_cast<byte>(msg.parameter.hi) } };
-                out << midi { control_change { { msg.channel }, 0x62, static_cast<byte>(msg.parameter.lo) } };
-                out << midi { long_control_change { { msg.channel }, 0x06, msg.value } };
+                (*this)(control_change { { msg.channel }, 0x63, static_cast<byte>(msg.parameter.hi) });
+                (*this)(control_change { { msg.channel }, 0x62, static_cast<byte>(msg.parameter.lo) });
+                (*this)(long_control_change { { msg.channel }, 0x06, msg.value });
             }
         };
 
