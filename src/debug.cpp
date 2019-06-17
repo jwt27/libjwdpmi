@@ -1427,13 +1427,13 @@ namespace jw
 
         _Unwind_Reason_Code unwind_print_trace(_Unwind_Context* c, void*)
         {
-            std::clog << " --> 0x" << std::hex << _Unwind_GetIP(c);
+            std::clog << " --> " << std::hex << std::noshowbase << std::setfill(' ') << std::setw(11) << _Unwind_GetIP(c);
             return _URC_NO_REASON;
         }
 
         void print_backtrace() noexcept
         {
-            std::clog << "Backtrace";
+            std::clog << "Backtrace  ";
             _Unwind_Backtrace(unwind_print_trace, nullptr);
             std::clog << '\n';
         }
