@@ -7,7 +7,7 @@
 #include <vector>
 #include <deque>
 #include <iostream>
-#include <unordered_map>
+#include <list>
 #include <mutex>
 #include <optional>
 #include <jw/common.h>
@@ -120,24 +120,46 @@ namespace jw::audio
             std::mutex mutex { };
             byte last_status { 0 };
         };
-        inline static std::unordered_map<std::istream*, istream_info> rx_state { };
-        inline static std::unordered_map<std::ostream*, ostream_info> tx_state { };
+        inline static std::list<istream_info> istream_list { };
+        inline static std::list<ostream_info> ostream_list { };
+
+        template <typename S, typename L>
+        static void* get_pword(int i, S& stream, L& list)
+        {
+            void*& p = stream.pword(i);
+            if (__builtin_expect(p == nullptr, false))
+                p = &list.emplace_back();
+            return p;
+        }
+
+        static istream_info& rx_state(std::istream& stream)
+        {
+            static const int i = std::ios_base::xalloc();
+            return *static_cast<istream_info*>(get_pword(i, stream, istream_list));
+        }
+
+        static ostream_info& tx_state(std::ostream& stream)
+        {
+            static const int i = std::ios_base::xalloc();
+            return *static_cast<ostream_info*>(get_pword(i, stream, ostream_list));
+        }
 
         struct stream_writer
         {
             std::ostream& out;
+            ostream_info& tx { tx_state(out) };
 
             void put_status(byte a)
             {
-                if (tx_state[&out].last_status != a) out.put(a);
-                tx_state[&out].last_status = a;
+                if (tx.last_status != a) out.put(a);
+                tx.last_status = a;
             }
 
-            void clear_status() { tx_state[&out].last_status = 0; }
+            void clear_status() { tx.last_status = 0; }
 
             void operator()(const note_event& msg)
             {
-                if (not msg.on and tx_state[&out].last_status == (0x90 | (msg.channel & 0x0f)))
+                if (not msg.on and tx.last_status == (0x90 | (msg.channel & 0x0f)))
                 {
                     put_status(0x90 | (msg.channel & 0x0f));
                     out.put(msg.key);
@@ -193,15 +215,16 @@ namespace jw::audio
     public:
         friend std::ostream& operator<<(std::ostream& out, const midi& in)
         {
-            std::unique_lock<std::mutex> lock { tx_state[&out].mutex, std::defer_lock };
+            auto& tx { tx_state(out) };
+            std::unique_lock<std::mutex> lock { tx.mutex, std::defer_lock };
             if (not in.is_realtime_message()) lock.lock();
-            std::visit(stream_writer { out }, in.msg);
+            std::visit(stream_writer { out, tx }, in.msg);
             return out;
         }
 
         friend std::istream& operator>>(std::istream& in, midi& out)
         {
-            auto& rx { rx_state[&in] };
+            auto& rx { rx_state(in) };
             std::unique_lock<std::mutex> lock { rx.mutex };
             auto i { rx.pending_msg.cbegin() };
             auto get = [&]
