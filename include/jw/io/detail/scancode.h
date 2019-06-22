@@ -8,7 +8,6 @@
 
 #include <jw/common.h>
 #include <jw/io/key.h>
-#include <jw/io/io_error.h>
 
 namespace jw
 {
@@ -21,39 +20,65 @@ namespace jw
 
         namespace detail
         {
-        // Single scancode
+            // Single scancode
             using raw_scancode = byte;
 
-            // Scancode sequence
-            class scancode
+            struct scancode
             {
-            public:
-                // Extract one scancode sequence from a sequence of bytes
+                // Extract and decode one scancode sequence from a sequence of bytes
                 // NOTE: parameter will be modified, extracted sequences are removed
                 template <typename Container>
-                static std::optional<scancode> extract(Container& bytes, scancode_set set)
+                static std::optional<key_state_pair> extract(Container& bytes, scancode_set set)
                 {
-                    std::optional<scancode> extracted_code { };
+                    auto find = [](const auto& map, const auto& key) noexcept -> std::optional<typename std::decay_t<decltype(map)>::mapped_type>
+                    {
+                        auto i = map.find(key);
+                        if (i != map.cend()) return i->second;
+                        else return std::nullopt;
+                    };
+
+                    key_state_pair k { { }, key_state::down };
+                    bool ext0 = false;
+                    bool ext1 = false;
 
                     for (auto i = bytes.begin(); i != bytes.end(); ++i)
                     {
                         if (set == set2)
                         {
-                            if (*i == 0xE0) continue;
-                            if (*i == 0xE1) continue;
+                            if (*i == 0xE0) { ext0 = true; continue; }
+                            if (*i == 0xE1) { ext1 = true; continue; }
                         }
-                        if (*i == 0xF0) continue;
-                        ++i;
-                        extracted_code = scancode { set, bytes.begin(), i };
-                        bytes.erase(bytes.begin(), i);
-                        break;
+                        if (*i == 0xF0) { k.second = key_state::up; continue; }
+
+                        auto c = *i;
+                        bytes.erase(bytes.begin(), i + 1);
+
+                        switch (set)
+                        {
+                        case set1:
+                        case set2:
+                            if (ext0)
+                            {
+                                if (auto p = find(set2_extended0_to_key_table, c)) { k.first = *p; break; }
+                                if (auto p = find(set2_extended0_to_set3_table, c)) { c = *p; }
+                                else { k.first = 0xE000 + c; break; }
+                            }
+                            else if (ext1)
+                            {
+                                if (c == 0x14) { k.first = key::pause; break; }
+                                else { k.first = 0xE100 + c; break; }
+                            }
+                            else if (auto p = find(set2_to_set3_table, c)) { c = *p; }
+                            [[fallthrough]];
+                        case set3:
+                            if (auto p = find(set3_to_key_table, c)) { k.first = *p; }
+                            else { k.first = 0x0100 + c; }
+                        }
+                        return k;
                     }
 
-                    return extracted_code;
+                    return std::nullopt;
                 }
-
-                // Decode scancode sequence into key code and state pair
-                key_state_pair decode();
 
                 // Undo scancode translation for a single byte. No break code handling.
                 static raw_scancode undo_translation(raw_scancode c) noexcept { return undo_translation_table[c]; }
@@ -93,20 +118,7 @@ namespace jw
                 };
 
             private:
-                std::array<raw_scancode, 3> sequence;
-                scancode_set code_set;
-
-                scancode(scancode_set set, const std::array<raw_scancode, 3>& copy)
-                    : sequence(copy), code_set(set) { }
-
-                template <typename I0, typename I1>
-                scancode(scancode_set set, I0 begin, I1 end) : code_set(set)
-                {
-                    if (end - begin > 3) [[unlikely]] throw framing_error { "Scancode longer than 3 bytes?" };
-                    std::copy(begin, end, sequence.begin());
-                }
-
-                scancode(scancode_set set) : scancode(set, { }) { }
+                scancode() = delete;
 
                 static const std::array<raw_scancode, 0x100> undo_translation_table;
                 static std::unordered_map<raw_scancode, raw_scancode> set2_to_set3_table;

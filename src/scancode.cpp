@@ -13,47 +13,6 @@ namespace jw
     {
         namespace detail
         {
-            key_state_pair scancode::decode()
-            {
-                key_state_pair k;
-                bool ext0 = false;
-                bool ext1 = false;
-
-                auto i = sequence.begin();
-
-                if (code_set == set2)
-                {
-                    if (*i == 0xE0) { ext0 = true; ++i; }
-                    if (*i == 0xE1) { ext1 = true; ++i; }
-                }
-                if (*i == 0xF0) { k.second = key_state::up; ++i; }
-                else k.second = key_state::down;
-
-                auto c = *i;
-                switch (code_set)
-                {
-                case set1:
-                case set2:
-                    if (ext0)
-                    {
-                        if (set2_extended0_to_key_table.count(c)) { k.first = set2_extended0_to_key_table[c]; break; }
-                        if (set2_extended0_to_set3_table.count(c)) { c = set2_extended0_to_set3_table[c]; }
-                        else { k.first = 0xE000 + c; break; }
-                    }
-                    else if (ext1)
-                    {
-                        if (c == 0x14) { k.first = key::pause; break; }
-                        else { k.first = 0xE100 + c; break; }
-                    }
-                    else if (set2_to_set3_table.count(c)) { c = set2_to_set3_table[c]; }
-                    [[fallthrough]];
-                case set3:
-                    if (set3_to_key_table.count(c)) { k.first = set3_to_key_table[c]; }
-                    else { k.first = 0x0100 + c; }
-                }
-                return k;
-            }
-
             /*
             raw_scancode scancode::translate(raw_scancode c)
             {

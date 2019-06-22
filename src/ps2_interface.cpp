@@ -19,7 +19,7 @@ namespace jw
 {
     namespace io
     {
-        std::optional<detail::scancode> ps2_interface::get_scancode()
+        std::optional<key_state_pair> ps2_interface::get_scancode()
         {
             dpmi::irq_mask disable_irq { 1 };
             return detail::scancode::extract(scancode_queue, get_scancode_set());

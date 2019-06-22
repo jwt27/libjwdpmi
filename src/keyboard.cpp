@@ -32,14 +32,13 @@ namespace jw
                     key_changed(k);
                 };
 
-                while (auto c = ps2->get_scancode())
+                while (auto k = ps2->get_scancode())
                 {
-                    auto k = c->decode();
-                    handle_key(k);
+                    handle_key(*k);
 
                     auto set_lock_state = [this, &handle_key](auto k, auto state_key)
                     {
-                        if (keys[k.first].is_up() and k.second.is_down())
+                        if (keys[k->first].is_up() and k->second.is_down())
                             handle_key({ state_key, not keys[state_key] });
 
                         ps2->set_leds(keys[key::num_lock_state].is_down(),
@@ -47,7 +46,7 @@ namespace jw
                             keys[key::scroll_lock_state].is_down());
                     };
 
-                    switch (k.first)
+                    switch (k->first)
                     {
                     case key::num_lock: set_lock_state(k, key::num_lock_state); break;
                     case key::caps_lock: set_lock_state(k, key::caps_lock_state); break;
