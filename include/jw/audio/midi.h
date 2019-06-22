@@ -127,7 +127,7 @@ namespace jw::audio
         static void* get_pword(int i, S& stream, L& list)
         {
             void*& p = stream.pword(i);
-            if (__builtin_expect(p == nullptr, false))
+            if (p == nullptr) [[unlikely]]
                 p = &list.emplace_back();
             return p;
         }
