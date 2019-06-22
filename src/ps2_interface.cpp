@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #include <iostream>
@@ -18,7 +19,7 @@ namespace jw
 {
     namespace io
     {
-        std::deque<detail::scancode> ps2_interface::get_scancodes()
+        std::optional<detail::scancode> ps2_interface::get_scancode()
         {
             dpmi::irq_mask disable_irq { 1 };
             return detail::scancode::extract(scancode_queue, get_scancode_set());

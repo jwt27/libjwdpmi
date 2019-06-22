@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
@@ -7,6 +8,7 @@
 
 #include <jw/common.h>
 #include <jw/io/key.h>
+#include <jw/io/io_error.h>
 
 namespace jw
 {
@@ -26,28 +28,28 @@ namespace jw
             class scancode
             {
             public:
-                // Extract full scancode sequences from a sequence of bytes
+                // Extract one scancode sequence from a sequence of bytes
                 // NOTE: parameter will be modified, extracted sequences are removed
-                static std::deque<scancode> extract(auto& codes, scancode_set set)
+                template <typename Container>
+                static std::optional<scancode> extract(Container& bytes, scancode_set set)
                 {
-                    std::deque<scancode> extracted_codes;
+                    std::optional<scancode> extracted_code { };
 
-                    auto i = codes.begin();
-                    while (i != codes.end())
+                    for (auto i = bytes.begin(); i != bytes.end(); ++i)
                     {
                         if (set == set2)
                         {
-                            if (*i == 0xE0) { ++i; continue; }
-                            if (*i == 0xE1) { ++i; continue; }
+                            if (*i == 0xE0) continue;
+                            if (*i == 0xE1) continue;
                         }
-                        if (*i == 0xF0) { ++i; continue; }
-                        i++;
-                        extracted_codes.push_back({ set, { codes.begin(), i } });
-                        codes.erase(codes.begin(), i);
-                        i = codes.begin();
+                        if (*i == 0xF0) continue;
+                        ++i;
+                        extracted_code = scancode { set, bytes.begin(), i };
+                        bytes.erase(bytes.begin(), i);
+                        break;
                     }
 
-                    return extracted_codes;
+                    return extracted_code;
                 }
 
                 // Decode scancode sequence into key code and state pair
@@ -91,14 +93,20 @@ namespace jw
                 };
 
             private:
-                std::deque<raw_scancode> sequence;
+                std::array<raw_scancode, 3> sequence;
                 scancode_set code_set;
 
-                scancode(scancode_set set, std::deque<raw_scancode> seq)
-                    : sequence(seq), code_set(set) { }
+                scancode(scancode_set set, const std::array<raw_scancode, 3>& copy)
+                    : sequence(copy), code_set(set) { }
 
-                scancode(scancode_set set)
-                    : scancode(set, { }) { }
+                template <typename I0, typename I1>
+                scancode(scancode_set set, I0 begin, I1 end) : code_set(set)
+                {
+                    if (end - begin > 3) [[unlikely]] throw framing_error { "Scancode longer than 3 bytes?" };
+                    std::copy(begin, end, sequence.begin());
+                }
+
+                scancode(scancode_set set) : scancode(set, { }) { }
 
                 static const std::array<raw_scancode, 0x100> undo_translation_table;
                 static std::unordered_map<raw_scancode, raw_scancode> set2_to_set3_table;

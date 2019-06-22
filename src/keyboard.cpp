@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
@@ -16,10 +17,7 @@ namespace jw
         {
             try
             {
-                auto codes = ps2->get_scancodes();
-                if (codes.size() == 0) return;
-
-                auto handle_key = [this, async](key_state_pair k)
+                auto handle_key = [this](key_state_pair k)
                 {
                     if (keys[k.first].is_down() && k.second.is_down()) k.second = key_state::repeat;
 
@@ -33,9 +31,9 @@ namespace jw
                     key_changed(k);
                 };
 
-                for (auto&& c : codes)
+                while (auto c = ps2->get_scancode())
                 {
-                    auto k = c.decode();
+                    auto k = c->decode();
                     handle_key(k);
 
                     auto set_lock_state = [this, &handle_key](auto k, auto state_key)
