@@ -27,6 +27,7 @@ namespace jw
                     keys[key::any_alt] = keys[key::alt_left] | keys[key::alt_right];
                     keys[key::any_shift] = keys[key::shift_left] | keys[key::shift_right];
                     keys[key::any_win] = keys[key::win_left] | keys[key::win_right];
+                    keys[key::any_enter] = keys[key::enter] | keys[key::num_enter];
 
                     key_changed(k);
                 };
