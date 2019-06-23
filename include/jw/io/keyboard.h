@@ -28,19 +28,10 @@ namespace jw
             void redirect_cin(bool echo = true, std::ostream& echo_stream = std::cout);
             void restore_cin();
             void update() { do_update(false); }
+            void auto_update(bool enable);
 
-            void auto_update(bool enable)
-            {
-                if (enable) ps2->set_keyboard_update_thread({ [this]() { do_update(true); } });
-                else ps2->set_keyboard_update_thread({ });
-            }
-
-            keyboard()
-            {
-                ps2->init_keyboard();
-                keys.reserve(128);
-            }
-            ~keyboard() { restore_cin(); ps2->reset_keyboard(); }
+            keyboard();
+            ~keyboard();
 
         private:
             ps2_interface* ps2 { ps2_interface::instance().get() };

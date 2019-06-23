@@ -49,7 +49,7 @@ namespace jw
 
                 // 0100 - 01FF = undefined keys
 
-                // 0200 - 02FF = virtual keys (these do not generate events)
+                // 0200 - 02FF = virtual keys
                 any_shift = 0x200, any_ctrl, any_alt, any_win, any_enter,
                 num_lock_state, caps_lock_state, scroll_lock_state,
 
