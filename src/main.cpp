@@ -193,7 +193,7 @@ namespace jw
 
     auto aligned_ptr = [align](void* p)
     {
-        if (p == nullptr) throw std::bad_alloc { };
+        if (p == nullptr) [[unlikely]] throw std::bad_alloc { };
         auto b = ((reinterpret_cast<std::uintptr_t>(p) + 4) & -align) + align;
         *(reinterpret_cast<void**>(b) - 1) = p;
         return reinterpret_cast<void*>(b);
@@ -204,7 +204,7 @@ namespace jw
         if (new_alloc_initialized == yes) return aligned_ptr(new_alloc->allocate(n));
         else throw std::bad_alloc { };
     }
-    if (__builtin_expect(new_alloc_initialized == no, false))
+    if (new_alloc_initialized == no) [[unlikely]]
     {
         dpmi::interrupt_mask no_interrupts_here { };
         try
