@@ -126,7 +126,7 @@ namespace jw
                 {
                     if constexpr (sse and (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>))
                     {
-                        auto do_blend = [this, &other]() PIXEL_FUNCTION
+                        auto do_blend = [this, &other]()
                         {
                             *this = m128(m128_blend<U>(m128(), other.m128()));
                         };
@@ -169,7 +169,7 @@ namespace jw
                 {
                     if constexpr (sse and (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>))
                     {
-                        auto do_blend = [this, &other]() PIXEL_FUNCTION
+                        auto do_blend = [this, &other]()
                         {
                             *this = m128(m128_blend<U>(m128_premul(m128()), m128_premul(other.m128())));
                         };
@@ -219,7 +219,7 @@ namespace jw
 
                 if constexpr (sse and (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>))
                 {
-                    auto do_cast = [this]() PIXEL_FUNCTION
+                    auto do_cast = [this]()
                     {
                         return pixel<U>::m128(m128_cast_to<U>(m128()));
                     };

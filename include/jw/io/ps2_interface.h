@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
@@ -255,7 +256,7 @@ namespace jw
             dpmi::locked_pool_allocator<> alloc { 1_KB };
             std::deque<detail::raw_scancode, dpmi::locked_pool_allocator<>> scancode_queue { alloc };
 
-            dpmi::irq_handler irq_handler { [this]() INTERRUPT
+            dpmi::irq_handler irq_handler { [this]()
             {
                 if (get_status().data_available)
                 {

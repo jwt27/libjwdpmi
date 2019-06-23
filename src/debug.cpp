@@ -1354,7 +1354,7 @@ namespace jw
                 }, dpmi::always_call);
 
                 {
-                    exception_handler check_frame_type { 3, [](auto*, auto*, bool t) [[gnu::used]] 
+                    exception_handler check_frame_type { 3, [](auto*, auto*, bool t)
                     { 
                         new_frame_type = t;
                         return true; 

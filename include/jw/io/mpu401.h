@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
@@ -78,7 +79,7 @@ namespace jw
                         data_port.write(*tx_ptr++);
                 }
 
-                dpmi::irq_handler irq_handler { [this]() INTERRUPT
+                dpmi::irq_handler irq_handler { [this]()
                 {
                     try
                     {

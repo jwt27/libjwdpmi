@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
@@ -34,7 +35,7 @@ namespace jw
             tsc_ticks_per_irq = tsc_total / tsc_sample_size;
         }
 
-        dpmi::irq_handler setup::rtc_irq { []() INTERRUPT
+        dpmi::irq_handler setup::rtc_irq { []()
         {
             static byte last_sec { 0 };
             dpmi::interrupt_mask no_irq { };
@@ -56,7 +57,7 @@ namespace jw
             dpmi::irq_handler::acknowledge();
         }, dpmi::always_call | dpmi::no_interrupts };
 
-        dpmi::irq_handler setup::pit_irq { []() INTERRUPT
+        dpmi::irq_handler setup::pit_irq { []()
         {
             ++pit_ticks;
 

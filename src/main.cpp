@@ -204,8 +204,9 @@ namespace jw
         if (new_alloc_initialized == yes) return aligned_ptr(new_alloc->allocate(n));
         else throw std::bad_alloc { };
     }
-    if (new_alloc_initialized == no) [[unlikely]]
+    if (new_alloc_initialized == no)
     {
+        [[unlikely]];
         dpmi::interrupt_mask no_interrupts_here { };
         try
         {

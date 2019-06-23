@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
@@ -203,7 +204,7 @@ namespace jw
                     return true;
                 }
 
-                dpmi::irq_handler irq_handler { [this]() INTERRUPT
+                dpmi::irq_handler irq_handler { [this]()
                 {
                     auto id = irq_id.read();
                     if (not id.no_irq_pending)
