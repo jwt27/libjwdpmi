@@ -70,7 +70,7 @@ namespace jw
         {
         #ifndef NDEBUG
             trap_mask() noexcept;
-            [[gnu::optimize("no-omit-frame-pointer")]] ~trap_mask() noexcept;
+            ~trap_mask() noexcept;
 
             trap_mask(const trap_mask&) = delete;
             trap_mask(trap_mask&&) = delete;

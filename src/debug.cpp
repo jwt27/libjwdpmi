@@ -1409,6 +1409,7 @@ namespace jw
 
         trap_mask::~trap_mask() noexcept
         {
+            FORCE_FRAME_POINTER;
             if (failed) return;
             auto& t = detail::threads[jw::thread::detail::scheduler::get_current_thread_id()];
             t.trap_mask = std::max(t.trap_mask - 1, 0l);
