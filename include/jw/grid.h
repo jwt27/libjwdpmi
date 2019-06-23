@@ -208,11 +208,11 @@ namespace jw
 
         constexpr auto begin() noexcept   { return iterator { *this, { 0, 0 } }; }
         constexpr auto vbegin() noexcept  { return vertical_iterator { *this, { 0, 0 } }; }
-        constexpr auto rbegin() noexcept  { return vertical_iterator { *this, size() - vector2i { 1, 1 } }; }
+        constexpr auto rbegin() noexcept  { return reverse_iterator { *this, size() - vector2i { 1, 1 } }; }
         constexpr auto rvbegin() noexcept { return reverse_vertical_iterator { *this, size() - vector2i { 1, 1 } }; }
         constexpr auto cbegin() const noexcept   { return const_iterator { *this, { 0, 0 } }; }
         constexpr auto cvbegin() const noexcept  { return const_vertical_iterator { *this, { 0, 0 } }; }
-        constexpr auto crbegin() const noexcept  { return const_vertical_iterator { *this, size() - vector2i { 1, 1 } }; }
+        constexpr auto crbegin() const noexcept  { return const_reverse_iterator { *this, size() - vector2i { 1, 1 } }; }
         constexpr auto crvbegin() const noexcept { return const_reverse_vertical_iterator { *this, size() - vector2i { 1, 1 } }; }
         constexpr auto end() const noexcept { return invalid_grid_iterator { }; }
 
@@ -264,9 +264,8 @@ namespace jw
         constexpr const T& get_wrap(vector2i p) const { return grid().base_get(abs_pos_wrap(p)); }
         constexpr const T& get(vector2i p) const { return grid().base_get(abs_pos(p)); }
 
-        static constexpr unsigned level = L;
         std::conditional_t<(L < 2), R&, R> r;
-        vector2i pos, dim;
+        const vector2i pos, dim;
     };
 
     template<typename T>
@@ -283,13 +282,13 @@ namespace jw
         constexpr auto range_abs(const vector2i& topleft, const vector2i& bottomright) noexcept { return range(topleft, bottomright - topleft); }
 
         constexpr auto* data() noexcept { return ptr; }
-        constexpr const auto* data() const noexcept { return data(); }
+        constexpr const auto* data() const noexcept { return ptr; }
         constexpr auto data_size() const noexcept { return this->width() * this->height(); }
 
     protected:
         constexpr const T& base_get(vector2i p) const { return *(ptr + p[0] + this->dim[0] * p[1]); }
 
-        T* ptr;
+        T* const ptr;
     };
 
     template<typename T>
