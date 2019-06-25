@@ -189,19 +189,23 @@ namespace jw
             void fpu_context_switcher_t::leave() noexcept
             {
                 if (__builtin_expect(not init, false)) return;
-                if (context_switch_successful) return;
+                if (context_switch_successful)
+                {
+                    context_switch_successful = false;
+                    return;
+                }
 
                 if (contexts.back() != nullptr) alloc.deallocate(contexts.back(), 1);
                 contexts.pop_back();
 
                 if (not use_ts_bit)
                 {
-                    set_fpu_emulation((contexts.size() > 1 and get_fpu_emulation().em) or contexts.back() != nullptr);
+                    set_fpu_emulation(contexts.back() != nullptr or (contexts.size() > 1 and get_fpu_emulation().em));
                 }
                 else
                 {
                     cr0_t cr0 { };
-                    cr0.task_switched = (contexts.size() > 1 and cr0.task_switched) or contexts.back() != nullptr;
+                    cr0.task_switched = contexts.back() != nullptr or (contexts.size() > 1 and cr0.task_switched);
                     cr0.set();
                 }
             }
