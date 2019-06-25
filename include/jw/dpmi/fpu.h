@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
@@ -162,7 +163,6 @@ namespace jw
                 locked_pool_allocator<fpu_context> alloc { config::interrupt_fpu_context_pool };
                 std::deque<fpu_context*, locked_pool_allocator<>> contexts { alloc };
 
-                fpu_context* default_irq_context;
                 bool context_switch_successful { false };
                 bool use_ts_bit { false };
                 bool init { false };
