@@ -17,6 +17,13 @@ constexpr std::uint64_t operator"" _TB(std::uint64_t n) { return n << 40; }
 
 #define FORCE_FRAME_POINTER asm(""::"r"(__builtin_frame_address(0)));
 
+#ifdef __MMX__
+#   define HAVE__MMX__
+#endif
+#ifdef __SSE__
+#   define HAVE__SSE__
+#endif
+
 namespace jw
 {
     void print_exception(const std::exception& e, int level = 0) noexcept;
@@ -28,14 +35,14 @@ namespace jw
 
     [[noreturn]] void terminate();
 
-#   ifdef __MMX__
-    static constexpr bool mmx = true;
+#   ifdef HAVE__MMX__
+    inline constexpr bool mmx = true;
 #   else
-    static constexpr bool mmx = false;
+    inline constexpr bool mmx = false;
 #   endif
-#   ifdef __SSE__
-    static constexpr bool sse = true;
+#   ifdef HAVE__SSE__
+    inline constexpr bool sse = true;
 #   else
-    static constexpr bool sse = false;
+    inline constexpr bool sse = false;
 #   endif
 }

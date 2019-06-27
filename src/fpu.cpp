@@ -14,111 +14,56 @@ namespace jw
     {
         namespace detail
         {
-            bool cr0_allowed { true };
-            bool cr0_access_known { false };
-            bool test_cr0_access()
-            {
-                if (__builtin_expect(!cr0_access_known, false))
-                {
-                    volatile bool test { true };
-                    dpmi::exception_handler exc { 0x0d, [&test](auto*, exception_frame* frame, bool)
-                    {
-                        test = false;
-                        frame->fault_address.offset += 3;
-                        return true;
-                    } };
-
-                    asm volatile(
-                        "mov eax, cr0;" // both instructions are 3 bytes
-                        "mov cr0, eax;"
-                        :::"eax");
-
-                    cr0_allowed = test;
-                    cr0_access_known = true;
-                }
-                return cr0_allowed;
-            }
-
-            bool cr4_allowed { true };
-            bool cr4_access_known { false };
-            bool test_cr4_access()
-            {
-                if (__builtin_expect(!cr4_access_known, false))
-                {
-                    volatile bool test { true };
-                    dpmi::exception_handler exc { 0x0d, [&test](auto*, exception_frame* frame, bool)
-                    {
-                        test = false;
-                        frame->fault_address.offset += 3;
-                        return true;
-                    } };
-
-                    asm volatile(
-                        "mov eax, cr4;"
-                        "mov cr4, eax;"
-                        :::"eax");
-
-                    cr4_allowed = test;
-                    cr4_access_known = true;
-                }
-                return cr4_allowed;
-            }
-
             std::unique_ptr<exception_handler> exc07_handler, exc06_handler;
 
             fpu_context_switcher_t::fpu_context_switcher_t()
             {
                 cr0_t cr0 { };
                 cr0.native_exceptions = true;
-                cr0.monitor_fpu = true;
                 cr0.task_switched = false;
-#ifdef __SSE__
-                asm("test %b0, %b0;"
-                    "jz skip%=;"
-                    "mov eax, cr4;"
-                    "or eax, 0x600;" // enable SSE and SSE exceptions
-                    "mov cr4,eax;"
-                    "skip%=:"
-                    ::"q"(test_cr4_access())
-                    : "eax");
-                cr0.fpu_emulation = false;
-                set_fpu_emulation(false);
-#endif
                 cr0.set();
 
-                asm("fnclex;"
+                if constexpr (sse)
+                {
+                    ring0_privilege r0 { };
+                    std::uint32_t scratch;
+                    asm volatile
+                    (
+                        "mov %0, cr4;"
+                        "or %0, 0x600;" // enable SSE and SSE exceptions
+                        "mov cr4, %0;"
+                        : "=r" (scratch)
+                    );
+                }
+
+                asm
+                (
+                    "fnclex;"
                     "fninit;"
                     "sub esp, 4;"
                     "fnstcw [esp];"
                     "or word ptr [esp], 0x00BF;"   // mask all exceptions
                     "fldcw [esp];"
-#ifdef __SSE__
-                    "stmxcsr [esp];"
-                    "or dword ptr [esp], 0x00001F80;"
-                    "ldmxcsr [esp];"
-#endif
-                    "add esp, 4;");
-                contexts.push_back(nullptr);
+                    "add esp, 4;"
+                );
 
-                set_fpu_emulation(false, true);
-                if (test_cr0_access())
+                if constexpr (sse)
                 {
-                    interrupt_mask no_irqs { };
-                    {
-                        cr0_t cr0 { };
-                        cr0.task_switched = true;
-                        cr0.set();
-                    }
-                    cr0_t cr0 { };
-                    use_ts_bit = cr0.task_switched;
-                    cr0.task_switched = false;
-                    cr0.set();
+                    asm
+                    (
+                        "sub esp, 4;"
+                        "stmxcsr [esp];"
+                        "or dword ptr [esp], 0x00001F80;"
+                        "ldmxcsr [esp];"
+                        "add esp, 4;"
+                    );
                 }
 
-                use_ts_bit = false; // HACK
+                contexts.push_back(nullptr);
+                set_fpu_emulation(false, true);
 
                 auto dummy_exception_handler = [this] (auto e) { return std::make_unique<exception_handler>(e, [this](cpu_registers*, exception_frame*, bool) { return context_switch_successful; }); };
-                if (not use_ts_bit) exc06_handler = dummy_exception_handler(exception_num::invalid_opcode);
+                exc06_handler = dummy_exception_handler(exception_num::invalid_opcode);
                 exc07_handler = dummy_exception_handler(exception_num::device_not_available);
 
                 init = true;
@@ -136,22 +81,13 @@ namespace jw
                 auto try_context_switch = [this, exc]
                 {
                     if (exc != exception_num::device_not_available and exc != exception_num::invalid_opcode) return false;
-                    if (get_fpu_emulation().em)
-                    {
-                        set_fpu_emulation(false);
-                    }
-                    else
-                    {
-                        return false;
-                        cr0_t cr0 { };
-                        if (not cr0.task_switched) return false;
-                        cr0.task_switched = false;
-                        cr0.set();
-                    }
+                    if (not get_fpu_emulation().em) return false;
+
+                    set_fpu_emulation(false);
 
                     if (contexts.back() == nullptr)
                     {
-                        for (auto&& i : contexts)
+                        for (auto& i : contexts)
                         {
                             if (i == nullptr)
                             {
@@ -175,13 +111,7 @@ namespace jw
                 if (not context_switch_successful)
                 {
                     contexts.push_back(nullptr);
-                    if (not use_ts_bit) set_fpu_emulation(true);
-                    else
-                    {
-                        cr0_t cr0 { };
-                        cr0.task_switched = true;
-                        cr0.set();
-                    }
+                    set_fpu_emulation(true);
                 }
                 return context_switch_successful;
             }
@@ -198,16 +128,7 @@ namespace jw
                 if (contexts.back() != nullptr) alloc.deallocate(contexts.back(), 1);
                 contexts.pop_back();
 
-                if (not use_ts_bit)
-                {
-                    set_fpu_emulation(contexts.back() != nullptr or (contexts.size() > 1 and get_fpu_emulation().em));
-                }
-                else
-                {
-                    cr0_t cr0 { };
-                    cr0.task_switched = contexts.back() != nullptr or (contexts.size() > 1 and cr0.task_switched);
-                    cr0.set();
-                }
+                set_fpu_emulation(contexts.back() != nullptr or (contexts.size() > 1 and get_fpu_emulation().em));
             }
 
             void fpu_context_switcher_t::set_fpu_emulation(bool em, bool mp)

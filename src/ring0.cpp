@@ -11,6 +11,8 @@ namespace jw::dpmi
         {
             try
             {
+                detail::ring3_cs = get_cs();
+                detail::ring3_ss = get_ss();
                 cs = descriptor::clone_segment(detail::ring3_cs);
                 cs->segment.code_segment.privilege_level = 0;
                 cs->set_selector_privilege(0);

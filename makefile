@@ -7,6 +7,8 @@ CXXFLAGS += -fnon-call-exceptions
 CXXFLAGS += -mcld
 CXXFLAGS += -mpreferred-stack-boundary=4
 
+CXXFLAGS_NOFPU := -mgeneral-regs-only $(shell tools/missing-macros.sh $(CXX) $(CXXFLAGS))
+
 INCLUDE := -Iinclude
 LIBS := 
 
@@ -41,9 +43,9 @@ $(OBJDIR):
 $(OUTDIR)/$(OUTPUT): $(OBJ) | $(OUTDIR)
 	$(AR) scru $@ $(OBJ) $(LIBS)
 
-$(OBJDIR)/cpu_exception.% : override CXXFLAGS += -mgeneral-regs-only
-$(OBJDIR)/fpu.% : override CXXFLAGS += -mgeneral-regs-only
-$(OBJDIR)/irq.% : override CXXFLAGS += -mgeneral-regs-only
+$(OBJDIR)/cpu_exception.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
+$(OBJDIR)/fpu.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
+$(OBJDIR)/irq.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
 $(OBJDIR)/debug.% : override CXXFLAGS += -O3
 
 $(OBJDIR)/%.asm: $(SRCDIR)/%.cpp jwdpmi_config.h | $(OBJDIR)

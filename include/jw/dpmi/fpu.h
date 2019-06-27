@@ -16,13 +16,14 @@
 #include <jw/alloc.h>
 #include <jw/common.h>
 #include <jw/split_stdint.h>
+#include <jw/dpmi/ring0.h>
 #include <../jwdpmi_config.h>
 
 namespace jw
 {
     namespace dpmi
     {
-        union alignas(0x08) [[gnu::packed]] long_fpu_register
+        union alignas(0x08) long_fpu_register
         {
             byte value[0x10];
             long double value_ld;
@@ -43,68 +44,60 @@ namespace jw
         };
         static_assert(sizeof(short_fpu_register) == 10);
 
-        union alignas(0x10) [[gnu::packed]] sse_register
+        union alignas(0x10) sse_register
         {
             std::array<float, 4> value;
             __m128 m128;
         };
         static_assert(sizeof(sse_register) == 0x10);
 
-        struct alignas(0x08) fsave_data
+        struct alignas(8) fsave_data
         {
-            union
-            {
-                struct [[gnu::packed]]
-                {
-                    std::uint16_t fctrl;
-                    unsigned : 16;
-                    std::uint16_t fstat;
-                    unsigned : 16;
-                    std::uint16_t ftag;
-                    unsigned : 16;
-                    std::uintptr_t fioff;
-                    selector fiseg;
-                    std::uint16_t fop;
-                    std::uintptr_t fooff;
-                    selector foseg;
-                    unsigned : 16;
-                    short_fpu_register st[8];
-                };
-                std::array<byte, 108> raw;
-            };
-            void save() noexcept { asm("fsave [%0];"::"r"(raw.data())); }
-            void restore() noexcept { asm("frstor [%0];"::"r"(raw.data())); }
+            std::uint16_t fctrl;
+            unsigned : 16;
+            std::uint16_t fstat;
+            unsigned : 16;
+            std::uint16_t ftag;
+            unsigned : 16;
+            std::uintptr_t fioff;
+            selector fiseg;
+            std::uint16_t fop;
+            std::uintptr_t fooff;
+            selector foseg;
+            unsigned : 16;
+            short_fpu_register st[8];
+
+            void save() noexcept { asm("fsave %0;"::"m" (*this)); }
+            void restore() noexcept { asm("frstor %0;"::"m" (*this)); }
         };
+        static_assert(sizeof(fsave_data) >= 108); // it's 112 for some reason
 
         struct alignas(0x10) fxsave_data
         {
-            union
-            {
-                struct [[gnu::packed]]
-                {
-                    std::uint16_t fctrl;
-                    std::uint16_t fstat;
-                    std::uint8_t ftag;
-                    unsigned : 8;
-                    std::uint16_t fop;
-                    std::uintptr_t fioff;
-                    selector fiseg;
-                    unsigned : 16;
-                    std::uintptr_t fooff;
-                    selector foseg;
-                    unsigned : 16;
-                    std::uint32_t mxcsr;
-                    std::uint32_t mxcsr_mask;
-                    long_fpu_register st[8];
-                    sse_register xmm[16];
-                };
-                std::array<byte, 512> raw;
-            };
-            void save() noexcept { asm("fxsave [%0];"::"r"(raw.data())); }
-            void restore() noexcept { asm("fxrstor [%0];"::"r"(raw.data())); }
-        };
+            std::uint16_t fctrl;
+            std::uint16_t fstat;
+            std::uint8_t ftag;
+            unsigned : 8;
+            std::uint16_t fop;
+            std::uintptr_t fioff;
+            selector fiseg;
+            unsigned : 16;
+            std::uintptr_t fooff;
+            selector foseg;
+            unsigned : 16;
+            std::uint32_t mxcsr;
+            std::uint32_t mxcsr_mask;
+            long_fpu_register st[8];
+            sse_register xmm[8];
+            unsigned reserved[44];
+            byte unused[48];
 
-#       ifdef __SSE__
+            void save() noexcept { asm("fxsave %0;"::"m" (*this)); }
+            void restore() noexcept { asm("fxrstor %0;"::"m" (*this)); }
+        };
+        static_assert(sizeof(fxsave_data) == 512);
+
+#       ifdef HAVE__SSE__
         using fpu_context = fxsave_data;
 #       else
         using fpu_context = fsave_data;
@@ -112,9 +105,6 @@ namespace jw
 
         namespace detail
         {
-            [[gnu::pure]] bool test_cr0_access();
-            [[gnu::pure]] bool test_cr4_access();
-
             struct [[gnu::packed]] cr0_t
             {
                 bool protected_mode : 1;
@@ -134,27 +124,13 @@ namespace jw
 
                 cr0_t()
                 {
-                    bool cr0_access = test_cr0_access();
-                    asm volatile(
-                        "test %b1, %b1;"
-                        "mov %0, 0;"
-                        "jz skip%=;"
-                        "mov %0, cr0;"
-                        "skip%=:"
-                        : "=r" (*this)
-                        : "q" (cr0_access));
+                    ring0_privilege r0 { };
+                    asm volatile("mov %0, cr0;" : "=r" (*this));
                 }
                 void set()
                 {
-                    bool cr0_access = test_cr0_access();
-                    if (!cr0_access) return;
-                    asm volatile(
-                        "test %b1, %b1;"
-                        "jz skip%=;"
-                        "mov cr0, %0;"
-                        "skip%=:"
-                        :: "r" (*this)
-                        , "q" (cr0_access));
+                    ring0_privilege r0 { };
+                    asm volatile("mov cr0, %0;" :: "r" (*this));
                 }
             };
 
@@ -164,7 +140,6 @@ namespace jw
                 std::deque<fpu_context*, locked_pool_allocator<>> contexts { alloc };
 
                 bool context_switch_successful { false };
-                bool use_ts_bit { false };
                 bool init { false };
 
                 struct fpu_emulation_status

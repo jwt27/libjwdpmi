@@ -214,7 +214,7 @@ namespace jw
                 4
             };
 
-#           ifndef __SSE__
+#           ifndef HAVE__SSE__
             constexpr auto reg_max = regnum::fop;
 #           else
             constexpr auto reg_max = regnum::mxcsr;
@@ -630,7 +630,7 @@ namespace jw
                             case foseg: { std::uint32_t s = fpu->foseg; encode(out, &s); return; }
                             case fooff: { std::uint32_t s = fpu->fooff; encode(out, &s); return; }
                             case fop:   { std::uint32_t s = fpu->fop  ; encode(out, &s); return; }
-#                           ifdef __SSE__
+#                           ifdef HAVE__SSE__
                             case xmm0: case xmm1: case xmm2: case xmm3: case xmm4: case xmm5: case xmm6: case xmm7:
                                 encode(out, &fpu->xmm[r - xmm0]); return;
                             case mxcsr: encode(out, &fpu->mxcsr); return;
