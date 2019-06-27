@@ -75,7 +75,7 @@ namespace jw::dpmi
         }
 
     private:
-        static inline std::map<std::uint32_t, leaf_t, std::less<std::uint32_t>, locking_allocator<>> leaves;
+        static inline std::map<std::uint32_t, leaf_t, std::less<std::uint32_t>, locking_allocator<>> leaves { };
         static inline bool initialized { false };
 
         static void populate();
