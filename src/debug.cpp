@@ -409,7 +409,7 @@ namespace jw
             }
 
             // Decode big-endian hex string
-            inline auto decode(std::string_view str)
+            inline auto decode(const std::string_view& str)
             {
                 std::uint32_t result { };
                 if (str[0] == '-') return all_threads_id;
@@ -427,7 +427,7 @@ namespace jw
             template <typename T>
             inline bool reverse_decode(const std::string_view& in, T* out, std::size_t len = sizeof(T))
             {
-                if (in.size() < 2 * len) return false;
+                len = std::min(len, in.size() / 2);
                 auto ptr = reinterpret_cast<byte*>(out);
                 for (std::size_t i = 0; i < len; ++i)
                 {
@@ -442,7 +442,7 @@ namespace jw
             inline void encode(std::ostream& out, T* in, std::size_t len = sizeof(T))
             {
                 auto ptr = reinterpret_cast<const volatile byte*>(in);
-                for (std::size_t i = 0; i < len; ++i) 
+                for (std::size_t i = 0; i < len; ++i)
                     out << std::setw(2) << static_cast<std::uint32_t>(ptr[i]);
             }
 
@@ -617,7 +617,7 @@ namespace jw
                     case eip: encode(out, &t.frame.fault_address.offset); return;
                     default:
                         if (r > reg_max) return;
-                        auto* volatile fpu = fpu_context_switcher.get_last_context();
+                        auto* fpu = fpu_context_switcher.get_last_context();
                         switch (r)
                         {
                             case st0: case st1: case st2: case st3: case st4: case st5: case st6: case st7:
@@ -687,17 +687,32 @@ namespace jw
                 case esp:    return reverse_decode(value, &t.frame.stack.offset, regsize[r]);
                 case eip:    return reverse_decode(value, &t.frame.fault_address.offset, regsize[r]);
                 case eflags: return reverse_decode(value, &t.frame.flags.raw_eflags, regsize[r]);
-                case cs:     return reverse_decode(value.substr(0, 4), &t.frame.fault_address.segment, regsize[r]);
-                case ss:     return reverse_decode(value.substr(0, 4), &t.frame.stack.segment, regsize[r]);
-                case ds: if (new_frame_type) { return reverse_decode(value.substr(0, 4), &t.frame.ds, regsize[r]); } return false;
-                case es: if (new_frame_type) { return reverse_decode(value.substr(0, 4), &t.frame.es, regsize[r]); } return false;
-                case fs: if (new_frame_type) { return reverse_decode(value.substr(0, 4), &t.frame.fs, regsize[r]); } return false;
-                case gs: if (new_frame_type) { return reverse_decode(value.substr(0, 4), &t.frame.gs, regsize[r]); } return false;
-                default: if (r > mxcsr) return false;
-                    //auto fpu = fpu_context_switcher.get_last_context();
+                case cs:     return reverse_decode(value.substr(0, 4), &t.frame.fault_address.segment, 2);
+                case ss:     return reverse_decode(value.substr(0, 4), &t.frame.stack.segment, 2);
+                case ds: if (new_frame_type) { return reverse_decode(value.substr(0, 4), &t.frame.ds, 2); } return false;
+                case es: if (new_frame_type) { return reverse_decode(value.substr(0, 4), &t.frame.es, 2); } return false;
+                case fs: if (new_frame_type) { return reverse_decode(value.substr(0, 4), &t.frame.fs, 2); } return false;
+                case gs: if (new_frame_type) { return reverse_decode(value.substr(0, 4), &t.frame.gs, 2); } return false;
+                default:
+                    auto* fpu = fpu_context_switcher.get_last_context();
                     switch (r)
                     {
-                    default: return false; // TODO
+                    case st0: case st1: case st2: case st3: case st4: case st5: case st6: case st7:
+                        return reverse_decode(value, &fpu->st[r - st0], regsize[r]);
+                    case fctrl: { return reverse_decode(value, &fpu->fctrl, regsize[r]); }
+                    case fstat: { return reverse_decode(value, &fpu->fstat, regsize[r]); }
+                    case ftag:  { return reverse_decode(value, &fpu->ftag,  regsize[r]); }
+                    case fiseg: { return reverse_decode(value, &fpu->fiseg, regsize[r]); }
+                    case fioff: { return reverse_decode(value, &fpu->fioff, regsize[r]); }
+                    case foseg: { return reverse_decode(value, &fpu->foseg, regsize[r]); }
+                    case fooff: { return reverse_decode(value, &fpu->fooff, regsize[r]); }
+                    case fop:   { return reverse_decode(value, &fpu->fop,   regsize[r]); }
+#                   ifdef HAVE__SSE__
+                    case xmm0: case xmm1: case xmm2: case xmm3: case xmm4: case xmm5: case xmm6: case xmm7:
+                        return reverse_decode(value, &fpu->xmm[r - xmm0], regsize[r]);
+                    case mxcsr: return reverse_decode(value, &fpu->mxcsr, regsize[r]);
+#                   endif
+                    default: return false;
                     }
                 }
             }
