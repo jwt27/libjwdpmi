@@ -1,10 +1,11 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
+#pragma once
 #include <jw/thread/task.h>
 #include <jw/dpmi/detail/interrupt_id.h>
-#pragma once
 
 namespace jw
 {
@@ -173,15 +174,14 @@ namespace jw
                     auto v = interrupt_id::get_current_interrupt().lock()->vector;
                     if (data->entries.at(v)->flags & always_chain) return;
                     auto i = vec_to_irq(v);
-                    if (i >= 16) return;
-                    if (!in_service()[i]) return;
+                    auto s = in_service();
 
                     if (i >= 8)
                     {
-                        pic1_cmd.write((i % 8) | 0x60);
-                        pic0_cmd.write(0x62);
+                        if (s[i]) pic1_cmd.write((i % 8) | 0x60);
+                        if (s[2]) pic0_cmd.write(0x62);
                     }
-                    else pic0_cmd.write(i | 0x60);
+                    else if (s[i]) pic0_cmd.write(i | 0x60);
                 }
 
                 INTERRUPT static byte* get_stack_ptr() noexcept;

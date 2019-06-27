@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
@@ -29,7 +30,7 @@ namespace jw
                 auto hang = [] { do { } while (true); };
 
                 auto i = vec_to_irq(vec);
-                if ((i == 7 || i == 15) && !in_service()[i]) goto spurious;
+                if ((i == 7 or i == 15) and not in_service()[i]) goto spurious;
 
                 try
                 {
@@ -43,8 +44,8 @@ namespace jw
                 catch (const std::exception& e) { exception_msg(); print_exception(e); hang(); }
                 catch (...) { exception_msg(); hang(); }
 
-                spurious:
                 asm("cli");
+            spurious:
                 acknowledge();
                 interrupt_id::pop_back();
                 fpu_context_switcher.leave();
