@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
@@ -6,51 +7,12 @@
 #include <unordered_map>
 #include <jw/io/detail/scancode.h>
 
-//TODO: I don't really like all the dynamic allocation going on here.
 namespace jw
 {
     namespace io
     {
         namespace detail
         {
-            key_state_pair scancode::decode()
-            {
-                key_state_pair k;
-                k.second = key_state::down;
-
-                bool ext0 = false;
-                bool ext1 = false;
-
-                for (auto c : sequence)
-                {
-                    if (c == 0xF0) { k.second = key_state::up; continue; }
-                    switch (code_set)
-                    {
-                    case set1:
-                    case set2:
-                        if (c == 0xE0) { ext0 = true; continue; }
-                        if (c == 0xE1) { ext1 = true; continue; }
-                        if (ext0)
-                        {
-                            if (set2_extended0_to_key_table.count(c)) { k.first = set2_extended0_to_key_table[c]; continue; }
-                            if (set2_extended0_to_set3_table.count(c)) { c = set2_extended0_to_set3_table[c]; }
-                            else { k.first = 0xE000 + c; continue; }
-                        }
-                        else if (ext1)
-                        {
-                            if (c == 0x14) { k.first = key::pause; continue; }
-                            else { k.first = 0xE100 + c; continue; }
-                        }
-                        else if (set2_to_set3_table.count(c)) { c = set2_to_set3_table[c]; }
-                        [[fallthrough]];
-                    case set3:
-                        if (set3_to_key_table.count(c)) { k.first = set3_to_key_table[c]; }
-                        else { k.first = 0x0100 + c; }
-                    }
-                }
-                return k;
-            }
-
             /*
             raw_scancode scancode::translate(raw_scancode c)
             {

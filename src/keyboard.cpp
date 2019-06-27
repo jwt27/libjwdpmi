@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
@@ -16,43 +17,40 @@ namespace jw
         {
             try
             {
-                auto codes = ps2->get_scancodes();
-                if (codes.size() == 0) return;
-
-                auto handle_key = [this, async](key_state_pair k)
+                auto handle_key = [this](key_state_pair k)
                 {
-                    if (keys[k.first].is_down() && k.second.is_down()) k.second = key_state::repeat;
-
-                    keys[k.first] = k.second;
-
-                    keys[key::any_ctrl] = keys[key::ctrl_left] | keys[key::ctrl_right];
-                    keys[key::any_alt] = keys[key::alt_left] | keys[key::alt_right];
-                    keys[key::any_shift] = keys[key::shift_left] | keys[key::shift_right];
-                    keys[key::any_win] = keys[key::win_left] | keys[key::win_right];
-
+                    auto& s = keys[k.first];
+                    if (s == k.second) return;
+                    if (s.is_down() and k.second.is_down()) k.second = key_state::repeat;
+                    s = k.second;
                     key_changed(k);
                 };
 
-                for (auto&& c : codes)
+                auto set_lock_state = [this, &handle_key](key_state_pair k, key state_key)
                 {
-                    auto k = c.decode();
-                    handle_key(k);
+                    if (keys[k.first].is_up() and k.second.is_down())
+                        handle_key({ state_key, not keys[state_key] });
 
-                    auto set_lock_state = [this, &handle_key](auto k, auto state_key)
+                    ps2->set_leds(keys[key::num_lock_state].is_down(),
+                                  keys[key::caps_lock_state].is_down(),
+                                  keys[key::scroll_lock_state].is_down());
+                };
+
+                while (auto k = ps2->get_scancode())
+                {
+                    handle_key(*k);
+
+                    handle_key({ key::any_ctrl,  keys[key::ctrl_left]  | keys[key::ctrl_right]  });
+                    handle_key({ key::any_alt,   keys[key::alt_left]   | keys[key::alt_right]   });
+                    handle_key({ key::any_shift, keys[key::shift_left] | keys[key::shift_right] });
+                    handle_key({ key::any_win,   keys[key::win_left]   | keys[key::win_right]   });
+                    handle_key({ key::any_enter, keys[key::enter]      | keys[key::num_enter]   });
+
+                    switch (k->first)
                     {
-                        if (keys[k.first].is_up() and k.second.is_down())
-                            handle_key({ state_key, not keys[state_key] });
-
-                        ps2->set_leds(keys[key::num_lock_state].is_down(),
-                            keys[key::caps_lock_state].is_down(),
-                            keys[key::scroll_lock_state].is_down());
-                    };
-
-                    switch (k.first)
-                    {
-                    case key::num_lock: set_lock_state(k, key::num_lock_state); break;
-                    case key::caps_lock: set_lock_state(k, key::caps_lock_state); break;
-                    case key::scroll_lock: set_lock_state(k, key::scroll_lock_state); break;
+                    case key::num_lock:    set_lock_state(*k, key::num_lock_state);    break;
+                    case key::caps_lock:   set_lock_state(*k, key::caps_lock_state);   break;
+                    case key::scroll_lock: set_lock_state(*k, key::scroll_lock_state); break;
                     }
                 }
             }
@@ -86,6 +84,24 @@ namespace jw
             s->disable();
             std::cin.rdbuf(cin);
             cin = nullptr;
+        }
+
+        void keyboard::auto_update(bool enable)
+        {
+            if (enable) ps2->set_keyboard_update_thread({ [this]() { do_update(true); } });
+            else ps2->set_keyboard_update_thread({ });
+        }
+
+        keyboard::keyboard()
+        {
+            ps2->init_keyboard();
+            keys.reserve(128);
+        }
+
+        keyboard::~keyboard()
+        {
+            restore_cin();
+            ps2->reset_keyboard();
         }
     }
 }

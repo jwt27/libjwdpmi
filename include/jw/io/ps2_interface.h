@@ -38,7 +38,7 @@ namespace jw
 
         struct ps2_interface : dpmi::class_lock<ps2_interface>
         {
-            std::deque<detail::scancode> get_scancodes();
+            std::optional<key_state_pair> get_scancode();
 
             scancode_set current_scancode_set;
             scancode_set get_scancode_set() { return current_scancode_set; }

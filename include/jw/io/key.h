@@ -49,8 +49,8 @@ namespace jw
 
                 // 0100 - 01FF = undefined keys
 
-                // 0200 - 0203 = virtual keys
-                any_shift = 0x200, any_ctrl, any_alt, any_win,
+                // 0200 - 02FF = virtual keys
+                any_shift = 0x200, any_ctrl, any_alt, any_win, any_enter,
                 num_lock_state, caps_lock_state, scroll_lock_state,
 
                 // E000 - E1FF = undefined set2 extended keys
