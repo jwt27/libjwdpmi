@@ -1,5 +1,4 @@
 # libjwdpmi
-(any suggestions for better names are welcome)  
 This library aims to be a complete development framework for DPMI (32-bit DOS) applications, written in C++17.  
 It's still in the experimental stage. Anything may change at any time.
 
@@ -18,9 +17,8 @@ Current features include:
 * MIDI protocol implementation.
 
 ## Installing
-* Build and install gcc with `--target=i586-pc-msdosdjgpp`, and install the djgpp standard library.  
-The easiest way is to use Andrew Wu's build script, found here: https://github.com/andrewwutw/build-djgpp  
-Or use my fork, which currently has more features: https://github.com/jwt27/build-djgpp/tree/generic
+* Build and install gcc with `--target=i686-pc-msdosdjgpp`, and install the djgpp standard library.  
+An easy to use build script is available here: https://github.com/jwt27/build-gcc
 
 * Set your `PATH` accordingly:  
 ```
@@ -33,9 +31,9 @@ $ git submodule update --init
 ```
 * In your makefile, export your `AR`, `CXX` and `CXXFLAGS`, and add a rule to build `libjwdpmi`:  
 ```
-AR:=i586-pc-msdosdjgpp-ar
-CXX:=i586-pc-msdosdjgpp-g++
-CXXFLAGS:=-std=gnu++17 -masm=intel
+AR:=i686-pc-msdosdjgpp-ar
+CXX:=i686-pc-msdosdjgpp-g++
+CXXFLAGS:=-std=gnu++2a -masm=intel
 
 export AR CXX CXXFLAGS
 libjwdpmi:
