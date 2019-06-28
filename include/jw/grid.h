@@ -133,10 +133,27 @@ namespace jw
         template<typename, grid_iterator_direction> friend struct grid_iterator;
 
         constexpr grid_range() noexcept = delete;
-        constexpr grid_range(const grid_range&) noexcept = default;
-        constexpr grid_range(grid_range&&) noexcept = default;
-        constexpr grid_range& operator=(const grid_range&) noexcept = default;
-        constexpr grid_range& operator=(grid_range&&) noexcept = default;
+
+        template<unsigned L2 = L, std::enable_if_t<(L2 > 1), bool> = { }>
+        constexpr grid_range(const grid_range<R, T, L2>& other) noexcept
+            : r(other.r), pos(other.pos), dim(other.dim) { }
+
+        template<unsigned L2 = L, std::enable_if_t<(L2 <= 1), bool> = { }>
+        constexpr grid_range(const grid_range<R, T, L2>& other) noexcept
+            : r(&other.r == reinterpret_cast<R*>(&other) ? reinterpret_cast<R&>(*this) : other.r)
+            , pos(other.pos), dim(other.dim) { }
+
+        template<unsigned L2 = L, std::enable_if_t<(L2 > 1), bool> = { }>
+        constexpr grid_range(grid_range<R, T, L2>&& other) noexcept
+            : r(other.r), pos(other.pos), dim(other.dim) { }
+
+        template<unsigned L2 = L, std::enable_if_t<(L2 <= 1), bool> = { }>
+        constexpr grid_range(grid_range<R, T, L2>&& other) noexcept
+            : r(&other.r == reinterpret_cast<R*>(&other) ? reinterpret_cast<R&>(*this) : other.r)
+            , pos(other.pos), dim(other.dim) { }
+
+        constexpr grid_range& operator=(const grid_range& other) noexcept { new (this) grid_range { other }; }
+        constexpr grid_range& operator=(grid_range&& other) noexcept { new (this) grid_range { other }; }
 
         constexpr auto range(vector2i position, vector2i dimensions) const noexcept { return make_range(*this, position, dimensions); }
         constexpr auto range(vector2i position, vector2i dimensions) noexcept { return make_range(*this, position, dimensions); }
@@ -160,8 +177,7 @@ namespace jw
 
         template<typename R2, unsigned L2> friend constexpr bool operator==(const grid_range& lhs, const grid_range<R2, T, L2>& rhs) noexcept
         {
-            return lhs.grid().data() == rhs.grid().data() and &lhs(0, 0) == &rhs(0, 0) and
-                &lhs(lhs.size() - vector2i { 1, 1 }) == &rhs(rhs.size() - vector2i { 1, 1 });
+            return &lhs(0, 0) == &rhs(0, 0) and &lhs(lhs.size() - vector2i { 1, 1 }) == &rhs(rhs.size() - vector2i { 1, 1 });
         }
         template<typename R2, unsigned L2> friend constexpr bool operator!=(const grid_range& lhs, const grid_range<R2, T, L2>& rhs) noexcept { return not (lhs == rhs); }
 
@@ -268,22 +284,19 @@ namespace jw
         const vector2i pos, dim;
     };
 
+#   define COMMON_FUNCTIONS \
+    template<typename, typename, unsigned> friend struct grid_range;                                                                                  \
+    constexpr auto range(vector2i position, vector2i dimensions) const noexcept { return this->template make_range<1>(*this, position, dimensions); } \
+    constexpr auto range(vector2i position, vector2i dimensions) noexcept { return this->template make_range<1>(*this, position, dimensions); }       \
+    constexpr auto range_abs(const vector2i& topleft, const vector2i& bottomright) const noexcept { return range(topleft, bottomright - topleft); }   \
+    constexpr auto range_abs(const vector2i& topleft, const vector2i& bottomright) noexcept { return range(topleft, bottomright - topleft); }
+
     template<typename T>
     struct grid : public grid_range<grid<T>, T, 0>
     {
-        template<typename, typename, unsigned> friend struct grid_range;
-
-        constexpr grid(vector2i size, T* data) : grid_range<grid<T>, T, 0>(*this, { 0, 0 }, size), ptr(data) { }
-        constexpr grid(std::size_t w, std::size_t h, T* data) : grid(vector2i { w, h }, data) { }
-
-        constexpr auto range(vector2i position, vector2i dimensions) const noexcept { return this->template make_range<1>(*this, position, dimensions); }
-        constexpr auto range(vector2i position, vector2i dimensions) noexcept { return this->template make_range<1>(*this, position, dimensions); }
-        constexpr auto range_abs(const vector2i& topleft, const vector2i& bottomright) const noexcept { return range(topleft, bottomright - topleft); }
-        constexpr auto range_abs(const vector2i& topleft, const vector2i& bottomright) noexcept { return range(topleft, bottomright - topleft); }
-
-        constexpr auto* data() noexcept { return ptr; }
-        constexpr const auto* data() const noexcept { return ptr; }
-        constexpr auto data_size() const noexcept { return this->width() * this->height(); }
+        constexpr grid(vector2i size, T* const data) : grid_range<grid<T>, T, 0>(*this, { 0, 0 }, size), ptr(data) { }
+        constexpr grid(std::size_t w, std::size_t h, T* const data) : grid(vector2i { w, h }, data) { }
+        COMMON_FUNCTIONS
 
     protected:
         constexpr const T& base_get(vector2i p) const { return *(ptr + p[0] + this->dim[0] * p[1]); }
@@ -292,23 +305,30 @@ namespace jw
     };
 
     template<typename T>
-    struct grid_container : public grid<T>
+    struct grid_container : public grid_range<grid_container<T>, T, 0>
     {
         grid_container(vector2i size, std::experimental::pmr::memory_resource* memres = std::experimental::pmr::get_default_resource())
-            : grid<T>(size, nullptr), data(size.x() * size.y(), std::experimental::pmr::polymorphic_allocator<T> { memres }) { this->ptr = data.data(); }
+            : grid_range<grid_container<T>, T, 0>(*this, { 0, 0 }, size), data(size.x()* size.y(), std::experimental::pmr::polymorphic_allocator<T> { memres }) { }
         grid_container(std::size_t w, std::size_t h, std::experimental::pmr::memory_resource* memres = std::experimental::pmr::get_default_resource())
             : grid_container(vector2i { w,h }, memres) { }
+        COMMON_FUNCTIONS
 
     protected:
+        constexpr const T& base_get(vector2i p) const { return *(data.data() + p[0] + this->dim[0] * p[1]); }
+
         std::experimental::pmr::vector<T> data;
     };
 
     template<typename T, std::size_t w, std::size_t h>
-    struct fixed_grid : public grid<T>
+    struct fixed_grid : public grid_range<fixed_grid<T, w, h>, T, 0>
     {
-        constexpr fixed_grid() : grid<T>(w, h, array.data()) { }
+        constexpr fixed_grid() : grid_range<fixed_grid<T, w, h>, T, 0>(*this, { 0, 0 }, { w, h }) { }
+        COMMON_FUNCTIONS
 
     protected:
+        constexpr const T& base_get(vector2i p) const { return *(array.data() + p[0] + this->dim[0] * p[1]); }
+
         std::array<T, w * h> array;
     };
+#   undef COMMON_FUNCTIONS
 }
