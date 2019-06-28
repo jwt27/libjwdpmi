@@ -4,6 +4,7 @@
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #include <algorithm>
+#include <optional>
 #include <jw/dpmi/irq.h>
 #include <jw/dpmi/fpu.h>
 #include <jw/alloc.h>
@@ -34,12 +35,14 @@ namespace jw
 
                 try
                 {
-                    std::unique_ptr<irq_mask> mask;
-                    if (!(data->entries.at(vec)->flags & no_interrupts)) asm("sti");
-                    else if (data->entries.at(vec)->flags & no_reentry) mask = std::make_unique<irq_mask>(i);
-                    if (!(data->entries.at(vec)->flags & no_auto_eoi)) send_eoi();
+                    std::optional<irq_mask> mask;
+                    auto& entry = data->entries.at(vec);
+                    auto flags = entry->flags;
+                    if (not (flags & no_interrupts)) asm("sti");
+                    else if (flags & no_reentry) mask.emplace(i);
+                    if (not (flags & no_auto_eoi)) send_eoi();
                 
-                    data->entries.at(vec)->call();
+                    entry->call();
                 }
                 catch (const std::exception& e) { exception_msg(); print_exception(e); hang(); }
                 catch (...) { exception_msg(); hang(); }
@@ -86,26 +89,24 @@ namespace jw
                     "call get_eip%=;"  // call near/relative (E8)   // 5 bytes
                     "get_eip%=: pop esi;"
                     "mov ds, cs:[esi-0x18];"        // Restore segment registers
-                    "mov es, cs:[esi-0x16];"
-                    "mov fs, cs:[esi-0x14];"
-                    "mov gs, cs:[esi-0x12];"
+                    "mov es, [esi-0x16];"
+                    "mov fs, [esi-0x14];"
+                    "mov gs, [esi-0x12];"
                     "mov ebp, esp;"
                     "mov bx, ss;"
-                    "cmp bx, cs:[esi-0x26];"
+                    "cmp bx, [esi-0x26];"
                     "je keep_stack%=;"
-                    "call cs:[esi-0x20];"           // Get a new stack pointer
-                    "mov ss, cs:[esi-0x26];"
+                    "call [esi-0x20];"              // Get a new stack pointer
+                    "mov ss, [esi-0x26];"
                     "mov esp, eax;"
                     "keep_stack%=:"
-                    "and esp, -0x10;"               // Align stack
-                    "sub esp, 0xc;"
-                    "push cs:[esi-0x1C];"           // Pass our interrupt vector
-                    "call cs:[esi-0x10];"           // Call the entry point
-                    "cmp bx, cs:[esi-0x26];"
+                    "push [esi-0x1C];"              // Pass our interrupt vector
+                    "call [esi-0x10];"              // Call the entry point
+                    "cmp bx, [esi-0x26];"
                     "je ret_same_stack%=;"
-                    "mov eax, cs:[esi-0x24];"
+                    "mov eax, [esi-0x24];"
                     "dec dword ptr [eax];"          // --stack_use_count
-                    "mov ss, bx;"         
+                    "mov ss, bx;"
                     "ret_same_stack%=:"
                     "mov esp, ebp;"
                     "popa; pop gs; pop fs; pop es; pop ds;"
@@ -158,7 +159,7 @@ namespace jw
                     , "b" (v)
                     , "c" (ptr.segment)
                     , "d" (ptr.offset));
-                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+                if (c) [[unlikely]] throw dpmi_error(error, __PRETTY_FUNCTION__);
             }
 
             far_ptr32 irq_controller::get_pm_interrupt_vector(int_vector v)
@@ -173,7 +174,7 @@ namespace jw
                     , "=d" (ptr.offset)
                     : "a" (0x0204)
                     , "b" (v));
-                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+                if (c) [[unlikely]] throw dpmi_error(error, __PRETTY_FUNCTION__);
                 return ptr;
             }
         }

@@ -140,7 +140,7 @@ namespace jw
             private:
                 static int_vector irq_to_vec(irq_level i) noexcept
                 { 
-                    assert(i < 16); 
+                    assert(i < 16);
                     dpmi::version ver { };
                     return i < 8 ? i + ver.pic_master_base : i - 8 + ver.pic_slave_base;
                 }
@@ -155,7 +155,7 @@ namespace jw
                 static bool is_irq(int_vector v) { return vec_to_irq(v) != 0xff; }
                 static bool is_acknowledged()
                 { 
-                    if (auto&& id = interrupt_id::get_current_interrupt().lock()) return id->acknowledged;
+                    if (auto id = interrupt_id::get_current_interrupt().lock()) return id->acknowledged;
                     return true;
                 }
 
