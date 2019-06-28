@@ -136,7 +136,7 @@ namespace jw
 
             class fpu_context_switcher_t : class_lock<fpu_context_switcher_t>
             {
-                locked_pool_allocator<fpu_context> alloc { config::interrupt_fpu_context_pool };
+                locked_pool_allocator<false, fpu_context> alloc { config::interrupt_fpu_context_pool };
                 std::deque<fpu_context*, locked_pool_allocator<>> contexts { alloc };
 
                 bool context_switch_successful { false };

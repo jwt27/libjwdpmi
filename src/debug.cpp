@@ -56,11 +56,11 @@ namespace jw
             bool thread_events_enabled { false };
             bool new_frame_type { true };
 
-            locked_pool_allocator<> alloc { 1_MB };
-            std::map<std::string, std::string, std::less<std::string>, locked_pool_allocator<>> supported { alloc };
-            std::map<std::uintptr_t, watchpoint, std::less<std::uintptr_t>, locked_pool_allocator<>> watchpoints { alloc };
-            std::map<std::uintptr_t, byte, std::less<std::uintptr_t>, locked_pool_allocator<>> breakpoints { alloc };
-            std::map<int, void(*)(int)> signal_handlers {  };
+            locked_pool_allocator<false> alloc { 1_MB };
+            std::map<std::string, std::string, std::less<std::string>, locked_pool_allocator<false>> supported { alloc };
+            std::map<std::uintptr_t, watchpoint, std::less<std::uintptr_t>, locked_pool_allocator<false>> watchpoints { alloc };
+            std::map<std::uintptr_t, byte, std::less<std::uintptr_t>, locked_pool_allocator<false>> breakpoints { alloc };
+            std::map<int, void(*)(int)> signal_handlers { };
 
             std::array<std::unique_ptr<exception_handler>, 0x20> exception_handlers;
             rs232_streambuf_internals* gdb_streambuf;
@@ -76,9 +76,9 @@ namespace jw
                 using std::string_view::basic_string_view;
             };
 
-            std::deque<std::string, locked_pool_allocator<>> sent_packets { alloc };
+            std::deque<std::string, locked_pool_allocator<false>> sent_packets { alloc };
             std::string raw_packet_string;
-            std::deque<packet_string, locked_pool_allocator<>> packet { alloc };
+            std::deque<packet_string, locked_pool_allocator<false>> packet { alloc };
             bool replied { false };
 
             constexpr std::uint32_t all_threads_id { std::numeric_limits<std::uint32_t>::max() };
@@ -92,7 +92,7 @@ namespace jw
                 new_exception_frame frame;
                 cpu_registers reg;
                 //template <typename T> using set_with_alloc = std::unordered_set<T, std::hash<T>, std::equal_to<T>, locked_pool_allocator<T>>;
-                template <typename T> using set_with_alloc = std::set<T, std::less<T>, locked_pool_allocator<T>>;
+                template <typename T> using set_with_alloc = std::set<T, std::less<T>, locked_pool_allocator<false, T>>;
                 set_with_alloc<std::int32_t> signals { alloc };
                 std::int32_t last_stop_signal { -1 };
                 std::uintptr_t step_range_begin { 0 };

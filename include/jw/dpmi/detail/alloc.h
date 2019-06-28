@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
@@ -12,9 +13,9 @@ namespace jw
     {
         namespace detail
         {
-            struct new_allocator : locked_pool_allocator<byte>
+            struct new_allocator : locked_pool_allocator<false, byte>, class_lock<new_allocator>
             {
-                using base = locked_pool_allocator<byte>;
+                using base = locked_pool_allocator<false, byte>;
 
                 auto allocate(std::size_t n)
                 {

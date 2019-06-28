@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
@@ -17,7 +18,7 @@ namespace jw::dpmi::detail
 
     struct interrupt_id : public class_lock<interrupt_id>
     {
-        locked_pool_allocator<> alloc { 1_KB };
+        locked_pool_allocator<false> alloc { 1_KB };
         std::uint64_t id_count { 0 };
         std::uint32_t use_count { 0 };
         struct id_t

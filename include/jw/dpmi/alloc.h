@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
@@ -76,14 +77,15 @@ namespace jw
             template <typename U> constexpr friend bool operator!= (const locking_allocator& a, const locking_allocator<U>& b) noexcept { return !(a == b); }
         };
 
+        struct empty { };
 
         // Allocates from a pre-allocated locked memory pool. This allows interrupt handlers to insert/remove elements in 
         // STL containers without risking page faults.
         // When specifying a pool size, make sure to account for overhead (reallocation, fragmentation, alignment overhead). 
         // Keep in mind each allocation takes at least sizeof(T) + alignof(T) + sizeof(pool_node) bytes. Therefore this 
         // allocator is rather space-inefficient for single-element allocations. 
-        template<typename T = byte>
-        struct locked_pool_allocator : class_lock<locked_pool_allocator<T>>
+        template<bool lock_self = true, typename T = byte>
+        struct locked_pool_allocator : std::conditional_t<lock_self, class_lock<locked_pool_allocator<lock_self, T>>, empty>
         {
             using pool_type = std::vector<byte, locking_allocator<>>;
             using value_type = T;
@@ -193,12 +195,12 @@ namespace jw
                 new(begin()) pool_node { };
             }
 
-            template <typename U> friend class locked_pool_allocator;
-            template <typename U> locked_pool_allocator(const locked_pool_allocator<U>& c) : pool(c.pool) { }
+            template <bool lock_other, typename U> friend class locked_pool_allocator;
+            template <bool lock_other, typename U> locked_pool_allocator(const locked_pool_allocator<lock_other, U>& c) : pool(c.pool) { }
 
-            template <typename U> struct rebind { using other = locked_pool_allocator<U>; };
-            template <typename U> constexpr friend bool operator== (const locked_pool_allocator& a, const locked_pool_allocator<U>& b) noexcept { return a.pool == b.pool; }
-            template <typename U> constexpr friend bool operator!= (const locked_pool_allocator& a, const locked_pool_allocator<U>& b) noexcept { return !(a == b); }
+            template <typename U> struct rebind { using other = locked_pool_allocator<lock_self, U>; };
+            template <bool lock_other, typename U> constexpr friend bool operator== (const locked_pool_allocator& a, const locked_pool_allocator<lock_other, U>& b) noexcept { return a.pool == b.pool; }
+            template <bool lock_other, typename U> constexpr friend bool operator!= (const locked_pool_allocator& a, const locked_pool_allocator<lock_other, U>& b) noexcept { return !(a == b); }
 
         protected:
             constexpr auto* begin() const noexcept { return aligned_ptr<pool_node>(pool->data()); }
@@ -266,25 +268,29 @@ namespace jw
             static inline std::map<void*, ptr_with_lock>* map { };
         };
 
-        struct locked_pool_memory_resource : protected locked_pool_allocator<byte>, public std::experimental::pmr::memory_resource,
-            private class_lock<locked_pool_memory_resource>
+        template <bool lock_self = true>
+        struct locked_pool_memory_resource : protected locked_pool_allocator<lock_self, byte>, public std::experimental::pmr::memory_resource
         {
-            locked_pool_memory_resource(std::size_t size_bytes) : locked_pool_allocator(size_bytes) { }
+            friend struct locked_pool_memory_resource<not lock_self>;
+            using base = locked_pool_allocator<lock_self, byte>;
+
+            locked_pool_memory_resource(std::size_t size_bytes) : base(size_bytes) { }
 
         protected:
             [[nodiscard]] virtual void* do_allocate(std::size_t n, std::size_t) override
             {
-                return reinterpret_cast<void*>(locked_pool_allocator::allocate(n));
+                return reinterpret_cast<void*>(base::allocate(n));
             }
 
             virtual void do_deallocate(void* ap, std::size_t size, std::size_t) noexcept override
             {
-                locked_pool_allocator::deallocate(reinterpret_cast<byte*>(ap), size);
+                base::deallocate(reinterpret_cast<byte*>(ap), size);
             }
 
             virtual bool do_is_equal(const std::experimental::pmr::memory_resource& other) const noexcept override
             {
-                return dynamic_cast<const locked_pool_memory_resource*>(&other) == this;
+                return dynamic_cast<const locked_pool_memory_resource*>(&other)->pool == this->pool
+                    or dynamic_cast<const locked_pool_memory_resource<not lock_self>*>(&other)->pool == this->pool;
             }
         };
     }

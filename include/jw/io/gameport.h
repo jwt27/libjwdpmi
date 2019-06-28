@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
@@ -74,7 +75,7 @@ namespace jw::io
         } cfg;
 
         gameport(config c, std::size_t alloc_size = 1_KB) : cfg(c), port(c.port),
-            memory_resource(using_irq()? std::make_unique<dpmi::locked_pool_memory_resource>(alloc_size) : nullptr)
+            memory_resource(using_irq()? std::make_unique<dpmi::locked_pool_memory_resource<true>>(alloc_size) : nullptr)
         {
             switch (cfg.strategy)
             {
