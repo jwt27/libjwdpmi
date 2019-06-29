@@ -20,10 +20,21 @@ namespace jw
                 auto handle_key = [this](key_state_pair k)
                 {
                     auto& s = keys[k.first];
-                    if (s == k.second) return;
                     if (s.is_down() and k.second.is_down()) k.second = key_state::repeat;
                     s = k.second;
                     key_changed(k);
+                };
+
+                auto handle_virtual_key = [this, &handle_key](key_state_pair k, key vk, std::initializer_list<key> list)
+                {
+                    bool found { false };
+                    key_state state { };
+                    for (auto&& i : list)
+                    {
+                        if (i == k.first) found = true;
+                        state |= keys[i];
+                    }
+                    if (found) handle_key({ vk, state });
                 };
 
                 auto set_lock_state = [this, &handle_key](key_state_pair k, key state_key)
@@ -40,11 +51,11 @@ namespace jw
                 {
                     handle_key(*k);
 
-                    handle_key({ key::any_ctrl,  keys[key::ctrl_left]  | keys[key::ctrl_right]  });
-                    handle_key({ key::any_alt,   keys[key::alt_left]   | keys[key::alt_right]   });
-                    handle_key({ key::any_shift, keys[key::shift_left] | keys[key::shift_right] });
-                    handle_key({ key::any_win,   keys[key::win_left]   | keys[key::win_right]   });
-                    handle_key({ key::any_enter, keys[key::enter]      | keys[key::num_enter]   });
+                    handle_virtual_key(*k, key::any_ctrl,  { key::ctrl_left,  key::ctrl_right  });
+                    handle_virtual_key(*k, key::any_alt,   { key::alt_left,   key::alt_right   });
+                    handle_virtual_key(*k, key::any_shift, { key::shift_left, key::shift_right });
+                    handle_virtual_key(*k, key::any_win,   { key::win_left,   key::win_right   });
+                    handle_virtual_key(*k, key::any_enter, { key::enter,      key::num_enter   });
 
                     switch (k->first)
                     {

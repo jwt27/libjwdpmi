@@ -92,6 +92,8 @@ namespace jw
             constexpr key_state(const key_state&) = default;
             constexpr key_state& operator=(const key_state&) = default;
 
+            constexpr key_state& operator|=(const key_state& other) { this->value |= other.value; return *this; }
+
             constexpr bool is_down() const noexcept { return value & down; }
             constexpr bool is_up() const noexcept { return !is_down(); }
             constexpr explicit operator bool() const noexcept { return is_down(); }
