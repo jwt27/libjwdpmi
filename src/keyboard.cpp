@@ -39,12 +39,11 @@ namespace jw
 
                 auto set_lock_state = [this, &handle_key](key_state_pair k, key state_key)
                 {
-                    if (keys[k.first].is_up() and k.second.is_down())
-                        handle_key({ state_key, not keys[state_key] });
+                    if (k.second.is_down()) handle_key({ state_key, not keys[state_key] });
 
-                    ps2->set_leds(keys[key::num_lock_state].is_down(),
-                                  keys[key::caps_lock_state].is_down(),
-                                  keys[key::scroll_lock_state].is_down());
+                    ps2->set_leds(keys[key::num_lock_state],
+                                  keys[key::caps_lock_state],
+                                  keys[key::scroll_lock_state]);
                 };
 
                 while (auto k = ps2->get_scancode())
