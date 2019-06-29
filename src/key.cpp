@@ -1,7 +1,9 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
+#include <optional>
 #include <jw/io/key.h>
 #include <jw/io/keyboard.h>
 
@@ -9,19 +11,33 @@ namespace jw
 {
     namespace io
     {
+        template<typename M, typename K>
+        static inline const typename M::mapped_type* find(const M& map, const K& key) noexcept
+        {
+            auto i = map.find(key);
+            if (i != map.cend()) return &i->second;
+            else return nullptr;
+        };
+
         char key::to_ascii(bool shift, bool capslock, bool numlock) const
         {
-            if ((shift ^ numlock) && ascii_num_table.count(value)) return ascii_num_table[value];
-            if ((shift ^ capslock) && ascii_caps_table.count(value)) return ascii_caps_table[value];
-            if (shift && ascii_shift_table.count(value)) return ascii_shift_table[value];
-            if (ascii_table.count(value)) return ascii_table[value];
+            if (shift xor numlock) if (auto a = find(ascii_num_table, value)) return *a;
+            if (shift xor capslock) if (auto a = find(ascii_caps_table, value)) return *a;
+            if (shift) if (auto a = find(ascii_shift_table, value)) return *a;
+            if (auto a = find(ascii_table, value)) return *a;
             return 0;
         }
 
         std::string_view key::name() const
         {
-            if (name_table.count(value)) return name_table[value];
-            return std::string { to_ascii(false, true, true) };
+            if (auto a = find(name_table, value)) return *a;
+
+            auto sv = [] (const auto& a) { return std::string_view { a, 1 }; };
+            if (auto a = find(ascii_num_table, value)) return sv(a);
+            if (auto a = find(ascii_caps_table, value)) return sv(a);
+            if (auto a = find(ascii_table, value)) return sv(a);
+
+            return "Unknown";
         }
 
         char key::to_ascii(const keyboard& kb) const
@@ -205,6 +221,7 @@ namespace jw
             { key::tab, "Tab" },
             { key::backspace, "Backspace" },
             { key::enter, "Enter" },
+            { key::any_enter, "Enter" },
             { key::space, "Space" },
             { key::print_screen, "Print Screen" },
             { key::pause, "Pause" },
