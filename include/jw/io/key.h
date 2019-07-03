@@ -72,7 +72,7 @@ namespace jw
             static std::unordered_map<key, char> ascii_num_table;
             static std::unordered_map<key, char> ascii_caps_table;
             static std::unordered_map<key, char> ascii_shift_table;
-            static std::unordered_map<key, std::string_view> name_table;
+            static std::unordered_map<key, std::string> name_table;
         };
 
 

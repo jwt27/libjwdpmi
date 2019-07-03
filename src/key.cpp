@@ -37,7 +37,10 @@ namespace jw
             if (auto a = find(ascii_caps_table, value)) return sv(a);
             if (auto a = find(ascii_table, value)) return sv(a);
 
-            return "Unknown";
+            std::stringstream s { };
+            s << std::hex << std::setw(4) << std::setfill('0') << value;
+            auto& a = name_table.emplace(value, s.str()).first->second;
+            return a;
         }
 
         char key::to_ascii(const keyboard& kb) const
@@ -187,7 +190,7 @@ namespace jw
             { key::slash, '?' }
         };
 
-        std::unordered_map<key, std::string_view> key::name_table
+        std::unordered_map<key, std::string> key::name_table
         {
             { key::esc, "Esc" },
             { key::f1, "F1" },
