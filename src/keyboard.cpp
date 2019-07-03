@@ -39,7 +39,7 @@ namespace jw
 
                 auto set_lock_state = [this, &handle_key](key_state_pair k, key state_key)
                 {
-                    if (k.second.is_down()) handle_key({ state_key, not keys[state_key] });
+                    if (keys[k.first] == key_state::down) handle_key({ state_key, not keys[state_key] });
 
                     ps2->set_leds(keys[key::num_lock_state],
                                   keys[key::caps_lock_state],
