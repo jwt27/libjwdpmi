@@ -51,7 +51,7 @@ namespace jw
 
                 // 0200 - 02FF = virtual keys
                 any_shift = 0x200, any_ctrl, any_alt, any_win, any_enter,
-                num_lock_state, caps_lock_state, scroll_lock_state,
+                num_lock_state = 0x280, caps_lock_state, scroll_lock_state,
 
                 // E000 - E1FF = undefined set2 extended keys
             };
@@ -65,6 +65,7 @@ namespace jw
             char to_ascii(const keyboard& kb) const;
             bool is_printable(bool shift, bool caps_lock, bool num_lock) const;
             bool is_printable(const keyboard& kb) const;
+            bool is_virtual() const noexcept { return value >= 0x200 and value < 0x300; }
             std::string_view name() const;
 
         private:
@@ -94,13 +95,12 @@ namespace jw
 
             constexpr key_state& operator|=(const key_state& other) { this->value |= other.value; return *this; }
 
-            constexpr bool is_down() const noexcept { return value & down; }
-            constexpr bool is_up() const noexcept { return !is_down(); }
+            constexpr bool is_up() const noexcept { return value == up; }
+            constexpr bool is_down() const noexcept { return not is_up(); }
             constexpr explicit operator bool() const noexcept { return is_down(); }
         };
 
         using key_state_pair = std::pair<key, key_state>;
-
     }
 }
 
