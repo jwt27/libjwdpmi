@@ -24,7 +24,7 @@ namespace jw
                 bad_key = 0,
                 esc, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12,
                 backtick, n1, n2, n3, n4, n5, n6, n7, n8, n9, n0, minus, equals, backspace,
-                tab, q, w, e, r, t, y, u, i, o, p, brace_left, brace_right, backslash,
+                tab, q, w, e, r, t, y, u, i, o, p, bracket_left, bracket_right, backslash,
                 caps_lock, a, s, d, f, g, h, j, k, l, semicolon, quote, enter,
                 shift_left, z, x, c, v, b, n, m, comma, dot, slash, shift_right,
                 ctrl_left, alt_left, space, alt_right, ctrl_right,
@@ -34,9 +34,9 @@ namespace jw
                 del, end, page_down,
                 up, left, down, right,
 
-                num_lock, num_div, num_mul, num_sub,
+                num_lock, num_div, num_mul, num_sub, num_add,
                 num_7, num_8, num_9,
-                num_4, num_5, num_6, num_add,
+                num_4, num_5, num_6,
                 num_1, num_2, num_3,
                 num_0, num_dot, num_enter,
 
@@ -45,7 +45,6 @@ namespace jw
                 mm_volume_up, mm_volume_down,
                 web_home, web_favourites, web_search, web_mail,
                 pwr_on, pwr_sleep, pwr_wake,
-                // TODO: 122-key ?
 
                 // 0100 - 01FF = undefined keys
 
