@@ -61,18 +61,17 @@ namespace jw
             constexpr key(const key&) = default;
             constexpr key& operator=(const key&) = default;
 
-            char to_ascii(bool shift, bool caps_lock, bool num_lock) const;
+            char to_ascii(bool ctrl, bool alt, bool shift, bool caps_lock, bool num_lock) const;
             char to_ascii(const keyboard& kb) const;
-            bool is_printable(bool shift, bool caps_lock, bool num_lock) const;
-            bool is_printable(const keyboard& kb) const;
             bool is_virtual() const noexcept { return value >= 0x200 and value < 0x300; }
             std::string_view name() const;
 
         private:
-            static std::unordered_map<key, char> ascii_table;
-            static std::unordered_map<key, char> ascii_num_table;
-            static std::unordered_map<key, char> ascii_caps_table;
-            static std::unordered_map<key, char> ascii_shift_table;
+            static const std::unordered_map<key, char> ascii_table;
+            static const std::unordered_map<key, char> ascii_num_table;
+            static const std::unordered_map<key, char> ascii_caps_table;
+            static const std::unordered_map<key, char> ascii_shift_table;
+            static const std::unordered_map<key, char> ascii_ctrl_table;
             static std::unordered_map<key, std::string> name_table;
         };
 

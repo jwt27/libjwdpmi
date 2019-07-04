@@ -19,8 +19,10 @@ namespace jw
             else return nullptr;
         };
 
-        char key::to_ascii(bool shift, bool capslock, bool numlock) const
+        char key::to_ascii(bool ctrl, bool alt, bool shift, bool capslock, bool numlock) const
         {
+            if (alt) return 0;
+            if (ctrl and not shift) if (auto a = find(ascii_ctrl_table, value)) return *a;
             if (shift xor numlock) if (auto a = find(ascii_num_table, value)) return *a;
             if (shift xor capslock) if (auto a = find(ascii_caps_table, value)) return *a;
             if (shift) if (auto a = find(ascii_shift_table, value)) return *a;
@@ -45,22 +47,14 @@ namespace jw
 
         char key::to_ascii(const keyboard& kb) const
         {
-            return key::to_ascii(kb.get(any_shift),
+            return key::to_ascii(kb.get(any_ctrl),
+                                 kb.get(any_alt),
+                                 kb.get(any_shift),
                                  kb.get(caps_lock_state),
                                  kb.get(num_lock_state));
         }
 
-        bool key::is_printable(bool shift, bool capslock, bool numlock) const
-        {
-            return to_ascii(shift, capslock, numlock) != 0;
-        }
-
-        bool key::is_printable(const keyboard& kb) const
-        {
-            return to_ascii(kb) != 0; // can't inline this :(
-        }
-
-        std::unordered_map<key, char> key::ascii_table
+        const std::unordered_map<key, char> key::ascii_table
         {
             { key::a, 'a' },
             { key::b, 'b' },
@@ -120,7 +114,7 @@ namespace jw
             { key::backspace, '\b' }
         };
 
-        std::unordered_map<key, char> key::ascii_caps_table
+        const std::unordered_map<key, char> key::ascii_caps_table
         {
             { key::a, 'A' },
             { key::b, 'B' },
@@ -150,7 +144,7 @@ namespace jw
             { key::z, 'Z' }
         };
 
-        std::unordered_map<key, char> key::ascii_num_table
+        const std::unordered_map<key, char> key::ascii_num_table
         {
             { key::num_0, '0' },
             { key::num_1, '1' },
@@ -165,7 +159,7 @@ namespace jw
             { key::num_dot, '.' }
         };
 
-        std::unordered_map<key, char> key::ascii_shift_table
+        const std::unordered_map<key, char> key::ascii_shift_table
         {
             { key::n0, ')' },
             { key::n1, '!' },
@@ -188,6 +182,42 @@ namespace jw
             { key::comma, '<' },
             { key::dot, '>' },
             { key::slash, '?' }
+        };
+
+        const std::unordered_map<key, char> key::ascii_ctrl_table
+        {
+            { key::n2, 0x00 },
+            { key::a, 0x01 },
+            { key::b, 0x02 },
+            { key::c, 0x03 },
+            { key::d, 0x04 },
+            { key::e, 0x05 },
+            { key::f, 0x06 },
+            { key::g, 0x07 },
+            { key::h, 0x08 },
+            { key::i, 0x09 },
+            { key::j, 0x0a },
+            { key::k, 0x0b },
+            { key::l, 0x0c },
+            { key::m, 0x0d },
+            { key::n, 0x0e },
+            { key::o, 0x0f },
+            { key::p, 0x10 },
+            { key::q, 0x11 },
+            { key::r, 0x12 },
+            { key::s, 0x13 },
+            { key::t, 0x14 },
+            { key::u, 0x15 },
+            { key::v, 0x16 },
+            { key::w, 0x17 },
+            { key::x, 0x18 },
+            { key::y, 0x19 },
+            { key::z, 0x1a },
+            { key::brace_left, 0x1b },
+            { key::backslash, 0x1c },
+            { key::brace_right, 0x1d },
+            { key::n6, 0x1e },
+            { key::minus, 0x1f },
         };
 
         std::unordered_map<key, std::string> key::name_table
