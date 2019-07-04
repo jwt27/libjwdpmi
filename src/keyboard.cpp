@@ -22,7 +22,7 @@ namespace jw
                     auto& s = keys[k.first];
                     if (s.is_down() and k.second.is_down()) k.second = key_state::repeat;
                     s = k.second;
-                    key_changed(k);
+                    key_changed(k.first, k.second);
                 };
 
                 auto handle_virtual_key = [this, &handle_key](key_state_pair k, key vk, std::initializer_list<key> list)

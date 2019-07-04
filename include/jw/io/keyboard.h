@@ -20,7 +20,7 @@ namespace jw
     {
         struct keyboard final
         {
-            chain_event<bool(key_state_pair)> key_changed;
+            chain_event<bool(key, key_state)> key_changed;
 
             const key_state& get(key k) const { return keys[k]; }
             const key_state& operator[](key k) const { return keys[k]; }

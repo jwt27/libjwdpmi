@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
@@ -32,17 +33,17 @@ namespace jw
                 virtual int_type underflow() override;
 
             private:
-                callback<bool(key_state_pair)> event_handler { [this](auto k)
+                callback<bool(key, key_state)> event_handler { [this](key k, key_state s)
                 {
                     if (egptr() >= buffer.end()) sync();
-                    if (k.second.is_down() && k.first.is_printable(keyb))
+                    if (s.is_up()) return false;
+                    if (auto c = k.to_ascii(keyb))
                     {
-                        auto c = k.first.to_ascii(keyb);
                         *(ptr++) = c;
                         if (echo)
                         {
                             *echo_stream << c << std::flush;
-                            if (k.first == key::backspace) *echo_stream << ' ' << c << std::flush;
+                            if (k == key::backspace) *echo_stream << ' ' << c << std::flush;
                         }
                         setg(buffer.begin(), gptr(), ptr);
                         return true;
