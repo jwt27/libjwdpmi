@@ -33,7 +33,7 @@ namespace jw
 
             struct mpu401_streambuf : std::streambuf
             {
-                mpu401_streambuf(mpu401_config c);
+                mpu401_streambuf(const mpu401_config& c);
                 virtual ~mpu401_streambuf();
 
                 mpu401_streambuf(const mpu401_streambuf&) = delete;
@@ -111,10 +111,15 @@ namespace jw
 
         struct mpu401_stream : std::iostream
         {
-            mpu401_stream(mpu401_config c) : std::iostream(&streambuf), streambuf(c) { }
+            mpu401_stream(const mpu401_config& c) : std::iostream(nullptr), streambuf(new detail::mpu401_streambuf { c })
+            {
+                this->rdbuf(streambuf.get());
+            }
+
+            mpu401_stream(const mpu401_stream&) = delete;
 
         private:
-            detail::mpu401_streambuf streambuf;
+            std::unique_ptr<detail::mpu401_streambuf> streambuf;
         };
     }
 }

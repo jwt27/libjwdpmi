@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
@@ -13,7 +14,7 @@ namespace jw
         {
             std::unordered_map<port_num, bool> mpu401_streambuf::port_use_map { };
 
-            mpu401_streambuf::mpu401_streambuf(mpu401_config c) : cfg(c), cmd_port(cfg.port + 1), status_port(cfg.port + 1), data_port(cfg.port)
+            mpu401_streambuf::mpu401_streambuf(const mpu401_config& c) : cfg(c), cmd_port(cfg.port + 1), status_port(cfg.port + 1), data_port(cfg.port)
             {
                 if (port_use_map[cfg.port]) throw std::runtime_error("MPU401 port already in use.");
 
