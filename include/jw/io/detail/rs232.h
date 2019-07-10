@@ -97,7 +97,7 @@ namespace jw
 
             struct rs232_streambuf : public std::streambuf, dpmi::class_lock<rs232_streambuf>
             {
-                rs232_streambuf(rs232_config p);
+                rs232_streambuf(const rs232_config& p);
                 virtual ~rs232_streambuf();
 
                 rs232_streambuf() = delete;

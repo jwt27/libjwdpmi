@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
@@ -113,13 +114,18 @@ namespace jw
     {
         struct rs232_stream : public std::iostream
         {
+            rs232_stream(const rs232_config& c) : std::iostream(nullptr), streambuf(new detail::rs232_streambuf { c })
+            {
+                this->rdbuf(streambuf.get());
+            }
+
             // note: takes ownership of streambuf pointer.
             rs232_stream(detail::rs232_streambuf* s) : std::iostream(s), streambuf(s) { }
+
+            rs232_stream(const rs232_stream&) = delete;
 
         private:
             std::unique_ptr<detail::rs232_streambuf> streambuf;
         };
-
-        inline auto make_rs232_stream(rs232_config c) { return rs232_stream { new detail::rs232_streambuf { c } }; }
     }
 }

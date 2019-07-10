@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #include <jw/io/rs232.h>
@@ -12,7 +13,7 @@ namespace jw
         {
             std::unordered_map<port_num, bool> rs232_streambuf::com_port_use_map { };
 
-            rs232_streambuf::rs232_streambuf(rs232_config p)
+            rs232_streambuf::rs232_streambuf(const rs232_config& p)
                 : config(p), 
                 rate_divisor(p.io_port), data_port(p.io_port), 
                 irq_enable(p.io_port + 1), 
