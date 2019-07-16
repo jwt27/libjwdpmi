@@ -33,7 +33,6 @@ namespace jw
         constexpr auto& operator+=(const vector2i& n) const
         {
             p += rotate(n);
-            steps += n.x() + n.y() * r.width();
             check_overflow();
             return *this;
         }
@@ -42,7 +41,6 @@ namespace jw
         constexpr auto& operator+=(std::ptrdiff_t n) const
         {
             p += n * direction();
-            steps += n;
             check_overflow();
             return *this;
         }
@@ -51,7 +49,6 @@ namespace jw
         constexpr auto& operator++() const noexcept
         {
             p += direction();
-            steps += 1;
             if constexpr (D == grid_iterator_direction::right) if (p.x() >= r.width()) { p.y() += 1; p.x() = 0; }
             if constexpr (D == grid_iterator_direction::left) if (p.x() < 0) { p.y() -= 1; p.x() = r.width() - 1; }
             if constexpr (D == grid_iterator_direction::down) if (p.y() >= r.height()) { p.x() += 1; p.y() = 0; }
@@ -59,7 +56,7 @@ namespace jw
             return *this;
         }
 
-        constexpr bool valid() const noexcept { return steps < max_steps; }
+        constexpr bool valid() const noexcept { return p.x() + p.y() * r.width() < r.width() * r.height(); }
         constexpr const auto& position() const noexcept { return p; }
 
         constexpr vector2i direction() const noexcept
@@ -113,8 +110,6 @@ namespace jw
 
         R& r;
         mutable vector2i p;
-        mutable std::size_t steps { 0 };
-        const std::size_t max_steps { static_cast<std::size_t>(r.width() * r.height()) };
     };
 
     template<typename R, typename T, unsigned L>
