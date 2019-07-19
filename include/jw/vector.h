@@ -77,7 +77,7 @@ namespace jw
         template <typename U, std::enable_if_t<std::is_same_v<promoted_type<U>, T>, bool> = { } >
         constexpr const vector& promoted() const noexcept { return *this; }
 
-        template<typename U> auto promote_scalar(const U& scalar) { return static_cast<promoted_type<T>>(scalar); }
+        template<typename U> auto promote_scalar(const U& scalar) { return static_cast<promoted_type<U>>(scalar); }
 
         constexpr auto& operator+=(const vector& rhs) noexcept { v += rhs.v; return *this; }
         constexpr auto& operator-=(const vector& rhs) noexcept { return *this += -rhs; }
