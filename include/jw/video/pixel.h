@@ -302,12 +302,10 @@ namespace jw
             {
                 V<4, VT> src;
                 if constexpr ((std::is_same_v<VT, float> and std::is_same_v<typename P::T, float>) or (sizeof(VT) == 1 and byte_aligned()))
-                {
                     src = *reinterpret_cast<const V<4, VT>*>(this);
-                    if constexpr (has_alpha()) src = V<4, VT> { src[0], src[1], src[2], 1 };
-                }
-                else if constexpr (has_alpha()) src = V<4, VT> { static_cast<VT>(this->b), static_cast<VT>(this->g), static_cast<VT>(this->r), static_cast<VT>(this->a), };
-                else src = V<4, VT> { static_cast<VT>(this->b), static_cast<VT>(this->g), static_cast<VT>(this->r), 1 };
+                else if constexpr (has_alpha())
+                    src = V<4, VT> { static_cast<VT>(this->b), static_cast<VT>(this->g), static_cast<VT>(this->r), static_cast<VT>(this->a), };
+                else src = V<4, VT> { static_cast<VT>(this->b), static_cast<VT>(this->g), static_cast<VT>(this->r), 0 };
                 return src;
             }
 
@@ -450,7 +448,6 @@ namespace jw
             template <typename U>
             PIXEL_FUNCTION constexpr __m64 m64_blend(__m64 dst, __m64 src)
             {
-                //auto a = _mm_sub_pi16(_mm_set1_pi16(U::ax), _mm_shuffle_pi16(src, shuffle_mask(3, 3, 3, 3)));
                 auto a = _mm_set1_pi16(U::ax - reinterpret_cast<V<4, std::uint16_t>>(src)[3]);
 
                 if constexpr (not std::is_same_v<P, U>) src = pixel<U>::template m64_cast_to<P>(src);
