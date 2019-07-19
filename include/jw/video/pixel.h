@@ -61,8 +61,6 @@ namespace jw
         };
         static_assert(sizeof(text_char) == 2 && alignof(text_char) == 2, "text_char has incorrect size or alignment.");
 
-        struct [[gnu::packed]] px { };
-
 #       ifdef HAVE__SSE__
 #           define PIXEL_FUNCTION [[gnu::hot, gnu::sseregparm, gnu::always_inline]]
 #       else
@@ -79,14 +77,14 @@ namespace jw
 #       endif
 
         template<typename P>
-        struct alignas(P) [[gnu::packed, gnu::may_alias]] pixel : public P, public px
+        struct alignas(P) [[gnu::packed, gnu::may_alias]] pixel : public P
         {
             template<typename> friend struct pixel;
 
             template<std::size_t N, typename VT>
             using V [[gnu::vector_size(N * sizeof(VT)), gnu::may_alias]] = VT;
 
-            static constexpr auto cast_PT(auto v) { return static_cast<typename P::T>(v); }
+            static constexpr auto cast_PT(auto v) noexcept { return static_cast<typename P::T>(v); }
 
             constexpr pixel() noexcept = default;
             template<typename Q = pixel, std::enable_if_t<Q::has_alpha(), bool> = { }>
@@ -98,10 +96,10 @@ namespace jw
             template<typename Q = pixel, std::enable_if_t<not Q::has_alpha(), bool> = { }>
             constexpr pixel(auto cr, auto cg, auto cb) noexcept : P { cast_PT(cb), cast_PT(cg), cast_PT(cr) } { }
 
-            constexpr pixel(const pixel& p) noexcept = default;
-            constexpr pixel(pixel&& p) noexcept = default;
-            constexpr pixel& operator=(const pixel&) noexcept = default;
-            constexpr pixel& operator=(pixel&&) noexcept = default;
+            constexpr pixel(const pixel& p) noexcept { assign(p); }
+            constexpr pixel(pixel&& p) noexcept { assign(p); }
+            constexpr pixel& operator=(const pixel& p) noexcept { assign(p); return *this; };
+            constexpr pixel& operator=(pixel&& p) noexcept { assign(p); return *this; };
 
             template <typename U> constexpr operator pixel<U>() const noexcept { return cast_to<U>(); }
 
@@ -138,13 +136,7 @@ namespace jw
                     {
                         mmx_function { [this, &other] { *this = m64(m64_blend<U>(m64(), other.m64())); } }();
                     }
-                    else
-                    {
-                        using VT = std::conditional_t<std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>, float, std::uint32_t>;
-                        V<4, VT> src = other.template vector<VT>();
-                        V<4, VT> dst = vector<VT>();
-                        *this = vector<VT>(vector_blend<U, VT>(dst, src));
-                    }
+                    else do_blend_vector();
                 }
                 return *this;
             }
@@ -207,6 +199,14 @@ namespace jw
             }
 
         private:
+            constexpr void assign(const pixel& p) noexcept
+            {
+                if constexpr (sizeof(pixel) == 0x10)* reinterpret_cast<__m128*>(this) = *reinterpret_cast<const __m128*>(&p);
+                else if constexpr (sizeof(pixel) == 4)* reinterpret_cast<std::uint32_t*>(this) = *reinterpret_cast<const std::uint32_t*>(&p);
+                else if constexpr (sizeof(pixel) == 2)* reinterpret_cast<std::uint16_t*>(this) = *reinterpret_cast<const std::uint16_t*>(&p);
+                else if constexpr (sizeof(pixel) == 1)* reinterpret_cast<std::uint8_t*>(this) = *reinterpret_cast<const std::uint8_t*>(&p);
+            }
+
             template <typename U>
             PIXEL_FUNCTION constexpr pixel<U> cast_to() const
             {
@@ -612,8 +612,6 @@ namespace jw
             T g : 6, : 2;
             T r : 6, : 2;
             T a : 8;
-
-            constexpr bgra_6668(T vb, T vg, T vr, T va) noexcept : b(vb), g(vg), r(vr), a(va) { }
 
             static constexpr T rx = 63;
             static constexpr T gx = 63;

@@ -598,11 +598,11 @@ namespace jw
             if (vbe2_pm)
             {
                 std::unique_ptr<std::vector<pxvga>> copy;
-                const px* ptr = &*begin;
+                const byte* ptr = reinterpret_cast<const byte*>(begin);
                 if (dac_bits < 8)
                 {
                     copy = std::make_unique<std::vector<pxvga>>(begin, end);
-                    ptr = copy->data();
+                    ptr = reinterpret_cast<const byte*>(copy->data());
                 }
 
                 dpmi::selector mmio = vbe2_mmio ? vbe2_mmio->get_selector() : dpmi::get_ds();
@@ -656,14 +656,14 @@ namespace jw
             if (not vbe3_pm) return vbe2::set_palette(begin, end, first, wait_for_vsync);
 
             std::unique_ptr<std::vector<pxvga>> copy;
-            const px* ptr = &*begin;
+            const byte* ptr = reinterpret_cast<const byte*>(begin);
             if (dac_bits < 8)
             {
                 copy = std::make_unique<std::vector<pxvga>>(begin, end);
-                ptr = copy->data();
+                ptr = reinterpret_cast<const byte*>(copy->data());
             }
 
-            dpmi::linear_memory data_mem { dpmi::get_ds(), static_cast<const px32n*>(ptr),  static_cast<std::size_t>(end - begin) };
+            dpmi::linear_memory data_mem { dpmi::get_ds(), reinterpret_cast<const px32n*>(ptr),  static_cast<std::size_t>(end - begin) };
             std::uint16_t ax;
             FORCE_FRAME_POINTER;
             asm volatile(
