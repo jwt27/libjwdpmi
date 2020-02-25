@@ -145,6 +145,7 @@ namespace jw
             pit_cmd.write(0x34);
             pit0_data.write(0);
             pit0_data.write(0);
+            // todo: fix up DOS time at 0040:006C
         }
 
         void setup::reset_rtc()
@@ -178,34 +179,57 @@ namespace jw
 
         rtc::time_point rtc::now() noexcept
         {
-            dpmi::interrupt_mask no_irq { };
-            auto read_bcd = []
+            auto from_bcd = [](byte bcd)
             {
-                auto bcd = setup::rtc_data.read();
                 return (bcd >> 4) * 10 + (bcd & 0xF);
+            };
+            auto read = []
+            {
+                return setup::rtc_data.read();
             };
             auto set_index = [](byte i)
             {
                 setup::rtc_index.write(i);
             };
 
-            std::uint64_t sec { 0 };
-            set_index(0x80);    // second
-            sec += read_bcd();
-            set_index(0x82);    // minute
-            sec += read_bcd() * 60;
-            set_index(0x84);    // hour
-            sec += read_bcd() * 60 * 60;
-            set_index(0x87);    // day
-            sec += (read_bcd() - 1) * 60 * 60 * 24;
-            set_index(0x88);    // month
-            sec += (read_bcd() - 1) * 60 * 60 * 24 * (365.2425 / 12);
-            set_index(0x09);    // year
-            sec += read_bcd() * 60 * 60 * 24 * 365.2425;
-            sec += 946684800;   // seconds from 1970 to 2000
-            sec *= static_cast<std::uint64_t>(1e6);
-            sec += jw::round(setup::rtc_ticks * setup::ns_per_rtc_tick / 1e3);
-            return time_point { duration { sec } };
+            byte year, month, day, hour, min, sec;  // BCD
+
+            {
+                dpmi::interrupt_mask no_irq { };
+                set_index(0x80);    // second
+                sec = read();
+                set_index(0x82);    // minute
+                min = read();
+                set_index(0x84);    // hour
+                hour = read();
+                set_index(0x87);    // day
+                day = read();
+                set_index(0x88);    // month
+                month = read();
+                set_index(0x09);    // year
+                year = read();
+            }
+
+            unsigned y = 2000 + from_bcd(year);
+            const unsigned m = from_bcd(month);
+            const unsigned d = from_bcd(day);
+
+            // algorithm from http://howardhinnant.github.io/date_algorithms.html
+            y -= m <= 2;
+            const unsigned era = y / 400;
+            const unsigned yoe = y - era * 400;
+            const unsigned doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+            const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+            const unsigned days_since_1970 = era * 146097 + doe - 719468;
+
+            std::uint64_t unix_time = days_since_1970 * 60 * 60 * 24;
+            unix_time += from_bcd(hour) * 60 * 60;
+            unix_time += from_bcd(min) * 60;
+            unix_time += from_bcd(sec);
+
+            std::uint64_t usec = unix_time * static_cast<std::uint64_t>(1e6);
+            usec += jw::round(setup::rtc_ticks * setup::ns_per_rtc_tick / 1e3);
+            return time_point { duration { usec } };
         }
     }
 }
