@@ -1,8 +1,10 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
+#include <bit>
 #include <jw/chrono/chrono.h>
 #include <jw/io/ioport.h>
 #include <jw/dpmi/irq_mask.h>
@@ -13,7 +15,8 @@ namespace jw
 {
     namespace chrono
     {
-        std::size_t tsc_max_sample_size { 1000 };
+        std::size_t tsc_max_sample_size { 1024 };
+        std::size_t tsc_max_sample_bits { 10 };
         std::size_t tsc_sample_size { 0 };
         std::uint64_t tsc_total { 0 };
         bool tsc_resync { true };
@@ -26,14 +29,17 @@ namespace jw
             std::uint32_t diff = tsc - last_tsc;
             last_tsc = tsc;
             if (__builtin_expect(tsc_resync, false)) { tsc_resync = false; return; }
-            tsc_total += diff;
-            ++tsc_sample_size;
-            while (tsc_sample_size > tsc_max_sample_size)
+            if (tsc_sample_size == tsc_max_sample_size)
             {
-                tsc_total -= static_cast<std::uint32_t>(tsc_total / tsc_sample_size);
+                tsc_total -= static_cast<std::uint32_t>(tsc_total >> tsc_max_sample_bits);
                 --tsc_sample_size;
             }
-            tsc_ticks_per_irq = tsc_total / tsc_sample_size;
+            tsc_total += diff;
+            ++tsc_sample_size;
+            if (tsc_sample_size == tsc_max_sample_size) [[likely]]
+                tsc_ticks_per_irq = tsc_total >> tsc_max_sample_bits;
+            else
+                tsc_ticks_per_irq = tsc_total / tsc_sample_size;
         }
 
         dpmi::irq_handler setup::rtc_irq { []()
@@ -116,8 +122,12 @@ namespace jw
         void setup::setup_tsc(std::size_t sample_size, tsc_reference r)
         {
             have_rdtsc = dpmi::cpuid::feature_flags().time_stamp_counter;
-
-            if (sample_size != 0) tsc_max_sample_size = sample_size;
+            if (sample_size != 0)
+            {
+                if (not std::ispow2(sample_size)) throw std::runtime_error { "Number of TSC samples must be a power of two." };
+                tsc_max_sample_size = sample_size;
+                tsc_max_sample_bits = std::log2p1(sample_size - 1);
+            }
             if (r != tsc_reference::none and (r != current_tsc_ref() or current_tsc_ref() == tsc_reference::none))
             {
                 preferred_tsc_ref = r;
