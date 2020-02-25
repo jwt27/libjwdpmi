@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
@@ -80,8 +81,8 @@ namespace jw
 
                 auto try_context_switch = [this, exc]
                 {
-                    if (exc != exception_num::device_not_available and exc != exception_num::invalid_opcode) return false;
-                    if (not get_fpu_emulation().em) return false;
+                    if (exc != exception_num::device_not_available and exc != exception_num::invalid_opcode) [[likely]] return false;
+                    if (not get_fpu_emulation().em) [[unlikely]] return false;
 
                     set_fpu_emulation(false);
 
