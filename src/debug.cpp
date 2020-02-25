@@ -814,7 +814,7 @@ namespace jw
                     auto report_other_threads = [&do_stop_reply, &report_last]
                     {
                         for (auto&& t : threads)
-                            if (do_stop_reply(t.second), report_last) return true;
+                            if (do_stop_reply(t.second, report_last)) return true;
                         return false;
                     };
                     if (not report_other_threads() and force)
