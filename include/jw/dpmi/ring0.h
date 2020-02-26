@@ -1,5 +1,6 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
+/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
 #include <optional>
@@ -25,6 +26,10 @@ namespace jw::dpmi
         [[gnu::noinline]] ring0_privilege();
         [[gnu::noinline]] ~ring0_privilege();
 
+        // Check if ring0 access is available. If false, the constructor will throw a no_ring0_access exception.
+        static bool wont_throw();
+
+        // Used by std::terminate handler to return to ring3.
         static void force_leave()
         {
             if (get_cs() == detail::ring0_cs) leave();
@@ -37,6 +42,8 @@ namespace jw::dpmi
         inline static far_ptr32 entry;
         inline static std::uintptr_t esp;
         bool dont_leave { false };
+
+        static void setup(bool);
         
         [[gnu::naked, gnu::noinline]] static void enter();
         [[gnu::naked, gnu::noinline]] static void leave();
