@@ -44,7 +44,7 @@ obj/%.asm: src/%.cpp jwdpmi_config.h | obj
 	$(CXX) $(CXXFLAGS) -S -o $@ $(INCLUDE) -c $< $(PIPECMD)
 
 obj/%.o: src/%.cpp jwdpmi_config.h | obj
-	$(CXX) $(CXXFLAGS) -MD -MP -MF $(@:.o=.d) -o $@ $(INCLUDE) -c $< $(PIPECMD)
+	$(CXX) $(CXXFLAGS) -o $@ $(INCLUDE) -MP -MD -c $< $(PIPECMD)
 
 obj/%.ii: src/%.cpp | obj
 	$(CXX) $(CXXFLAGS) -E -o $@ $(INCLUDE) -c $<
