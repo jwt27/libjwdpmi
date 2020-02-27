@@ -53,7 +53,7 @@ namespace jw::dpmi
 
     ring0_privilege::~ring0_privilege() { if (not dont_leave) force_leave(); }
 
-    bool ring0_privilege::wont_throw()
+    bool ring0_privilege::wont_throw() noexcept
     {
         if (ring0_accessible == unknown) [[unlikely]] setup(false);
         return ring0_accessible == yes;

@@ -27,7 +27,7 @@ namespace jw::dpmi
         [[gnu::noinline]] ~ring0_privilege();
 
         // Check if ring0 access is available. If false, the constructor will throw a no_ring0_access exception.
-        static bool wont_throw();
+        static bool wont_throw() noexcept;
 
         // Used by std::terminate handler to return to ring3.
         static void force_leave()
