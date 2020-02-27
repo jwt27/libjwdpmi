@@ -32,7 +32,7 @@ namespace jw
 
         // Set a breakpoint with specified signal.
         // signal can be an exception number, C signal number, or any user-defined signal.
-        inline void break_with_signal(int signal)
+        inline void break_with_signal([[maybe_unused]] int signal)
         {
 #           ifndef NDEBUG
             detail::current_signal = signal;
@@ -62,7 +62,7 @@ namespace jw
             }
         }
 #       else
-        void throw_assert(bool condition) { }
+        void throw_assert(bool) { }
 #       endif
 
         // Disable the trap flag
