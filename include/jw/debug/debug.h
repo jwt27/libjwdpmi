@@ -62,7 +62,7 @@ namespace jw
             }
         }
 #       else
-        void throw_assert(bool) { }
+        inline void throw_assert(bool) { }
 #       endif
 
         // Disable the trap flag
