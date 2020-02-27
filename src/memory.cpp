@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
@@ -60,10 +61,24 @@ namespace jw
                     limit.hi = ldt_desc.segment.limit_hi;
                     ldt = descriptor::create_segment(base, limit);
 
+                    // Check if ldt access is allowed
+                    asm("mov bx, gs;"
+                        "mov gs, %w0;"
+                        "mov eax, gs:[0];"
+                        "mov gs:[0], eax;"
+                        "mov gs, bx;"
+                        :: "r" (ldt->get_selector())
+                        : "eax", "ebx");
+
                     have_access = yes;
                 }
                 catch (const cpu_exception&) { }
                 catch (const dpmi_error&) { }
+                if (have_access != yes)
+                {
+                    gdt.reset();
+                    ldt.reset();
+                }
             }
             return have_access == yes;
         }
