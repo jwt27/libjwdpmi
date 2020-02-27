@@ -69,24 +69,22 @@ namespace jw::dpmi
             : "m" (entry)
         );
     }
-#   pragma GCC diagnostic push
-#   pragma GCC diagnostic ignored "-Wstrict-aliasing"
+
     void ring0_privilege::leave()
     {
         asm
         (
             "lea eax, [esp+4];"
-            "push %0;"          //  SS
+            "push %k0;"         //  SS
             "push eax;"         //  ESP
-            "push %1;"          //  CS
+            "push %k1;"         //  CS
             "push [eax-4];"     //  EIP
             "retf;"
-            :: "m" (reinterpret_cast<std::uint32_t&>(detail::ring3_ss))
-            , "m" (reinterpret_cast<std::uint32_t&>(detail::ring3_cs))
+            :: "m" (detail::ring3_ss)
+            , "m" (detail::ring3_cs)
             : "eax"
         );
     }
-#   pragma GCC diagnostic pop
 
     void ring0_privilege::ring0_entry_point()
     {
