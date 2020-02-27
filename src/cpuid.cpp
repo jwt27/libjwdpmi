@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 
 #include <jw/dpmi/cpuid.h>
@@ -7,8 +8,6 @@ namespace jw::dpmi
 {
     void cpuid::populate()
     {
-        initialized = true;
-
         bool have_cpuid;
         std::uint32_t scratch;
         asm

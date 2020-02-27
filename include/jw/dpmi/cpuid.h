@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
@@ -54,7 +55,7 @@ namespace jw::dpmi
 
         static const leaf_t& leaf(std::uint32_t i)
         {
-            if (not initialized) populate();
+            if (leaves.empty()) [[unlikely]] populate();
             return leaves[i];
         }
 
@@ -70,13 +71,16 @@ namespace jw::dpmi
 
         static feature_flags_t feature_flags()
         {
-            auto& l = leaf(1);
-            return reinterpret_cast<const feature_flags_t&>(l);
+            union
+            {
+                std::uint32_t edx = leaf(1).edx;
+                feature_flags_t flags;
+            };
+            return flags;
         }
 
     private:
         static inline std::map<std::uint32_t, leaf_t, std::less<std::uint32_t>, locking_allocator<>> leaves { };
-        static inline bool initialized { false };
 
         static void populate();
     };
