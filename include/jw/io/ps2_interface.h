@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
@@ -187,6 +188,7 @@ namespace jw
             template<cmd_sequence_element... seq>
             byte command(const std::initializer_list<byte>& data)
             {
+                bool retried { false };
                 retry:
                 try
                 {
@@ -196,9 +198,18 @@ namespace jw
                     do_ps2_command<seq...>(data.begin(), result);
                     return result;
                 }
-                catch (const io_error&)
+                catch (const io_error& e)
                 {
+                    std::cerr << "Error occured during PS/2 command sequence:";
+                    for (auto c : { seq... }) std::cerr << ' ' << std::hex << std::setfill('0') << std::setw(2) << static_cast<unsigned>(c);
+                    std::cerr << '\n';
+                    std::cerr << "With data:";
+                    for (auto d : data) std::cerr << ' ' << std::hex << std::setfill('0') << std::setw(2) << static_cast<unsigned>(d);
+                    std::cerr << '\n';
+                    print_exception(e);
                     reset();
+                    if (retried) throw;
+                    retried = true;
                     goto retry;
                 }
             }
