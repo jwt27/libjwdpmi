@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
@@ -109,28 +110,34 @@ namespace jw
             asm volatile (
                 "jmp exception_wrapper_end%=;"
                 // --- \/\/\/\/\/\/ --- //
-                "exception_wrapper_begin%=:;"
+                "exception_wrapper_begin%=:"
 
                 "pusha; push ds; push es; push fs; push gs;"    // 7 bytes
-                "call get_eip%=;"                               // 5 bytes
-                "get_eip%=: pop eax;"       // Get EIP and use it to find our variables
+                "call Lget_eip;"                                // 5 bytes
+                "Lget_eip: pop eax;"        // Get EIP and use it to find our variables
 
                 "mov ebp, esp;"
-                "lea edi, [ebp-0x20];"
+                "mov edx, esp;"
                 "mov bx, ss;"
                 "cmp bx, word ptr cs:[eax-0x1C];"
-                "je keep_stack%=;"
-                "mov edi, cs:[eax-0x20];"   // new stack pointer
-                "keep_stack%=:"
-                "mov ecx, 0x22;"            // exception_frame = 0x58 bytes, pushed regs = 0x30 bytes, total 0x22 dwords
-                "sub edi, 0x88;"
-                "and edi, -0x10;"           // align stack
-                "mov es, cs:[eax-0x1C];"    // note: this is DS
+                "je Lkeep_stack;"
+
+                // Copy frame to new stack
+                "les edi, cs:[eax-0x20];"   // new stack pointer
+                "sub edi, 0x88;"            // exception_frame = 0x58 bytes, pushed regs = 0x30 bytes, total 0x88 bytes
+                "mov ecx, 0x22;"
                 "push ss; pop ds;"
                 "mov esi, ebp;"
                 "mov ebp, edi;"
                 "cld;"
                 "rep movsd;"
+
+                // Switch to the new stack
+                "mov ss, cs:[eax-0x1C];"
+                "mov esp, ebp;"
+                "Lkeep_stack:"
+                "push ebx;"                 // previous SS
+                "push edx;"                 // previous ESP
 
                 // Restore segment registers
                 "mov ds, cs:[eax-0x1C];"
@@ -138,24 +145,32 @@ namespace jw
                 "mov fs, cs:[eax-0x18];"
                 "mov gs, cs:[eax-0x16];"
 
-                // Switch to the new stack
-                "mov ss, cs:[eax-0x1C];"
-                "mov esp, ebp;"
-
-                "sub esp, 0x08;"
-                "add ebp, 0x10;"
-                "push ebp;"                 // Pointer to raw_exception_frame
+                "lea edx, [ebp+0x10];"
+                "push edx;"                 // Pointer to raw_exception_frame
                 "push cs:[eax-0x28];"       // Pointer to self
                 "mov ebx, eax;"
                 "call cs:[ebx-0x24];"       // call_handler();
                 "cli;"
-                "add esp, 0x10;"
+                "add esp, 0x08;"
+
+                // Copy frame and switch back to previous stack
+                "mov dx, ss;"
+                "cmp dx, [esp+0x04];"
+                "je Lret_same_stack;"
+                "mov esi, ebp;"
+                "les edi, [esp];"
+                "mov ecx, 0x22;"
+                "rep movsd;"
+                "lss esp, [esp];"
+                "mov ebp, esp;"
+                "Lret_same_stack:"
+                "mov esp, ebp;"
 
                 "test al, al;"              // Check return value
-                "jz chain%=;"               // Chain if false
+                "jz Lchain;"                // Chain if false
                 "mov al, cs:[ebx-0x14];"
                 "test al, al;"              // Check which frame to return
-                "jz old_type%=;"
+                "jz Lold_type;"
 
                 // Return with DPMI 1.0 frame
                 "pop gs; pop fs; pop es; pop ds; popa;"
@@ -163,12 +178,12 @@ namespace jw
                 "retf;"
 
                 // Return with DPMI 0.9 frame
-                "old_type%=:;"
+                "Lold_type:"
                 "pop gs; pop fs; pop es; pop ds; popa;"
                 "retf;"
 
                 // Chain to previous handler
-                "chain%=:"
+                "Lchain:"
                 "mov eax, cs:[ebx-0x12];"   // copy chain_to ptr above stack (is this dangerous?)
                 "mov ss:[esp-0x08], eax;"
                 "mov ax, cs:[ebx-0x0e];"
@@ -176,13 +191,12 @@ namespace jw
                 "pop gs; pop fs; pop es; pop ds; popa;"
                 "jmp fword ptr ss:[esp-0x38];"
 
-                "exception_wrapper_end%=:;"
+                "exception_wrapper_end%=:"
                 // --- /\/\/\/\/\/\ --- //
                 "mov %0, offset exception_wrapper_begin%=;"
-                "mov %1, offset exception_wrapper_end%=;"
-                "sub %1, %0;"
-                : "=rm,r" (start)
-                , "=r,rm" (size)
+                "mov %1, offset exception_wrapper_end%= - exception_wrapper_begin%=;"
+                : "=rm" (start)
+                , "=rm" (size)
                 ::"cc");
             assert(size <= code.size());
 
