@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
@@ -105,35 +106,6 @@ namespace jw
 
         namespace detail
         {
-            struct [[gnu::packed]] cr0_t
-            {
-                bool protected_mode : 1;
-                bool monitor_fpu : 1;
-                bool fpu_emulation : 1;
-                bool task_switched : 1;
-                bool fpu_387 : 1;
-                bool native_exceptions : 1;
-                unsigned : 10;
-                bool write_protect : 1;
-                unsigned : 1;
-                bool alignment_check : 1;
-                unsigned : 10;
-                bool disable_write_through : 1;
-                bool disable_cache : 1;
-                bool enable_paging : 1;
-
-                cr0_t()
-                {
-                    ring0_privilege r0 { };
-                    asm volatile("mov %0, cr0;" : "=r" (*this));
-                }
-                void set()
-                {
-                    ring0_privilege r0 { };
-                    asm volatile("mov cr0, %0;" :: "r" (*this));
-                }
-            };
-
             class fpu_context_switcher_t : class_lock<fpu_context_switcher_t>
             {
                 locked_pool_allocator<false, fpu_context> alloc { config::interrupt_fpu_context_pool };

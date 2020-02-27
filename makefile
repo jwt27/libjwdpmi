@@ -36,6 +36,8 @@ bin/libjwdpmi.a: $(OBJ) | bin
 obj/cpu_exception.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
 obj/fpu.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
 obj/irq.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
+obj/ring0.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
+obj/memory.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
 obj/debug.% : override CXXFLAGS += -O3
 
 obj/%.asm: src/%.cpp jwdpmi_config.h | obj

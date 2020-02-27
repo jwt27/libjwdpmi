@@ -17,25 +17,11 @@ namespace jw
         {
             std::unique_ptr<exception_handler> exc07_handler, exc06_handler;
 
+            [[gnu::noinline]] void nop() { asm(""); }
+
             fpu_context_switcher_t::fpu_context_switcher_t()
             {
-                cr0_t cr0 { };
-                cr0.native_exceptions = true;
-                cr0.task_switched = false;
-                cr0.set();
-
-                if constexpr (sse)
-                {
-                    ring0_privilege r0 { };
-                    std::uint32_t scratch;
-                    asm volatile
-                    (
-                        "mov %0, cr4;"
-                        "or %0, 0x600;" // enable SSE and SSE exceptions
-                        "mov cr4, %0;"
-                        : "=r" (scratch)
-                    );
-                }
+                setup_exception_throwers();
 
                 asm
                 (
@@ -58,6 +44,43 @@ namespace jw
                         "ldmxcsr [esp];"
                         "add esp, 4;"
                     );
+                }
+
+                try
+                {
+                    std::optional<ring0_privilege> r0;  // try to access control registers in ring 0
+                    if (ring0_privilege::wont_throw()) r0 = ring0_privilege { };
+                    // if we have no ring0 access, the dpmi host might still trap and emulate control register access.
+
+                    nop();
+
+                    std::uint32_t scratch;
+                    asm volatile
+                    (
+                        "mov %0, cr0;"
+                        "or %0, 0x10;"      // enable native x87 exceptions
+                        "mov cr0, %0;"
+                        : "=r" (scratch)
+                    );
+                    nop();
+                    if constexpr (sse)
+                    {
+                        asm volatile
+                        (
+                            "mov %0, cr4;"
+                            "or %0, 0x600;" // enable SSE and SSE exceptions
+                            "mov cr4, %0;"
+                            : "=r" (scratch)
+                        );
+                    }
+
+                    nop();
+                }
+                catch (...)
+                {
+                    // setting cr0 or cr4 failed. if compiled with SSE then this might be a problem.
+                    // for now, assume that the dpmi server already enabled these bits (HDPMI does this).
+                    // if not, then we'll soon crash with an invalid opcode on the first SSE instruction.
                 }
 
                 contexts.push_back(nullptr);
