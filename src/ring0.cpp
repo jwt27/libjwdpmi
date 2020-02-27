@@ -90,7 +90,6 @@ namespace jw::dpmi
     {
         asm
         (
-            "add esp, 0x10;"
             "mov ss, %w0;"
             "mov esp, %1;"
             "ret;"
