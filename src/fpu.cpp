@@ -105,7 +105,7 @@ namespace jw
                 auto try_context_switch = [this, exc]
                 {
                     if (exc != exception_num::device_not_available and exc != exception_num::invalid_opcode) [[likely]] return false;
-                    if (not get_fpu_emulation().em) [[unlikely]] return false;
+                    if (not get_fpu_emulation()) [[unlikely]] return false;
 
                     set_fpu_emulation(false);
 
@@ -152,7 +152,7 @@ namespace jw
                 if (contexts.back() != nullptr) alloc.deallocate(contexts.back(), 1);
                 contexts.pop_back();
 
-                set_fpu_emulation(contexts.back() != nullptr or (contexts.size() > 1 and get_fpu_emulation().em));
+                set_fpu_emulation(contexts.back() != nullptr or (contexts.size() > 1 and get_fpu_emulation()));
             }
 
             void fpu_context_switcher_t::set_fpu_emulation(bool em, bool mp)
@@ -167,17 +167,15 @@ namespace jw
                     , "b" (mp | (em << 1))
                     : "cc");
                 if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+                cr0_em = em;
             }
 
-            fpu_context_switcher_t::fpu_emulation_status fpu_context_switcher_t::get_fpu_emulation()
+            bool fpu_context_switcher_t::get_fpu_emulation()
             {
-                fpu_emulation_status status;
-                asm volatile(
-                    "int 0x31;"
-                    : "=a" (status)
-                    : "a" (0x0E00)
-                    : "cc");
-                return status;
+                // int 0x31,0e00 is no longer called here, primarily because cwsdpmi doesn't implement this.
+                // even though the DPMI documentation claims that "all known DPMI 0.9 hosts support this function"...
+                // we don't need any other bits besides this one anyway, so it ends up being faster too.
+                return cr0_em;
             }
         }
     }

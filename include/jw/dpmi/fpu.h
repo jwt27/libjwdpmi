@@ -113,25 +113,10 @@ namespace jw
 
                 bool context_switch_successful { false };
                 bool init { false };
-
-                struct fpu_emulation_status
-                {
-                    bool mp : 1;
-                    bool em : 1;
-                    bool host_mp : 1;
-                    bool host_em : 1;
-                    enum
-                    {
-                        fpu_none = 0,
-                        fpu_286 = 2,
-                        fpu_387,
-                        fpu_486
-                    } fpu_type : 4;
-                    unsigned : 8;
-                };
+                bool cr0_em { false };
 
                 void set_fpu_emulation(bool em, bool mp = true);
-                fpu_emulation_status get_fpu_emulation();
+                bool get_fpu_emulation();
 
             public:
                 fpu_context_switcher_t();
