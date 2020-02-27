@@ -753,7 +753,10 @@ namespace jw
                         t.action = thread_info::none;
                         t.last_stop_signal = signal;
 
-                        std::stringstream s { };
+                        static std::stringstream s { };
+                        s.str({ });
+                        s.clear();
+                        s.exceptions(std::ios::failbit | std::ios::badbit);
                         s << std::hex << std::setfill('0');
                         if (async) s << "Stop:";
                         if (signal == thread_finished)
@@ -830,7 +833,10 @@ namespace jw
                 recv_packet();
                 current_thread->signals.erase(packet_received);
 
-                std::stringstream s { };
+                static std::stringstream s { };
+                s.str({ });
+                s.clear();
+                s.exceptions(std::ios::failbit | std::ios::badbit);
                 s << std::hex << std::setfill('0');
                 auto& p = packet.front().delim;
                 if (p == '?')   // stop reason
@@ -878,7 +884,10 @@ namespace jw
                     else if (q == "ThreadExtraInfo")
                     {
                         using namespace thread::detail;
-                        std::stringstream msg { };
+                        static std::stringstream msg { };
+                        msg.str({ });
+                        msg.clear();
+                        msg.exceptions(std::ios::failbit | std::ios::badbit);
                         auto id = decode(packet[1]);
                         if (threads.count(id))
                         {
@@ -1361,6 +1370,7 @@ namespace jw
                 dpmi::locking_allocator<> stream_alloc;
                 gdb_streambuf = new rs232_streambuf_internals { cfg };
                 gdb = allocate_unique<io::rs232_stream>(stream_alloc, gdb_streambuf);
+                gdb->exceptions(std::ios::failbit | std::ios::badbit);
 
                 serial_irq = std::make_unique<irq_handler>([]
                 {
@@ -1408,6 +1418,7 @@ namespace jw
             void notify_gdb_exit(byte result)
             {
                 std::stringstream s { };
+                s.exceptions(std::ios::failbit | std::ios::badbit);
                 s << std::hex << std::setfill('0');
                 s << "W" << std::setw(2) << static_cast<std::uint32_t>(result);
                 send_packet(s.str());
