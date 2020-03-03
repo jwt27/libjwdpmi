@@ -1,3 +1,4 @@
 bin/
 obj/
 jwdpmi_config.h
+doxygen_sqlite3.db
