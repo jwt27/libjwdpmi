@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
@@ -37,44 +38,51 @@ namespace jw
                         else return std::nullopt;
                     };
 
-                    key_state_pair k { { }, key_state::down };
+                    key k = key::bad_key;
+                    key_state state = key_state::down;
                     bool ext0 = false;
                     bool ext1 = false;
 
                     for (auto i = bytes.begin(); i != bytes.end(); ++i)
                     {
-                        if (set == set2)
-                        {
-                            if (*i == 0xE0) { ext0 = true; continue; }
-                            if (*i == 0xE1) { ext1 = true; continue; }
-                        }
-                        if (*i == 0xF0) { k.second = key_state::up; continue; }
-
                         auto c = *i;
+                        if (set == set1 or set == set2)
+                        {
+                            if (c == 0xE0) { ext0 = true; continue; }
+                            if (c == 0xE1) { ext1 = true; continue; }
+                        }
+                        if (set == set2 or set == set3)
+                        {
+                            if (c == 0xF0) { state = key_state::up; continue; }
+                        }
+
                         bytes.erase(bytes.begin(), i + 1);
 
                         switch (set)
                         {
                         case set1:
+                            if ((c & 0x80) != 0) { state = key_state::up; }
+                            c = set1_to_set2_table[c & 0x7F];
+                            [[fallthrough]];
                         case set2:
                             if (ext0)
                             {
-                                if (auto p = find(set2_extended0_to_key_table, c)) { k.first = *p; break; }
+                                if (auto p = find(set2_extended0_to_key_table, c)) { k = *p; break; }
                                 if (auto p = find(set2_extended0_to_set3_table, c)) { c = *p; }
-                                else { k.first = 0xE000 + c; break; }
+                                else { k = 0xE000 | c; break; }
                             }
                             else if (ext1)
                             {
-                                if (c == 0x14) { k.first = key::pause; break; }
-                                else { k.first = 0xE100 + c; break; }
+                                if (c == 0x14) { k = key::pause; break; }
+                                else { k = 0xE100 | c; break; }
                             }
                             else if (auto p = find(set2_to_set3_table, c)) { c = *p; }
                             [[fallthrough]];
                         case set3:
-                            if (auto p = find(set3_to_key_table, c)) { k.first = *p; }
-                            else { k.first = 0x0100 + c; }
+                            if (auto p = find(set3_to_key_table, c)) { k = *p; }
+                            else { k = 0x0100 | c; }
                         }
-                        return k;
+                        return key_state_pair { k, state };
                     }
 
                     return std::nullopt;
@@ -100,7 +108,7 @@ namespace jw
 
                     auto& operator=(raw_scancode c)
                     {
-                        if ((c & 0x80) && (c != 0xE0) && (c != 0xE1))
+                        if ((c & 0x80) != 0 and (c & 0xF0) != 0xE0)
                         {
                             container->push_back(0xF0);
                             c &= 0x7F;
@@ -121,6 +129,7 @@ namespace jw
                 scancode() = delete;
 
                 static const std::array<raw_scancode, 0x100> undo_translation_table;
+                static const std::array<raw_scancode, 0x80> set1_to_set2_table;
                 static std::unordered_map<raw_scancode, raw_scancode> set2_to_set3_table;
                 static std::unordered_map<raw_scancode, const raw_scancode> set2_extended0_to_set3_table;
                 static std::unordered_map<raw_scancode, const raw_scancode> set2_extended0_to_key_table;
