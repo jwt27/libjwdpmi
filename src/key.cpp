@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
@@ -236,8 +237,11 @@ namespace jw
             { key::f11, "F11" },
             { key::f12, "F12" },
             { key::scroll_lock, "Scroll Lock" },
+            { key::scroll_lock_state, "Scroll Lock state" },
             { key::num_lock, "Num Lock" },
+            { key::num_lock_state, "Num Lock state" },
             { key::caps_lock, "Caps Lock" },
+            { key::caps_lock_state, "Caps Lock state" },
             { key::shift_left, "Left Shift" },
             { key::shift_right, "Right Shift" },
             { key::any_shift, "Shift" },
