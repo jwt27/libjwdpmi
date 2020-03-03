@@ -47,9 +47,6 @@ namespace jw
         // Display raw packet data from serial gdb interface
         constexpr bool enable_gdb_protocol_dump = false;
 
-        // Enable this to work around buggy keyboard code in dosbox.
-        constexpr bool dosbox = false;
-
         // Clock used for gameport timing.
         using gameport_clock = jw::chrono::tsc;
 

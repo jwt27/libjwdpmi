@@ -36,7 +36,7 @@ namespace jw
             std::optional<key_state_pair> get_scancode();
 
             scancode_set current_scancode_set;
-            scancode_set get_scancode_set() { return current_scancode_set; }
+            scancode_set get_scancode_set();
             void set_scancode_set(byte set) ;
 
             void set_typematic(byte, byte) { /* TODO */ }
@@ -149,7 +149,7 @@ namespace jw
                         [[fallthrough]];
                     case RESEND:
                         throw io_error("Keyboard on fire.");
-                    default:
+                    [[likely]] default:
                         return;
                     }
                 };
@@ -158,7 +158,7 @@ namespace jw
                 {
                     switch (b)
                     {
-                    case ACK:
+                    [[likely]] case ACK:
                         return;
                     default:
                         std::cerr << "PS/2 interface: expected ACK, got this: " << std::hex << static_cast<unsigned>(b) << std::endl;
@@ -202,8 +202,8 @@ namespace jw
                     for (auto d : data) std::cerr << ' ' << std::hex << std::setfill('0') << std::setw(2) << static_cast<unsigned>(d);
                     std::cerr << '\n';
                     print_exception(e);
-                    reset();
                     if (retried) throw;
+                    reset();
                     retried = true;
                     goto retry;
                 }
@@ -227,6 +227,7 @@ namespace jw
             const io_port<byte> data_port { 0x60 };
             std::mutex mutex;
             inline static bool keyboard_initialized { false };
+            scancode_set initial_scancode_set;
 
             controller_status get_status()
             {

@@ -23,7 +23,7 @@ namespace jw
         std::optional<key_state_pair> ps2_interface::get_scancode()
         {
             dpmi::irq_mask disable_irq { 1 };
-            return detail::scancode::extract(scancode_queue, get_scancode_set());
+            return detail::scancode::extract(scancode_queue, current_scancode_set);
         }
 
         void ps2_interface::reset()
@@ -34,7 +34,7 @@ namespace jw
             config.keyboard_interrupt = true;
             write_config();
 
-            set_scancode_set(set3);
+            initial_scancode_set = get_scancode_set();
             enable_typematic(true);
 
             irq_handler.enable();
@@ -65,27 +65,25 @@ namespace jw
         {
             if (not keyboard_initialized) return;
             irq_handler.disable();
-            set_scancode_set(set2);
+            set_scancode_set(initial_scancode_set);
             config = initial_config;
             config.translate_scancodes = true;
             write_config();                 // restore PS/2 configuration data
             keyboard_initialized = false;
         }
 
+        scancode_set ps2_interface::get_scancode_set()
+        {
+            current_scancode_set = static_cast<scancode_set>(command<send_data, recv_kb_ack, send_data, recv_kb_ack, recv_kb_data>({ 0xF0, 0 }));
+            return current_scancode_set;
+        }
+
         void ps2_interface::set_scancode_set(byte set)
         {
-            if (config::dosbox)
-            {
-                command<send_data, recv_kb_ack, send_data, recv_kb_ack, recv_kb_ack>({ 0xF0, set }); // Dosbox-X sends two ACKs
-                current_scancode_set = static_cast<scancode_set>(command<send_data, recv_kb_ack, send_data, recv_kb_data, recv_kb_ack>({ 0xF0, 0 }));  // Dosbox-X sends ACK-data-ACK...
-            }
-            else
-            {
-                command<send_data, recv_kb_ack, send_data, recv_kb_ack>({ 0xF0, set });
-                current_scancode_set = static_cast<scancode_set>(command<send_data, recv_kb_ack, send_data, recv_kb_ack, recv_kb_data>({ 0xF0, 0 }));  // Should be ACK-ACK-data.
-            }
+            command<send_data, recv_kb_ack, send_data, recv_kb_ack>({ 0xF0, set });
+            get_scancode_set();
 
-            if (set == set3) command<send_data, recv_kb_ack>({ 0xF8 });    // Enable make/break mode for all keys.
+            if (current_scancode_set == set3) command<send_data, recv_kb_ack>({ 0xF8 });    // Enable make/break mode for all keys.
         }
     }
 }
