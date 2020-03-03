@@ -92,7 +92,7 @@ namespace jw
         }
         else std::cerr << "std::terminate called.\n";
         debug::print_backtrace();
-        io::detail::ps2_interface_instance.reset();
+        if (io::ps2_interface::instantiated()) io::ps2_interface::instance().reset();
 
         debug::break_with_signal(SIGTERM);
         std::abort();

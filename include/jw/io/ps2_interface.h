@@ -24,12 +24,6 @@ namespace jw
 {
     namespace io
     {
-        struct ps2_interface;
-        namespace detail
-        {
-            static inline std::unique_ptr<ps2_interface> ps2_interface_instance;
-        }
-
         enum keyboard_leds : byte
         {
             scroll_lock_led = 0b001,
@@ -79,11 +73,12 @@ namespace jw
             void init_keyboard();
             void reset_keyboard();
 
+            static bool instantiated() { return static_cast<bool>(instance_ptr); }
+
             static auto& instance()
             {
-                using namespace detail;
-                if (not ps2_interface_instance) ps2_interface_instance.reset(new ps2_interface { });
-                return ps2_interface_instance;
+                if (not instantiated()) instance_ptr.reset(new ps2_interface { });
+                return instance_ptr;
             }
             virtual ~ps2_interface();
 
@@ -226,6 +221,7 @@ namespace jw
                 bool parity_error : 1;
             };
 
+            static inline std::unique_ptr<ps2_interface> instance_ptr;
             const in_port<controller_status> status_port { 0x64 };
             const out_port<byte> command_port { 0x64 };
             const io_port<byte> data_port { 0x60 };

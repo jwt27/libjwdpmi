@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
@@ -41,7 +42,7 @@ namespace jw
 
         ps2_interface::ps2_interface()
         {
-            if (detail::ps2_interface_instance) throw std::runtime_error("Only one ps2_interface instance allowed.");
+            if (instantiated()) throw std::runtime_error("Only one ps2_interface instance allowed.");
         }
 
         ps2_interface::~ps2_interface()
