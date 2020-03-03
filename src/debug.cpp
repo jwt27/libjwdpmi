@@ -607,7 +607,7 @@ namespace jw
                     case esi: encode(out, &t.reg.esi); return;
                     case edi: encode(out, &t.reg.edi); return;
                     case esp: encode(out, &t.frame.stack.offset); return;
-                    case eflags: encode(out, &t.frame.flags.raw_eflags); return;
+                    case eflags: encode(out, &t.frame.raw_eflags); return;
                     case cs: { std::uint32_t s = t.frame.fault_address.segment; encode(out, &s); return; }
                     case ss: { std::uint32_t s = t.frame.stack.segment; encode(out, &s); return; }
                     case ds: { if (new_frame_type) { std::uint32_t s = t.frame.ds; encode(out, &s); } else encode_null(out, regsize[r]); return; }
@@ -686,7 +686,7 @@ namespace jw
                 case edi:    return reverse_decode(value, &t.reg.edi, regsize[r]);
                 case esp:    return reverse_decode(value, &t.frame.stack.offset, regsize[r]);
                 case eip:    return reverse_decode(value, &t.frame.fault_address.offset, regsize[r]);
-                case eflags: return reverse_decode(value, &t.frame.flags.raw_eflags, regsize[r]);
+                case eflags: return reverse_decode(value, &t.frame.raw_eflags, regsize[r]);
                 case cs:     return reverse_decode(value.substr(0, 4), &t.frame.fault_address.segment, 2);
                 case ss:     return reverse_decode(value.substr(0, 4), &t.frame.stack.segment, 2);
                 case ds: if (new_frame_type) { return reverse_decode(value.substr(0, 4), &t.frame.ds, 2); } return false;
@@ -1310,7 +1310,7 @@ namespace jw
                     if (temp_debugmsg) std::clog << "sending stop reply.\n";
                     stop_reply();
 
-                    if (config::enable_gdb_interrupts and current_thread->frame.flags.interrupt) asm("sti");
+                    if (config::enable_gdb_interrupts and current_thread->frame.flags.interrupts_enabled) asm("sti");
 
                     auto cant_continue = []
                     {

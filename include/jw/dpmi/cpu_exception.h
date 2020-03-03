@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
@@ -46,38 +47,14 @@ namespace jw
                 };
                 std::uint16_t raw_info_bits;
             } info_bits;
-            union [[gnu::packed]]
+            union
             {
-                struct[[gnu::packed]]
-                {
-                    bool carry : 1;
-                    unsigned : 1;
-                    bool parity : 1;
-                    unsigned : 1;
-                    bool adjust : 1;
-                    unsigned : 1;
-                    bool zero : 1;
-                    bool sign : 1;
-                    bool trap : 1;
-                    bool interrupt : 1;
-                    bool direction : 1;
-                    bool overflow : 1;
-                    unsigned iopl : 2;
-                    bool nested_task : 1;
-                    unsigned : 1;
-                    bool resume : 1;
-                    bool v86mode : 1;
-                    bool alignment_check : 1;
-                    bool virtual_interrupt : 1;
-                    bool virtual_interrupt_pending : 1;
-                    bool cpuid_available : 1;
-                    unsigned : 10;
-                };
+                cpu_flags flags;
                 std::uint32_t raw_eflags;
-            } flags;
+            };
             far_ptr32 stack; unsigned : 16;
 
-            auto& print(auto& out) const
+            std::ostream& print(std::ostream& out) const
             {
                 using namespace std;
                 out << hex << setfill('0');
@@ -85,7 +62,7 @@ namespace jw
                 out << ", ss:esp=" << setw(4) << stack.segment << ':' << setw(8) << stack.offset << '\n';
                 out << "Error code: " << setw(8) << error_code;
                 out << ", Info bits: " << std::bitset<3>(info_bits.raw_info_bits);
-                out << ", Flags: " << std::bitset<22>(flags.raw_eflags) << '\n';
+                out << ", Flags: " << std::bitset<22>(raw_eflags) << '\n';
                 out << setfill(' ') << setw(0);
                 return out;
             }
@@ -116,7 +93,7 @@ namespace jw
                 unsigned raw_pte : 32;
             } page_table_entry;
 
-            auto& print(auto& out) const
+            std::ostream& print(std::ostream& out) const
             {
                 out << static_cast<old_exception_frame>(*this);
                 using namespace std;

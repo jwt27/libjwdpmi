@@ -79,7 +79,7 @@ namespace jw
                     if constexpr (not config::enable_throwing_from_cpu_exceptions) return false;    // Only throw if this option is enabled
                     if (f->fault_address.segment != detail::ring3_cs
                         and f->fault_address.segment != detail::ring0_cs) return false;             // and exception happened in our code
-                    if (f->flags.v86mode) return false;                                             // and not in real mode (sanity check)
+                    if (f->flags.v86_mode) return false;                                            // and not in real mode (sanity check)
                     return true;
                 };
 

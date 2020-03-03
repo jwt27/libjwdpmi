@@ -248,6 +248,37 @@ namespace jw
             asm volatile("int 0x2f;"::"a"(0x1680));
         }
 
+        // EFLAGS register
+        struct cpu_flags
+        {
+            bool carry : 1;
+            bool : 1;
+            bool parity : 1;
+            bool : 1;
+            bool adjust : 1;
+            bool : 1;
+            bool zero : 1;
+            bool sign : 1;
+            bool trap : 1;
+            bool interrupts_enabled : 1;
+            bool direction : 1;
+            bool overflow : 1;
+            unsigned io_privilege : 2;
+            bool nested_task : 1;
+            bool : 1;
+            bool resume : 1;
+            bool v86_mode : 1;
+            bool alignment_check : 1;
+            bool virtual_interrupts_enabled : 1;
+            bool virtual_interrupts_pending : 1;
+            bool cpuid : 1;
+            unsigned : 10;
+
+            void get() { asm ("pushfd; pop %0" : "=rm" (*this)); }
+            static cpu_flags current() { cpu_flags f; f.get(); return f; }
+        };
+        static_assert (sizeof(cpu_flags) == 4);
+
         // All general purpose registers, as pushed on the stack by the PUSHA instruction.
         struct alignas(2) [[gnu::packed]] cpu_registers
         {
