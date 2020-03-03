@@ -186,12 +186,12 @@ namespace jw
             static descriptor create_call_gate(selector code_seg, std::uintptr_t entry_point);
 
             auto get_selector() const noexcept { return sel; }
-            void set_base(auto b) { set_base(sel, b); read(); }
+            void set_base(std::uintptr_t b) { set_base(sel, b); read(); }
             auto get_base() const { return get_base(sel); }
-            void set_limit(auto l) { set_limit(sel, l); read(); }
+            void set_limit(std::size_t l) { set_limit(sel, l); read(); }
             std::size_t get_limit() const;
             ldt_access_rights get_access_rights();
-            void set_access_rights(const auto& r) { r.set(sel); read(); }
+            void set_access_rights(const ldt_access_rights& r) { r.set(sel); read(); }
             void set_selector_privilege(unsigned priv) { sel.privilege_level = priv; }
 
             void read() const;
@@ -209,6 +209,10 @@ namespace jw
 
             selector_bits sel;
             bool no_alloc { true };
+            enum direct_ldt_access_t { unknown, yes, ring0, no };
+
+        public:
+            static direct_ldt_access_t direct_ldt_access();
         };
             
         inline constexpr std::uintptr_t conventional_to_physical(std::uint16_t segment, std::uint16_t offset) noexcept

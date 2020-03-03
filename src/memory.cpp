@@ -5,8 +5,10 @@
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
+#include <optional>
 #include <jw/dpmi/memory.h>
 #include <jw/dpmi/cpu_exception.h>
+#include <jw/dpmi/ring0.h>
 
 namespace jw
 {
@@ -18,12 +20,13 @@ namespace jw
 
         std::optional<descriptor> gdt, ldt;
 
-        bool direct_ldt_access()
+        descriptor::direct_ldt_access_t descriptor::direct_ldt_access()
         {
-            enum { unknown, yes, no } static have_access { unknown };
-
-            if (__builtin_expect(have_access == unknown, false))
+            static direct_ldt_access_t have_access { unknown };
+            if (have_access == unknown) [[unlikely]]
             {
+                bool use_ring0 { false };
+                retry:
                 try
                 {
                     have_access = no;
@@ -35,22 +38,29 @@ namespace jw
                     } gdtr;
                     selector ldtr;
 
-                    asm("sgdt %0":"=m"(gdtr));
-                    asm("sldt %w0":"=rm"(ldtr));
+                    {
+                        std::optional<ring0_privilege> r0;
+                        if (use_ring0) r0.emplace();
+                        asm volatile ("sgdt %0":"=m"(gdtr));
+                        asm volatile ("sldt %w0":"=rm"(ldtr));
+                    }
 
-                    gdt = descriptor::create_segment(gdtr.base, gdtr.limit);
-                    descriptor_data ldt_desc;
+                    gdt = descriptor::create_segment(gdtr.base, gdtr.limit + 1);
                     selector_bits ldt_selector = ldtr;
 
-                    asm("mov bx, gs;"
-                        "mov gs, %w1;"
-                        "mov eax, gs:[%2*8];"
-                        "mov edx, gs:[%2*8+4];"
-                        "mov gs, bx;"
-                        : "=&A" (ldt_desc)
-                        : "r" (gdt->get_selector())
-                        , "r" (ldt_selector.index)
-                        : "ebx");
+                    union
+                    {
+                        split_uint64_t ldt_bits;
+                        descriptor_data ldt_desc;
+                    };
+
+                    {
+                        std::optional<ring0_privilege> r0;
+                        if (use_ring0) r0.emplace();
+                        gs_override gs { gdt->get_selector() };
+                        asm volatile ("mov %0, gs:[%1*8+0]" : "=r" (ldt_bits.lo) : "r" (ldt_selector.index));
+                        asm volatile ("mov %0, gs:[%1*8+4]" : "=r" (ldt_bits.hi) : "r" (ldt_selector.index));
+                    }
 
                     split_uint32_t base;
                     base.lo = ldt_desc.segment.base_lo;
@@ -61,26 +71,25 @@ namespace jw
                     limit.hi = ldt_desc.segment.limit_hi;
                     ldt = descriptor::create_segment(base, limit);
 
-                    // Check if ldt access is allowed
-                    asm("mov bx, gs;"
-                        "mov gs, %w0;"
-                        "mov eax, gs:[0];"
-                        "mov gs:[0], eax;"
-                        "mov gs, bx;"
-                        :: "r" (ldt->get_selector())
-                        : "eax", "ebx");
+                    if (use_ring0) have_access = ring0;
+                    else have_access = yes;
 
-                    have_access = yes;
+                    // Check if ldt access is possible
+                    descriptor test { get_ds() };
                 }
-                catch (const cpu_exception&) { }
-                catch (const dpmi_error&) { }
-                if (have_access != yes)
+                catch (...)
                 {
+                    have_access = no;
+                    if (not use_ring0 and ring0_privilege::wont_throw())
+                    {
+                        use_ring0 = true;
+                        goto retry;
+                    }
                     gdt.reset();
                     ldt.reset();
                 }
             }
-            return have_access == yes;
+            return have_access;
         }
 
         ldt_access_rights::ldt_access_rights(selector sel)
@@ -184,19 +193,22 @@ namespace jw
 
         void descriptor::read() const
         {
-            if (__builtin_expect(direct_ldt_access(), true))
+            auto ldt_access = direct_ldt_access();
+            if (ldt_access != no) [[likely]]
             {
+                std::optional<ring0_privilege> r0;
+                if (ldt_access == ring0) r0.emplace();
                 selector_bits s { sel };
                 auto& table = s.local ? ldt : gdt;
-                asm("mov bx, gs;"
-                    "mov gs, %w1;"
-                    "mov eax, gs:[%2*8];"
-                    "mov edx, gs:[%2*8+4];"
-                    "mov gs, bx;"
-                    : "=&A" (static_cast<descriptor_data&>(*const_cast<descriptor*>(this)))
-                    : "r" (table->get_selector())
-                    , "r" (s.index)
-                    : "ebx");
+                gs_override gs { table->get_selector() };
+                union
+                {
+                    split_uint64_t raw;
+                    descriptor_data data;
+                };
+                asm volatile ("mov %0, gs:[%1*8+0]" : "=&r" (raw.lo) : "r" (s.index));
+                asm volatile ("mov %0, gs:[%1*8+4]" : "=&r" (raw.hi) : "r" (s.index));
+                static_cast<descriptor_data&>(*const_cast<descriptor*>(this)) = data;
             }
             else
             {
@@ -220,19 +232,22 @@ namespace jw
 
         void descriptor::write()
         {
-            if (__builtin_expect(direct_ldt_access(), true))
+            auto ldt_access = direct_ldt_access();
+            if (ldt_access != no) [[likely]]
             {
+                std::optional<ring0_privilege> r0;
+                if (ldt_access == ring0) r0.emplace();
                 selector_bits s { sel };
                 auto& table = s.local ? ldt : gdt;
-                asm("mov bx, gs;"
-                    "mov gs, %w1;"
-                    "mov gs:[%2*8], eax;"
-                    "mov gs:[%2*8+4], edx;"
-                    "mov gs, bx;"
-                    :: "A" (static_cast<descriptor_data&>(*this))
-                    , "r" (table->get_selector())
-                    , "r" (s.index)
-                    : "ebx");
+                gs_override gs { table->get_selector() };
+                union
+                {
+                    split_uint64_t raw;
+                    descriptor_data data;
+                };
+                data = *this;
+                asm volatile ("mov gs:[%1*8+0], %0" :: "r" (raw.lo), "r" (s.index));
+                asm volatile ("mov gs:[%1*8+4], %0" :: "r" (raw.hi), "r" (s.index));
             }
             else
             {

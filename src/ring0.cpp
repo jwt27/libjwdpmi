@@ -11,6 +11,8 @@ namespace jw::dpmi
     void ring0_privilege::setup(bool throw_on_fail)
     {
         if (ring0_accessible != unknown) return;
+        descriptor::direct_ldt_access();    // accessing ldt may require ring0, in which case this function will be re-entered.
+        if (ring0_accessible != unknown) return;
         try
         {
             detail::ring3_cs = get_cs();

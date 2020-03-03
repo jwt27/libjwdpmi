@@ -17,8 +17,6 @@ namespace jw
         {
             std::unique_ptr<exception_handler> exc07_handler, exc06_handler;
 
-            [[gnu::noinline]] void nop() { asm(""); }
-
             fpu_context_switcher_t::fpu_context_switcher_t()
             {
                 setup_exception_throwers();
@@ -52,29 +50,14 @@ namespace jw
                     if (ring0_privilege::wont_throw()) r0 = ring0_privilege { };
                     // if we have no ring0 access, the dpmi host might still trap and emulate control register access.
 
-                    nop();
-
-                    std::uint32_t scratch;
-                    asm volatile
-                    (
-                        "mov %0, cr0;"
-                        "or %0, 0x10;"      // enable native x87 exceptions
-                        "mov cr0, %0;"
-                        : "=r" (scratch)
-                    );
-                    nop();
+                    std::uint32_t cr;
+                    asm volatile ("mov %0, cr0" : "=r" (cr));
+                    asm volatile ("mov cr0, %0" :: "r" (cr | 0x10));       // enable native x87 exceptions
                     if constexpr (sse)
                     {
-                        asm volatile
-                        (
-                            "mov %0, cr4;"
-                            "or %0, 0x600;" // enable SSE and SSE exceptions
-                            "mov cr4, %0;"
-                            : "=r" (scratch)
-                        );
+                        asm volatile ("mov %0, cr4" : "=r" (cr));
+                        asm volatile ("mov cr0, %0" :: "r" (cr | 0x600));  // enable SSE and SSE exceptions
                     }
-
-                    nop();
                 }
                 catch (...)
                 {
