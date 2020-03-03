@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
@@ -16,6 +17,7 @@
 #include <jw/io/rs232.h>
 #include <jw/io/ps2_interface.h>
 #include <jw/dpmi/ring0.h>
+#include <jw/video/ansi.h>
 #include <cxxabi.h>
 #include <unwind.h>
 #include <../jwdpmi_config.h>
@@ -38,10 +40,10 @@ namespace jw
 {
     void print_exception(const std::exception& e, int level) noexcept
     {
-        std::cerr << "Level " << std::dec << level << ": " << e.what() << '\n';
+        std::cerr << "Exception " << std::dec << level << ": " << e.what() << '\n';
         try { std::rethrow_if_nested(e); }
         catch (const std::exception& e) { print_exception(e, level + 1); }
-        catch (...) { std::cerr << "Level " << std::dec << (level + 1) << ": Unknown exception.\n"; }
+        catch (...) { std::cerr << "Exception " << std::dec << (level + 1) << ": Unknown exception.\n"; }
     }
 
     extern "C" void* irq_safe_malloc(std::size_t n)
@@ -82,6 +84,7 @@ namespace jw
     [[noreturn]] void terminate_handler() noexcept
     {
         dpmi::ring0_privilege::force_leave();
+        std::cerr << video::ansi::set_80x50_mode();
         if (auto exc = std::current_exception())
         {
             std::cerr << "std::terminate called after throwing an exception:\n";
