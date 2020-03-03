@@ -31,25 +31,16 @@ namespace jw
                 template <typename Container>
                 static std::optional<key_state_pair> extract(Container& bytes, scancode_set set)
                 {
-                    auto find = [](const auto& map, const auto& key) noexcept -> std::optional<typename std::decay_t<decltype(map)>::mapped_type>
-                    {
-                        auto i = map.find(key);
-                        if (i != map.cend()) return i->second;
-                        else return std::nullopt;
-                    };
-
                     key k = key::bad_key;
                     key_state state = key_state::down;
-                    bool ext0 = false;
-                    bool ext1 = false;
+                    byte ext = 0;
 
                     for (auto i = bytes.begin(); i != bytes.end(); ++i)
                     {
                         auto c = *i;
                         if (set == set1 or set == set2)
                         {
-                            if (c == 0xE0) { ext0 = true; continue; }
-                            if (c == 0xE1) { ext1 = true; continue; }
+                            if ((c & 0xF0) == 0xE0) { ext = c; continue; }
                         }
                         if (set == set2 or set == set3)
                         {
@@ -65,23 +56,25 @@ namespace jw
                             c = set1_to_set2_table[c & 0x7F];
                             [[fallthrough]];
                         case set2:
-                            if (ext0)
+                            if (ext == 0xE0)
                             {
-                                if (auto p = find(set2_extended0_to_key_table, c)) { k = *p; break; }
-                                if (auto p = find(set2_extended0_to_set3_table, c)) { c = *p; }
+                                if (c == 0x37) { k = key::pwr_on; break; }
+                                if (c == 0x5E) { k = key::pwr_wake; break; }
+                                if (auto p = set2_e0_to_set3_table[c]) { c = p; }
                                 else { k = 0xE000 | c; break; }
                             }
-                            else if (ext1)
+                            else if (ext == 0xE1)
                             {
                                 if (c == 0x14) { k = key::pause; break; }
                                 else { k = 0xE100 | c; break; }
                             }
-                            else if (auto p = find(set2_to_set3_table, c)) { c = *p; }
+                            else if (ext != 0) { k = (ext << 8) | c; break; }
+                            else if (auto p = set2_to_set3_table[c]) { c = p; }
                             [[fallthrough]];
                         case set3:
-                            if (auto p = find(set3_to_key_table, c)) { k = *p; }
-                            else { k = 0x0100 | c; }
+                            k = set3_to_key_table[c];
                         }
+                        if (k == key::bad_key) k = 0x0100 | c;
                         return key_state_pair { k, state };
                     }
 
@@ -130,10 +123,9 @@ namespace jw
 
                 static const std::array<raw_scancode, 0x100> undo_translation_table;
                 static const std::array<raw_scancode, 0x80> set1_to_set2_table;
-                static std::unordered_map<raw_scancode, raw_scancode> set2_to_set3_table;
-                static std::unordered_map<raw_scancode, const raw_scancode> set2_extended0_to_set3_table;
-                static std::unordered_map<raw_scancode, const raw_scancode> set2_extended0_to_key_table;
-                static std::unordered_map<raw_scancode, key> set3_to_key_table;
+                static const std::array<byte, 0x100> set2_to_set3_table;
+                static const std::array<byte, 0x100> set2_e0_to_set3_table;
+                static const std::array<byte, 0x100> set3_to_key_table;
             };
         }
     }

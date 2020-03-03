@@ -46,177 +46,192 @@ namespace jw
                 0x13, 0x19, 0x39, 0x51, 0x53, 0x5C, 0x5F, 0x62, 0x63, 0x64, 0x65, 0x67, 0x68, 0x6A, 0x6D, 0x6E
             };
 
-            std::unordered_map<raw_scancode, raw_scancode> scancode::set2_to_set3_table
+            const std::array<raw_scancode, 0x100> scancode::set2_to_set3_table
             {
-                { 0x01, 0x47 }, { 0x03, 0x27 }, { 0x04, 0x17 }, { 0x05, 0x07 },
-                { 0x06, 0x0F }, { 0x07, 0x5E }, { 0x09, 0x4F }, { 0x0A, 0x3F },
-                { 0x0B, 0x2F }, { 0x0C, 0x1F }, { 0x11, 0x19 }, { 0x14, 0x11 },
-                { 0x58, 0x14 }, { 0x5D, 0x5C }, { 0x76, 0x08 }, { 0x77, 0x76 },
-                { 0x78, 0x56 }, { 0x79, 0x7C }, { 0x7B, 0x84 }, { 0x7C, 0x7E },
-                { 0x7E, 0x5F }, { 0x83, 0x37 }, { 0x84, 0x57 }
+                0x00, 0x47, 0x00, 0x27, 0x17, 0x07, 0x0F, 0x5E, 0x00, 0x4F, 0x3F, 0x2F, 0x1F, 0x00, 0x00, 0x00,
+                0x00, 0x19, 0x00, 0x00, 0x11, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x14, 0x00, 0x00, 0x00, 0x00, 0x5C, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08, 0x76, 0x56, 0x7C, 0x00, 0x84, 0x7E, 0x00, 0x5F, 0x00,
+                0x00, 0x00, 0x00, 0x37, 0x57, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
             };
 
-            std::unordered_map<raw_scancode, const raw_scancode> scancode::set2_extended0_to_set3_table
+            const std::array<raw_scancode, 0x100> scancode::set2_e0_to_set3_table
             {
-                { 0x11, 0x39 }, { 0x14, 0x58 }, { 0x1F, 0x8B }, { 0x27, 0x8C },
-                { 0x2F, 0x8D }, { 0x3F, 0x7F }, { 0x4A, 0x77 }, { 0x5A, 0x79 },
-                { 0x69, 0x65 }, { 0x6B, 0x61 }, { 0x6C, 0x6E }, { 0x70, 0x67 },
-                { 0x71, 0x64 }, { 0x72, 0x60 }, { 0x74, 0x6A }, { 0x75, 0x63 },
-                { 0x7A, 0x6D }, { 0x7C, 0x57 }, { 0x7D, 0x6F }, { 0x7E, 0x62 }
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x39, 0x00, 0x00, 0x58, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x8B,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x8C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x8D,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7F,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x77, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x79, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x65, 0x00, 0x61, 0x6E, 0x00, 0x00, 0x00,
+                0x67, 0x64, 0x60, 0x00, 0x6A, 0x63, 0x00, 0x00, 0x00, 0x00, 0x6D, 0x00, 0x57, 0x6F, 0x62, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
             };
 
-            std::unordered_map<raw_scancode, const raw_scancode> scancode::set2_extended0_to_key_table
+            const std::array<byte, 0x100> scancode::set3_to_key_table
             {
-                { 0x37, key::pwr_on },
-                { 0x5E, key::pwr_wake }
-            };
-
-            std::unordered_map<raw_scancode, key> scancode::set3_to_key_table
-            {
-                { 0x00, key::bad_key },
-                //{ 0x01, key:: },
-                //{ 0x02, key:: },
-                //{ 0x03, key:: },
-                //{ 0x04, key:: },
-                //{ 0x05, key:: },
-                //{ 0x06, key:: },
-                { 0x07, key::f1 },
-                { 0x08, key::esc },
-                //{ 0x09, key:: },
-                //{ 0x0A, key:: },
-                //{ 0x0B, key:: },
-                //{ 0x0C, key:: },
-                { 0x0D, key::tab },
-                { 0x0E, key::backtick },
-                { 0x0F, key::f2 },
-                //{ 0x10, key:: },
-                { 0x11, key::ctrl_left },
-                { 0x12, key::shift_left },
-                //{ 0x13, key:: },
-                { 0x14, key::caps_lock },
-                { 0x15, key::q },
-                { 0x16, key::n1 },
-                { 0x17, key::f3 },
-                //{ 0x18, key:: },
-                { 0x19, key::alt_left },
-                { 0x1A, key::z },
-                { 0x1B, key::s },
-                { 0x1C, key::a },
-                { 0x1D, key::w },
-                { 0x1E, key::n2 },
-                { 0x1F, key::f4 },
-                //{ 0x20, key:: },
-                { 0x21, key::c },
-                { 0x22, key::x },
-                { 0x23, key::d },
-                { 0x24, key::e },
-                { 0x25, key::n4 },
-                { 0x26, key::n3 },
-                { 0x27, key::f5 },
-                //{ 0x28, key:: },
-                { 0x29, key::space },
-                { 0x2A, key::v },
-                { 0x2B, key::f },
-                { 0x2C, key::t },
-                { 0x2D, key::r },
-                { 0x2E, key::n5 },
-                { 0x2F, key::f6 },
-                //{ 0x30, key:: },
-                { 0x31, key::n },
-                { 0x32, key::b },
-                { 0x33, key::h },
-                { 0x34, key::g },
-                { 0x35, key::y },
-                { 0x36, key::n6 },
-                { 0x37, key::f7 },
-                //{ 0x38, key:: },
-                { 0x39, key::alt_right },
-                { 0x3A, key::m },
-                { 0x3B, key::j },
-                { 0x3C, key::u },
-                { 0x3D, key::n7 },
-                { 0x3E, key::n8 },
-                { 0x3F, key::f8 },
-                //{ 0x40, key:: },
-                { 0x41, key::comma },
-                { 0x42, key::k },
-                { 0x43, key::i },
-                { 0x44, key::o },
-                { 0x45, key::n0 },
-                { 0x46, key::n9 },
-                { 0x47, key::f9 },
-                //{ 0x48, key:: },
-                { 0x49, key::dot },
-                { 0x4A, key::slash },
-                { 0x4B, key::l },
-                { 0x4C, key::semicolon },
-                { 0x4D, key::p },
-                { 0x4E, key::minus },
-                { 0x4F, key::f10 },
-                //{ 0x50, key:: },
-                //{ 0x51, key:: },
-                { 0x52, key::quote },
-                //{ 0x53, key:: },
-                { 0x54, key::bracket_left },
-                { 0x55, key::equals },
-                { 0x56, key::f11 },
-                { 0x57, key::print_screen },
-                { 0x58, key::ctrl_right },
-                { 0x59, key::shift_right },
-                { 0x5A, key::enter },
-                { 0x5B, key::bracket_right },
-                { 0x5C, key::backslash },
-                //{ 0x5D, key:: },
-                { 0x5E, key::f12 },
-                { 0x5F, key::scroll_lock },
-                { 0x60, key::down },
-                { 0x61, key::left },
-                { 0x62, key::pause },
-                { 0x63, key::up },
-                { 0x64, key::del },
-                { 0x65, key::end },
-                { 0x66, key::backspace },
-                { 0x67, key::insert },
-                //{ 0x68, key:: },
-                { 0x69, key::num_1 },
-                { 0x6A, key::right },
-                { 0x6B, key::num_4 },
-                { 0x6C, key::num_7 },
-                { 0x6D, key::page_down },
-                { 0x6E, key::home },
-                { 0x6F, key::page_up },
-                { 0x70, key::num_0 },
-                { 0x71, key::num_dot },
-                { 0x72, key::num_2 },
-                { 0x73, key::num_5 },
-                { 0x74, key::num_6 },
-                { 0x75, key::num_8 },
-                { 0x76, key::num_lock },
-                { 0x77, key::num_div },
-                //{ 0x78, key:: },
-                { 0x79, key::num_enter },
-                { 0x7A, key::num_3 },
-                //{ 0x7B, key:: },
-                { 0x7C, key::num_add },
-                { 0x7D, key::num_9 },
-                { 0x7E, key::num_mul },
-                { 0x7F, key::pwr_sleep },
-                //{ 0x80, key:: },
-                //{ 0x81, key:: },
-                //{ 0x82, key:: },
-                //{ 0x83, key:: },
-                { 0x84, key::num_sub },
-                //{ 0x85, key:: },
-                //{ 0x86, key:: },
-                //{ 0x87, key:: },
-                //{ 0x88, key:: },
-                //{ 0x89, key:: },
-                //{ 0x8A, key:: },
-                { 0x8B, key::win_left },
-                { 0x8C, key::win_right },
-                { 0x8D, key::win_menu },
-                //{ 0x8E, key:: },
-                //{ 0x8F, key:: },
+                key::bad_key,               // 0x00
+                key::bad_key,               // 0x01
+                key::bad_key,               // 0x02
+                key::bad_key,               // 0x03
+                key::bad_key,               // 0x04
+                key::bad_key,               // 0x05
+                key::bad_key,               // 0x06
+                key::f1,                    // 0x07
+                key::esc,                   // 0x08
+                key::bad_key,               // 0x09
+                key::bad_key,               // 0x0A
+                key::bad_key,               // 0x0B
+                key::bad_key,               // 0x0C
+                key::tab,                   // 0x0D
+                key::backtick,              // 0x0E
+                key::f2,                    // 0x0F
+                key::bad_key,               // 0x10
+                key::ctrl_left,             // 0x11
+                key::shift_left,            // 0x12
+                key::bad_key,               // 0x13
+                key::caps_lock,             // 0x14
+                key::q,                     // 0x15
+                key::n1,                    // 0x16
+                key::f3,                    // 0x17
+                key::bad_key,               // 0x18
+                key::alt_left,              // 0x19
+                key::z,                     // 0x1A
+                key::s,                     // 0x1B
+                key::a,                     // 0x1C
+                key::w,                     // 0x1D
+                key::n2,                    // 0x1E
+                key::f4,                    // 0x1F
+                key::bad_key,               // 0x20
+                key::c,                     // 0x21
+                key::x,                     // 0x22
+                key::d,                     // 0x23
+                key::e,                     // 0x24
+                key::n4,                    // 0x25
+                key::n3,                    // 0x26
+                key::f5,                    // 0x27
+                key::bad_key,               // 0x28
+                key::space,                 // 0x29
+                key::v,                     // 0x2A
+                key::f,                     // 0x2B
+                key::t,                     // 0x2C
+                key::r,                     // 0x2D
+                key::n5,                    // 0x2E
+                key::f6,                    // 0x2F
+                key::bad_key,               // 0x30
+                key::n,                     // 0x31
+                key::b,                     // 0x32
+                key::h,                     // 0x33
+                key::g,                     // 0x34
+                key::y,                     // 0x35
+                key::n6,                    // 0x36
+                key::f7,                    // 0x37
+                key::bad_key,               // 0x38
+                key::alt_right,             // 0x39
+                key::m,                     // 0x3A
+                key::j,                     // 0x3B
+                key::u,                     // 0x3C
+                key::n7,                    // 0x3D
+                key::n8,                    // 0x3E
+                key::f8,                    // 0x3F
+                key::bad_key,               // 0x40
+                key::comma,                 // 0x41
+                key::k,                     // 0x42
+                key::i,                     // 0x43
+                key::o,                     // 0x44
+                key::n0,                    // 0x45
+                key::n9,                    // 0x46
+                key::f9,                    // 0x47
+                key::bad_key,               // 0x48
+                key::dot,                   // 0x49
+                key::slash,                 // 0x4A
+                key::l,                     // 0x4B
+                key::semicolon,             // 0x4C
+                key::p,                     // 0x4D
+                key::minus,                 // 0x4E
+                key::f10,                   // 0x4F
+                key::bad_key,               // 0x50
+                key::bad_key,               // 0x51
+                key::quote,                 // 0x52
+                key::bad_key,               // 0x53
+                key::bracket_left,          // 0x54
+                key::equals,                // 0x55
+                key::f11,                   // 0x56
+                key::print_screen,          // 0x57
+                key::ctrl_right,            // 0x58
+                key::shift_right,           // 0x59
+                key::enter,                 // 0x5A
+                key::bracket_right,         // 0x5B
+                key::backslash,             // 0x5C
+                key::bad_key,               // 0x5D
+                key::f12,                   // 0x5E
+                key::scroll_lock,           // 0x5F
+                key::down,                  // 0x60
+                key::left,                  // 0x61
+                key::pause,                 // 0x62
+                key::up,                    // 0x63
+                key::del,                   // 0x64
+                key::end,                   // 0x65
+                key::backspace,             // 0x66
+                key::insert,                // 0x67
+                key::bad_key,               // 0x68
+                key::num_1,                 // 0x69
+                key::right,                 // 0x6A
+                key::num_4,                 // 0x6B
+                key::num_7,                 // 0x6C
+                key::page_down,             // 0x6D
+                key::home,                  // 0x6E
+                key::page_up,               // 0x6F
+                key::num_0,                 // 0x70
+                key::num_dot,               // 0x71
+                key::num_2,                 // 0x72
+                key::num_5,                 // 0x73
+                key::num_6,                 // 0x74
+                key::num_8,                 // 0x75
+                key::num_lock,              // 0x76
+                key::num_div,               // 0x77
+                key::bad_key,               // 0x78
+                key::num_enter,             // 0x79
+                key::num_3,                 // 0x7A
+                key::bad_key,               // 0x7B
+                key::num_add,               // 0x7C
+                key::num_9,                 // 0x7D
+                key::num_mul,               // 0x7E
+                key::pwr_sleep,             // 0x7F
+                key::bad_key,               // 0x80
+                key::bad_key,               // 0x81
+                key::bad_key,               // 0x82
+                key::bad_key,               // 0x83
+                key::num_sub,               // 0x84
+                key::bad_key,               // 0x85
+                key::bad_key,               // 0x86
+                key::bad_key,               // 0x87
+                key::bad_key,               // 0x88
+                key::bad_key,               // 0x89
+                key::bad_key,               // 0x8A
+                key::win_left,              // 0x8B
+                key::win_right,             // 0x8C
+                key::win_menu,              // 0x8D
+                key::bad_key,               // 0x8E
+                key::bad_key                // 0x8F
             };
         }
     }
