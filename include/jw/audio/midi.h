@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 
@@ -146,12 +147,12 @@ namespace jw::audio
 
         struct stream_writer
         {
-            std::ostream& out;
-            ostream_info& tx { tx_state(out) };
+            std::streambuf& out;
+            ostream_info& tx;
 
             void put_status(byte a)
             {
-                if (tx.last_status != a) out.put(a);
+                if (tx.last_status != a) out.sputc(a);
                 tx.last_status = a;
             }
 
@@ -162,34 +163,34 @@ namespace jw::audio
                 if (not msg.on and tx.last_status == (0x90 | (msg.channel & 0x0f)))
                 {
                     put_status(0x90 | (msg.channel & 0x0f));
-                    out.put(msg.key);
-                    out.put(0x00);
+                    out.sputc(msg.key);
+                    out.sputc(0x00);
                 }
                 else
                 {
                     put_status((msg.on ? 0x90 : 0x80) | (msg.channel & 0x0f));
-                    out.put(msg.key);
-                    out.put(msg.velocity);
+                    out.sputc(msg.key);
+                    out.sputc(msg.velocity);
                 }
             }
-            void operator()(const key_pressure& msg)        { put_status(0xa0 | (msg.channel & 0x0f)); out.put(msg.key); out.put(msg.value); }
-            void operator()(const control_change& msg)      { put_status(0xb0 | (msg.channel & 0x0f)); out.put(msg.controller); out.put(msg.value); }
-            void operator()(const program_change& msg)      { put_status(0xc0 | (msg.channel & 0x0f)); out.put(msg.value); }
-            void operator()(const channel_pressure& msg)    { put_status(0xd0 | (msg.channel & 0x0f)); out.put(msg.value); }
-            void operator()(const pitch_change& msg)        { put_status(0xe0 | (msg.channel & 0x0f)); out.put(msg.value.lo); out.put(msg.value.hi); }
+            void operator()(const key_pressure& msg)        { put_status(0xa0 | (msg.channel & 0x0f)); out.sputc(msg.key); out.sputc(msg.value); }
+            void operator()(const control_change& msg)      { put_status(0xb0 | (msg.channel & 0x0f)); out.sputc(msg.controller); out.sputc(msg.value); }
+            void operator()(const program_change& msg)      { put_status(0xc0 | (msg.channel & 0x0f)); out.sputc(msg.value); }
+            void operator()(const channel_pressure& msg)    { put_status(0xd0 | (msg.channel & 0x0f)); out.sputc(msg.value); }
+            void operator()(const pitch_change& msg)        { put_status(0xe0 | (msg.channel & 0x0f)); out.sputc(msg.value.lo); out.sputc(msg.value.hi); }
 
-            void operator()(const sysex& msg)               { clear_status(); out.put(0xf0); out.write(reinterpret_cast<const char*>(msg.data.data()), msg.data.size()); out.put(0xf7); }
-            void operator()(const mtc_quarter_frame& msg)   { clear_status(); out.put(0xf1); out.put(msg.data); }
-            void operator()(const song_position& msg)       { clear_status(); out.put(0xf2); out.put(msg.value.lo); out.put(msg.value.hi); }
-            void operator()(const song_select& msg)         { clear_status(); out.put(0xf3); out.put(msg.value); }
+            void operator()(const sysex& msg)               { clear_status(); out.sputc(0xf0); out.sputn(reinterpret_cast<const char*>(msg.data.data()), msg.data.size()); out.sputc(0xf7); }
+            void operator()(const mtc_quarter_frame& msg)   { clear_status(); out.sputc(0xf1); out.sputc(msg.data); }
+            void operator()(const song_position& msg)       { clear_status(); out.sputc(0xf2); out.sputc(msg.value.lo); out.sputc(msg.value.hi); }
+            void operator()(const song_select& msg)         { clear_status(); out.sputc(0xf3); out.sputc(msg.value); }
 
-            void operator()(const tune_request&)    { out.put(0xf6); }
-            void operator()(const clock_tick&)      { out.put(0xf8); }
-            void operator()(const clock_start&)     { out.put(0xfa); }
-            void operator()(const clock_continue&)  { out.put(0xfb); }
-            void operator()(const clock_stop&)      { out.put(0xfc); }
-            void operator()(const active_sense&)    { out.put(0xfe); }
-            void operator()(const reset&)           { out.put(0xff); }
+            void operator()(const tune_request&)    { out.sputc(0xf6); }
+            void operator()(const clock_tick&)      { out.sputc(0xf8); }
+            void operator()(const clock_start&)     { out.sputc(0xfa); }
+            void operator()(const clock_continue&)  { out.sputc(0xfb); }
+            void operator()(const clock_stop&)      { out.sputc(0xfc); }
+            void operator()(const active_sense&)    { out.sputc(0xfe); }
+            void operator()(const reset&)           { out.sputc(0xff); }
 
             void operator()(const long_control_change& msg)
             {
@@ -218,7 +219,13 @@ namespace jw::audio
             auto& tx { tx_state(out) };
             std::unique_lock<std::mutex> lock { tx.mutex, std::defer_lock };
             if (not in.is_realtime_message()) lock.lock();
-            std::visit(stream_writer { out, tx }, in.msg);
+            std::ostream::sentry sentry { out };
+            try
+            {
+                if (sentry) std::visit(stream_writer { *out.rdbuf(), tx }, in.msg);
+            }
+            catch (const abi::__forced_unwind&) { out.setstate(std::ios::badbit); throw; }
+            catch (...) { out.setstate(std::ios::badbit); }
             return out;
         }
 
@@ -226,11 +233,13 @@ namespace jw::audio
         {
             auto& rx { rx_state(in) };
             std::unique_lock<std::mutex> lock { rx.mutex };
+            std::ios::iostate error { std::ios::goodbit };
+            auto& buf = *in.rdbuf();
             auto i { rx.pending_msg.cbegin() };
             auto get = [&]
             {
                 if (i != rx.pending_msg.cend()) return *(i++);
-                auto b = static_cast<byte>(in.get());
+                auto b = static_cast<byte>(buf.sbumpc());
                 if (b >= 0xf8)  // system realtime messages may be mixed in
                 {
                     out.time = clock::now();
@@ -249,6 +258,9 @@ namespace jw::audio
                 return b;
             };
 
+            std::istream::sentry sentry { in };
+            if (not sentry) goto fail;
+
             try
             {
                 byte a { rx.last_status };
@@ -257,10 +269,10 @@ namespace jw::audio
                 {
                     if (a == 0)
                     {
-                        while ((in.peek() & 0x80) == 0) in.get();    // discard data until the first status byte
+                        while ((buf.sgetc() & 0x80) == 0) buf.sbumpc(); // discard data until the first status byte
                         a = get();
                     }
-                    in.peek();      // make sure there is data available before timestamping
+                    buf.sgetc();    // make sure there is data available before timestamping
                     rx.pending_msg_time = clock::now();
                 }
                 else
@@ -289,6 +301,7 @@ namespace jw::audio
                     case 0xc0: out.msg = program_change { { ch }, get() }; break;
                     case 0xd0: out.msg = channel_pressure { { ch }, get() }; break;
                     case 0xe0: out.msg = pitch_change { { ch }, { get(), get() } }; break;
+                    default: error |= std::ios::failbit;
                     }
                 }
                 else                    // system message
@@ -307,11 +320,16 @@ namespace jw::audio
                     case 0xf2: out.msg = song_position { { }, { get(), get() } }; break;
                     case 0xf3: out.msg = song_select { { }, get() }; break;
                     case 0xf6: out.msg = tune_request { }; break;
+                    default: error |= std::ios::failbit;
                     }
                 }
                 rx.pending_msg.clear();
             }
             catch (const system_realtime_message&) { }
+            catch (const abi::__forced_unwind&) { in.setstate(std::ios::badbit); throw; }
+            catch (...) { in.setstate(std::ios::badbit); }
+        fail:
+            if (error) in.setstate(error);
             return in;
         }
     };
