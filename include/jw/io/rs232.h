@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
@@ -81,7 +82,7 @@ namespace jw
                 port_num port { 0 };
                 if (p <= com4)
                 {
-                    dpmi::mapped_dos_memory<port_num> com_ports { 4 , dpmi::far_ptr16 { 0x0040, 0x0000 } };
+                    dpmi::mapped_dos_memory<std::uint16_t> com_ports { 4 , dpmi::far_ptr16 { 0x0040, 0x0000 } };
                     if (com_ports.requires_new_selector()) // DPMI 0.9 host
                     {
                         dpmi::gs_override gs { com_ports.get_selector() };
