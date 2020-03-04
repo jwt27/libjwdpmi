@@ -6,7 +6,7 @@
 
 #include <cstring>
 #include <string_view>
-#include <deque>
+#include <vector>
 #include <crt0.h>
 #include <csignal>
 #include <jw/alloc.h>
@@ -34,7 +34,7 @@ int _crt0_startup_flags = 0
 | _CRT0_FLAG_NONMOVE_SBRK
 | _CRT0_FLAG_LOCK_MEMORY;
 
-int jwdpmi_main(std::deque<std::string_view>);
+int jwdpmi_main(const std::vector<std::string_view>&);
 
 namespace jw
 {
@@ -58,7 +58,7 @@ namespace jw
         auto call_offset = reinterpret_cast<volatile std::ptrdiff_t*>(p + 1);
         auto next_insn = reinterpret_cast<std::uintptr_t>(p + 5);               // e8 call instruction is 5 bytes
 
-        if (*p != 0xe8 or reinterpret_cast<std::uintptr_t>(next_insn + *call_offset) != reinterpret_cast<std::uintptr_t>(std::malloc)) asm ("int 3");
+        if (*p != 0xe8 or reinterpret_cast<std::uintptr_t>(next_insn + *call_offset) != reinterpret_cast<std::uintptr_t>(std::malloc)) [[unlikely]] { asm ("int 3"); }
 
         *call_offset = reinterpret_cast<std::uintptr_t>(irq_safe_malloc) - next_insn;
     }
@@ -152,10 +152,11 @@ int main(int argc, const char** argv)
     _crt0_startup_flags &= ~_CRT0_FLAG_LOCK_MEMORY;
     try 
     {
-        std::deque<std::string_view> args { };
+        std::vector<std::string_view> args { };
+        args.reserve(argc);
         for (auto i = 0; i < argc; ++i)
         {
-        #ifndef NDEBUG
+#           ifndef NDEBUG
             if (stricmp(argv[i], "--debug") == 0)
             {
                 io::rs232_config cfg;
@@ -167,7 +168,7 @@ int main(int argc, const char** argv)
                 debug::detail::debug_mode = true;
             }
             else
-        #endif
+#           endif
             {
                 args.emplace_back(argv[i]);
             }
