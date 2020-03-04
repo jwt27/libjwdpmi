@@ -132,7 +132,8 @@ namespace jw
                         if (*i != nullptr) return *i;
                     return nullptr;
                 }
-            } inline fpu_context_switcher [[gnu::init_priority(101)]];
+            };
+            inline std::unique_ptr<fpu_context_switcher_t> fpu_context_switcher;
         }
     }
 }

@@ -617,7 +617,7 @@ namespace jw
                     case eip: encode(out, &t.frame.fault_address.offset); return;
                     default:
                         if (r > reg_max) return;
-                        auto* fpu = fpu_context_switcher.get_last_context();
+                        auto* fpu = fpu_context_switcher->get_last_context();
                         switch (r)
                         {
                             case st0: case st1: case st2: case st3: case st4: case st5: case st6: case st7:
@@ -694,7 +694,7 @@ namespace jw
                 case fs: if (new_frame_type) { return reverse_decode(value.substr(0, 4), &t.frame.fs, 2); } return false;
                 case gs: if (new_frame_type) { return reverse_decode(value.substr(0, 4), &t.frame.gs, 2); } return false;
                 default:
-                    auto* fpu = fpu_context_switcher.get_last_context();
+                    auto* fpu = fpu_context_switcher->get_last_context();
                     switch (r)
                     {
                     case st0: case st1: case st2: case st3: case st4: case st5: case st6: case st7:

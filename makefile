@@ -38,6 +38,7 @@ obj/fpu.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
 obj/irq.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
 obj/ring0.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
 obj/memory.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
+obj/main.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
 obj/debug.% : override CXXFLAGS += -O3
 
 obj/%.asm: src/%.cpp jwdpmi_config.h | obj

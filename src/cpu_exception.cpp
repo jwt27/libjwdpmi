@@ -45,7 +45,7 @@ namespace jw
             bool enter_exception_context(exception_num exc) noexcept
             {
                 ++detail::exception_count;
-                auto fpu_context_switch_handled = detail::fpu_context_switcher.enter(exc);
+                auto fpu_context_switch_handled = detail::fpu_context_switcher->enter(exc);
                 detail::interrupt_id::push_back(exc, detail::interrupt_id::id_t::exception);
                 return fpu_context_switch_handled;
             }
@@ -53,7 +53,7 @@ namespace jw
             void leave_exception_context() noexcept
             {
                 detail::interrupt_id::pop_back();
-                detail::fpu_context_switcher.leave();
+                detail::fpu_context_switcher->leave();
                 --detail::exception_count;
             }
         }

@@ -29,7 +29,6 @@ namespace jw
             constexpr operator selector() const noexcept { return value; }
         };
 
-        //DPMI 0.9 AX=0604
         inline const std::size_t page_size = []
         {
             dpmi_error_code error;
@@ -42,7 +41,7 @@ namespace jw
                 , "=b" (size.hi)
                 , "=c" (size.lo)
                 : "a" (0x0604));
-            if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+            if (c) throw dpmi_error(error, "page_size");
 
             return size;
         }();

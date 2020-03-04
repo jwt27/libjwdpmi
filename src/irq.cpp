@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
@@ -18,7 +19,7 @@ namespace jw
             void irq_controller::interrupt_entry_point(int_vector vec) noexcept
             {
                 ++interrupt_count;
-                fpu_context_switcher.enter(0);
+                fpu_context_switcher->enter(0);
                 interrupt_id::push_back(vec, interrupt_id::id_t::interrupt);
                 
                 byte* esp; asm("mov %0, esp;":"=rm"(esp));
@@ -51,7 +52,7 @@ namespace jw
             spurious:
                 acknowledge();
                 interrupt_id::pop_back();
-                fpu_context_switcher.leave();
+                fpu_context_switcher->leave();
                 --interrupt_count;
             }
 

@@ -48,22 +48,19 @@ namespace jw
 
     extern "C" void* irq_safe_malloc(std::size_t n)
     {
-        if (dpmi::in_irq_context() or dpmi::get_cs() == dpmi::detail::ring0_cs) return nullptr;
-        return std::malloc(n);
+        return ::operator new(n);
     }
 
-    extern "C" void* init_malloc(std::size_t)
+    void setup_irq_safe_exceptions()
     {
-        return nullptr;
-    }
+        auto p = reinterpret_cast<byte*>(abi::__cxa_allocate_exception);
+        p = std::find(p, p + 0x20, 0xe8);
+        auto call_offset = reinterpret_cast<volatile std::ptrdiff_t*>(p + 1);
+        auto next_insn = reinterpret_cast<std::uintptr_t>(p + 5);               // e8 call instruction is 5 bytes
 
-    void patch__cxa_allocate_exception(auto* func) noexcept
-    {
-        auto p = reinterpret_cast<byte*>(abi::__cxa_allocate_exception);        // take the address of __cxa_allocate_exception
-        p = std::find(p, p + 0x20, 0xe8);                                       // find the first 0xe8 byte, assume this is the call to malloc.
-        auto post_call = reinterpret_cast<std::uintptr_t>(p + 5);               // e8 call instruction is 5 bytes
-        auto new_malloc = reinterpret_cast<std::ptrdiff_t>(func);               // take the address of new malloc
-        *reinterpret_cast<std::ptrdiff_t*>(p + 1) = new_malloc - post_call;     // hotpatch __cxa_alloc to call irq_safe_malloc instead.
+        if (*p != 0xe8 or reinterpret_cast<std::uintptr_t>(next_insn + *call_offset) != reinterpret_cast<std::uintptr_t>(std::malloc)) asm ("int 3");
+
+        *call_offset = reinterpret_cast<std::uintptr_t>(irq_safe_malloc) - next_insn;
     }
 
     [[noreturn]] void terminate()
@@ -108,23 +105,53 @@ namespace jw
     {
         if (debug::debug()) debug::detail::notify_gdb_exit(return_value);
     }
+
+    struct init
+    {
+        init() noexcept
+        {
+            using namespace jw::dpmi;
+            using namespace jw::dpmi::detail;
+
+            setup_irq_safe_exceptions();
+            setup_exception_throwers();
+
+            fpu_context_switcher.reset(new fpu_context_switcher_t { });
+
+            try
+            {
+                std::optional<ring0_privilege> r0;  // try to access control registers in ring 0
+                if (ring0_privilege::wont_throw()) r0 = ring0_privilege { };
+                // if we have no ring0 access, the dpmi host might still trap and emulate control register access.
+
+                std::uint32_t cr;
+                asm volatile ("mov %0, cr0" : "=r" (cr));
+                asm volatile ("mov cr0, %0" :: "r" (cr | 0x10));       // enable native x87 exceptions
+                if constexpr (sse)
+                {
+                    asm volatile ("mov %0, cr4" : "=r" (cr));
+                    asm volatile ("mov cr0, %0" :: "r" (cr | 0x600));  // enable SSE and SSE exceptions
+                }
+            }
+            catch (...)
+            {
+                // setting cr0 or cr4 failed. if compiled with SSE then this might be a problem.
+                // for now, assume that the dpmi server already enabled these bits (HDPMI does this).
+                // if not, then we'll soon crash with an invalid opcode on the first SSE instruction.
+            }
+
+            original_terminate_handler = std::set_terminate(terminate_handler);
+            std::atexit(atexit_handler);
+        }
+    } initializer [[gnu::init_priority(101)]];
 }
 
 [[gnu::force_align_arg_pointer]]
 int main(int argc, const char** argv)
 {
-    patch__cxa_allocate_exception(init_malloc);
-    try { throw std::array<byte, 512> { }; } catch (...) { }
-    patch__cxa_allocate_exception(irq_safe_malloc);
-    try { throw 0; } catch (...) { }
     _crt0_startup_flags &= ~_CRT0_FLAG_LOCK_MEMORY;
-
     try 
-    {   
-        dpmi::detail::setup_exception_throwers();
-        original_terminate_handler = std::set_terminate(jw::terminate_handler);
-        std::atexit(jw::atexit_handler);
-    
+    {
         std::deque<std::string_view> args { };
         for (auto i = 0; i < argc; ++i)
         {
@@ -258,7 +285,7 @@ namespace jw
 void operator delete(void* p, std::size_t)
 {
     p = *(reinterpret_cast<void**>(p) - 1);
-    if (new_alloc_initialized == yes && new_alloc->in_pool(p))
+    if (new_alloc_initialized == yes and new_alloc->in_pool(p))
     {
         new_alloc->deallocate(p);
         return;
