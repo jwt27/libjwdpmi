@@ -10,29 +10,29 @@ Current features include:
 * Cooperative multi-threading and coroutines.
 * RS-232 serial communication using `std::iostream`.
 * Event-driven keyboard interface.
-* Integrated GDB [remote debugging](https://i.imgur.com/HsREynj.png) backend.
+* Integrated GDB remote debugging backend.
 * Access to PIT, RTC and RDTSC clocks using `std::chrono`.
 * VESA VBE3 graphics interface.
 * Accurate analog game port interface.
 * MIDI protocol implementation.
 
 ## Installing
-* Build and install gcc with `--target=i686-pc-msdosdjgpp`, and install the djgpp standard library.  
+* Build and install gcc with `--target=i386-pc-msdosdjgpp`, and install the djgpp standard library.  
 An easy to use build script is available here: https://github.com/jwt27/build-gcc
 
 * Set your `PATH` accordingly:  
-```
+```sh
 $ export PATH=/usr/local/cross/bin:$PATH
 ```
 * Add this repository as a submodule in your own project  
-```
+```sh
 $ git submodule add https://github.com/jwt27/libjwdpmi.git ./lib/libjwdpmi
 $ git submodule update --init
 ```
 * In your makefile, export your `AR`, `CXX` and `CXXFLAGS`, and add a rule to build `libjwdpmi`:  
-```
-AR:=i686-pc-msdosdjgpp-ar
-CXX:=i686-pc-msdosdjgpp-g++
+```make
+AR:=i386-pc-msdosdjgpp-ar
+CXX:=i386-pc-msdosdjgpp-g++
 CXXFLAGS:=-std=gnu++2a -masm=intel
 
 export AR CXX CXXFLAGS
@@ -40,7 +40,7 @@ libjwdpmi:
     $(MAKE) -C lib/libjwdpmi/
 ```
 * Add the `include/` directory to your global include path (`-I`) and link your program with `libjwdpmi.a`, found in the `bin/` directory.
-```
+```make
 obj/%.o: src/%.cpp
     $(CXX) $(CXXFLAGS) -o $@ -Ilib/libjwdpmi/include -c $<
 
