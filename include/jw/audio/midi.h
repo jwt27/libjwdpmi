@@ -30,32 +30,32 @@ namespace jw::audio
         // tag types
         struct channel_message { byte channel; };
         struct system_message { };
-        struct system_common_message : public system_message { };
-        struct system_realtime_message : public system_message { };
+        struct system_common_message    : system_message { };
+        struct system_realtime_message  : system_message { };
 
         // channel message types
-        struct note_event : public channel_message { bool on; byte key, velocity; };
-        struct key_pressure : public channel_message { byte key, value; };
-        struct channel_pressure : public channel_message { byte value; };
-        struct control_change : public channel_message { byte controller, value; };
-        struct long_control_change : public channel_message { byte controller; split_uint14_t value; }; // never received
-        struct program_change : public channel_message { byte value; };
-        struct pitch_change : public channel_message { split_uint14_t value; };
-        struct rpn_change : public channel_message { split_uint14_t parameter, value; }; // never received
-        struct nrpn_change : public channel_message { split_uint14_t parameter, value; }; // never received
+        struct note_event           : channel_message { bool on; byte key, velocity; };
+        struct key_pressure         : channel_message { byte key, value; };
+        struct channel_pressure     : channel_message { byte value; };
+        struct control_change       : channel_message { byte controller, value; };
+        struct long_control_change  : channel_message { byte controller; split_uint14_t value; };   // never received
+        struct program_change       : channel_message { byte value; };
+        struct pitch_change         : channel_message { split_uint14_t value; };
+        struct rpn_change           : channel_message { split_uint14_t parameter, value; };         // never received
+        struct nrpn_change          : channel_message { split_uint14_t parameter, value; };         // never received
 
         // system message types
-        struct sysex : public system_common_message { std::vector<byte> data; };
-        struct mtc_quarter_frame : public system_common_message { byte data; };    // TODO
-        struct song_position : public system_common_message { split_uint14_t value; };
-        struct song_select : public system_common_message { byte value; };
-        struct tune_request : public system_common_message { };
-        struct clock_tick : public system_realtime_message { };
-        struct clock_start : public system_realtime_message { };
-        struct clock_continue : public system_realtime_message { };
-        struct clock_stop : public system_realtime_message { };
-        struct active_sense : public system_realtime_message { };
-        struct reset : public system_realtime_message { };
+        struct sysex                : system_common_message { std::vector<byte> data; };
+        struct mtc_quarter_frame    : system_common_message { byte data; };                         // TODO
+        struct song_position        : system_common_message { split_uint14_t value; };
+        struct song_select          : system_common_message { byte value; };
+        struct tune_request         : system_common_message { };
+        struct clock_tick           : system_realtime_message { };
+        struct clock_start          : system_realtime_message { };
+        struct clock_continue       : system_realtime_message { };
+        struct clock_stop           : system_realtime_message { };
+        struct active_sense         : system_realtime_message { };
+        struct reset                : system_realtime_message { };
 
         std::variant<
             note_event,
