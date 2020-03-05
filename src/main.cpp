@@ -154,7 +154,7 @@ int main(int argc, const char** argv)
     {
         std::vector<std::string_view> args { };
         args.reserve(argc);
-        for (auto i = 0; i < argc; ++i)
+        for (auto i = 1; i < argc; ++i)
         {
 #           ifndef NDEBUG
             if (stricmp(argv[i], "--debug") == 0)
