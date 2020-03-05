@@ -214,6 +214,13 @@ namespace jw::audio
             }
         };
 
+        template <typename S>
+        static void iostream_exception(S& stream)
+        {
+            stream.setstate(std::ios::badbit);
+            if (stream.exceptions() & stream.rdstate()) throw;
+        };
+
     public:
         friend std::ostream& operator<<(std::ostream& out, const midi& in)
         {
@@ -225,8 +232,10 @@ namespace jw::audio
             {
                 if (sentry) std::visit(stream_writer { *out.rdbuf(), tx }, in.msg);
             }
-            catch (const abi::__forced_unwind&) { out.setstate(std::ios::badbit); throw; }
-            catch (...) { out.setstate(std::ios::badbit); }
+            catch (const terminate_exception&)  { iostream_exception(out); throw; }
+            catch (const thread::abort_thread&) { iostream_exception(out); throw; }
+            catch (const abi::__forced_unwind&) { iostream_exception(out); throw; }
+            catch (...)                         { iostream_exception(out); }
             return out;
         }
 
@@ -237,7 +246,16 @@ namespace jw::audio
             std::ios::iostate error { std::ios::goodbit };
             auto& buf = *in.rdbuf();
             auto i { rx.pending_msg.cbegin() };
-            auto get = [&]
+
+            struct failure { };
+
+            auto fail = [&error]
+            {
+                error |= std::ios::failbit;
+                throw failure { };
+            };
+
+            auto get_any = [&]
             {
                 if (i != rx.pending_msg.cend()) return *(i++);
                 auto b = static_cast<byte>(buf.sbumpc());
@@ -252,6 +270,7 @@ namespace jw::audio
                     case 0xfc: out.msg = clock_stop { }; break;
                     case 0xfe: out.msg = active_sense { }; break;
                     case 0xff: out.msg = reset { }; break;
+                    default: [[unlikely]] fail();
                     }
                     throw system_realtime_message { };
                 }
@@ -259,11 +278,17 @@ namespace jw::audio
                 return b;
             };
 
-            std::istream::sentry sentry { in };
-            if (not sentry) goto fail;
+            auto get = [&]
+            {
+                auto b = get_any();
+                if ((b & 0x80) != 0) [[unlikely]] fail();
+                return b;
+            };
 
+            std::istream::sentry sentry { in, true };
             try
             {
+                if (not sentry) [[unlikely]] throw failure { };
                 byte a { rx.last_status };
 
                 if (rx.pending_msg.empty())
@@ -271,14 +296,14 @@ namespace jw::audio
                     if (a == 0)
                     {
                         while ((buf.sgetc() & 0x80) == 0) buf.sbumpc(); // discard data until the first status byte
-                        a = get();
+                        a = get_any();
                     }
                     buf.sgetc();    // make sure there is data available before timestamping
                     rx.pending_msg_time = clock::now();
                 }
                 else
                 {
-                    if ((rx.pending_msg[0] & 0x80) != 0) a = get();
+                    if ((rx.pending_msg[0] & 0x80) != 0) a = get_any();
                 }
                 out.time = rx.pending_msg_time;
 
@@ -302,7 +327,7 @@ namespace jw::audio
                     case 0xc0: out.msg = program_change { { ch }, get() }; break;
                     case 0xd0: out.msg = channel_pressure { { ch }, get() }; break;
                     case 0xe0: out.msg = pitch_change { { ch }, { get(), get() } }; break;
-                    default: error |= std::ios::failbit;
+                    default: [[unlikely]] fail();
                     }
                 }
                 else                    // system message
@@ -314,23 +339,25 @@ namespace jw::audio
                     {
                         auto& data = out.msg.emplace<sysex>().data;
                         data.reserve(32);
-                        for (a = get(); a != 0xf7; a = get()) data.push_back(a);
+                        for (a = get_any(); a != 0xf7; a = get_any()) data.push_back(a);
                         break;
                     }
                     case 0xf1: out.msg = mtc_quarter_frame { { }, get() }; break;
                     case 0xf2: out.msg = song_position { { }, { get(), get() } }; break;
                     case 0xf3: out.msg = song_select { { }, get() }; break;
                     case 0xf6: out.msg = tune_request { }; break;
-                    default: error |= std::ios::failbit;
+                    default: [[unlikely]] fail();
                     }
                 }
                 rx.pending_msg.clear();
             }
+            catch (const failure&) { rx.pending_msg.clear(); }
             catch (const system_realtime_message&) { }
-            catch (const abi::__forced_unwind&) { in.setstate(std::ios::badbit); throw; }
-            catch (...) { in.setstate(std::ios::badbit); }
-        fail:
-            if (error) in.setstate(error);
+            catch (const terminate_exception&)  { iostream_exception(in); throw; }
+            catch (const thread::abort_thread&) { iostream_exception(in); throw; }
+            catch (const abi::__forced_unwind&) { iostream_exception(in); throw; }
+            catch (...)                         { iostream_exception(in); }
+            if (error != std::ios::goodbit) in.setstate(error);
             return in;
         }
     };
