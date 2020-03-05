@@ -80,6 +80,7 @@ namespace jw::audio
             reset> msg;
         typename clock::time_point time;
 
+        constexpr midi() noexcept { }
         midi(std::istream& in) { in >> *this; }
         template<typename T> constexpr midi(T&& m, typename clock::time_point t = clock::time_point::min()) : msg(std::forward<T>(m)), time(t) { }
 
