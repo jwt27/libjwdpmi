@@ -130,7 +130,7 @@ namespace jw
                 if constexpr (sse)
                 {
                     asm volatile ("mov %0, cr4" : "=r" (cr));
-                    asm volatile ("mov cr0, %0" :: "r" (cr | 0x600));  // enable SSE and SSE exceptions
+                    asm volatile ("mov cr4, %0" :: "r" (cr | 0x600));  // enable SSE and SSE exceptions
                 }
             }
             catch (...)
