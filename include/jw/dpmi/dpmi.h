@@ -301,26 +301,26 @@ namespace jw
             union [[gnu::packed]]
             {
                 std::uint32_t ebx;
-                struct[[gnu::packed]] { std::uint16_t bx; };
-                struct[[gnu::packed]] { std::uint8_t bl, bh; };
+                struct [[gnu::packed]] { std::uint16_t bx; };
+                struct [[gnu::packed]] { std::uint8_t bl, bh; };
             };
             union [[gnu::packed]]
             {
                 std::uint32_t edx;
-                struct[[gnu::packed]] { std::uint16_t dx; };
-                struct[[gnu::packed]] { std::uint8_t dl, dh; };
+                struct [[gnu::packed]] { std::uint16_t dx; };
+                struct [[gnu::packed]] { std::uint8_t dl, dh; };
             };
             union [[gnu::packed]]
             {
                 std::uint32_t ecx;
-                struct[[gnu::packed]] { std::uint16_t cx; };
-                struct[[gnu::packed]] { std::uint8_t cl, ch; };
+                struct [[gnu::packed]] { std::uint16_t cx; };
+                struct [[gnu::packed]] { std::uint8_t cl, ch; };
             }; 
             union [[gnu::packed]]
             {
                 std::uint32_t eax;
-                struct[[gnu::packed]] { std::uint16_t ax; };
-                struct[[gnu::packed]] { std::uint8_t al, ah; };
+                struct [[gnu::packed]] { std::uint16_t ax; };
+                struct [[gnu::packed]] { std::uint8_t al, ah; };
             };
 
             auto& print(std::ostream& out) const
