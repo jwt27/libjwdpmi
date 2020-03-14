@@ -47,9 +47,13 @@ namespace jw::dpmi
 
     ring0_privilege::ring0_privilege()
     {
-        if (ring0_accessible == unknown) [[unlikely]] setup(true);
-        if (ring0_accessible != yes) throw no_ring0_access { };
-        if (get_cs() != detail::ring0_cs) enter();
+        selector_bits cs { get_cs() };
+        if (cs.privilege_level != 0)
+        {
+            if (ring0_accessible == unknown) [[unlikely]] setup(true);
+            if (ring0_accessible != yes) throw no_ring0_access { };
+            enter();
+        }
         else dont_leave = true;
     }
 
@@ -57,6 +61,8 @@ namespace jw::dpmi
 
     bool ring0_privilege::wont_throw() noexcept
     {
+        selector_bits cs { get_cs() };
+        if (cs.privilege_level == 0) return true;
         if (ring0_accessible == unknown) [[unlikely]] setup(false);
         return ring0_accessible == yes;
     }
