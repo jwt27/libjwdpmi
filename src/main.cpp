@@ -48,7 +48,8 @@ namespace jw
 
     extern "C" void* irq_safe_malloc(std::size_t n)
     {
-        return ::operator new(n);
+        if (dpmi::in_irq_context() or dpmi::get_cs() == dpmi::detail::ring0_cs) return nullptr;
+        else return std::malloc(n);
     }
 
     void setup_irq_safe_exceptions()
@@ -113,7 +114,6 @@ namespace jw
             using namespace jw::dpmi;
             using namespace jw::dpmi::detail;
 
-            setup_irq_safe_exceptions();
             setup_exception_throwers();
 
             fpu_context_switcher.reset(new fpu_context_switcher_t { });
@@ -149,6 +149,7 @@ namespace jw
 [[gnu::force_align_arg_pointer]]
 int main(int argc, const char** argv)
 {
+    setup_irq_safe_exceptions();    // This should really be done in init() above.
     _crt0_startup_flags &= ~_CRT0_FLAG_LOCK_MEMORY;
     try 
     {
