@@ -118,23 +118,30 @@ namespace jw
 
             fpu_context_switcher.reset(new fpu_context_switcher_t { });
 
-            try
+            bool use_ring0 { false };
+        retry_cr0:
+            try     // This part is really tricky without irq-safe exceptions set up.
             {
                 std::optional<ring0_privilege> r0;  // try to access control registers in ring 0
-                if (ring0_privilege::wont_throw()) r0 = ring0_privilege { };
+                if (use_ring0) r0 = ring0_privilege { };
                 // if we have no ring0 access, the dpmi host might still trap and emulate control register access.
 
                 std::uint32_t cr;
-                asm volatile ("mov %0, cr0" : "=r" (cr));
-                asm volatile ("mov cr0, %0" :: "r" (cr | 0x10));       // enable native x87 exceptions
+                asm ("mov %0, cr0" : "=r" (cr));
+                asm ("mov cr0, %0" :: "r" (cr | 0x10));       // enable native x87 exceptions
                 if constexpr (sse)
                 {
-                    asm volatile ("mov %0, cr4" : "=r" (cr));
-                    asm volatile ("mov cr4, %0" :: "r" (cr | 0x600));  // enable SSE and SSE exceptions
+                    asm ("mov %0, cr4" : "=r" (cr));
+                    asm ("mov cr4, %0" :: "r" (cr | 0x600));  // enable SSE and SSE exceptions
                 }
             }
-            catch (...)
+            catch (const cpu_exception&)
             {
+                if (not use_ring0 and ring0_privilege::wont_throw())
+                {
+                    use_ring0 = true;
+                    goto retry_cr0;
+                }
                 // setting cr0 or cr4 failed. if compiled with SSE then this might be a problem.
                 // for now, assume that the dpmi server already enabled these bits (HDPMI does this).
                 // if not, then we'll soon crash with an invalid opcode on the first SSE instruction.
