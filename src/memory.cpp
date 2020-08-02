@@ -41,8 +41,8 @@ namespace jw
                     {
                         std::optional<ring0_privilege> r0;
                         if (use_ring0) r0.emplace();
-                        asm volatile ("sgdt %0":"=m"(gdtr));
-                        asm volatile ("sldt %w0":"=rm"(ldtr));
+                        asm ("sgdt %0"  : "=m"  (gdtr));
+                        asm ("sldt %w0" : "=rm" (ldtr));
                     }
 
                     gdt = descriptor::create_segment(gdtr.base, gdtr.limit + 1);
@@ -58,8 +58,8 @@ namespace jw
                         std::optional<ring0_privilege> r0;
                         if (use_ring0) r0.emplace();
                         gs_override gs { gdt->get_selector() };
-                        asm volatile ("mov %0, gs:[%1*8+0]" : "=r" (ldt_bits.lo) : "r" (ldt_selector.index));
-                        asm volatile ("mov %0, gs:[%1*8+4]" : "=r" (ldt_bits.hi) : "r" (ldt_selector.index));
+                        asm ("mov %0, gs:[%1*8+0]" : "=r" (ldt_bits.lo) : "r" (ldt_selector.index));
+                        asm ("mov %0, gs:[%1*8+4]" : "=r" (ldt_bits.hi) : "r" (ldt_selector.index));
                     }
 
                     split_uint32_t base;
@@ -206,8 +206,8 @@ namespace jw
                     split_uint64_t raw;
                     descriptor_data data;
                 };
-                asm volatile ("mov %0, gs:[%1*8+0]" : "=&r" (raw.lo) : "r" (s.index));
-                asm volatile ("mov %0, gs:[%1*8+4]" : "=&r" (raw.hi) : "r" (s.index));
+                asm ("mov %0, gs:[%1*8+0]" : "=r" (raw.lo) : "r" (s.index));
+                asm ("mov %0, gs:[%1*8+4]" : "=r" (raw.hi) : "r" (s.index));
                 static_cast<descriptor_data&>(*const_cast<descriptor*>(this)) = data;
             }
             else
@@ -246,8 +246,8 @@ namespace jw
                     descriptor_data data;
                 };
                 data = *this;
-                asm volatile ("mov gs:[%1*8+0], %0" :: "r" (raw.lo), "r" (s.index));
-                asm volatile ("mov gs:[%1*8+4], %0" :: "r" (raw.hi), "r" (s.index));
+                asm ("mov gs:[%1*8+0], %0" :: "r" (raw.lo), "r" (s.index));
+                asm ("mov gs:[%1*8+4], %0" :: "r" (raw.hi), "r" (s.index));
             }
             else
             {
