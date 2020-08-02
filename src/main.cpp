@@ -228,12 +228,12 @@ namespace jw
 [[nodiscard]] void* operator new(std::size_t n, std::align_val_t alignment)
 {
     auto align = std::max(static_cast<std::size_t>(alignment), std::size_t { 4 });
-    n += align + 4;
+    n += align + sizeof(void*);
 
     auto aligned_ptr = [align](void* p)
     {
         if (p == nullptr) [[unlikely]] throw std::bad_alloc { };
-        auto b = ((reinterpret_cast<std::uintptr_t>(p) + 4) & -align) + align;
+        auto b = ((reinterpret_cast<std::uintptr_t>(p) + sizeof(void*)) & -align) + align;
         *(reinterpret_cast<void**>(b) - 1) = p;
         return reinterpret_cast<void*>(b);
     };
