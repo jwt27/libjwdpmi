@@ -13,11 +13,9 @@ namespace jw
     {
         namespace detail
         {
-            std::unordered_map<port_num, bool> mpu401_streambuf::port_use_map { };
-
             mpu401_streambuf::mpu401_streambuf(const mpu401_config& c) : cfg(c), cmd_port(cfg.port + 1), status_port(cfg.port + 1), data_port(cfg.port)
             {
-                if (port_use_map[cfg.port]) throw std::runtime_error("MPU401 port already in use.");
+                if (ports_used.contains(cfg.port)) throw std::runtime_error("MPU401 port already in use.");
 
                 auto timeout = std::chrono::milliseconds { 10 };
 
@@ -42,13 +40,14 @@ namespace jw
 
                 irq_handler.set_irq(cfg.irq);
                 if (cfg.use_irq) irq_handler.enable();
+                ports_used.insert(cfg.port);
             }
 
             mpu401_streambuf::~mpu401_streambuf()
             {
                 irq_handler.disable();
                 cmd_port.write(0xFF);
-                port_use_map[cfg.port] = false;
+                ports_used.erase(cfg.port);
             }
 
             int mpu401_streambuf::sync()

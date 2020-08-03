@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
@@ -11,8 +12,6 @@ namespace jw
     {
         namespace detail
         {
-            std::unordered_map<port_num, bool> rs232_streambuf::com_port_use_map { };
-
             rs232_streambuf::rs232_streambuf(const rs232_config& p)
                 : config(p), 
                 rate_divisor(p.io_port), data_port(p.io_port), 
@@ -21,8 +20,7 @@ namespace jw
                 line_control(p.io_port + 3), modem_control(p.io_port + 4),
                 line_status(p.io_port + 5), modem_status(p.io_port + 6) 
             {
-                if (com_port_use_map[config.io_port]) throw std::runtime_error("COM port already in use.");
-                com_port_use_map[config.io_port] = true;
+                if (ports_used.contains(config.io_port)) throw std::runtime_error("COM port already in use.");
 
                 uart_irq_enable_reg irqen { };
                 irq_enable.write(irqen);
@@ -69,6 +67,7 @@ namespace jw
                 irq_enable.write(irqen);
 
                 set_rts();
+                ports_used.insert(config.io_port);
             }
 
             rs232_streambuf::~rs232_streambuf() 
@@ -76,7 +75,7 @@ namespace jw
                 modem_control.write({ });
                 irq_enable.write({ });
                 irq_handler.disable();
-                com_port_use_map[config.io_port] = false;
+                ports_used.erase(config.io_port);
             }
 
             int rs232_streambuf::sync()

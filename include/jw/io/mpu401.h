@@ -7,6 +7,7 @@
 #pragma once
 #include <iostream>
 #include <mutex>
+#include <unordered_set>
 #include <jw/io/ioport.h>
 #include <jw/dpmi/irq.h>
 #include <jw/common.h>
@@ -122,7 +123,7 @@ namespace jw
                 char_type* rx_ptr { rx_buf.data() };
                 char_type* tx_ptr { tx_buf.data() };
 
-                static std::unordered_map<port_num, bool> port_use_map;
+                inline static std::unordered_set<port_num> ports_used { };
             };
         }
 

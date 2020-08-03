@@ -1,10 +1,12 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
-#include <jw/thread/thread.h>
 #include <mutex>
+#include <unordered_set>
+#include <jw/thread/thread.h>
 
 namespace jw
 {
@@ -257,7 +259,7 @@ namespace jw
                 static const char_type xon = 0x11;
                 static const char_type xoff = 0x13;
 
-                static std::unordered_map<port_num, bool> com_port_use_map;
+                inline static std::unordered_set<port_num> ports_used;
 
             protected:
                 /*
