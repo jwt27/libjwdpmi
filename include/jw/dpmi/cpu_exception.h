@@ -114,9 +114,9 @@ namespace jw
             new_exception_frame frame_10;
         };
 
-        static_assert(sizeof(old_exception_frame) == 0x20, "check sizeof old_exception_frame");
-        static_assert(sizeof(new_exception_frame) == 0x38, "check sizeof new_exception_frame");
-        static_assert(sizeof(raw_exception_frame) == 0x78, "check sizeof raw_exception_frame");
+        static_assert(sizeof(old_exception_frame) == 0x20);
+        static_assert(sizeof(new_exception_frame) == 0x38);
+        static_assert(sizeof(raw_exception_frame) == 0x78);
 
         using exception_frame = old_exception_frame; // can be static_cast to new_exception_frame type
         using exception_handler_sig = bool(cpu_registers*, exception_frame*, bool);
@@ -171,7 +171,7 @@ namespace jw
             exception_handler* next { nullptr };
             exception_handler* prev { nullptr };
             static inline std::array<exception_handler*, 0x20> last { };
-            static inline std::array<byte, config::exception_stack_size> stack; // TODO: allow nested exceptions
+            static inline std::array<byte, config::exception_stack_size> stack;
 
             [[gnu::force_align_arg_pointer]] static bool call_handler(exception_handler* self, raw_exception_frame* frame) noexcept;
                                                                 // sizeof   alignof     offset
@@ -192,15 +192,15 @@ namespace jw
             exception_handler(exception_num e, F&& f, bool = false)
                 : handler(std::allocator_arg, locking_allocator<> { }, std::forward<F>(f))
                 , exc(e), stack_ptr(stack.data() + stack.size() - 4)
+                , chain_to { detail::cpu_exception_handlers::get_pm_handler(e) }
             {
                 detail::setup_exception_throwers();
                 init_code();
 
                 prev = last[e];
-                if (prev != nullptr)prev->next = this;
+                if (prev != nullptr) prev->next = this;
                 last[e] = this;
 
-                chain_to = detail::cpu_exception_handlers::get_pm_handler(e);
                 new_type = detail::cpu_exception_handlers::set_pm_handler(e, get_ptr());
             }
 
