@@ -7,19 +7,9 @@
 
 #include <atomic>
 #include <deque>
+#include <chrono>
 #include <jw/dpmi/irq.h>
 #include <jw/math.h>
-
-// included by <chrono>
-#include <ratio>
-#include <type_traits>
-#include <limits>
-#include <ctime>
-#include <bits/parse_numbers.h>
-
-#define inline // eww
-#include_next <chrono>
-#undef inline
 
 namespace jw
 {
@@ -176,23 +166,4 @@ namespace jw
             }
         };
     }
-}
-
-namespace std
-{
-    namespace chrono
-    {
-        inline namespace jw
-        {
-            using system_clock = ::jw::chrono::rtc;
-            using steady_clock = ::jw::chrono::pit;
-            using high_resolution_clock = ::jw::chrono::tsc;
-        }
-    }
-
-    inline namespace literals
-    {
-        using namespace chrono_literals;
-    }
-    using namespace literals;
 }

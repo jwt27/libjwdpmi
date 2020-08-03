@@ -14,6 +14,7 @@
 #include <jw/dpmi/lock.h>
 #include <jw/io/ioport.h>
 #include <jw/thread/task.h>
+#include <jw/thread/mutex.h>
 #include <jw/chrono/chrono.h>
 
 // TODO: clean this up
@@ -187,7 +188,7 @@ namespace jw
                 retry:
                 try
                 {
-                    std::unique_lock<std::mutex> lock { mutex };
+                    std::unique_lock<thread::mutex> lock { mutex };
                     dpmi::irq_mask no_irq { 1 };
                     byte result { keyboard_response::ERROR };
                     do_ps2_command<seq...>(data.begin(), result);
@@ -225,7 +226,7 @@ namespace jw
             const in_port<controller_status> status_port { 0x64 };
             const out_port<byte> command_port { 0x64 };
             const io_port<byte> data_port { 0x60 };
-            std::mutex mutex;
+            thread::mutex mutex;
             inline static bool keyboard_initialized { false };
             scancode_set initial_scancode_set;
 

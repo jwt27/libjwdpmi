@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
@@ -8,7 +9,7 @@
 #include <variant>
 #include <jw/thread/thread.h>
 #include <jw/thread/detail/mutex.h>
-#include <jw/dpmi/detail/irq.h>
+#include <jw/dpmi/irq.h>
 #include <jw/dpmi/detail/interrupt_id.h>
 
 namespace jw

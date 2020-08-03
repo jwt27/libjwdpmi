@@ -55,7 +55,7 @@ namespace jw
                 thread::yield_while([this]
                 {
                     {
-                        std::unique_lock<std::recursive_mutex> lock { getting };
+                        std::unique_lock<thread::recursive_mutex> lock { getting };
                         if (not status_port.read().no_data_available) underflow();
                     }
                     overflow();
@@ -66,7 +66,7 @@ namespace jw
 
             std::streamsize mpu401_streambuf::xsgetn(char_type * s, std::streamsize n)
             {
-                std::unique_lock<std::recursive_mutex> lock { getting };
+                std::unique_lock<thread::recursive_mutex> lock { getting };
                 std::streamsize max_n;
                 thread::yield_while([&]
                 {
@@ -83,7 +83,7 @@ namespace jw
 
             mpu401_streambuf::int_type mpu401_streambuf::underflow()
             {
-                std::unique_lock<std::recursive_mutex> lock { getting };
+                std::unique_lock<thread::recursive_mutex> lock { getting };
                 auto qsize = rx_buf.size() / 4;
                 if (rx_ptr > rx_buf.begin() + qsize * 3)
                 {
@@ -107,7 +107,7 @@ namespace jw
 
             std::streamsize mpu401_streambuf::xsputn(const char_type * s, std::streamsize n)
             {
-                std::unique_lock<std::recursive_mutex> lock { putting };
+                std::unique_lock<thread::recursive_mutex> lock { putting };
                 std::streamsize max_n;
                 while ((max_n = std::min(tx_buf.end() - pptr(), n)) < n)
                     overflow();
@@ -121,7 +121,7 @@ namespace jw
 
             mpu401_streambuf::int_type mpu401_streambuf::overflow(int_type c)
             {
-                std::unique_lock<std::recursive_mutex> lock { putting };
+                std::unique_lock<thread::recursive_mutex> lock { putting };
                 thread::yield_while([this]
                 {
                     check_irq_exception();

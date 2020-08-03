@@ -14,7 +14,9 @@
 #include <jw/common.h>
 #include <jw/split_stdint.h>
 #include <jw/thread/thread.h>
+#include <jw/thread/mutex.h>
 #include <jw/io/mpu401.h>
+#include <jw/chrono/chrono.h>
 #include <../jwdpmi_config.h>
 
 namespace jw
@@ -113,14 +115,14 @@ namespace jw::audio
     protected:
         struct istream_info
         {
-            std::mutex mutex { };
+            thread::mutex mutex { };
             std::deque<byte> pending_msg { };
             clock::time_point pending_msg_time;
             byte last_status { 0 };
         };
         struct ostream_info
         {
-            std::mutex mutex { };
+            thread::mutex mutex { };
             byte last_status { 0 };
         };
         inline static std::list<istream_info> istream_list { };
@@ -234,7 +236,7 @@ namespace jw::audio
         friend std::ostream& operator<<(std::ostream& out, const midi& in)
         {
             auto& tx { tx_state(out) };
-            std::unique_lock<std::mutex> lock { tx.mutex, std::defer_lock };
+            std::unique_lock<thread::mutex> lock { tx.mutex, std::defer_lock };
             if (not in.is_realtime_message()) lock.lock();
             std::ostream::sentry sentry { out };
             try
@@ -251,7 +253,7 @@ namespace jw::audio
         friend std::istream& operator>>(std::istream& in, midi& out)
         {
             auto& rx { rx_state(in) };
-            std::unique_lock<std::mutex> lock { rx.mutex };
+            std::unique_lock<thread::mutex> lock { rx.mutex };
             std::ios::iostate error { std::ios::goodbit };
             auto& buf = *in.rdbuf();
             auto i { rx.pending_msg.cbegin() };

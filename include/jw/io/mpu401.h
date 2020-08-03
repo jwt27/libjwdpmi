@@ -12,6 +12,7 @@
 #include <jw/dpmi/irq.h>
 #include <jw/common.h>
 #include <jw/io/io_error.h>
+#include <jw/thread/mutex.h>
 
 namespace jw
 {
@@ -90,7 +91,7 @@ namespace jw
 
                 void put()
                 {
-                    std::unique_lock<std::recursive_mutex> locked { putting, std::try_to_lock };
+                    std::unique_lock<thread::recursive_mutex> locked { putting, std::try_to_lock };
                     if (not locked) return;
                     dpmi::interrupt_mask no_irq { };
                     while (tx_ptr < pptr() and not status_port.read().dont_send_data)
@@ -115,7 +116,7 @@ namespace jw
                 out_port<byte> cmd_port;
                 in_port<mpu401_status> status_port;
                 io_port<byte> data_port;
-                std::recursive_mutex getting, putting;
+                thread::recursive_mutex getting, putting;
                 std::exception_ptr irq_exception;
 
                 std::array<char_type, 1_KB> rx_buf;

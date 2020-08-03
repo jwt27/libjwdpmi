@@ -7,6 +7,7 @@
 #include <mutex>
 #include <unordered_set>
 #include <jw/thread/thread.h>
+#include <jw/thread/mutex.h>
 
 namespace jw
 {
@@ -168,7 +169,7 @@ namespace jw
                     //if (config.flow_control == rs232_config::xon_xoff && !cts) { put_one(xon); return; };
                     //irq_disable no_irq { this, irq_disable::put };
                     dpmi::interrupt_mask no_irq { };
-                    std::unique_lock<std::recursive_mutex> locked { putting, std::try_to_lock };
+                    std::unique_lock<thread::recursive_mutex> locked { putting, std::try_to_lock };
                     if (not locked) return;
                     auto size = std::min(read_status().tx_fifo_empty ? 16 : 1, pptr() - tx_ptr);
                     for (auto i = 0; i < size or (tx_ptr < pptr() and read_status().transmitter_empty); ++tx_ptr, ++i)
@@ -247,7 +248,7 @@ namespace jw
                 io_port <uart_modem_control_reg> modem_control;
                 in_port <uart_line_status_reg> line_status;
                 in_port <uart_modem_status_reg> modem_status;
-                std::recursive_mutex getting, putting;
+                thread::recursive_mutex getting, putting;
                 std::exception_ptr irq_exception;
                 bool cts { false };
 
