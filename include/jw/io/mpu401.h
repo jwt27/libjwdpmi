@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
@@ -41,6 +42,22 @@ namespace jw
                 mpu401_streambuf& operator=(const mpu401_streambuf&) = delete;
                 mpu401_streambuf& operator=(mpu401_streambuf&&) = delete;
 
+                void put_realtime(char_type out)
+                {
+                    while (true)
+                    {
+                        {
+                            dpmi::interrupt_mask no_irq { };
+                            if (not status_port.read().dont_send_data)
+                            {
+                                data_port.write(out);
+                                return;
+                            }
+                        }
+                        thread::yield();
+                    }
+                }
+
             protected:
                 virtual int sync() override;
                 virtual std::streamsize xsgetn(char_type* s, std::streamsize n) override;
@@ -72,9 +89,9 @@ namespace jw
 
                 void put()
                 {
-                    dpmi::interrupt_mask no_irq { };
                     std::unique_lock<std::recursive_mutex> locked { putting, std::try_to_lock };
                     if (not locked) return;
+                    dpmi::interrupt_mask no_irq { };
                     while (tx_ptr < pptr() and not status_port.read().dont_send_data)
                         data_port.write(*tx_ptr++);
                 }

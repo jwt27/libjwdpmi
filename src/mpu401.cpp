@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
@@ -125,10 +126,7 @@ namespace jw
                 thread::yield_while([this]
                 {
                     check_irq_exception();
-                    {
-                        dpmi::interrupt_mask no_irq { };
-                        put();
-                    }
+                    put();
                     return tx_ptr < pptr();
                 });
 

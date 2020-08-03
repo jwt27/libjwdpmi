@@ -14,6 +14,7 @@
 #include <jw/common.h>
 #include <jw/split_stdint.h>
 #include <jw/thread/thread.h>
+#include <jw/io/mpu401.h>
 #include <../jwdpmi_config.h>
 
 namespace jw
@@ -151,6 +152,14 @@ namespace jw::audio
             std::streambuf& out;
             ostream_info& tx;
 
+            void put_realtime(byte a)
+            {
+                if (auto* mpu = dynamic_cast<jw::io::detail::mpu401_streambuf*>(&out))
+                    mpu->put_realtime(a);
+                else
+                    out.sputc(a);
+            }
+
             void put_status(byte a)
             {
                 if (tx.last_status != a) out.sputc(a);
@@ -184,14 +193,14 @@ namespace jw::audio
             void operator()(const mtc_quarter_frame& msg)   { clear_status(); out.sputc(0xf1); out.sputc(msg.data); }
             void operator()(const song_position& msg)       { clear_status(); out.sputc(0xf2); out.sputc(msg.value.lo); out.sputc(msg.value.hi); }
             void operator()(const song_select& msg)         { clear_status(); out.sputc(0xf3); out.sputc(msg.value); }
+            void operator()(const tune_request&)            { clear_status(); out.sputc(0xf6); }
 
-            void operator()(const tune_request&)    { out.sputc(0xf6); }
-            void operator()(const clock_tick&)      { out.sputc(0xf8); }
-            void operator()(const clock_start&)     { out.sputc(0xfa); }
-            void operator()(const clock_continue&)  { out.sputc(0xfb); }
-            void operator()(const clock_stop&)      { out.sputc(0xfc); }
-            void operator()(const active_sense&)    { out.sputc(0xfe); }
-            void operator()(const reset&)           { out.sputc(0xff); }
+            void operator()(const clock_tick&)              { put_realtime(0xf8); }
+            void operator()(const clock_start&)             { put_realtime(0xfa); }
+            void operator()(const clock_continue&)          { put_realtime(0xfb); }
+            void operator()(const clock_stop&)              { put_realtime(0xfc); }
+            void operator()(const active_sense&)            { put_realtime(0xfe); }
+            void operator()(const reset&)                   { put_realtime(0xff); }
 
             void operator()(const long_control_change& msg)
             {
