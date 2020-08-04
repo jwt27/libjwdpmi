@@ -33,7 +33,7 @@ namespace jw::dpmi::detail
         std::vector<std::shared_ptr<id_t>, locked_pool_allocator<>> current_interrupt { alloc };
 
         static void push_back(auto&&... args)
-        { 
+        {
             auto* self = get();
             if (self->current_interrupt.size() == 0) eh_globals = *reinterpret_cast<jw_cxa_eh_globals*>(abi::__cxa_get_globals());
             self->current_interrupt.push_back(std::allocate_shared<id_t>(self->alloc, self->id_count++, std::forward<decltype(args)>(args)...));

@@ -106,11 +106,11 @@ namespace jw
             watchpoint(const watchpoint&) = delete;
             watchpoint& operator=(const watchpoint&) = delete;
             watchpoint(watchpoint&& m) : handle(m.handle), type(m.type) { m.handle = null_handle; }
-            watchpoint& operator=(watchpoint&& m) 
-            { 
-                std::swap(handle, m.handle); 
-                type = m.type; 
-                return *this; 
+            watchpoint& operator=(watchpoint&& m)
+            {
+                std::swap(handle, m.handle);
+                type = m.type;
+                return *this;
             }
 
             // Set a watchpoint (DPMI 0.9, AX=0B00)

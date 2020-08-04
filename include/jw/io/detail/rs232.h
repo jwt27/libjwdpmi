@@ -266,11 +266,11 @@ namespace jw
                 /*
                 struct irq_disable  // TODO: needs fixing
                 {
-                    enum which 
-                    { 
-                        get = 0b1, 
-                        put = 0b10, 
-                        line = 0b100, 
+                    enum which
+                    {
+                        get = 0b1,
+                        put = 0b10,
+                        line = 0b100,
                         modem = 0b1000,
                         all = 0b1111
                     };

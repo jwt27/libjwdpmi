@@ -19,7 +19,7 @@ namespace jw
             asm volatile(           \
                 "out %w1, "#reg";"  \
                 :: "a" (v)          \
-                , "Nd" (p)); 
+                , "Nd" (p));
 
         #define PORT_IN(reg)        \
             T v;                    \

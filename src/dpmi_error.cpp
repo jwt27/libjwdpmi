@@ -4,7 +4,7 @@
 
 #include <string>
 #include <sstream>
-#include <jw/dpmi/dpmi_error.h> 
+#include <jw/dpmi/dpmi_error.h>
 
 using namespace std;
 

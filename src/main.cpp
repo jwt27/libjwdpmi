@@ -158,7 +158,7 @@ int main(int argc, const char** argv)
 {
     setup_irq_safe_exceptions();    // This should really be done in init() above.
     _crt0_startup_flags &= ~_CRT0_FLAG_LOCK_MEMORY;
-    try 
+    try
     {
         std::vector<std::string_view> args { };
         args.reserve(argc);
@@ -187,8 +187,8 @@ int main(int argc, const char** argv)
             std::cout << "Debug mode activated. Connecting to GDB..." << std::endl;
             debug::breakpoint();
         }
-    
-        jw::return_value = jwdpmi_main(args); 
+
+        jw::return_value = jwdpmi_main(args);
     }
     catch (const std::exception& e) { std::cerr << "Caught exception in main()!\n"; jw::print_exception(e); }
     catch (const jw::terminate_exception& e) { std::cerr << e.what() << '\n'; }
@@ -282,7 +282,7 @@ namespace jw
         }
         new_alloc_resize_reentry.clear();
     }
-    
+
     return aligned_ptr(std::malloc(n));
 }
 

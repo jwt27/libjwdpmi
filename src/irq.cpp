@@ -21,7 +21,7 @@ namespace jw
                 ++interrupt_count;
                 fpu_context_switcher->enter(0);
                 interrupt_id::push_back(vec, interrupt_id::id_t::interrupt);
-                
+
                 byte* esp; asm("mov %0, esp;":"=rm"(esp));
                 if (__builtin_expect(static_cast<std::size_t>(esp - data->stack.data()) <= config::interrupt_minimum_stack_size, false))
                 {
@@ -42,7 +42,7 @@ namespace jw
                     if (not (flags & no_interrupts)) asm("sti");
                     else if (flags & no_reentry) mask.emplace(i);
                     if (not (flags & no_auto_eoi)) send_eoi();
-                
+
                     entry->call();
                 }
                 catch (const std::exception& e) { exception_msg(); print_exception(e); hang(); }
@@ -76,7 +76,7 @@ namespace jw
                 }
             }
 
-            irq_wrapper::irq_wrapper(int_vector _vec, entry_fptr entry_f, stack_fptr stack_f, std::uint32_t* use_cnt_ptr) noexcept 
+            irq_wrapper::irq_wrapper(int_vector _vec, entry_fptr entry_f, stack_fptr stack_f, std::uint32_t* use_cnt_ptr) noexcept
                 : use_cnt(use_cnt_ptr), get_stack(stack_f), vec(_vec), entry_point(entry_f)
             {
                 byte* start;
@@ -127,7 +127,7 @@ namespace jw
                 auto* ptr = linear_memory(get_cs(), start, size).get_ptr<byte>();
                 std::copy_n(ptr, size, code.data());
                 auto cs_limit = reinterpret_cast<std::size_t>(code.data() + size);
-                if (descriptor::get_limit(get_cs()) < cs_limit) 
+                if (descriptor::get_limit(get_cs()) < cs_limit)
                     descriptor::set_limit(get_cs(), cs_limit);
 
                 asm volatile (

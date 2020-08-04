@@ -88,7 +88,7 @@ namespace jw
         }
 
         void keyboard::restore_cin()
-        { 
+        {
             if (cin == nullptr || std::cin.rdbuf() != streambuf.get()) return;
             auto* s = static_cast<detail::keyboard_streambuf*>(streambuf.get());
             s->disable();

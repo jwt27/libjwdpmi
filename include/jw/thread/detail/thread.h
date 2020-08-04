@@ -105,7 +105,7 @@ namespace jw
 
                 // Invoke a funcion on this thread.
                 template<typename F> void invoke(F&& function) { invoke_list.emplace_back(std::forward<F>(function)); }
-                
+
                 virtual ~thread()
                 {
                     if (pending_exceptions() > 0)

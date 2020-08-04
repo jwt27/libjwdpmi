@@ -9,7 +9,7 @@
 #include <jw/thread/thread.h>
 #include <../jwdpmi_config.h>
 
-// references: 
+// references:
 // IBM keyboard datasheet   --> http://www.mcamafia.de/pdf/ibm_hitrc11.pdf
 // Virtualbox keyboard code --> https://www.virtualbox.org/svn/vbox/trunk/src/VBox/Devices/Input/PS2K.cpp
 // Dosbox-X keyboard code   --> https://github.com/joncampbell123/dosbox-x/blob/master/src/hardware/keyboard.cpp

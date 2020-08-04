@@ -148,7 +148,7 @@ namespace jw
             pci_register<reg_bus_info> bus_info { this, 0x3C };
 
             auto read_status() { return command_and_status.read().status; }
-            void clear_status(reg_status clear_bits) 
+            void clear_status(reg_status clear_bits)
             {
                 auto s = command_and_status.read();
                 s.status = clear_bits;
@@ -156,7 +156,7 @@ namespace jw
             }
 
             auto current_command() { return command_and_status.read().command; }
-            void send_command(reg_command cmd) 
+            void send_command(reg_command cmd)
             {
                 reg_command_and_status r { };
                 r.command = cmd;

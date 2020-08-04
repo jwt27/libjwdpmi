@@ -174,7 +174,7 @@ namespace jw
             byte* pm_table_ptr = pm_table.get_ptr();
             vbe2_pm_interface.assign(pm_table_ptr, pm_table_ptr + reg.cx);
             auto cs_limit = reinterpret_cast<std::size_t>(vbe2_pm_interface.data() + reg.cx);
-            if (dpmi::descriptor::get_limit(dpmi::get_cs()) < cs_limit) 
+            if (dpmi::descriptor::get_limit(dpmi::get_cs()) < cs_limit)
                 dpmi::descriptor::set_limit(dpmi::get_cs(), cs_limit);
 
             {
@@ -288,7 +288,7 @@ namespace jw
                 vbe3_call_wrapper_mem.get_descriptor().lock()->set_access_rights(ar);
                 vbe3_call.segment = vbe3_call_wrapper_mem.get_selector();
                 auto cs_limit = reinterpret_cast<std::size_t>(vbe3_call_wrapper.data() + code_size);
-                if (descriptor::get_limit(get_cs()) < cs_limit) 
+                if (descriptor::get_limit(get_cs()) < cs_limit)
                     descriptor::set_limit(get_cs(), cs_limit);
 
                 asm volatile("call fword ptr [vbe3_call];":::"eax", "ebx", "ecx", "edx", "esi", "edi", "cc");
@@ -340,7 +340,7 @@ namespace jw
             mode = m;
             mode_info = &modes[m.mode];
             dac_bits = 6;
-        } 
+        }
 
         std::tuple<std::size_t, std::size_t, std::size_t> vbe::set_scanline_length(std::size_t width, bool width_in_pixels)
         {
@@ -435,7 +435,7 @@ namespace jw
 
             auto bps = (mode.use_lfb_mode && info.vbe_version >= 0x300) ? mode_info->linear_bytes_per_scanline : mode_info->bytes_per_scanline;
             auto start = pos.x() * (mode_info->bits_per_pixel / 8) + pos.y() * bps;
-            if (mode_info->bits_per_pixel >= 8) start = ((start & 3) << 30 | (start >> 2)); 
+            if (mode_info->bits_per_pixel >= 8) start = ((start & 3) << 30 | (start >> 2));
             split_uint32_t split_start { start };
 
             dpmi::selector mmio = vbe2_mmio ? vbe2_mmio->get_selector() : dpmi::get_ds();

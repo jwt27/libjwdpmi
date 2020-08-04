@@ -151,7 +151,7 @@ namespace jw
         struct realmode_callback : public realmode_callback_base, class_lock<realmode_callback>
         {
             template<typename F>
-            realmode_callback(F&& function, std::size_t pool_size = 1_KB) 
+            realmode_callback(F&& function, std::size_t pool_size = 1_KB)
                 : realmode_callback_base(code.data())
                 , function_ptr(std::allocator_arg, locking_allocator<> { }, std::forward<F>(function))
                 , alloc(pool_size), reg_pool(alloc) { init_code(); }

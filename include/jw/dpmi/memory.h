@@ -214,7 +214,7 @@ namespace jw
         public:
             static direct_ldt_access_t direct_ldt_access();
         };
-            
+
         inline constexpr std::uintptr_t conventional_to_physical(std::uint16_t segment, std::uint16_t offset) noexcept
         {
             return (static_cast<std::uint32_t>(segment) << 4) + offset;
@@ -234,7 +234,7 @@ namespace jw
         {
             return num_bytes & -0x10;
         }
-            
+
         inline constexpr std::size_t round_up_to_paragraph_size(std::size_t num_bytes) noexcept
         {
             return round_down_to_paragraph_size(num_bytes) + ((num_bytes & 0x0f) == 0 ? 0 : 0x10);
@@ -365,7 +365,7 @@ namespace jw
             std::uintptr_t addr;
             std::size_t size;
         };
-        
+
         struct device_memory_base;
         struct mapped_dos_memory_base;
         struct dos_memory_base;
@@ -381,7 +381,7 @@ namespace jw
 
             memory_base(std::size_t num_bytes, bool committed = true) : memory_base(linear_memory { 0, num_bytes }, committed) { }
 
-            virtual ~memory_base() 
+            virtual ~memory_base()
             {
                 try
                 {
@@ -555,10 +555,10 @@ namespace jw
 
             virtual void resize(std::size_t, bool = true) override { }
             virtual bool requires_new_selector() const noexcept override { return !device_map_supported; }
-            virtual operator bool() const noexcept override 
-            { 
-                if (device_map_supported) return base::operator bool(); 
-                else return addr != null_handle; 
+            virtual operator bool() const noexcept override
+            {
+                if (device_map_supported) return base::operator bool();
+                else return addr != null_handle;
             };
 
         protected:
@@ -632,24 +632,24 @@ namespace jw
             mapped_dos_memory_base(base&&) = delete;
             mapped_dos_memory_base& operator=(base&&) = delete;
 
-            mapped_dos_memory_base(mapped_dos_memory_base&& m) 
+            mapped_dos_memory_base(mapped_dos_memory_base&& m)
                 : base(static_cast<base&&>(m)), offset(m.offset), dos_handle(m.dos_handle), dos_addr(m.dos_addr) { m.dos_handle = null_dos_handle;  }
-            mapped_dos_memory_base& operator=(mapped_dos_memory_base&& m) 
+            mapped_dos_memory_base& operator=(mapped_dos_memory_base&& m)
             {
-                base::operator=(static_cast<base&&>(m)); 
+                base::operator=(static_cast<base&&>(m));
                 std::swap(dos_handle, m.dos_handle);
                 std::swap(dos_addr, m.dos_addr);
                 std::swap(offset, m.offset);
-                return *this; 
+                return *this;
             }
-            
+
             virtual void resize(std::size_t, bool = true) override { }
             virtual bool requires_new_selector() const noexcept override { return !dos_map_supported; }
             auto get_dos_ptr() const noexcept { return dos_addr; }
             virtual std::ptrdiff_t get_offset_in_block() const noexcept override { return offset; }
             virtual operator bool() const noexcept override
-            { 
-                if (dos_map_supported) return base::operator bool(); 
+            {
+                if (dos_map_supported) return base::operator bool();
                 else return addr != null_handle;
             };
 
@@ -663,7 +663,7 @@ namespace jw
             virtual selector get_selector() override
             {
                 if (dos_handle == null_dos_handle) alloc_selector();
-                return dos_handle; 
+                return dos_handle;
             }
 
         protected:
@@ -775,7 +775,7 @@ namespace jw
             // dos_memory(std::size_t num_elements)
             template<typename... Args>
             memory_t(std::size_t num_elements, Args&&... args) : base(num_elements * sizeof(T), std::forward<Args>(args)...) { }
-            
+
             auto* get_ptr(selector sel = get_ds()) { return base::template get_ptr<T>(sel); }
             auto* operator->() noexcept { return get_ptr(); }
             auto& operator*() noexcept { return *get_ptr(); }

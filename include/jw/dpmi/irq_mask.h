@@ -22,7 +22,7 @@ namespace jw
         public:
             interrupt_mask() noexcept { cli(); }
             ~interrupt_mask() { if (__builtin_expect(--count == 0 && initial_state, true)) sti(); }
-            
+
             interrupt_mask(const interrupt_mask&) = delete;
             interrupt_mask(interrupt_mask&&) = delete;
             interrupt_mask& operator=(const interrupt_mask&) = delete;

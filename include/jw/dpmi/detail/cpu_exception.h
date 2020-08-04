@@ -51,7 +51,7 @@ namespace jw
                 }
 
                 static far_ptr32 get_rm_handler(exception_num n) { return get_rm_exception_handler(n); }
-                
+
                 static void set_rm_handler(exception_num n, far_ptr32 ptr) { set_rm_exception_handler(n, ptr); }
 
             private:

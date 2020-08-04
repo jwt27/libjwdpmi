@@ -58,7 +58,7 @@ namespace jw
             static inline std::uint32_t pit_counter_max;
             static inline volatile std::uint64_t pit_ticks;
             static inline volatile std::uint_fast16_t rtc_ticks;
-            
+
             static dpmi::irq_handler pit_irq;
             static dpmi::irq_handler rtc_irq;
 

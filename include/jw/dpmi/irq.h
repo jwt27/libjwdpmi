@@ -20,7 +20,7 @@
 // Default PM handlers for all interrupts reflect to RM.
 
 // --- Nested interrupts:
-// CWSDPMI: switches to its locked stack on the first interrupt, a nested interrupt calls 
+// CWSDPMI: switches to its locked stack on the first interrupt, a nested interrupt calls
 // the handler on the current stack (which should already be locked).
 // When a hardware exception occurs and interrupts nest 5 levels deep, it crashes? (exphdlr.c:306)
 
@@ -55,7 +55,7 @@ namespace jw
 
             // Always chain to the default handler (usually provided by the host). Default behaviour is to chain only if the interupt has not been acknowledged.
             // Note that the default handler will always enable interrupts, which makes the no_interrupts option less effective.
-            // This option effectively implies no_reentry and no_auto_eoi. 
+            // This option effectively implies no_reentry and no_auto_eoi.
             always_chain = 0b10,
 
             // Don't automatically send an End Of Interrupt for this IRQ. The first call to acknowledge() will send the EOI.

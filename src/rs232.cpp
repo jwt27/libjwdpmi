@@ -13,12 +13,12 @@ namespace jw
         namespace detail
         {
             rs232_streambuf::rs232_streambuf(const rs232_config& p)
-                : config(p), 
-                rate_divisor(p.io_port), data_port(p.io_port), 
-                irq_enable(p.io_port + 1), 
+                : config(p),
+                rate_divisor(p.io_port), data_port(p.io_port),
+                irq_enable(p.io_port + 1),
                 irq_id(p.io_port + 2), fifo_control(p.io_port + 2),
                 line_control(p.io_port + 3), modem_control(p.io_port + 4),
-                line_status(p.io_port + 5), modem_status(p.io_port + 6) 
+                line_status(p.io_port + 5), modem_status(p.io_port + 6)
             {
                 if (ports_used.contains(config.io_port)) throw std::runtime_error("COM port already in use.");
 
@@ -70,7 +70,7 @@ namespace jw
                 ports_used.insert(config.io_port);
             }
 
-            rs232_streambuf::~rs232_streambuf() 
+            rs232_streambuf::~rs232_streambuf()
             {
                 modem_control.write({ });
                 irq_enable.write({ });
@@ -165,7 +165,7 @@ namespace jw
             //                          |       +- current put pointer
             //                          +- next character to send
 
-            rs232_streambuf::int_type rs232_streambuf::overflow(int_type c) 
+            rs232_streambuf::int_type rs232_streambuf::overflow(int_type c)
             {
                 std::unique_lock<thread::recursive_mutex> lock { putting };
                 thread::yield_while([this]

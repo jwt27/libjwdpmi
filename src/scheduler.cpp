@@ -104,13 +104,13 @@ namespace jw
                     current_thread->state = finished;
                 }
                 catch (const abort_thread&) { }
-                catch (const terminate_exception&) 
-                { 
+                catch (const terminate_exception&)
+                {
                     for (auto& t : threads) t->exceptions.push_back(std::current_exception());
                 }
-                catch (...) 
-                { 
-                    current_thread->exceptions.push_back(std::current_exception()); 
+                catch (...)
+                {
+                    current_thread->exceptions.push_back(std::current_exception());
                 }
 
                 if (current_thread->state != finished) current_thread->state = initialized;
@@ -118,9 +118,9 @@ namespace jw
 
                 while (true) try { yield(); }
                 catch (const abort_thread&) { }
-                catch (...) 
-                { 
-                    current_thread->exceptions.push_back(std::current_exception()); 
+                catch (...)
+                {
+                    current_thread->exceptions.push_back(std::current_exception());
                 }
             }
 
@@ -157,7 +157,7 @@ namespace jw
                         catch (...) { }
                     }
                 }
-                
+
                 if (__builtin_expect(current_thread != main_thread && *reinterpret_cast<std::uint32_t*>(current_thread->stack.get()) != 0xDEADBEEF, false))
                     throw std::runtime_error("Stack overflow!");
 

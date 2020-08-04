@@ -29,10 +29,10 @@ namespace jw
         // Thrown when task->await() is called while no result will ever be available.
         struct illegal_await : public std::exception
         {
-            virtual const char* what() const noexcept override 
-            { 
+            virtual const char* what() const noexcept override
+            {
                 std::stringstream s;
-                s << "Illegal call to await().\n"; 
+                s << "Illegal call to await().\n";
                 s << "Thread" << thread->name << " (id " << std::dec << thread->id() << ")";
                 return s.str().c_str();
             }
@@ -43,7 +43,7 @@ namespace jw
         // Thrown on parent thread in a nested_exception when an unhandled exception occurs on a child thread.
         struct thread_exception : public std::exception
         {
-            virtual const char* what() const noexcept override 
+            virtual const char* what() const noexcept override
             {
                 std::stringstream s;
                 s << "Exception thrown from thread";
@@ -60,7 +60,7 @@ namespace jw
         {
             if (dpmi::in_irq_context()) return;
             debug::trap_mask dont_trace_here { };
-            detail::scheduler::thread_switch(); 
+            detail::scheduler::thread_switch();
         }
 
         // Yields execution while the given condition evaluates to true.

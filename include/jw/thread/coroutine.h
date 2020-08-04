@@ -92,7 +92,7 @@ namespace jw
                 }
 
                 template <typename F>
-                coroutine_impl(F&& f, std::size_t stack_bytes = config::thread_default_stack_size) 
+                coroutine_impl(F&& f, std::size_t stack_bytes = config::thread_default_stack_size)
                     : base { stack_bytes }
                     , function { std::forward<F>(f) } { }
             };

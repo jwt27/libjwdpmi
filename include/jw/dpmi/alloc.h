@@ -55,10 +55,10 @@ namespace jw
                 ::operator delete(p);
             }
 
-            std::size_t max_size() const noexcept 
-            { 
+            std::size_t max_size() const noexcept
+            {
                 if (in_irq_context()) return 0;
-                return std::allocator<T>{ }.max_size(); 
+                return std::allocator<T>{ }.max_size();
             }
 
             template <typename U> struct rebind { using other = locking_allocator<U>; };
@@ -80,11 +80,11 @@ namespace jw
 
         struct empty { };
 
-        // Allocates from a pre-allocated locked memory pool. This allows interrupt handlers to insert/remove elements in 
+        // Allocates from a pre-allocated locked memory pool. This allows interrupt handlers to insert/remove elements in
         // STL containers without risking page faults.
-        // When specifying a pool size, make sure to account for overhead (reallocation, fragmentation, alignment overhead). 
-        // Keep in mind each allocation takes at least sizeof(T) + alignof(T) + sizeof(pool_node) bytes. Therefore this 
-        // allocator is rather space-inefficient for single-element allocations. 
+        // When specifying a pool size, make sure to account for overhead (reallocation, fragmentation, alignment overhead).
+        // Keep in mind each allocation takes at least sizeof(T) + alignof(T) + sizeof(pool_node) bytes. Therefore this
+        // allocator is rather space-inefficient for single-element allocations.
         template<bool lock_self = true, typename T = byte>
         struct locked_pool_allocator : std::conditional_t<lock_self, class_lock<locked_pool_allocator<lock_self, T>>, empty>
         {

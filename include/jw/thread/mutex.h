@@ -39,7 +39,7 @@ namespace jw
             {
                 locked.clear();
             }
-            bool try_lock() noexcept 
+            bool try_lock() noexcept
             {
                 return !locked.test_and_set();
             }

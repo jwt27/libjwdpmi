@@ -44,7 +44,7 @@ namespace jw::dpmi
         bool dont_leave { false };
 
         static void setup(bool);
-        
+
         [[gnu::naked, gnu::noinline]] static void enter();
         [[gnu::naked, gnu::noinline]] static void leave();
 

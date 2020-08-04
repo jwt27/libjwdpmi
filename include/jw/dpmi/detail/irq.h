@@ -37,7 +37,7 @@ namespace jw
             };
 
             struct irq_handler_base
-            {   
+            {
                 template<typename F>
                 irq_handler_base(F&& func, irq_config_flags f = { }) : handler_ptr(std::allocator_arg, locking_allocator<> { }, std::forward<F>(func)), flags(f) { }
                 irq_handler_base() = delete;
@@ -76,8 +76,8 @@ namespace jw
 
                 ~irq_controller() { if (old_handler.offset != 0) set_pm_interrupt_vector(vec, old_handler); }
 
-                void add(irq_handler_base* p) 
-                { 
+                void add(irq_handler_base* p)
+                {
                     interrupt_mask no_ints_here { };
                     handler_chain.push_back(p);
                     add_flags();
@@ -139,13 +139,13 @@ namespace jw
 
             private:
                 static int_vector irq_to_vec(irq_level i) noexcept
-                { 
+                {
                     assert(i < 16);
                     dpmi::version ver { };
                     return i < 8 ? i + ver.pic_master_base : i - 8 + ver.pic_slave_base;
                 }
                 static irq_level vec_to_irq(int_vector v) noexcept
-                { 
+                {
                     dpmi::version ver { };
                     if (v >= ver.pic_master_base && v < ver.pic_master_base + 8u) return v - ver.pic_master_base;
                     if (v >= ver.pic_slave_base && v < ver.pic_slave_base + 8u) return v - ver.pic_slave_base + 8;
@@ -154,7 +154,7 @@ namespace jw
 
                 static bool is_irq(int_vector v) { return vec_to_irq(v) != 0xff; }
                 static bool is_acknowledged()
-                { 
+                {
                     if (auto id = interrupt_id::get_current_interrupt().lock()) return id->acknowledged;
                     return true;
                 }

@@ -4,7 +4,7 @@ CXXFLAGS += -Wno-address-of-packed-member
 CXXFLAGS_NOFPU := -mgeneral-regs-only $(shell tools/missing-macros.sh $(CXX) $(CXXFLAGS))
 
 INCLUDE := -Iinclude
-LIBS := 
+LIBS :=
 
 SRC := $(wildcard src/*.cpp)
 OBJ := $(SRC:src/%.cpp=obj/%.o)

@@ -8,7 +8,7 @@
 #include <iostream>
 #include <functional>
 #include <memory>
-#include <deque> 
+#include <deque>
 #include <jw/thread/detail/thread.h>
 #include <jw/dpmi/irq_check.h>
 #include <jw/dpmi/alloc.h>

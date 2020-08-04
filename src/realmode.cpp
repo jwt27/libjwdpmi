@@ -131,7 +131,7 @@ namespace jw
             auto* ptr = linear_memory(get_cs(), start, size).get_ptr<byte>();
             std::copy_n(ptr, size, code.data());
             auto cs_limit = reinterpret_cast<std::size_t>(code.data() + size);
-            if (descriptor::get_limit(get_cs()) < cs_limit) 
+            if (descriptor::get_limit(get_cs()) < cs_limit)
                 descriptor::set_limit(get_cs(), cs_limit);
 
             reg_pool.push_back({ });

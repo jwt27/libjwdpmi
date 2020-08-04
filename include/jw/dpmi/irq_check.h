@@ -20,7 +20,7 @@ namespace jw
         {
             bad_irq_function_call() : std::runtime_error("Illegal function call from interrupt routine.") { }
         };
-        
+
         // Returns true if currently in irq or exception context.
         inline bool in_irq_context() noexcept { return __builtin_expect(detail::interrupt_count > 0 || detail::exception_count > 0, false); }
 

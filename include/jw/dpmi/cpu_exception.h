@@ -148,7 +148,7 @@ namespace jw
                 sse_exception,
                 virtualization_exception,
                 security_exception = 0x1e
-            }; 
+            };
             using E::E;
             using E::operator=;
         };
@@ -207,12 +207,12 @@ namespace jw
             ~exception_handler();
 
             exception_handler(const exception_handler&) = delete;
-            exception_handler(exception_handler&&) = delete;           
+            exception_handler(exception_handler&&) = delete;
             exception_handler& operator=(const exception_handler&) = delete;
             exception_handler& operator=(exception_handler&&) = delete;
 
             far_ptr32 get_ptr() const noexcept { return far_ptr32 { get_cs(), reinterpret_cast<std::uintptr_t>(code.data()) }; }
-        }; 
+        };
 
         struct cpu_category : public std::error_category
         {
