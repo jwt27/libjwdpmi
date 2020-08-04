@@ -22,44 +22,59 @@ namespace jw
 {
     namespace dpmi
     {
-        namespace detail
-        {
-            class locking_allocator_base
-            {
-            protected:
-                static inline std::map<void*, data_lock>* map;
-            };
-        }
-
-        // Custom allocator which locks all memory it allocates. This makes STL containers safe to
+        // Custom memory resource which locks all memory it allocates. This makes STL containers safe to
         // access from interrupt handlers, as long as the handler itself does not allocate anything.
         // It still relies on _CRT0_FLAG_LOCK_MEMORY to lock code and static data, however.
-        template <typename T = byte>
-        struct locking_allocator : public detail::locking_allocator_base
+        struct locking_memory_resource : public std::pmr::memory_resource
         {
-            using value_type = T;
-            using pointer = T*;
-
-            [[nodiscard]] T* allocate(std::size_t n)
+            virtual ~locking_memory_resource()
             {
-                throw_if_irq();
-                if (__builtin_expect(map == nullptr, false)) map = new std::map<void*, data_lock> { };
-                n *= sizeof(T);
-                auto* p = ::operator new(n);
-                map->emplace(p, data_lock { p, n });
-                return static_cast<pointer>(p);
+                if (map == nullptr) return;
+                if (not map->empty()) return;
+                delete map;
+                map = nullptr;
             }
 
-            void deallocate(pointer p, std::size_t)
+        protected:
+            [[nodiscard]] virtual void* do_allocate(std::size_t n, std::size_t a) override
+            {
+                throw_if_irq();
+                if (map == nullptr) [[unlikely]] map = new std::map<void*, data_lock> { };
+                void* p = ::operator new(n, std::align_val_t { a });
+                map->emplace(p, data_lock { p, n });
+                return p;
+            }
+
+            virtual void do_deallocate(void* p, std::size_t, std::size_t) noexcept override
             {
                 map->erase(p);
                 ::operator delete(p);
             }
 
-            std::size_t max_size() const noexcept
+            virtual bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override
             {
-                if (in_irq_context()) return 0;
-                return std::allocator<T>{ }.max_size();
+                auto* o = dynamic_cast<const locking_memory_resource*>(&other);
+                return (o != nullptr);
+            }
+
+            static inline std::map<void*, data_lock>* map { };
+        };
+
+        // Legacy allocator based on locking_memory_resource
+        template <typename T = byte>
+        struct locking_allocator : protected locking_memory_resource
+        {
+            using value_type = T;
+            using pointer = T*;
+
+            [[nodiscard]] constexpr T* allocate(std::size_t n)
+            {
+                return static_cast<T*>(locking_memory_resource::allocate(n * sizeof(T), alignof(T)));
+            }
+
+            constexpr void deallocate(T* p, std::size_t n)
+            {
+                locking_memory_resource::deallocate(static_cast<void*>(p), n);
             }
 
             template <typename U> struct rebind { using other = locking_allocator<U>; };
@@ -67,13 +82,6 @@ namespace jw
             template <typename U>
             constexpr locking_allocator(const locking_allocator<U>&) noexcept { }
             constexpr locking_allocator() { };
-            ~locking_allocator()
-            {
-                if (map == nullptr) return;
-                if (__builtin_expect(!map->empty(), true)) return;
-                delete map;
-                map = nullptr;
-            }
 
             template <typename U> constexpr friend bool operator== (const locking_allocator&, const locking_allocator<U>&) noexcept { return true; }
             template <typename U> constexpr friend bool operator!= (const locking_allocator& a, const locking_allocator<U>& b) noexcept { return !(a == b); }
@@ -225,40 +233,6 @@ namespace jw
             }
 
             std::shared_ptr<pool_type> pool;
-        };
-
-        struct locking_memory_resource : public std::pmr::memory_resource
-        {
-            virtual ~locking_memory_resource()
-            {
-                if (!map->empty()) return;
-                delete map;
-                map = nullptr;
-            }
-
-        protected:
-            [[nodiscard]] virtual void* do_allocate(std::size_t n, std::size_t a) override
-            {
-                throw_if_irq();
-                if (map == nullptr) map = new std::map<void*, data_lock> { };
-                void* p = ::operator new(n, std::align_val_t { a });
-                map->emplace(p, data_lock { p, n });
-                return p;
-            }
-
-            virtual void do_deallocate(void* p, std::size_t, std::size_t) noexcept override
-            {
-                map->erase(p);
-                ::operator delete(p);
-            }
-
-            virtual bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override
-            {
-                auto* o = dynamic_cast<const locking_memory_resource*>(&other);
-                return (o != nullptr);
-            }
-
-            static inline std::map<void*, data_lock>* map { };
         };
 
         template <bool lock_self = true>
