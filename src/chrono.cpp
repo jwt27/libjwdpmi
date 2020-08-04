@@ -124,9 +124,9 @@ namespace jw
             have_rdtsc = dpmi::cpuid::feature_flags().time_stamp_counter;
             if (sample_size != 0)
             {
-                if (not std::ispow2(sample_size)) throw std::runtime_error { "Number of TSC samples must be a power of two." };
+                if (not std::has_single_bit(sample_size)) throw std::runtime_error { "Number of TSC samples must be a power of two." };
                 tsc_max_sample_size = sample_size;
-                tsc_max_sample_bits = std::log2p1(sample_size - 1);
+                tsc_max_sample_bits = std::bit_width(sample_size - 1);
             }
             if (r != tsc_reference::none and (r != current_tsc_ref() or current_tsc_ref() == tsc_reference::none))
             {
