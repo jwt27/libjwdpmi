@@ -91,21 +91,21 @@ namespace jw
         // STL containers without risking page faults.
         // When specifying a pool size, make sure to account for overhead (reallocation, fragmentation, alignment overhead).
         template<bool lock_self = true>
-        struct locked_pool_memory_resource : public std::pmr::memory_resource, private std::conditional_t<lock_self, class_lock<locked_pool_memory_resource<lock_self>>, empty>
+        struct locked_pool_resource : public std::pmr::memory_resource, private std::conditional_t<lock_self, class_lock<locked_pool_resource<lock_self>>, empty>
         {
             using pool_type = std::vector<std::byte, locking_allocator<>>;
 
-            locked_pool_memory_resource(std::size_t size_bytes)
+            locked_pool_resource(std::size_t size_bytes)
                 : pool(std::allocate_shared<pool_type>(locking_allocator<> { }, size_bytes + sizeof(pool_node), locking_allocator<> { }))
             {
                 new(begin()) pool_node { };
             }
 
-            locked_pool_memory_resource() = delete;
-            locked_pool_memory_resource(locked_pool_memory_resource&&) = default;
-            locked_pool_memory_resource(const locked_pool_memory_resource&) = default;
-            locked_pool_memory_resource& operator=(locked_pool_memory_resource&&) = default;
-            locked_pool_memory_resource& operator=(const locked_pool_memory_resource&) = default;
+            locked_pool_resource() = delete;
+            locked_pool_resource(locked_pool_resource&&) = default;
+            locked_pool_resource(const locked_pool_resource&) = default;
+            locked_pool_resource& operator=(locked_pool_resource&&) = default;
+            locked_pool_resource& operator=(const locked_pool_resource&) = default;
 
             // Resize the memory pool.  Throws std::bad_alloc if the pool is still in use.
             void resize(std::size_t size_bytes)
@@ -215,20 +215,20 @@ namespace jw
 
             virtual bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override
             {
-                auto* o = dynamic_cast<const locked_pool_memory_resource*>(&other);
+                auto* o = dynamic_cast<const locked_pool_resource*>(&other);
                 return o != nullptr and o->pool == pool;
             }
 
-            locked_pool_memory_resource(const std::shared_ptr<pool_type>& copy) : pool { copy } { }
+            locked_pool_resource(const std::shared_ptr<pool_type>& copy) : pool { copy } { }
 
             std::shared_ptr<pool_type> pool;
         };
 
-        // Legacy allocator based on locked_pool_memory_resource
+        // Legacy allocator based on locked_pool_resource
         template<bool lock_self = true, typename T = byte>
-        struct locked_pool_allocator : protected locked_pool_memory_resource<lock_self>
+        struct locked_pool_allocator : protected locked_pool_resource<lock_self>
         {
-            using base = locked_pool_memory_resource<lock_self>;
+            using base = locked_pool_resource<lock_self>;
             using value_type = T;
             using pointer = T*;
 
@@ -276,6 +276,6 @@ namespace jw
             template <bool lock_other, typename U> constexpr friend bool operator!= (const locked_pool_allocator& a, const locked_pool_allocator<lock_other, U>& b) noexcept { return !(a == b); }
         };
 
-        static_assert(sizeof(locked_pool_allocator<true>) == sizeof(locked_pool_memory_resource<true>));
+        static_assert(sizeof(locked_pool_allocator<true>) == sizeof(locked_pool_resource<true>));
     }
 }

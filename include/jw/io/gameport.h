@@ -77,7 +77,7 @@ namespace jw::io
         } cfg;
 
         gameport(config c, std::size_t alloc_size = 1_KB) : cfg(c), port(c.port),
-            memory_resource(using_irq()? std::make_unique<dpmi::locked_pool_memory_resource<true>>(alloc_size) : nullptr)
+            memory_resource(using_irq()? std::make_unique<dpmi::locked_pool_resource<true>>(alloc_size) : nullptr)
         {
             switch (cfg.strategy)
             {
