@@ -6,6 +6,7 @@
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
+#include <new>
 #include <memory>
 #include <vector>
 #include <map>
@@ -239,17 +240,15 @@ namespace jw
             [[nodiscard]] virtual void* do_allocate(std::size_t n, std::size_t a) override
             {
                 throw_if_irq();
-                if (map == nullptr) map = new std::map<void*, ptr_with_lock> { };
-                void* p = ::operator new(n + a);
-                void* ap = reinterpret_cast<void*>((reinterpret_cast<std::uintptr_t>(p) & -a) + a);
-                map->emplace(ap, ptr_with_lock { p, n + a });
-                return ap;
+                if (map == nullptr) map = new std::map<void*, data_lock> { };
+                void* p = ::operator new(n, std::align_val_t { a });
+                map->emplace(p, data_lock { p, n });
+                return p;
             }
 
-            virtual void do_deallocate(void* ap, std::size_t, std::size_t) noexcept override
+            virtual void do_deallocate(void* p, std::size_t, std::size_t) noexcept override
             {
-                auto* p = map->at(ap).p;
-                map->erase(ap);
+                map->erase(p);
                 ::operator delete(p);
             }
 
@@ -259,14 +258,7 @@ namespace jw
                 return (o != nullptr);
             }
 
-            struct ptr_with_lock
-            {
-                void* p;
-                data_lock lock;
-                ptr_with_lock(void* _p, std::size_t n) : p(_p), lock(p, n) { }
-            };
-
-            static inline std::map<void*, ptr_with_lock>* map { };
+            static inline std::map<void*, data_lock>* map { };
         };
 
         template <bool lock_self = true>
