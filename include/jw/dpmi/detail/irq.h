@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
@@ -49,7 +50,7 @@ namespace jw
             class irq_controller
             {
 
-                std::deque<irq_handler_base*, locking_allocator<>> handler_chain { };
+                std::deque<irq_handler_base*, locking_allocator<irq_handler_base*>> handler_chain { };
                 int_vector vec;
                 far_ptr32 old_handler { };
                 irq_wrapper wrapper;
@@ -116,7 +117,7 @@ namespace jw
                     }
 
                     thread::task<void()> increase_stack_size { [this]() { stack.resize(stack.size() * 2); } };
-                    std::map<int_vector, std::unique_ptr<irq_controller>, std::less<int_vector>, locking_allocator<>> entries { };
+                    std::map<int_vector, std::unique_ptr<irq_controller>, std::less<int_vector>, locking_allocator<std::pair<const int_vector, std::unique_ptr<irq_controller>>>> entries { };
                     std::vector<byte, locking_allocator<>> stack { };
                     std::uint32_t stack_use_count { 0 };
                 };

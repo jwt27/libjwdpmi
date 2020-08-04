@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
@@ -162,8 +163,8 @@ namespace jw
 
             func::function<void(realmode_registers*)> function_ptr;
             std::array<byte, 16_KB> stack;  // TODO: adjustable size
-            locked_pool_allocator<> alloc;
-            std::vector<realmode_registers, locked_pool_allocator<>> reg_pool;
+            locked_pool_allocator<true> alloc;
+            std::vector<realmode_registers, locked_pool_allocator<true, realmode_registers>> reg_pool;
 
             [[gnu::packed]] selector fs;                                            // [eax-0x19]
             [[gnu::packed]] selector gs;                                            // [eax-0x17]

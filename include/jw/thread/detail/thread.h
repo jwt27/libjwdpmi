@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
@@ -58,7 +59,7 @@ namespace jw
                 std::size_t stack_size;
                 std::deque<std::exception_ptr> exceptions { };
                 const std::uint32_t id_num { id_count++ };
-                std::deque<std::function<void()>, dpmi::locked_pool_allocator<>> invoke_list { *pool_alloc };
+                std::deque<std::function<void()>, dpmi::locked_pool_allocator<true, std::function<void()>>> invoke_list { *pool_alloc };
 
             protected:
                 thread_state state { initialized };

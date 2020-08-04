@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 
@@ -30,7 +31,7 @@ namespace jw::dpmi::detail
             constexpr id_t(std::uint64_t i, std::uint32_t v, auto t) noexcept : id(i), vector(v), type(t) { }
             jw_cxa_eh_globals eh_globals { };
         };
-        std::vector<std::shared_ptr<id_t>, locked_pool_allocator<>> current_interrupt { alloc };
+        std::vector<std::shared_ptr<id_t>, locked_pool_allocator<false, std::shared_ptr<id_t>>> current_interrupt { alloc };
 
         static void push_back(auto&&... args)
         {

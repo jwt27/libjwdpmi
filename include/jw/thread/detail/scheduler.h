@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
@@ -32,7 +33,7 @@ namespace jw
                 friend void ::jw::thread::yield();
                 friend int ::main(int, const char**);
                 static inline dpmi::locked_pool_allocator<> alloc { 128_KB };
-                static inline std::deque<thread_ptr, dpmi::locked_pool_allocator<>> threads { alloc };
+                static inline std::deque<thread_ptr, dpmi::locked_pool_allocator<true, thread_ptr>> threads { alloc };
                 static inline thread_ptr current_thread;
                 static inline thread_ptr main_thread;
 

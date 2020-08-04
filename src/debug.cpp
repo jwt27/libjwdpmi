@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
@@ -57,9 +58,9 @@ namespace jw
             bool new_frame_type { true };
 
             locked_pool_allocator<false> alloc { 1_MB };
-            std::map<std::string, std::string, std::less<std::string>, locked_pool_allocator<false>> supported { alloc };
-            std::map<std::uintptr_t, watchpoint, std::less<std::uintptr_t>, locked_pool_allocator<false>> watchpoints { alloc };
-            std::map<std::uintptr_t, byte, std::less<std::uintptr_t>, locked_pool_allocator<false>> breakpoints { alloc };
+            std::map<std::string, std::string, std::less<std::string>, locked_pool_allocator<false, std::pair<const std::string, std::string>>> supported { alloc };
+            std::map<std::uintptr_t, watchpoint, std::less<std::uintptr_t>, locked_pool_allocator<false, std::pair<const std::uintptr_t, watchpoint>>> watchpoints { alloc };
+            std::map<std::uintptr_t, byte, std::less<std::uintptr_t>, locked_pool_allocator<false, std::pair<const std::uintptr_t, byte>>> breakpoints { alloc };
             std::map<int, void(*)(int)> signal_handlers { };
 
             std::array<std::unique_ptr<exception_handler>, 0x20> exception_handlers;
@@ -76,9 +77,9 @@ namespace jw
                 using std::string_view::basic_string_view;
             };
 
-            std::deque<std::string, locked_pool_allocator<false>> sent_packets { alloc };
+            std::deque<std::string, locked_pool_allocator<false, std::string>> sent_packets { alloc };
             std::string raw_packet_string;
-            std::deque<packet_string, locked_pool_allocator<false>> packet { alloc };
+            std::deque<packet_string, locked_pool_allocator<false, packet_string>> packet { alloc };
             bool replied { false };
 
             constexpr std::uint32_t all_threads_id { std::numeric_limits<std::uint32_t>::max() };
@@ -169,7 +170,7 @@ namespace jw
                 }
             };
             
-            std::map<std::uint32_t, thread_info, std::less<std::uint32_t>, locked_pool_allocator<>> threads { alloc };
+            std::map<std::uint32_t, thread_info, std::less<std::uint32_t>, locked_pool_allocator<true, std::pair<const std::uint32_t, thread_info>>> threads { alloc };
             thread_info* current_thread { nullptr };
 
             inline void populate_thread_list()

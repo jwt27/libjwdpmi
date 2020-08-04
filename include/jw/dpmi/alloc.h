@@ -93,10 +93,10 @@ namespace jw
         template<bool lock_self = true>
         struct locked_pool_resource : public std::pmr::memory_resource, private std::conditional_t<lock_self, class_lock<locked_pool_resource<lock_self>>, empty>
         {
-            using pool_type = std::vector<std::byte, locking_allocator<>>;
+            using pool_type = std::vector<std::byte, locking_allocator<std::byte>>;
 
             locked_pool_resource(std::size_t size_bytes)
-                : pool(std::allocate_shared<pool_type>(locking_allocator<> { }, size_bytes + sizeof(pool_node), locking_allocator<> { }))
+                : pool(std::allocate_shared<pool_type>(locking_allocator<pool_type> { }, size_bytes + sizeof(pool_node), locking_allocator<std::byte> { }))
             {
                 new(begin()) pool_node { };
             }
