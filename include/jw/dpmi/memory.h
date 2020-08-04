@@ -1,11 +1,12 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
 #include <limits>
-#include <experimental/memory_resource>
+#include <memory_resource>
 #include <jw/dpmi/dpmi.h>
 
 namespace jw
@@ -433,7 +434,7 @@ namespace jw
             auto* get_memory_resource() { return &mem_res; }
 
         protected:
-            struct memory_resource : public std::experimental::pmr::memory_resource
+            struct memory_resource : public std::pmr::memory_resource
             {
                 memory_resource(memory_base* m) : mem(m) { }
 
@@ -450,7 +451,7 @@ namespace jw
                     if (mem->get_ptr<void>() == p) in_use = false;
                 }
 
-                virtual bool do_is_equal(const std::experimental::pmr::memory_resource& other) const noexcept override 
+                virtual bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override
                 {
                     auto* p = dynamic_cast<const memory_resource*>(&other);
                     if (p == nullptr) return false;

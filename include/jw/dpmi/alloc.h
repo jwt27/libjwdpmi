@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
@@ -8,7 +9,7 @@
 #include <memory>
 #include <vector>
 #include <map>
-#include <experimental/memory_resource>
+#include <memory_resource>
 
 #include <jw/common.h>
 #include <jw/dpmi/lock.h>
@@ -225,7 +226,7 @@ namespace jw
             std::shared_ptr<pool_type> pool;
         };
 
-        struct locking_memory_resource : public std::experimental::pmr::memory_resource
+        struct locking_memory_resource : public std::pmr::memory_resource
         {
             virtual ~locking_memory_resource()
             {
@@ -252,7 +253,7 @@ namespace jw
                 ::operator delete(p);
             }
 
-            virtual bool do_is_equal(const std::experimental::pmr::memory_resource& other) const noexcept override 
+            virtual bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override
             {
                 auto* o = dynamic_cast<const locking_memory_resource*>(&other);
                 return (o != nullptr);
@@ -269,7 +270,7 @@ namespace jw
         };
 
         template <bool lock_self = true>
-        struct locked_pool_memory_resource : protected locked_pool_allocator<lock_self, byte>, public std::experimental::pmr::memory_resource
+        struct locked_pool_memory_resource : protected locked_pool_allocator<lock_self, byte>, public std::pmr::memory_resource
         {
             friend struct locked_pool_memory_resource<not lock_self>;
             using base = locked_pool_allocator<lock_self, byte>;
@@ -287,7 +288,7 @@ namespace jw
                 base::deallocate(reinterpret_cast<byte*>(ap), size);
             }
 
-            virtual bool do_is_equal(const std::experimental::pmr::memory_resource& other) const noexcept override
+            virtual bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override
             {
                 return dynamic_cast<const locked_pool_memory_resource*>(&other)->pool == this->pool
                     or dynamic_cast<const locked_pool_memory_resource<not lock_self>*>(&other)->pool == this->pool;

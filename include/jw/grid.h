@@ -1,10 +1,12 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
-#include <experimental/vector>
+#include <vector>
 #include <type_traits>
+#include <memory_resource>
 #include <jw/vector.h>
 
 namespace jw
@@ -302,16 +304,16 @@ namespace jw
     template<typename T>
     struct grid_container : public grid_range<grid_container<T>, T, 0>
     {
-        grid_container(vector2i size, std::experimental::pmr::memory_resource* memres = std::experimental::pmr::get_default_resource())
-            : grid_range<grid_container<T>, T, 0>(*this, { 0, 0 }, size), data(size.x()* size.y(), std::experimental::pmr::polymorphic_allocator<T> { memres }) { }
-        grid_container(std::size_t w, std::size_t h, std::experimental::pmr::memory_resource* memres = std::experimental::pmr::get_default_resource())
+        grid_container(vector2i size, std::pmr::memory_resource* memres = std::pmr::get_default_resource())
+            : grid_range<grid_container<T>, T, 0>(*this, { 0, 0 }, size), data(size.x()* size.y(), std::pmr::polymorphic_allocator<T> { memres }) { }
+        grid_container(std::size_t w, std::size_t h, std::pmr::memory_resource* memres = std::pmr::get_default_resource())
             : grid_container(vector2i { w,h }, memres) { }
         COMMON_FUNCTIONS
 
     protected:
         constexpr const T& base_get(vector2i p) const { return *(data.data() + p[0] + this->dim[0] * p[1]); }
 
-        std::experimental::pmr::vector<T> data;
+        std::pmr::vector<T> data;
     };
 
     template<typename T, std::size_t w, std::size_t h>

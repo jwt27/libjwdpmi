@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
@@ -48,5 +49,5 @@ namespace jw
         return std::unique_ptr<T, deleter> { nullptr, deleter { rebind { alloc } } };
     }
 
-    //template <typename T> using pmr_unique_ptr = std::unique_ptr<T, allocator_delete<std::experimental::pmr::polymorphic_allocator<T>>>;
+    //template <typename T> using pmr_unique_ptr = std::unique_ptr<T, allocator_delete<std::pmr::polymorphic_allocator<T>>>;
 }

@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 
@@ -15,7 +16,8 @@
 #include <limits>
 #include <optional>
 #include <bitset>
-#include <experimental/deque>
+#include <deque>
+#include <memory_resource>
 
 // TODO: centering / deadzone
 // TODO: auto-calibrate?
@@ -152,12 +154,12 @@ namespace jw::io
         typename clock::time_point timing_start;
         std::bitset<4> button_state { 0 };
         std::optional<dpmi::data_lock> lock;
-        std::unique_ptr<std::experimental::pmr::memory_resource> memory_resource;
-        std::experimental::pmr::deque<std::pair<std::bitset<4>, typename clock::time_point>> button_events { get_memory_resource() };
-        std::experimental::pmr::deque<std::pair<raw_t, typename clock::time_point>> samples { get_memory_resource() };
+        std::unique_ptr<std::pmr::memory_resource> memory_resource;
+        std::pmr::deque<std::pair<std::bitset<4>, typename clock::time_point>> button_events { get_memory_resource() };
+        std::pmr::deque<std::pair<raw_t, typename clock::time_point>> samples { get_memory_resource() };
 
         bool using_irq() const { return cfg.strategy == poll_strategy::pit_irq or cfg.strategy == poll_strategy::rtc_irq; }
-        std::experimental::pmr::memory_resource* get_memory_resource() const noexcept { if (using_irq()) return memory_resource.get(); else return std::experimental::pmr::get_default_resource(); }
+        std::pmr::memory_resource* get_memory_resource() const noexcept { if (using_irq()) return memory_resource.get(); else return std::pmr::get_default_resource(); }
 
         void poll()
         {
