@@ -57,10 +57,12 @@ namespace jw
             bool thread_events_enabled { false };
             bool new_frame_type { true };
 
-            locked_pool_allocator<false> alloc { 1_MB };
-            std::map<std::string, std::string, std::less<std::string>, locked_pool_allocator<false, std::pair<const std::string, std::string>>> supported { alloc };
-            std::map<std::uintptr_t, watchpoint, std::less<std::uintptr_t>, locked_pool_allocator<false, std::pair<const std::uintptr_t, watchpoint>>> watchpoints { alloc };
-            std::map<std::uintptr_t, byte, std::less<std::uintptr_t>, locked_pool_allocator<false, std::pair<const std::uintptr_t, byte>>> breakpoints { alloc };
+            using pmr_stringstream = std::basic_stringstream<char, std::char_traits<char>, std::pmr::polymorphic_allocator<char>>;
+
+            locked_pool_resource<false> memres { 1_MB };
+            std::pmr::map<std::pmr::string, std::pmr::string> supported { &memres };
+            std::pmr::map<std::uintptr_t, watchpoint> watchpoints { &memres };
+            std::pmr::map<std::uintptr_t, byte> breakpoints { &memres };
             std::map<int, void(*)(int)> signal_handlers { };
 
             std::array<std::unique_ptr<exception_handler>, 0x20> exception_handlers;
@@ -77,9 +79,9 @@ namespace jw
                 using std::string_view::basic_string_view;
             };
 
-            std::deque<std::string, locked_pool_allocator<false, std::string>> sent_packets { alloc };
-            std::string raw_packet_string;
-            std::deque<packet_string, locked_pool_allocator<false, packet_string>> packet { alloc };
+            std::pmr::deque<std::pmr::string> sent_packets { &memres };
+            std::pmr::string raw_packet_string { &memres };
+            std::pmr::deque<packet_string> packet { &memres };
             bool replied { false };
 
             constexpr std::uint32_t all_threads_id { std::numeric_limits<std::uint32_t>::max() };
@@ -92,9 +94,7 @@ namespace jw
                 std::weak_ptr<thread::detail::thread> thread;
                 new_exception_frame frame;
                 cpu_registers reg;
-                //template <typename T> using set_with_alloc = std::unordered_set<T, std::hash<T>, std::equal_to<T>, locked_pool_allocator<T>>;
-                template <typename T> using set_with_alloc = std::set<T, std::less<T>, locked_pool_allocator<false, T>>;
-                set_with_alloc<std::int32_t> signals { alloc };
+                std::pmr::set<std::int32_t> signals { &memres };
                 std::int32_t last_stop_signal { -1 };
                 std::uintptr_t step_range_begin { 0 };
                 std::uintptr_t step_range_end { 0 };
@@ -170,7 +170,7 @@ namespace jw
                 }
             };
             
-            std::map<std::uint32_t, thread_info, std::less<std::uint32_t>, locked_pool_allocator<true, std::pair<const std::uint32_t, thread_info>>> threads { alloc };
+            std::pmr::map<std::uint32_t, thread_info> threads { &memres };
             thread_info* current_thread { nullptr };
 
             inline void populate_thread_list()
@@ -481,7 +481,7 @@ namespace jw
             }
 
             // not used
-            void send_notification(const std::string& output)
+            void send_notification(const std::pmr::string& output)
             {
                 if (config::enable_gdb_protocol_dump) std::clog << "note --> \"" << output << "\"\n";
                 const auto sum = checksum(output);
@@ -492,7 +492,7 @@ namespace jw
             {
                 if (config::enable_gdb_protocol_dump) std::clog << "send --> \"" << output << "\"\n";
 
-                static std::string rle_output { };
+                static std::pmr::string rle_output { &memres };
                 rle_output.clear();
                 rle_output.reserve(output.size());
                 auto& s = rle_output;
@@ -540,7 +540,7 @@ namespace jw
 
             void recv_packet()
             {
-                static std::string sum;
+                static std::pmr::string sum { &memres };
 
             retry:
                 recv_ack();
@@ -754,7 +754,7 @@ namespace jw
                         t.action = thread_info::none;
                         t.last_stop_signal = signal;
 
-                        static std::stringstream s { };
+                        static pmr_stringstream s { std::pmr::string { &memres } };
                         s.str({ });
                         s.clear();
                         s.exceptions(std::ios::failbit | std::ios::badbit);
@@ -834,7 +834,7 @@ namespace jw
                 recv_packet();
                 current_thread->signals.erase(packet_received);
 
-                static std::stringstream s { };
+                static pmr_stringstream s { std::pmr::string { &memres } };
                 s.str({ });
                 s.clear();
                 s.exceptions(std::ios::failbit | std::ios::badbit);
@@ -885,7 +885,7 @@ namespace jw
                     else if (q == "ThreadExtraInfo")
                     {
                         using namespace thread::detail;
-                        static std::stringstream msg { };
+                        static pmr_stringstream msg { std::pmr::string { &memres } };
                         msg.str({ });
                         msg.clear();
                         msg.exceptions(std::ios::failbit | std::ios::badbit);
@@ -1418,7 +1418,7 @@ namespace jw
 
             void notify_gdb_exit(byte result)
             {
-                std::stringstream s { };
+                pmr_stringstream s { std::pmr::string { &memres } };
                 s.exceptions(std::ios::failbit | std::ios::badbit);
                 s << std::hex << std::setfill('0');
                 s << "W" << std::setw(2) << static_cast<std::uint32_t>(result);
