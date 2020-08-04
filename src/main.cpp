@@ -294,7 +294,7 @@ namespace jw
 void operator delete(void* p, std::size_t)
 {
     p = *(reinterpret_cast<void**>(p) - 1);
-    if (new_alloc_initialized == yes and new_alloc->in_pool(p))
+    if (new_alloc_initialized == yes and new_alloc->in_pool(static_cast<byte*>(p)))
     {
         new_alloc->deallocate(p);
         return;
