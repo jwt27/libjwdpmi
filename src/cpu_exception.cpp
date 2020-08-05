@@ -272,7 +272,7 @@ namespace jw
             void setup_exception_throwers()
             {
                 if (not config::enable_throwing_from_cpu_exceptions) return;
-                if (__builtin_expect(exception_throwers_setup, true)) return;
+                if (exception_throwers_setup) [[likely]] return;
                 exception_throwers_setup = true;
 
                 auto make_thrower = [](exception_num n)

@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
@@ -88,7 +89,7 @@ namespace jw
 
             static void get() noexcept
             {
-                if (__builtin_expect(init, true)) return;
+                if (init) [[likely]] return;
                 asm("int 0x31;"
                     : "=a" (ax)
                     , "=b" (bx)
@@ -154,7 +155,7 @@ namespace jw
             static bool get_supported() noexcept { get(); return sup; }
             static void get() noexcept
             {
-                if (__builtin_expect(init || !sup, true)) return;
+                if (init or not sup) [[likely]] return;
                 bool c;
                 asm("push es;"
                     "mov es, %w2;"

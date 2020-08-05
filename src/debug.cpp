@@ -1210,7 +1210,7 @@ namespace jw
                     }
                 };
 
-                if (__builtin_expect(f->fault_address.segment != ring3_cs and f->fault_address.segment != ring0_cs, false))
+                if (f->fault_address.segment != ring3_cs and f->fault_address.segment != ring0_cs) [[unlikely]]
                 {
                     if (exc == exception_num::trap) return true; // keep stepping until we get back to our own code
                     std::cerr << "Can't debug this! CS is neither 0x" << std::hex << ring3_cs << " nor 0x" << ring0_cs << ".\n";
@@ -1218,7 +1218,7 @@ namespace jw
                     return false;
                 }
 
-                if (__builtin_expect(debugger_reentry, false))
+                if (debugger_reentry) [[unlikely]]
                 {
                     if (exc == 0x01 or exc == 0x03)
                     {   // breakpoint in debugger code, ignore

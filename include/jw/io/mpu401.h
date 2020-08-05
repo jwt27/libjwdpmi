@@ -70,7 +70,7 @@ namespace jw
             private:
                 void check_irq_exception()
                 {
-                    if (__builtin_expect(irq_exception != nullptr, false))
+                    if (irq_exception != nullptr) [[unlikely]]
                     {
                         auto e = std::move(irq_exception);
                         irq_exception = nullptr;

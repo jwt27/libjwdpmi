@@ -23,12 +23,12 @@ namespace jw
 
         void setup::update_tsc()
         {
-            if (__builtin_expect(not have_rdtsc, false)) return;
+            if (not have_rdtsc) [[unlikely]] return;
             static std::uint64_t last_tsc;
             auto tsc = rdtsc();
             std::uint32_t diff = tsc - last_tsc;
             last_tsc = tsc;
-            if (__builtin_expect(tsc_resync, false)) { tsc_resync = false; return; }
+            if (tsc_resync) [[unlikely]] { tsc_resync = false; return; }
             if (tsc_sample_size == tsc_max_sample_size)
             {
                 tsc_total -= static_cast<std::uint32_t>(tsc_total >> tsc_max_sample_bits);

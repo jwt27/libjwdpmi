@@ -23,7 +23,7 @@ namespace jw
                 interrupt_id::push_back(vec, interrupt_id::id_t::interrupt);
 
                 byte* esp; asm("mov %0, esp;":"=rm"(esp));
-                if (__builtin_expect(static_cast<std::size_t>(esp - data->stack.data()) <= config::interrupt_minimum_stack_size, false))
+                if (static_cast<std::size_t>(esp - data->stack.data()) <= config::interrupt_minimum_stack_size) [[unlikely]]
                 {
                     data->increase_stack_size->start();
                 }

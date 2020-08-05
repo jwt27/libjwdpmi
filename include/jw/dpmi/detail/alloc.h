@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
@@ -35,7 +36,7 @@ namespace jw
 
                 void resize_if_necessary()
                 {
-                    if (__builtin_expect(minimum_chunk_size <= (base::pool->size() >> 1), false))
+                    if (minimum_chunk_size <= (base::pool->size() >> 1)) [[unlikely]]
                     {
                         debug::trap_mask dont_trap_here { };
                         base::resize(base::pool->size() << 1);

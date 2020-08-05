@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
@@ -43,14 +44,14 @@ namespace jw
 
                 void lock()
                 {
-                    if (__builtin_expect(locked, false)) return;
+                    if (locked) [[unlikely]] return;
                     mem.lock_memory();
                     locked = true;
                 }
 
                 void unlock()
                 {
-                    if (__builtin_expect(!locked, false)) return;
+                    if (not locked) [[unlikely]] return;
                     mem.unlock_memory();
                     locked = false;
                 }

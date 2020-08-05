@@ -100,9 +100,9 @@ namespace jw
 
             void copy_from(selector new_reg_ds, realmode_registers* new_reg)
             {
-                if (__builtin_expect(new_reg == this && new_reg_ds == get_ds(), true)) return;
+                if (new_reg == this and new_reg_ds == get_ds()) [[likely]] return;
                 auto ptr = linear_memory { new_reg_ds, new_reg };
-                if (__builtin_expect(ptr.requires_new_selector(), false))
+                if (ptr.requires_new_selector()) [[unlikely]]
                 {
                     FORCE_FRAME_POINTER;
                     asm("push es;"

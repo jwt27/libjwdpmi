@@ -65,15 +65,15 @@ namespace jw::dpmi::detail
 
         static interrupt_id* get()
         {
-            if (__builtin_expect(instance == nullptr, false))
+            if (instance == nullptr) [[unlikely]]
                 instance = new interrupt_id { };
             return instance;
         }
 
         static void delete_if_possible()
         {
-            if (__builtin_expect(get()->use_count > 0, true)) return;
-            if (__builtin_expect(instance == nullptr, false)) return;
+            if (get()->use_count > 0) [[likely]] return;
+            if (instance == nullptr) [[unlikely]] return;
 
             delete instance;
             instance = nullptr;

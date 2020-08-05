@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
@@ -69,7 +70,7 @@ namespace jw
             void scheduler::thread_switch(thread_ptr t)
             {
                 debug::trap_mask dont_trace_here { };
-                if (__builtin_expect(t != nullptr, false))
+                if (t != nullptr) [[unlikely]]
                 {
                     dpmi::interrupt_mask no_interrupts_please { };
                     threads.erase(remove_if(threads.begin(), threads.end(), [t](const auto& i) { return i == t; }), threads.end());
@@ -82,7 +83,7 @@ namespace jw
                 context_switch(&current_thread->context);   // switch to a new task context
                 check_exception();  // rethrow pending exception
 
-                while (__builtin_expect(current_thread->invoke_list.size() > 0, false))
+                while (current_thread->invoke_list.size() > 0) [[unlikely]]
                 {
                     decltype(thread::invoke_list)::value_type f;
                     {
@@ -128,7 +129,7 @@ namespace jw
             // Throws abort_thread if task->abort() is called, or orphaned_thread if task is orphaned.
             void scheduler::check_exception()
             {
-                if (__builtin_expect(current_thread->awaiting && current_thread->awaiting->pending_exceptions() > 0, false))
+                if (current_thread->awaiting and current_thread->awaiting->pending_exceptions() > 0) [[unlikely]]
                 {
                     auto exc = current_thread->awaiting->exceptions.front();
                     current_thread->awaiting->exceptions.pop_front();
@@ -136,7 +137,7 @@ namespace jw
                     catch (...) { std::throw_with_nested(thread_exception { current_thread }); }
                 }
 
-                if (__builtin_expect(current_thread->pending_exceptions() > 0, false))
+                if (current_thread->pending_exceptions() > 0) [[unlikely]]
                 {
                     auto& exceptions = current_thread->exceptions;
                     for (auto i = exceptions.begin(); i != exceptions.end(); ++i)
@@ -158,11 +159,11 @@ namespace jw
                     }
                 }
 
-                if (__builtin_expect(current_thread != main_thread && *reinterpret_cast<std::uint32_t*>(current_thread->stack.get()) != 0xDEADBEEF, false))
+                if (current_thread != main_thread and *reinterpret_cast<std::uint32_t*>(current_thread->stack.get()) != 0xDEADBEEF) [[unlikely]]
                     throw std::runtime_error("Stack overflow!");
 
-                if (__builtin_expect(current_thread->state == terminating, false)) throw abort_thread();
-                if (__builtin_expect(current_thread.unique() && !current_thread->allow_orphan && current_thread->is_running(), false)) throw orphaned_thread();
+                if (current_thread->state == terminating) [[unlikely]] throw abort_thread();
+                if (current_thread.unique() and not current_thread->allow_orphan and current_thread->is_running()) [[unlikely]] throw orphaned_thread();
             }
 
             // Selects a new current_thread.
@@ -172,12 +173,12 @@ namespace jw
                 dpmi::interrupt_mask no_interrupts_please { };
                 for(std::size_t i = 0; ; ++i)
                 {
-                    if (__builtin_expect(current_thread->is_running(), true)) threads.push_back(current_thread);
+                    if (current_thread->is_running()) [[likely]] threads.push_back(current_thread);
 
                     current_thread = threads.front();
                     threads.pop_front();
 
-                    if (__builtin_expect(current_thread->state == starting, false)) // new task, initialize new context on stack
+                    if (current_thread->state == starting) [[unlikely]]     // new task, initialize new context on stack
                     {
                         byte* esp = (current_thread->stack.get() + current_thread->stack_size - 4) - sizeof(thread_context);
                         *reinterpret_cast<std::uint32_t*>(current_thread->stack.get()) = 0xDEADBEEF;  // stack overflow protection
@@ -188,9 +189,9 @@ namespace jw
                         current_thread->context->return_address = reinterpret_cast<std::uintptr_t>(run_thread);
                     }
 
-                    if (__builtin_expect(current_thread->pending_exceptions() != 0, false)) break;
-                    if (__builtin_expect(current_thread->awaiting && current_thread->awaiting->pending_exceptions() != 0, false)) break;
-                    if (__builtin_expect(current_thread->state != suspended, true)) break;
+                    if (current_thread->pending_exceptions() != 0) [[unlikely]] break;
+                    if (current_thread->awaiting and current_thread->awaiting->pending_exceptions() != 0) [[unlikely]] break;
+                    if (current_thread->state != suspended) [[likely]] break;
                     if (i > threads.size())
                     {
                         debug::break_with_signal(debug::detail::all_threads_suspended);

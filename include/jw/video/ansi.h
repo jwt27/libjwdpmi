@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
@@ -82,13 +83,13 @@ namespace jw::video::ansi
 
             if constexpr (not is_char<i>())
             {
-                if (__builtin_expect(j != 0, true))
+                if (j != 0) [[likely]]
                 {
                     out = std::to_chars(out, out + 4, j).ptr;
                 }
                 if constexpr (not is_char<i + 1>()) *(out++) = ';';
             }
-            else if (__builtin_expect(j != 0, true)) *(out++) = j;
+            else if (j != 0) [[likely]] *(out++) = j;
 
             if constexpr (sizeof...(next) > 0) emit<next...>(out);
             else *out = '\0';

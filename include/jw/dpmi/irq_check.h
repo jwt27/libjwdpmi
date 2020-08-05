@@ -23,7 +23,7 @@ namespace jw
         };
 
         // Returns true if currently in irq or exception context.
-        inline bool in_irq_context() noexcept { return __builtin_expect(detail::interrupt_count > 0 || detail::exception_count > 0, false); }
+        inline bool in_irq_context() noexcept { return __builtin_expect(detail::interrupt_count > 0 or detail::exception_count > 0, false); }
 
         // Throws bad_irq_function_call if currently in irq or exception context.
         inline void throw_if_irq() { if (in_irq_context()) throw bad_irq_function_call { }; };

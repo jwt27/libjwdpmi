@@ -116,7 +116,7 @@ namespace jw
             static constexpr bool is_steady { false };
             static time_point now() noexcept
             {
-                if (__builtin_expect(not setup::pit_irq.is_enabled(), false))
+                if (not setup::pit_irq.is_enabled()) [[unlikely]]
                 {
                     auto t = std::chrono::duration_cast<duration>(std::chrono::_V2::steady_clock::now().time_since_epoch());
                     return time_point { t };
@@ -153,12 +153,12 @@ namespace jw
 
             static time_point now() noexcept
             {
-                if (__builtin_expect(not setup::rtc_irq.is_enabled() and not setup::pit_irq.is_enabled(), false))
+                if (not setup::rtc_irq.is_enabled() and not setup::pit_irq.is_enabled()) [[unlikely]]
                 {
                     auto t = std::chrono::duration_cast<duration>(std::chrono::_V2::high_resolution_clock::now().time_since_epoch());
                     return time_point { t };
                 }
-                if (__builtin_expect(not setup::have_rdtsc, false))
+                if (not setup::have_rdtsc) [[unlikely]]
                 {
                     return time_point { std::chrono::duration_cast<duration>(pit::now().time_since_epoch()) };
                 }

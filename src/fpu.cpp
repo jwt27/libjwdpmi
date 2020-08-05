@@ -61,7 +61,7 @@ namespace jw
 
             bool fpu_context_switcher_t::enter(std::uint32_t exc) noexcept
             {
-                if (__builtin_expect(not init, false)) return false;
+                if (not init) [[unlikely]] return false;
 
                 auto try_context_switch = [this, exc]
                 {
@@ -103,7 +103,7 @@ namespace jw
 
             void fpu_context_switcher_t::leave() noexcept
             {
-                if (__builtin_expect(not init, false)) return;
+                if (not init) [[unlikely]] return;
                 if (context_switch_successful)
                 {
                     context_switch_successful = false;
