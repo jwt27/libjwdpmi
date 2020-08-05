@@ -42,19 +42,18 @@ namespace jw
                 tsc_ticks_per_irq = tsc_total / tsc_sample_size;
         }
 
-        dpmi::irq_handler setup::rtc_irq { []()
+        dpmi::irq_handler setup::rtc_irq { []
         {
             static byte last_sec { 0 };
-            dpmi::interrupt_mask no_irq { };
 
             rtc_index.write(0x80);
             auto sec = rtc_data.read();
-            if (sec != last_sec)
+            if (sec != last_sec) [[unlikely]]
             {
                 rtc_ticks = 0;
                 last_sec = sec;
             }
-            else ++rtc_ticks;
+            else asm ("inc %0" : "+m" (rtc_ticks));
 
             rtc_index.write(0x0C);
             rtc_data.read();
@@ -64,9 +63,15 @@ namespace jw
             dpmi::irq_handler::acknowledge();
         }, dpmi::always_call | dpmi::no_interrupts };
 
-        dpmi::irq_handler setup::pit_irq { []()
+        dpmi::irq_handler setup::pit_irq { []
         {
-            ++pit_ticks;
+            asm
+            (
+                "add %k0, 1;"
+                "adc %k0+4, 0;"
+                : "+m" (pit_ticks)
+                :: "cc"
+            );
 
             if (current_tsc_ref() == tsc_reference::pit) update_tsc();
 

@@ -254,8 +254,8 @@ namespace jw
 
                 std::array<char_type, 1_KB> rx_buf;
                 std::array<char_type, 1_KB> tx_buf;
-                char_type* volatile rx_ptr { rx_buf.data() };
-                char_type* volatile tx_ptr { tx_buf.data() };
+                char_type* rx_ptr { rx_buf.data() };
+                char_type* tx_ptr { tx_buf.data() };
 
                 static const char_type xon = 0x11;
                 static const char_type xoff = 0x13;

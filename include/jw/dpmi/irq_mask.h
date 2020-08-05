@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
@@ -21,7 +22,7 @@ namespace jw
         {
         public:
             interrupt_mask() noexcept { cli(); }
-            ~interrupt_mask() { if (__builtin_expect(--count == 0 && initial_state, true)) sti(); }
+            ~interrupt_mask() { if ((--count | not initially_enabled) == 0) [[likely]] { asm ("sti"); } }
 
             interrupt_mask(const interrupt_mask&) = delete;
             interrupt_mask(interrupt_mask&&) = delete;
@@ -39,7 +40,7 @@ namespace jw
             static void sti() noexcept
             {
                 if (count > 0) return;
-                asm("sti");
+                asm ("sti");
             }
 
         private:
@@ -47,11 +48,11 @@ namespace jw
             static void cli() noexcept
             {
                 auto state = get_and_set_interrupt_state(false);
-                if (count++ == 0) initial_state = state;
+                if (count++ == 0) initially_enabled = state;
             }
 
-            static inline volatile int count { 0 };
-            static inline bool initial_state;
+            static inline std::uint32_t count { 0 };
+            static inline bool initially_enabled;
 
             //DPMI 0.9 AX=090x
             static bool get_and_set_interrupt_state(bool state) noexcept
@@ -92,56 +93,68 @@ namespace jw
             irq_mask& operator=(const irq_mask&) = delete;
             irq_mask& operator=(irq_mask&&) = delete;
 
-            static void unmask(irq_level irq) // TODO: raii unmask
+            static void unmask(irq_level irq) noexcept // TODO: raii unmask
             {
-                if (map[irq].count > 0) { map[irq].first = false; return; }
-
-                byte mask = 1 << (irq % 8);
-                auto& port = irq < 8 ? pic0_data : pic1_data;
-                port.write(port.read() & ~mask);
+                auto& m = map[irq];
+                auto c = m.count.load() & ~(1UL << 31);
+                if (c > 0)
+                {
+                    m.count.store(c);
+                }
+                else
+                {
+                    auto [mask, port] = mp(irq);
+                    port.write(port.read() & ~mask);
+                }
             }
 
-            static bool enabled(irq_level irq) // TODO: raii unmask
+            static bool enabled(irq_level irq) noexcept
             {
-                if (map[irq].count > 0) return false;
+                if ((map[irq].count.load() & ~(1UL << 31)) > 0) return false;
 
-                byte mask = 1 << (irq % 8);
-                auto& port = irq < 8 ? pic0_data : pic1_data;
+                auto [mask, port] = mp(irq);
                 return port.read() & mask;
             }
 
         private:
             void cli() noexcept
             {
-                if (map[irq].count++ > 0) return;   // FIXME: race condition here
-
-                byte mask = 1 << (irq % 8);
-                auto& port = irq < 8 ? pic0_data : pic1_data;
-
+                asm("irq_mask_cli%=:":::);
+                auto [mask, port] = mp(irq);
                 byte current = port.read();
-                map[irq].first = (current & mask) != 0;
                 port.write(current | mask);
+
+                auto& m = map[irq];
+                auto c = m.count.load();
+                if ((c & ~(1UL << 31)) == 0) c = ((current & mask) != 0) << 31;
+                m.count.store(c + 1);
             }
 
             void sti() noexcept
             {
-                if (map[irq].count == 0) return;
-                if (--map[irq].count > 0) return;
-                if (map[irq].first) return;
-
-                byte mask = 1 << (irq % 8);
-                auto& port = irq < 8 ? pic0_data : pic1_data;
-
-                port.write(port.read() & ~mask);
+                auto& m = map[irq];
+                auto c = m.count.load() - 1;
+                m.count.store(c);
+                if (c == 0)
+                {
+                    auto [mask, port] = mp(irq);
+                    port.write(port.read() & ~mask);
+                }
             }
 
-            static inline constexpr io::io_port<byte> pic0_data { 0x21 };
-            static inline constexpr io::io_port<byte> pic1_data { 0xA1 };
+            static constexpr std::tuple<byte, io::io_port<byte>&> mp(irq_level irq)
+            {
+                byte mask = 1 << (irq % 8);
+                auto& port = irq < 8 ? pic0_data : pic1_data;
+                return { mask, port };
+            }
+
+            static inline constinit io::io_port<byte> pic0_data { 0x21 };
+            static inline constinit io::io_port<byte> pic1_data { 0xA1 };
 
             struct mask_counter
             {
-                volatile int count { 0 };
-                bool first { }; // true if initially masked
+                std::atomic<std::uint32_t> count { 0 };   // MSB is initial state (unset if irq enabled)
                 constexpr mask_counter() noexcept { }
             };
             static inline std::array<mask_counter, 16> map { };
