@@ -1,5 +1,5 @@
 # libjwdpmi
-This library aims to be a complete development framework for DPMI (32-bit DOS) applications, written in C++17.  
+This library aims to be a complete development framework for DPMI (32-bit DOS) applications, written in C++20.  
 It's still in the experimental stage. Anything may change at any time.
 
 ## Features
