@@ -20,7 +20,59 @@ namespace jw
 
         std::optional<descriptor> gdt, ldt;
 
-        descriptor::direct_ldt_access_t descriptor::direct_ldt_access()
+        [[gnu::noipa]] descriptor_data read_descriptor_direct(selector_bits s, bool use_ring0)
+        {
+            union
+            {
+                split_uint64_t raw;
+                descriptor_data data;
+            };
+            std::optional<ring0_privilege> r0;
+            if (use_ring0) r0.emplace();
+            auto& table = s.local ? ldt : gdt;
+            gs_override gs { table->get_selector() };
+            asm ("mov %0, gs:[%1*8+0]" : "=r" (raw.lo) : "r" (s.index));
+            asm ("mov %0, gs:[%1*8+4]" : "=r" (raw.hi) : "r" (s.index));
+            return data;
+        }
+
+        [[gnu::noipa]] void write_descriptor_direct(selector_bits s, const descriptor_data& d, bool use_ring0)
+        {
+            union
+            {
+                split_uint64_t raw;
+                descriptor_data data;
+            };
+            data = d;
+            std::optional<ring0_privilege> r0;
+            if (use_ring0) r0.emplace();
+            auto& table = s.local ? ldt : gdt;
+            gs_override gs { table->get_selector() };
+            asm ("mov gs:[%1*8+0], %0" :: "r" (raw.lo), "r" (s.index) : "memory");
+            asm ("mov gs:[%1*8+4], %0" :: "r" (raw.hi), "r" (s.index) : "memory");
+        }
+
+        struct [[gnu::packed]] gdt_register
+        {
+            std::uint16_t limit;
+            std::uint32_t base;
+        };
+
+        [[gnu::noipa]] auto sgdt()
+        {
+            gdt_register gdtr;
+            asm ("sgdt %0"  : "=m"  (gdtr));
+            return gdtr;
+        }
+
+        [[gnu::noipa]] auto sldt()
+        {
+            selector ldtr;
+            asm ("sldt %w0" : "=rm" (ldtr));
+            return ldtr;
+        }
+
+        descriptor::direct_ldt_access_t descriptor::direct_ldt_access() noexcept
         {
             static direct_ldt_access_t have_access { unknown };
             if (have_access == unknown) [[unlikely]]
@@ -31,36 +83,20 @@ namespace jw
                 {
                     have_access = no;
 
-                    struct [[gnu::packed]]
-                    {
-                        std::uint16_t limit;
-                        std::uint32_t base;
-                    } gdtr;
+                    gdt_register gdtr;
                     selector ldtr;
 
                     {
                         std::optional<ring0_privilege> r0;
                         if (use_ring0) r0.emplace();
-                        asm ("sgdt %0"  : "=m"  (gdtr));
-                        asm ("sldt %w0" : "=rm" (ldtr));
+                        gdtr = sgdt();
+                        ldtr = sldt();
                     }
 
                     gdt = descriptor::create_segment(gdtr.base, gdtr.limit + 1);
                     selector_bits ldt_selector = ldtr;
 
-                    union
-                    {
-                        split_uint64_t ldt_bits;
-                        descriptor_data ldt_desc;
-                    };
-
-                    {
-                        std::optional<ring0_privilege> r0;
-                        if (use_ring0) r0.emplace();
-                        gs_override gs { gdt->get_selector() };
-                        asm ("mov %0, gs:[%1*8+0]" : "=r" (ldt_bits.lo) : "r" (ldt_selector.index));
-                        asm ("mov %0, gs:[%1*8+4]" : "=r" (ldt_bits.hi) : "r" (ldt_selector.index));
-                    }
+                    auto ldt_desc = read_descriptor_direct(ldt_selector, use_ring0);
 
                     split_uint32_t base;
                     base.lo = ldt_desc.segment.base_lo;
@@ -196,25 +232,14 @@ namespace jw
             auto ldt_access = direct_ldt_access();
             if (ldt_access != no) [[likely]]
             {
-                std::optional<ring0_privilege> r0;
-                if (ldt_access == ring0) r0.emplace();
-                selector_bits s { sel };
-                auto& table = s.local ? ldt : gdt;
-                gs_override gs { table->get_selector() };
-                union
-                {
-                    split_uint64_t raw;
-                    descriptor_data data;
-                };
-                asm ("mov %0, gs:[%1*8+0]" : "=r" (raw.lo) : "r" (s.index));
-                asm ("mov %0, gs:[%1*8+4]" : "=r" (raw.hi) : "r" (s.index));
-                static_cast<descriptor_data&>(*const_cast<descriptor*>(this)) = data;
+                static_cast<descriptor_data&>(*const_cast<descriptor*>(this)) = read_descriptor_direct(sel, ldt_access == ring0);
             }
             else
             {
                 dpmi_error_code error;
                 bool c;
                 asm volatile(
+                    "lea edi, %2;"
                     "push es;"
                     "push ds;"
                     "pop es;"
@@ -222,10 +247,10 @@ namespace jw
                     "pop es;"
                     : "=@ccc" (c)
                     , "=a" (error)
+                    , "=m" (*const_cast<descriptor*>(this))
                     : "a" (0x000b)
                     , "b" (sel)
-                    , "D" (static_cast<const descriptor_data*>(this))
-                    : "memory");
+                    : "edi", "memory");
                 if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
             }
         }
@@ -235,19 +260,7 @@ namespace jw
             auto ldt_access = direct_ldt_access();
             if (ldt_access != no) [[likely]]
             {
-                std::optional<ring0_privilege> r0;
-                if (ldt_access == ring0) r0.emplace();
-                selector_bits s { sel };
-                auto& table = s.local ? ldt : gdt;
-                gs_override gs { table->get_selector() };
-                union
-                {
-                    split_uint64_t raw;
-                    descriptor_data data;
-                };
-                data = *this;
-                asm ("mov gs:[%1*8+0], %0" :: "r" (raw.lo), "r" (s.index));
-                asm ("mov gs:[%1*8+4], %0" :: "r" (raw.hi), "r" (s.index));
+                write_descriptor_direct(sel, *this, ldt_access == ring0);
             }
             else
             {

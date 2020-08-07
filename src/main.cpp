@@ -126,14 +126,7 @@ namespace jw
                 if (use_ring0) r0 = ring0_privilege { };
                 // if we have no ring0 access, the dpmi host might still trap and emulate control register access.
 
-                std::uint32_t cr;
-                asm ("mov %0, cr0" : "=r" (cr));
-                asm ("mov cr0, %0" :: "r" (cr | 0x10));       // enable native x87 exceptions
-                if constexpr (sse)
-                {
-                    asm ("mov %0, cr4" : "=r" (cr));
-                    asm ("mov cr4, %0" :: "r" (cr | 0x600));  // enable SSE and SSE exceptions
-                }
+                set_control_registers();
             }
             catch (const cpu_exception&)
             {
@@ -149,6 +142,18 @@ namespace jw
 
             original_terminate_handler = std::set_terminate(terminate_handler);
             std::atexit(atexit_handler);
+        }
+
+        [[gnu::noipa]] static void set_control_registers()
+        {
+            std::uint32_t cr;
+            asm ("mov %0, cr0" : "=r" (cr));
+            asm ("mov cr0, %0" :: "r" (cr | 0x10));       // enable native x87 exceptions
+            if constexpr (sse)
+            {
+                asm ("mov %0, cr4" : "=r" (cr));
+                asm ("mov cr4, %0" :: "r" (cr | 0x600));  // enable SSE and SSE exceptions
+            }
         }
     } initializer [[gnu::init_priority(101)]];
 }

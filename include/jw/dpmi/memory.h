@@ -209,10 +209,10 @@ namespace jw
 
             selector_bits sel;
             bool no_alloc { true };
-            enum direct_ldt_access_t { unknown, yes, ring0, no };
+            enum direct_ldt_access_t { unknown, yes, no, ring0 };
 
         public:
-            static direct_ldt_access_t direct_ldt_access();
+            static direct_ldt_access_t direct_ldt_access() noexcept;
         };
 
         inline constexpr std::uintptr_t conventional_to_physical(std::uint16_t segment, std::uint16_t offset) noexcept
