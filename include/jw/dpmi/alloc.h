@@ -62,29 +62,32 @@ namespace jw
 
         // Legacy allocator based on locking_memory_resource
         template <typename T = byte>
-        struct locking_allocator : protected locking_memory_resource
+        struct locking_allocator
         {
             using value_type = T;
             using pointer = T*;
 
             [[nodiscard]] constexpr T* allocate(std::size_t n)
             {
-                return static_cast<T*>(locking_memory_resource::allocate(n * sizeof(T), alignof(T)));
+                return static_cast<T*>(memres.allocate(n * sizeof(T), alignof(T)));
             }
 
             constexpr void deallocate(T* p, std::size_t n)
             {
-                locking_memory_resource::deallocate(static_cast<void*>(p), n);
+                memres.deallocate(static_cast<void*>(p), n * sizeof(T), alignof(T));
             }
 
             template <typename U> struct rebind { using other = locking_allocator<U>; };
 
             template <typename U>
             constexpr locking_allocator(const locking_allocator<U>&) noexcept { }
-            constexpr locking_allocator() { };
+            constexpr locking_allocator() = default;
 
             template <typename U> constexpr friend bool operator== (const locking_allocator&, const locking_allocator<U>&) noexcept { return true; }
-            template <typename U> constexpr friend bool operator!= (const locking_allocator& a, const locking_allocator<U>& b) noexcept { return !(a == b); }
+            template <typename U> constexpr friend bool operator!= (const locking_allocator&, const locking_allocator<U>&) noexcept { return false; }
+
+        private:
+            [[no_unique_address]] locking_memory_resource memres;
         };
 
         // Allocates from a pre-allocated locked memory pool. This allows interrupt handlers to insert/remove elements in
