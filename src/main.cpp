@@ -296,18 +296,36 @@ namespace jw
     return ::operator new(n, std::align_val_t { __STDCPP_DEFAULT_NEW_ALIGNMENT__ });
 }
 
-void operator delete(void* p, std::size_t)
+void operator delete(void* p, std::size_t, std::align_val_t) noexcept
 {
-    p = *(reinterpret_cast<void**>(p) - 1);
-    if (new_alloc_initialized == yes and new_alloc->in_pool(static_cast<byte*>(p)))
+    try
     {
-        new_alloc->deallocate(p);
-        return;
+        p = *(reinterpret_cast<void**>(p) - 1);
+        if (new_alloc_initialized == yes and new_alloc->in_pool(static_cast<byte*>(p)))
+        {
+            new_alloc->deallocate(p);
+            return;
+        }
+        std::free(p);
     }
-    std::free(p);
+    catch (...)
+    {
+        std::cerr << "Caught exception in operator delete!\n";
+        std::terminate();
+    }
 }
 
-void operator delete(void* p)
+void operator delete(void* p) noexcept
 {
-    ::operator delete(p, 1);
+    ::operator delete(p, 1, std::align_val_t { });
+}
+
+void operator delete(void* p, std::size_t) noexcept
+{
+    ::operator delete(p);
+}
+
+void operator delete(void* p, std::align_val_t) noexcept
+{
+    ::operator delete(p);
 }
