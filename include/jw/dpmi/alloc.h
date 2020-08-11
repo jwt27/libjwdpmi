@@ -54,7 +54,7 @@ namespace jw
             virtual bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override
             {
                 auto* o = dynamic_cast<const locking_memory_resource*>(&other);
-                return (o != nullptr);
+                return o != nullptr;
             }
 
             static inline std::map<void*, data_lock>* map { };
@@ -110,21 +110,22 @@ namespace jw
             locked_pool_resource& operator=(locked_pool_resource&&) = default;
             locked_pool_resource& operator=(const locked_pool_resource&) = default;
 
+            // Returns true if pool is unallocated
+            bool empty() const noexcept
+            {
+                auto first = begin();
+                return first->free and first->next == nullptr;
+            }
+
             // Resize the memory pool.  Throws std::bad_alloc if the pool is still in use.
             void resize(std::size_t size_bytes)
             {
-                for (auto* i = begin(); i != nullptr; i = i->next)
-                {
-                    if (not i->free) throw std::bad_alloc { };
-                }
-
-                {
-                    interrupt_mask no_interrupts_please { };
-                    debug::trap_mask dont_trap_here { };
-                    pool->clear();
-                    pool->resize(size_bytes);
-                    new(begin()) pool_node { };
-                }
+                if (not empty()) throw std::bad_alloc { };
+                interrupt_mask no_interrupts_please { };
+                debug::trap_mask dont_trap_here { };
+                pool->clear();
+                pool->resize(size_bytes);
+                new(begin()) pool_node { };
             }
 
             // Returns maximum number of bytes that can be allocated at once.
@@ -146,7 +147,7 @@ namespace jw
             bool in_pool(void* ptr)
             {
                 auto p = reinterpret_cast<std::byte*>(ptr);
-                return p > pool->data() && p < (pool->data() + pool->size());
+                return p > pool->data() and p < (pool->data() + pool->size());
             }
 
         protected:
@@ -206,7 +207,7 @@ namespace jw
             {
                 for (pool_node* prev = nullptr, *i = begin(); i != nullptr; prev = i, i = i->next)
                 {
-                    if (reinterpret_cast<void*>(i->begin()) <= p and reinterpret_cast<void*>(i->next) > p)
+                    if (reinterpret_cast<void*>(i->next) > p and reinterpret_cast<void*>(i->begin()) <= p)
                     {
                         i->free = true;
                         if (i->next != nullptr and i->next->free) i->next = i->next->next;
@@ -251,6 +252,12 @@ namespace jw
             void deallocate(pointer p, std::size_t num_elements)
             {
                 base::deallocate(static_cast<void*>(p), num_elements * sizeof(T), alignof(T));
+            }
+
+            // Returns true if pool is unallocated
+            bool empty() const noexcept
+            {
+                return base::empty();
             }
 
             // Resize the memory pool. Throws std::bad_alloc if the pool is still in use.
