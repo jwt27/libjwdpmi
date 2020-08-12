@@ -100,12 +100,7 @@ namespace jw
         do { } while (true);
     }
 
-    int return_value { -1 };
-
-    void atexit_handler()
-    {
-        if (debug::debug()) debug::detail::notify_gdb_exit(return_value);
-    }
+    int exit_code { -1 };
 
     struct init
     {
@@ -141,7 +136,11 @@ namespace jw
             }
 
             original_terminate_handler = std::set_terminate(terminate_handler);
-            std::atexit(atexit_handler);
+        }
+
+        ~init() noexcept
+        {
+            if (debug::debug()) debug::detail::notify_gdb_exit(exit_code);
         }
 
         [[gnu::noipa]] static void set_control_registers()
@@ -193,7 +192,7 @@ int main(int argc, const char** argv)
             debug::breakpoint();
         }
 
-        jw::return_value = jwdpmi_main(args);
+        jw::exit_code = jwdpmi_main(args);
     }
     catch (const std::exception& e) { std::cerr << "Caught exception in main()!\n"; jw::print_exception(e); }
     catch (const jw::terminate_exception& e) { std::cerr << e.what() << '\n'; }
@@ -215,7 +214,7 @@ int main(int argc, const char** argv)
         }
     }
 
-    return jw::return_value;
+    return jw::exit_code;
 }
 
 namespace jw
