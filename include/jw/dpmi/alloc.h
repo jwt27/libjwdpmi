@@ -171,7 +171,8 @@ namespace jw
 
                 void resize(std::size_t num_bytes)
                 {
-                    memres.deallocate(pool,pool_size);
+                    memres.deallocate(pool, pool_size);
+                    pool = nullptr;
                     pool_size = 0;
                     num_bytes += sizeof(pool_node);
                     pool = memres.allocate(num_bytes, alignof(pool_node));
