@@ -19,7 +19,6 @@ namespace jw
             if (p == nullptr) return;
             traits::destroy(*this, p);
             traits::deallocate(*this, p, 1);
-            p = nullptr;
         }
     };
 
@@ -33,7 +32,7 @@ namespace jw
 
         deleter d { rebind { alloc } };
         auto* p = traits::allocate(d, 1);
-        try { p = new(p) T { std::forward<Args>(args)... }; }
+        try { traits::construct(d, p, std::forward<Args>(args)...); }
         catch (...) { traits::deallocate(d, p, 1); throw; }
 
         return std::unique_ptr<T, deleter> { p, std::move(d) };
