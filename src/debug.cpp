@@ -1368,9 +1368,8 @@ namespace jw
                 if (debug_mode) return;
                 debug_mode = true;
 
-                dpmi::locking_allocator<> stream_alloc;
                 gdb_streambuf = new rs232_streambuf_internals { cfg };
-                gdb = allocate_unique<io::rs232_stream>(stream_alloc, gdb_streambuf);
+                gdb = allocate_unique<io::rs232_stream>(dpmi::locking_allocator<io::rs232_stream> { }, gdb_streambuf);
                 gdb->exceptions(std::ios::failbit | std::ios::badbit);
 
                 serial_irq = std::make_unique<irq_handler>([]

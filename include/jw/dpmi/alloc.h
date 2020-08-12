@@ -61,7 +61,7 @@ namespace jw
         };
 
         // Legacy allocator based on locking_memory_resource
-        template <typename T = byte>
+        template <typename T = std::byte>
         struct locking_allocator
         {
             using value_type = T;

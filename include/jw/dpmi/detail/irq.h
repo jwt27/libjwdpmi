@@ -118,7 +118,7 @@ namespace jw
 
                     thread::task<void()> increase_stack_size { [this]() { stack.resize(stack.size() * 2); } };
                     std::map<int_vector, std::unique_ptr<irq_controller>, std::less<int_vector>, locking_allocator<std::pair<const int_vector, std::unique_ptr<irq_controller>>>> entries { };
-                    std::vector<byte, locking_allocator<>> stack { };
+                    std::vector<byte, locking_allocator<byte>> stack { };
                     std::uint32_t stack_use_count { 0 };
                 };
 
