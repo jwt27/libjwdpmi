@@ -114,7 +114,7 @@ namespace jw
             // Resize the memory pool.  Throws std::bad_alloc if the pool is still in use.
             void resize(std::size_t size_bytes)
             {
-                if (not empty()) throw std::bad_alloc { };
+                if (pool->data() != nullptr and not empty()) throw std::bad_alloc { };
                 interrupt_mask no_interrupts_please { };
                 debug::trap_mask dont_trap_here { };
                 pool->resize(size_bytes);
@@ -176,13 +176,20 @@ namespace jw
 
                 void resize(std::size_t num_bytes)
                 {
-                    memres.deallocate(pool, pool_size);
-                    pool = nullptr;
-                    pool_size = 0;
-                    num_bytes += sizeof(pool_node);
-                    pool = memres.allocate(num_bytes, alignof(pool_node));
-                    new(begin()) pool_node { };
-                    pool_size = num_bytes;
+                    try
+                    {
+                        if (pool != nullptr) memres.deallocate(pool, pool_size);
+                        num_bytes += sizeof(pool_node);
+                        pool = memres.allocate(num_bytes, alignof(pool_node));
+                        new(begin()) pool_node { };
+                        pool_size = num_bytes;
+                    }
+                    catch (...)
+                    {
+                        pool = nullptr;
+                        pool_size = 0;
+                        throw;
+                    }
                 }
 
                 bool empty() const noexcept
