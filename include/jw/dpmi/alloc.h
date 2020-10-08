@@ -108,8 +108,7 @@ namespace jw
             // Returns true if pool is unallocated
             bool empty() const noexcept
             {
-                auto first = pool->begin();
-                return first->free and first->next == nullptr;
+                return pool->empty();
             }
 
             // Resize the memory pool.  Throws std::bad_alloc if the pool is still in use.
@@ -126,29 +125,29 @@ namespace jw
             {
                 interrupt_mask no_interrupts_please { };
                 debug::trap_mask dont_trap_here { };
-
-                std::size_t n { 0 };
-                for (auto* i = pool->begin(); i != nullptr; i = i->next)
-                {
-                    if (not i->free) continue;
-
-                    n = std::max(n, chunk_size(i));
-                }
-                return n;
+                return pool->max_size();
             }
 
-            bool in_pool(void* ptr)
+            bool in_pool(void* ptr) const noexcept
             {
-                auto p = reinterpret_cast<std::byte*>(ptr);
-                return p > pool->data() and p < (pool->data() + pool->size());
+                return pool->in_pool(ptr);
             }
 
         protected:
+            static constexpr void* aligned_ptr(void* p, std::size_t align) noexcept
+            {
+                auto a = reinterpret_cast<std::uintptr_t>(p);
+                auto b = a & -align;
+                if (b != a) b += align;
+                return reinterpret_cast<void*>(b);
+            }
+
             struct pool_node
             {
                 pool_node* next { nullptr };
                 bool free { true };
-                constexpr std::byte* begin() { return reinterpret_cast<std::byte*>(this + 1); }
+                constexpr auto* begin() noexcept { return reinterpret_cast<std::byte*>(this + 1); }
+                constexpr auto* begin() const noexcept { return reinterpret_cast<const std::byte*>(this + 1); }
 
                 constexpr pool_node() noexcept = default;
                 constexpr pool_node(pool_node* _next, bool _free) noexcept : next(_next), free(_free) { }
@@ -169,6 +168,12 @@ namespace jw
                 pool_container(const pool_container&) = delete;
                 pool_container& operator=(const pool_container&) = delete;
 
+                constexpr std::size_t size() const noexcept { return pool_size; }
+                auto* begin() noexcept { return static_cast<pool_node*>(pool); }
+                auto* data() noexcept { return static_cast<std::byte*>(pool); }
+                auto* begin() const noexcept { return static_cast<const pool_node*>(pool); }
+                auto* data() const noexcept { return static_cast<const std::byte*>(pool); }
+
                 void resize(std::size_t num_bytes)
                 {
                     memres.deallocate(pool, pool_size);
@@ -180,9 +185,71 @@ namespace jw
                     pool_size = num_bytes;
                 }
 
-                constexpr std::size_t size() const noexcept { return pool_size; }
-                auto* begin() noexcept { return static_cast<pool_node*>(pool); }
-                auto* data() noexcept { return static_cast<std::byte*>(pool); }
+                bool empty() const noexcept
+                {
+                    auto first = begin();
+                    return first->free and first->next == nullptr;
+                }
+
+                auto max_size() const noexcept
+                {
+                    std::size_t n { 0 };
+                    for (auto* i = begin(); i != nullptr; i = i->next)
+                    {
+                        if (not i->free) continue;
+                        n = std::max(n, chunk_size(i));
+                    }
+                    return n;
+                }
+
+                bool in_pool(void* ptr) const noexcept
+                {
+                    auto p = reinterpret_cast<const std::byte*>(ptr);
+                    return p > data() and p < (data() + size());
+                }
+
+                std::size_t chunk_size(const pool_node* p) const noexcept
+                {
+                    auto* end = p->next == nullptr ? data() + size() : reinterpret_cast<std::byte*>(p->next);
+                    return end - p->begin();
+                }
+
+                [[nodiscard]] void* allocate(std::size_t n, std::size_t a)
+                {
+                    n += a;
+                    for (auto* i = begin(); i != nullptr; i = i->next)
+                    {
+                        if (not i->free) continue;
+
+                        if (chunk_size(i) > n + sizeof(pool_node) + alignof(pool_node))         // Split chunk
+                        {
+                            auto* j = static_cast<pool_node*>(aligned_ptr(i->begin() + n, alignof(pool_node)));
+                            j = new(j) pool_node { i->next, true };
+                            i = new(i) pool_node { j, false };
+                            return aligned_ptr(i->begin(), a);
+                        }
+                        else if (chunk_size(i) >= n)                                            // Use entire chunk
+                        {
+                            i->free = false;
+                            return aligned_ptr(i->begin(), a);
+                        }
+                    }
+                    throw std::bad_alloc { };
+                }
+
+                void deallocate(void* p, std::size_t, std::size_t) noexcept
+                {
+                    for (pool_node* prev = nullptr, *i = begin(); i != nullptr; prev = i, i = i->next)
+                    {
+                        if (reinterpret_cast<void*>(i->next) > p and reinterpret_cast<void*>(i->begin()) <= p)
+                        {
+                            i->free = true;
+                            if (i->next != nullptr and i->next->free) i->next = i->next->next;
+                            if (prev != nullptr and prev->free) prev->next = i->next;
+                            return;
+                        }
+                    }
+                }
 
             private:
                 locking_memory_resource memres { };
@@ -190,58 +257,15 @@ namespace jw
                 std::size_t pool_size;
             };
 
-            // Returns size in bytes.
-            std::size_t chunk_size(pool_node* p) const noexcept
-            {
-                auto* end = p->next == nullptr ? pool->data() + pool->size() : reinterpret_cast<std::byte*>(p->next);
-                return end - p->begin();
-            }
-
-            constexpr void* aligned_ptr(void* p, std::size_t align) const noexcept
-            {
-                auto a = reinterpret_cast<std::uintptr_t>(p);
-                auto b = a & -align;
-                if (b != a) b += align;
-                return reinterpret_cast<void*>(b);
-            }
-
             [[nodiscard]] virtual void* do_allocate(std::size_t n, std::size_t a) override
             {
                 interrupt_mask no_interrupts_please { };
-                n += a;
-
-                for (auto* i = pool->begin(); i != nullptr; i = i->next)
-                {
-                    if (not i->free) continue;
-
-                    if (chunk_size(i) > n + sizeof(pool_node) + alignof(pool_node))         // Split chunk
-                    {
-                        auto* j = static_cast<pool_node*>(aligned_ptr(i->begin() + n, alignof(pool_node)));
-                        j = new(j) pool_node { i->next, true };
-                        i = new(i) pool_node { j, false };
-                        return aligned_ptr(i->begin(), a);
-                    }
-                    else if (chunk_size(i) >= n)                                            // Use entire chunk
-                    {
-                        i->free = false;
-                        return aligned_ptr(i->begin(), a);
-                    }
-                }
-                throw std::bad_alloc { };
+                return pool->allocate(n, a);
             }
 
-            virtual void do_deallocate(void* p, std::size_t, std::size_t) noexcept override
+            virtual void do_deallocate(void* p, std::size_t n, std::size_t a) noexcept override
             {
-                for (pool_node* prev = nullptr, *i = pool->begin(); i != nullptr; prev = i, i = i->next)
-                {
-                    if (reinterpret_cast<void*>(i->next) > p and reinterpret_cast<void*>(i->begin()) <= p)
-                    {
-                        i->free = true;
-                        if (i->next != nullptr and i->next->free) i->next = i->next->next;
-                        if (prev != nullptr and prev->free) prev->next = i->next;
-                        return;
-                    }
-                }
+                pool->deallocate(p, n, a);
             }
 
             virtual bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override
