@@ -155,7 +155,10 @@ namespace jw
 
             struct pool_container final
             {
-                pool_container(std::size_t num_bytes) : pool { memres.allocate(num_bytes, alignof(pool_node)) }, pool_size { num_bytes }
+                pool_container(std::size_t num_bytes)
+                    : pool { memres.allocate(num_bytes, alignof(pool_node)) }
+                    , pool_size { num_bytes }
+                    , first_free { begin() }
                 {
                     new(begin()) pool_node { };
                 }
@@ -183,11 +186,13 @@ namespace jw
                         pool = memres.allocate(num_bytes, alignof(pool_node));
                         new(begin()) pool_node { };
                         pool_size = num_bytes;
+                        first_free = begin();
                     }
                     catch (...)
                     {
                         pool = nullptr;
                         pool_size = 0;
+                        first_free = nullptr;
                         throw;
                     }
                 }
@@ -201,7 +206,7 @@ namespace jw
                 auto max_size() const noexcept
                 {
                     std::size_t n { 0 };
-                    for (auto* i = begin(); i != nullptr; i = i->next)
+                    for (auto* i = first_free; i != nullptr; i = i->next)
                     {
                         if (not i->free) continue;
                         n = std::max(n, chunk_size(i));
@@ -223,8 +228,9 @@ namespace jw
 
                 [[nodiscard]] void* allocate(std::size_t n, std::size_t a)
                 {
+                    if (first_free == nullptr) throw std::bad_alloc { };
                     n += a;
-                    for (auto* i = begin(); i != nullptr; i = i->next)
+                    for (auto* i = first_free; i != nullptr; i = i->next)
                     {
                         if (not i->free) continue;
 
@@ -233,11 +239,13 @@ namespace jw
                             auto* j = static_cast<pool_node*>(aligned_ptr(i->begin() + n, alignof(pool_node)));
                             j = new(j) pool_node { i->next, true };
                             i = new(i) pool_node { j, false };
+                            if (i == first_free) first_free = j;
                             return aligned_ptr(i->begin(), a);
                         }
                         else if (chunk_size(i) >= n)                                            // Use entire chunk
                         {
                             i->free = false;
+                            if (i == first_free) first_free = i->next;
                             return aligned_ptr(i->begin(), a);
                         }
                     }
@@ -251,6 +259,7 @@ namespace jw
                         if (reinterpret_cast<void*>(i->next) > p and reinterpret_cast<void*>(i->begin()) <= p)
                         {
                             i->free = true;
+                            if (i < first_free or first_free == nullptr) first_free = i;
                             if (i->next != nullptr and i->next->free) i->next = i->next->next;
                             if (prev != nullptr and prev->free) prev->next = i->next;
                             return;
@@ -262,6 +271,7 @@ namespace jw
                 locking_memory_resource memres { };
                 void* pool;
                 std::size_t pool_size;
+                pool_node* first_free;
             };
 
             [[nodiscard]] virtual void* do_allocate(std::size_t n, std::size_t a) override
