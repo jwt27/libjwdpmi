@@ -36,10 +36,10 @@ namespace jw
 
                 void resize_if_necessary()
                 {
-                    if (minimum_chunk_size <= (base::pool->size() >> 1)) [[unlikely]]
+                    if (minimum_chunk_size <= (base::size() >> 1)) [[unlikely]]
                     {
                         debug::trap_mask dont_trap_here { };
-                        base::resize(base::pool->size() << 1);
+                        base::resize(base::size() << 1);
                     }
                 }
 
