@@ -278,7 +278,7 @@ namespace jw
         };
 
         // Legacy allocator based on locked_pool_resource
-        template<bool lock_self = true, typename T = byte>
+        template<bool lock_self = true, typename T = std::byte>
         struct locked_pool_allocator : private std::conditional_t<lock_self, class_lock<locked_pool_allocator<lock_self, T>>, empty>
         {
             using value_type = T;
