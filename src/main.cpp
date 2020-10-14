@@ -81,8 +81,21 @@ namespace jw
     std::terminate_handler original_terminate_handler;
     [[noreturn]] void terminate_handler() noexcept
     {
+        static unsigned terminated = 0;
+        ++terminated;
+        if (terminated == 2)
+        {
+            std::cerr << "Re-entry in std::terminate!\n";
+            std::abort();
+        }
+        else if (terminated > 2)
+        {
+            do { asm("cli; hlt"); } while (true);
+        }
         dpmi::ring0_privilege::force_leave();
+        debug::break_with_signal(SIGTERM);
         std::cerr << video::ansi::set_80x50_mode();
+        if (io::ps2_interface::instantiated()) io::ps2_interface::instance().reset();
         if (auto exc = std::current_exception())
         {
             std::cerr << "std::terminate called after throwing an exception:\n";
@@ -91,13 +104,10 @@ namespace jw
             catch (const terminate_exception& e) { std::cerr << "terminate_exception.\n"; }
             catch (...) { std::cerr << "unknown exception.\n"; }
         }
-        else std::cerr << "std::terminate called.\n";
+        else std::cerr << "Terminating.\n";
         debug::print_backtrace();
-        if (io::ps2_interface::instantiated()) io::ps2_interface::instance().reset();
 
-        debug::break_with_signal(SIGTERM);
-        std::abort();
-        do { } while (true);
+        std::_Exit(-1);
     }
 
     int exit_code { -1 };
