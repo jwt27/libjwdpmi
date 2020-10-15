@@ -52,7 +52,7 @@ namespace jw
         else return std::malloc(n);
     }
 
-    void setup_irq_safe_exceptions()
+    [[gnu::no_sanitize("undefined")]] void setup_irq_safe_exceptions()
     {
         auto p = reinterpret_cast<byte*>(abi::__cxa_allocate_exception);
         p = std::find(p, p + 0x20, 0xe8);
