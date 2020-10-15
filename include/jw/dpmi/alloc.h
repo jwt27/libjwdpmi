@@ -11,13 +11,13 @@
 #include <vector>
 #include <map>
 #include <memory_resource>
-#include <span>
 
 #include <jw/common.h>
 #include <jw/dpmi/lock.h>
 #include <jw/debug/debug.h>
 #include <jw/dpmi/irq_mask.h>
 #include <jw/dpmi/irq_check.h>
+#include <jw/alloc.h>
 
 namespace jw
 {
@@ -70,12 +70,12 @@ namespace jw
 
             [[nodiscard]] constexpr T* allocate(std::size_t n)
             {
-                return static_cast<T*>(memres.allocate(n * sizeof(T), alignof(T)));
+                return static_cast<T*>(res.allocate(n * sizeof(T), alignof(T)));
             }
 
             constexpr void deallocate(T* p, std::size_t n)
             {
-                memres.deallocate(static_cast<void*>(p), n * sizeof(T), alignof(T));
+                res.deallocate(static_cast<void*>(p), n * sizeof(T), alignof(T));
             }
 
             template <typename U> struct rebind { using other = locking_allocator<U>; };
@@ -88,312 +88,40 @@ namespace jw
             template <typename U> constexpr friend bool operator!= (const locking_allocator&, const locking_allocator<U>&) noexcept { return false; }
 
         private:
-            [[no_unique_address]] locking_memory_resource memres;
+            [[no_unique_address]] locking_memory_resource res;
         };
 
         // Allocates from a pre-allocated locked memory pool. This allows interrupt handlers to insert/remove elements in
         // STL containers without risking page faults.
         // When specifying a pool size, make sure to account for overhead (reallocation, fragmentation, alignment overhead).
         template<bool lock_self = true>
-        struct locked_pool_resource : public std::pmr::memory_resource, private std::conditional_t<lock_self, class_lock<locked_pool_resource<lock_self>>, empty>
+        struct locked_pool_resource : public pool_resource, private std::conditional_t<lock_self, class_lock<locked_pool_resource<lock_self>>, empty>
         {
-            constexpr locked_pool_resource() noexcept = default;
+            using base = pool_resource;
+            constexpr locked_pool_resource() noexcept : base { &upstream } { }
+            locked_pool_resource(std::size_t size_bytes) : locked_pool_resource { } { grow(size_bytes); }
 
-            locked_pool_resource(std::size_t size_bytes)
-            {
-                grow(size_bytes);
-            }
-
-            virtual ~locked_pool_resource() noexcept
-            {
-                release();
-            }
-
-            constexpr locked_pool_resource(locked_pool_resource&& o) noexcept
-                : num_allocs { o.num_allocs }, num_pools { o.num_pools }, pools { o.pools }, root { o.root }
-            {
-                o.reset();
-            }
-
-            constexpr locked_pool_resource& operator=(locked_pool_resource&& o) noexcept
-            {
-                using std::swap;
-                swap(num_allocs, o.num_allocs);
-                swap(num_pools, o.num_pools);
-                swap(pools, o.pools);
-                swap(root, o.root);
-                return *this;
-            }
-
+            constexpr locked_pool_resource(locked_pool_resource&& o) noexcept = default;
+            constexpr locked_pool_resource& operator=(locked_pool_resource&& o) noexcept = default;
             locked_pool_resource(const locked_pool_resource&) = delete;
             locked_pool_resource& operator=(const locked_pool_resource&) = delete;
 
-            constexpr std::size_t size() const noexcept
-            {
-                std::size_t size = 0;
-                for (unsigned i = 0; i < num_pools; ++i)
-                    size += pools[i].size_bytes();
-                return size;
-            }
-
-            // Deallocate the memory pool
-            void release() noexcept
-            {
-                if (pools != nullptr)
-                {
-                    for (unsigned i = 0; i < num_pools; ++i)
-                        memres.deallocate(pools[i].data(), pools[i].size_bytes(), alignof(pool_node));
-                    memres.deallocate(pools, sizeof(pools_type) * num_pools, alignof(pools_type));
-                }
-                reset();
-            }
-
-            // Returns true if pool is unallocated
-            bool empty() const noexcept
-            {
-                return num_allocs == 0;
-            }
-
-            void grow(std::size_t bytes)
-            {
-                throw_if_irq();
-                bytes = std::max(bytes, sizeof(pool_node));
-                auto* p = memres.allocate(bytes, alignof(pool_node));
-                pools_type* new_pools;
-                try
-                {
-                    new_pools = static_cast<pools_type*>(memres.allocate(sizeof(pools_type) * (num_pools + 1), alignof(pools_type)));
-                }
-                catch (...)
-                {
-                    memres.deallocate(p, bytes, alignof(pool_node));
-                    throw;
-                }
-                if (pools != nullptr)
-                {
-                    std::uninitialized_move(pools, pools + num_pools, new_pools);
-                    std::destroy_n(pools, num_pools);
-                    memres.deallocate(pools, sizeof(pools_type) * num_pools, alignof(pools_type));
-                }
-                pools = new_pools;
-                pools[num_pools++] = pools_type { static_cast<std::byte*>(p), bytes };
-                auto* n = new(p) pool_node { bytes };
-                if (root == nullptr) root = n;
-                else
-                {
-                    interrupt_mask no_interrupts_please { };
-                    root = root->template insert<false>(n);
-                }
-            }
-
-            // Returns maximum number of bytes that can be allocated at once.
-            std::size_t max_size(std::size_t alignment = alignof(std::max_align_t)) const noexcept
-            {
-                if (root == nullptr) return 0;
-                auto size = root->size;
-                const auto overhead = alignment + sizeof(std::size_t) + sizeof(std::uint8_t);
-                if (size < overhead) return 0;
-                size -= overhead;
-                if (size < sizeof(pool_node) + alignof(pool_node)) return 0;
-                return size;
-            }
-
-            bool in_pool(const void* ptr) const noexcept
-            {
-                if (pools == nullptr) return false;
-                auto p = static_cast<const std::byte*>(ptr);
-                for (unsigned i = 0; i < num_pools; ++i)
-                    if (p < (pools[i].data() + pools[i].size()) and p >= pools[i].data()) return true;
-                return false;
-            }
+            using base::empty;
 
         protected:
-            struct pool_node
-            {
-                std::size_t size;
-                pool_node* next[2] { nullptr, nullptr };
-                bool alloc_hi { false };
-
-                auto* begin() noexcept { return reinterpret_cast<std::byte*>(this); }
-                auto* end() noexcept { return reinterpret_cast<std::byte*>(this) + size; }
-
-                template<bool merge = true>
-                constexpr pool_node* insert(pool_node* node) noexcept
-                {
-                    if (node == nullptr) return this;
-                    const auto higher = node > this;
-                    const auto lower = not higher;
-                    auto*& n = next[higher];
-
-                    auto fits_between = [](auto* a, auto* x, auto* b)
-                    {
-                        return ((x - a) xor (x - b)) < 0;
-                    };
-
-                    if constexpr (merge) if (n != nullptr)
-                    {
-                        auto lo = n, hi = node;
-                        if (higher) std::swap(lo, hi);
-                        if (lo->end() == hi->begin())
-                        {
-                            lo->size += hi->size;
-                            node = lo->insert(hi->next[1])->insert(hi->next[0]);
-                            n = nullptr;
-                        }
-                    }
-
-                    if (n != nullptr)
-                    {
-                        if (fits_between(this, node, n) and node->size >= n->size)
-                        {
-                            node = node->template insert<merge>(n->next[lower]);
-                            n->next[lower] = nullptr;
-                            node = node->template insert<merge>(n);
-                        }
-                        else node = n->template insert<merge>(node);
-                    }
-
-                    if constexpr (merge)
-                    {
-                        auto lo = node, hi = this;
-                        if (higher) std::swap(lo, hi);
-                        if (lo->end() == hi->begin())
-                        {
-                            lo->size += hi->size;
-                            if (higher) lo->next[1] = hi->next[1];
-                            return lo->insert(hi->next[lower]);
-                        }
-                    }
-
-                    if (node->size > size)
-                    {
-                        n = node->next[lower];
-                        node->next[lower] = this;
-                        return node;
-                    }
-
-                    n = node;
-                    return this;
-                }
-
-                constexpr auto minmax() noexcept
-                {
-                    auto cmp = [](const auto& a, const auto& b) { return a == nullptr or (b != nullptr and a->size < b->size); };
-                    return std::minmax({ next[0], next[1] }, cmp);
-                }
-
-                constexpr pool_node* erase() noexcept
-                {
-                    auto [min, max] = minmax();
-                    return max->template insert<false>(min);
-                }
-
-                constexpr pool_node* replace(pool_node* node) noexcept
-                {
-                    auto next_size = [this](auto i) { return next[i] != nullptr ? next[i]->size : 0; };
-                    auto max = std::max(next_size(0), next_size(1));
-                    if (node->size > max) return node->template insert<false>(next[0])->template insert<false>(next[1]);
-                    return erase()->template insert<false>(node);
-                }
-
-                constexpr pool_node* resize(std::size_t s) noexcept
-                {
-                    size = s;
-                    auto [min, max] = minmax();
-                    if (max != nullptr and max->size > size)
-                    {
-                        auto* node = max->template insert<false>(min);
-                        next[0] = next[1] = nullptr;
-                        return node->template insert<false>(this);
-                    }
-                    return this;
-                }
-            };
-
-            constexpr void reset() noexcept
-            {
-                num_allocs = 0;
-                num_pools = 0;
-                pools = nullptr;
-                root = nullptr;
-            }
-
-            static constexpr void* aligned_ptr(void* p, std::size_t align, bool down = false) noexcept
-            {
-                auto a = reinterpret_cast<std::uintptr_t>(p);
-                auto b = a & -align;
-                if (not down and b != a) b += align;
-                return reinterpret_cast<void*>(b);
-            }
-
             [[nodiscard]] virtual void* do_allocate(std::size_t n, std::size_t a) override
             {
-                n += a + sizeof(std::size_t) + sizeof(std::uint8_t);
-                n = std::max(n, sizeof(pool_node) + alignof(pool_node));
-
-                auto ptr = [a](void* begin, std::size_t size)
-                {
-                    *static_cast<std::size_t*>(begin) = size;
-                    auto* ptr = static_cast<std::uint8_t*>(begin);
-                    auto* p = static_cast<std::uint8_t*>(aligned_ptr(ptr + sizeof(std::size_t) + sizeof(std::uint8_t), a));
-                    *(p - 1) = p - ptr;
-                    return p;
-                };
-
                 interrupt_mask no_interrupts_please { };
-                if (root == nullptr) throw std::bad_alloc { };
-                auto size = root->size;
-                ++num_allocs;
-                if (size > n + sizeof(pool_node) + alignof(pool_node))  // Split chunk
-                {
-                    auto split_at = root->alloc_hi ? root->end() - n : root->begin() + n;
-                    auto* p = root->begin();
-                    auto* q = static_cast<std::byte*>(aligned_ptr(split_at, alignof(pool_node), root->alloc_hi));
-                    std::size_t p_size = q - p;
-                    std::size_t q_size = size - p_size;
-                    if (root->alloc_hi)
-                    {
-                        std::swap(p, q);
-                        std::swap(p_size, q_size);
-                        root->resize(q_size);
-                    }
-                    else root = root->replace(new(q) pool_node { static_cast<std::uintptr_t>(q_size) });
-                    root->alloc_hi ^= true;
-                    return ptr(p, p_size);
-                }
-                else if (size >= n)                                     // Use entire chunk
-                {
-                    auto* p = ptr(root->begin(), size);
-                    root = root->erase();
-                    return p;
-                }
-                --num_allocs;
-                throw std::bad_alloc { };
+                return base::do_allocate(n, a);
             }
 
-            virtual void do_deallocate(void* ptr, std::size_t, std::size_t) noexcept override
+            virtual void do_deallocate(void* p, std::size_t n, std::size_t a) noexcept override
             {
-                auto* p = static_cast<std::uint8_t*>(ptr);
-                p -= *(p - 1);
-                pool_node* node = new (p) pool_node { *reinterpret_cast<std::size_t*>(p) };
                 interrupt_mask no_interrupts_please { };
-                if (root == nullptr) root = node;
-                else root = root->insert(node);
-                --num_allocs;
+                return base::do_deallocate(p, n, a);
             }
 
-            virtual bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override
-            {
-                return &other == static_cast<const std::pmr::memory_resource*>(this);
-            }
-
-            using pools_type = std::span<std::byte>;
-
-            [[no_unique_address]] locking_memory_resource memres { };
-            std::size_t num_allocs { 0 };
-            std::size_t num_pools { 0 };
-            pools_type* pools { nullptr };
-            pool_node* root { nullptr };
+            locking_memory_resource upstream { };
         };
 
         // Legacy allocator based on locked_pool_resource
@@ -404,7 +132,7 @@ namespace jw
             using pointer = T*;
 
             locked_pool_allocator(std::size_t size_bytes)
-                : memres { std::allocate_shared<locked_pool_resource<false>>(locking_allocator<locked_pool_resource<false>> { }, size_bytes) } { }
+                : res { std::allocate_shared<locked_pool_resource<false>>(locking_allocator<locked_pool_resource<false>> { }, size_bytes) } { }
 
             locked_pool_allocator() = delete;
             locked_pool_allocator(locked_pool_allocator&&) = default;
@@ -414,64 +142,45 @@ namespace jw
 
             [[nodiscard]] T* allocate(std::size_t num_elements)
             {
-                return static_cast<T*>(memres->allocate(num_elements * sizeof(T), alignof(T)));
+                return static_cast<T*>(res->allocate(num_elements * sizeof(T), alignof(T)));
             }
 
             void deallocate(pointer p, std::size_t num_elements)
             {
-                memres->deallocate(static_cast<void*>(p), num_elements * sizeof(T), alignof(T));
+                res->deallocate(static_cast<void*>(p), num_elements * sizeof(T), alignof(T));
             }
 
-            // Deallocate the memory pool
-            void release() noexcept
-            {
-                memres->release();
-            }
+            // Deallocate the memory pool.
+            void release() noexcept { res->release(); }
 
-            // Returns true if pool is unallocated
-            bool empty() const noexcept
-            {
-                return memres->empty();
-            }
+            // Returns true if pool is unallocated.
+            bool empty() const noexcept { return res->empty(); }
 
             // Grow the memory pool by the specified amount.
-            void grow(std::size_t size_bytes)
-            {
-                memres->grow(size_bytes);
-            }
+            void grow(std::size_t size_bytes) { res->grow(size_bytes); }
+
+            // Returns the size of the largest chunk.
+            std::size_t max_chunk_size() const noexcept { return res->max_chunk_size(); }
 
             // Returns maximum number of elements that can be allocated at once.
-            std::size_t max_size() const noexcept
-            {
-                auto n = memres->max_size(alignof(T));
-                return n / sizeof(T);
-            }
+            std::size_t max_size() const noexcept { return res->max_size(alignof(T)) / sizeof(T); }
 
             // Returns current pool size in bytes.
-            std::size_t size() const noexcept
-            {
-                return memres->size();
-            }
+            std::size_t size() const noexcept { return res->size(); }
 
-            bool in_pool(T* p) const noexcept
-            {
-                return memres->in_pool(static_cast<void*>(p));
-            }
+            bool in_pool(T* p) const noexcept { return res->in_pool(static_cast<void*>(p)); }
 
-            std::weak_ptr<locked_pool_resource<false>> resource() noexcept
-            {
-                return memres;
-            }
+            std::weak_ptr<locked_pool_resource<false>> resource() noexcept { return res; }
 
             template <bool lock_other, typename U> friend class locked_pool_allocator;
-            template <bool lock_other, typename U> locked_pool_allocator(const locked_pool_allocator<lock_other, U>& c) : memres(c.memres) { }
+            template <bool lock_other, typename U> locked_pool_allocator(const locked_pool_allocator<lock_other, U>& c) : res(c.res) { }
 
             template <typename U> struct rebind { using other = locked_pool_allocator<lock_self, U>; };
-            template <bool lock_other, typename U> constexpr friend bool operator== (const locked_pool_allocator& a, const locked_pool_allocator<lock_other, U>& b) noexcept { return a.pool == b.pool; }
-            template <bool lock_other, typename U> constexpr friend bool operator!= (const locked_pool_allocator& a, const locked_pool_allocator<lock_other, U>& b) noexcept { return !(a == b); }
+            template <bool lock_other, typename U> constexpr friend bool operator== (const locked_pool_allocator& a, const locked_pool_allocator<lock_other, U>& b) noexcept { return a.res == b.res; }
+            template <bool lock_other, typename U> constexpr friend bool operator!= (const locked_pool_allocator& a, const locked_pool_allocator<lock_other, U>& b) noexcept { return not (a == b); }
 
         protected:
-            std::shared_ptr<locked_pool_resource<false>> memres;
+            std::shared_ptr<locked_pool_resource<false>> res;
         };
     }
 }
