@@ -11,6 +11,7 @@
 #include <vector>
 #include <map>
 #include <memory_resource>
+#include <span>
 
 #include <jw/common.h>
 #include <jw/dpmi/lock.h>
@@ -96,13 +97,11 @@ namespace jw
         template<bool lock_self = true>
         struct locked_pool_resource : public std::pmr::memory_resource, private std::conditional_t<lock_self, class_lock<locked_pool_resource<lock_self>>, empty>
         {
+            constexpr locked_pool_resource() noexcept = default;
+
             locked_pool_resource(std::size_t size_bytes)
-                : pool_size { size_bytes }
-                , pool { size_bytes > 0 ? memres.allocate(size_bytes, alignof(pool_node)) : nullptr }
-                , root { size_bytes >= sizeof(pool_node) ? static_cast<pool_node*>(pool) : nullptr }
             {
-                if (pool_size > sizeof(pool_node))
-                    new(pool) pool_node { pool_size };
+                grow(size_bytes);
             }
 
             virtual ~locked_pool_resource() noexcept
@@ -111,7 +110,7 @@ namespace jw
             }
 
             constexpr locked_pool_resource(locked_pool_resource&& o) noexcept
-                : num_allocs { o.num_allocs }, pool_size { o.pool_size }, pool { o.pool }, root { o.root }
+                : num_allocs { o.num_allocs }, num_pools { o.num_pools }, pools { o.pools }, root { o.root }
             {
                 o.reset();
             }
@@ -120,25 +119,32 @@ namespace jw
             {
                 using std::swap;
                 swap(num_allocs, o.num_allocs);
-                swap(pool_size, o.pool_size);
-                swap(pool, o.pool);
+                swap(num_pools, o.num_pools);
+                swap(pools, o.pools);
                 swap(root, o.root);
                 return *this;
             }
 
-            locked_pool_resource() = delete;
             locked_pool_resource(const locked_pool_resource&) = delete;
             locked_pool_resource& operator=(const locked_pool_resource&) = delete;
 
             constexpr std::size_t size() const noexcept
             {
-                return pool_size;
+                std::size_t size = 0;
+                for (unsigned i = 0; i < num_pools; ++i)
+                    size += pools[i].size_bytes();
+                return size;
             }
 
             // Deallocate the memory pool
             void release() noexcept
             {
-                if (pool != nullptr) memres.deallocate(pool, pool_size, alignof(pool_node));
+                if (pools != nullptr)
+                {
+                    for (unsigned i = 0; i < num_pools; ++i)
+                        memres.deallocate(pools[i].data(), pools[i].size_bytes(), alignof(pool_node));
+                    memres.deallocate(pools, sizeof(pools_type) * num_pools, alignof(pools_type));
+                }
                 reset();
             }
 
@@ -148,21 +154,35 @@ namespace jw
                 return num_allocs == 0;
             }
 
-            // Resize the memory pool.  Throws std::bad_alloc if the pool is still in use.
-            void resize(std::size_t size_bytes)
+            void grow(std::size_t bytes)
             {
-                if (not empty()) throw std::bad_alloc { };
-                interrupt_mask no_interrupts_please { };
-                debug::trap_mask dont_trap_here { };
+                throw_if_irq();
+                bytes = std::max(bytes, sizeof(pool_node));
+                auto* p = memres.allocate(bytes, alignof(pool_node));
+                pools_type* new_pools;
                 try
                 {
-                    release();
-                    new (this) locked_pool_resource { size_bytes };
+                    new_pools = static_cast<pools_type*>(memres.allocate(sizeof(pools_type) * (num_pools + 1), alignof(pools_type)));
                 }
                 catch (...)
                 {
-                    reset();
+                    memres.deallocate(p, bytes, alignof(pool_node));
                     throw;
+                }
+                if (pools != nullptr)
+                {
+                    std::uninitialized_move(pools, pools + num_pools, new_pools);
+                    std::destroy_n(pools, num_pools);
+                    memres.deallocate(pools, sizeof(pools_type) * num_pools, alignof(pools_type));
+                }
+                pools = new_pools;
+                pools[num_pools++] = pools_type { static_cast<std::byte*>(p), bytes };
+                auto* n = new(p) pool_node { bytes };
+                if (root == nullptr) root = n;
+                else
+                {
+                    interrupt_mask no_interrupts_please { };
+                    root = root->template insert<false>(n);
                 }
             }
 
@@ -178,10 +198,13 @@ namespace jw
                 return size;
             }
 
-            bool in_pool(void* ptr) const noexcept
+            bool in_pool(const void* ptr) const noexcept
             {
-                auto p = reinterpret_cast<const std::byte*>(ptr);
-                return p >= pool and p < static_cast<std::byte*>(pool) + pool_size;
+                if (pools == nullptr) return false;
+                auto p = static_cast<const std::byte*>(ptr);
+                for (unsigned i = 0; i < num_pools; ++i)
+                    if (p < (pools[i].data() + pools[i].size()) and p >= pools[i].data()) return true;
+                return false;
             }
 
         protected:
@@ -193,8 +216,6 @@ namespace jw
 
                 auto* begin() noexcept { return reinterpret_cast<std::byte*>(this); }
                 auto* end() noexcept { return reinterpret_cast<std::byte*>(this) + size; }
-                auto* cbegin() const noexcept { return reinterpret_cast<const std::byte*>(this); }
-                auto* cend() const noexcept { return reinterpret_cast<const std::byte*>(this) + size; }
 
                 template<bool merge = true>
                 constexpr pool_node* insert(pool_node* node) noexcept
@@ -213,7 +234,7 @@ namespace jw
                     {
                         auto lo = n, hi = node;
                         if (higher) std::swap(lo, hi);
-                        if (lo->cend() == hi->cbegin())
+                        if (lo->end() == hi->begin())
                         {
                             lo->size += hi->size;
                             node = lo->insert(hi->next[1])->insert(hi->next[0]);
@@ -236,7 +257,7 @@ namespace jw
                     {
                         auto lo = node, hi = this;
                         if (higher) std::swap(lo, hi);
-                        if (lo->cend() == hi->cbegin())
+                        if (lo->end() == hi->begin())
                         {
                             lo->size += hi->size;
                             if (higher) lo->next[1] = hi->next[1];
@@ -292,8 +313,8 @@ namespace jw
             constexpr void reset() noexcept
             {
                 num_allocs = 0;
-                pool_size = 0;
-                pool = nullptr;
+                num_pools = 0;
+                pools = nullptr;
                 root = nullptr;
             }
 
@@ -366,11 +387,13 @@ namespace jw
                 return &other == static_cast<const std::pmr::memory_resource*>(this);
             }
 
+            using pools_type = std::span<std::byte>;
+
             [[no_unique_address]] locking_memory_resource memres { };
             std::size_t num_allocs { 0 };
-            std::size_t pool_size;
-            void* pool;
-            pool_node* root;
+            std::size_t num_pools { 0 };
+            pools_type* pools { nullptr };
+            pool_node* root { nullptr };
         };
 
         // Legacy allocator based on locked_pool_resource
@@ -411,10 +434,10 @@ namespace jw
                 return memres->empty();
             }
 
-            // Resize the memory pool. Throws std::bad_alloc if the pool is still in use.
-            void resize(std::size_t size_bytes)
+            // Grow the memory pool by the specified amount.
+            void grow(std::size_t size_bytes)
             {
-                memres->resize(size_bytes);
+                memres->grow(size_bytes);
             }
 
             // Returns maximum number of elements that can be allocated at once.

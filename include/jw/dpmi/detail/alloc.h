@@ -39,7 +39,7 @@ namespace jw
                     if (minimum_chunk_size <= (base::size() >> 1)) [[unlikely]]
                     {
                         debug::trap_mask dont_trap_here { };
-                        base::resize(base::size() << 1);
+                        base::grow(base::size());
                     }
                 }
 
