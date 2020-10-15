@@ -72,8 +72,9 @@ namespace jw
 
         // Locks the memory occupied by a class (in Data Segment) that derives from this.
         template <typename T>
-        struct class_lock : public detail::memory_lock
+        class class_lock : public detail::memory_lock
         {
+            friend T;
             class_lock() : memory_lock(get_ds(), this, sizeof(T)) { }
             class_lock(class_lock&&) : class_lock() { }
             class_lock(const class_lock&) : class_lock() { }
