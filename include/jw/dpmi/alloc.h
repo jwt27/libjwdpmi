@@ -113,6 +113,8 @@ namespace jw
         private:
             virtual void grow(const std::span<std::byte>& ptr) noexcept override { do_grow<true>(ptr); }
 
+            virtual void auto_grow(std::size_t) override { throw std::bad_alloc { }; }
+
             [[nodiscard]] virtual void* do_allocate(std::size_t n, std::size_t a) override { return do_do_allocate<true>(n, a); }
 
             locking_memory_resource upstream { };

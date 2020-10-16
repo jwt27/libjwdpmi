@@ -210,6 +210,11 @@ namespace jw
             root = nullptr;
         }
 
+        virtual void auto_grow(std::size_t)
+        {
+            throw std::bad_alloc { };
+        }
+
         template<bool irq_safe>
         void do_grow(const std::span<std::byte>& ptr) noexcept
         {
@@ -242,7 +247,12 @@ namespace jw
             {
                 std::optional<dpmi::interrupt_mask> no_irqs;
                 if constexpr (irq_safe) no_irqs.emplace();
-                if (root == nullptr) throw std::bad_alloc { };
+            retry:
+                if (root == nullptr)
+                {
+                    auto_grow(n);
+                    goto retry;
+                }
                 p_size = root->size;
                 p = root->begin();
 
@@ -262,7 +272,11 @@ namespace jw
                     root->alloc_hi ^= true;
                 }
                 else if (p_size >= n) root = root->erase();                 // Use entire chunk
-                else throw std::bad_alloc { };
+                else
+                {
+                    auto_grow(n);
+                    goto retry;
+                }
                 ++num_allocs;
             }
             *reinterpret_cast<std::size_t*>(p) = p_size;
@@ -360,6 +374,11 @@ namespace jw
             base::reset();
             num_pools = 0;
             pools = nullptr;
+        }
+
+        virtual void auto_grow(std::size_t needed) override
+        {
+            grow(std::max(needed * 2, size() / 2));
         }
 
         template<bool irq_safe>
