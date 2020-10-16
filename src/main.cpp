@@ -12,7 +12,6 @@
 #include <jw/alloc.h>
 #include <jw/debug/debug.h>
 #include <jw/dpmi/cpu_exception.h>
-#include <jw/dpmi/detail/alloc.h>
 #include <jw/debug/detail/signals.h>
 #include <jw/io/rs232.h>
 #include <jw/io/ps2_interface.h>
@@ -229,75 +228,79 @@ int main(int argc, const char** argv)
 
 namespace jw
 {
-    enum
-    {
-        no,
-        almost,
-        yes
-    } new_alloc_initialized { no };
-    dpmi::detail::new_allocator* new_alloc { nullptr };
-    std::atomic_flag new_alloc_resize_reentry { false };
+    enum : unsigned { yes, no, almost } irq_alloc_initialized { no };
+    dpmi::locked_pool_resource<true>* irq_alloc { nullptr };
+    std::atomic_flag irq_alloc_resize { false };
+    std::size_t half_irq_alloc_size;
+    std::size_t min_chunk_size;
 }
 
 [[nodiscard]] void* operator new(std::size_t n, std::align_val_t alignment)
 {
-    auto align = std::max(static_cast<std::size_t>(alignment), std::size_t { 4 });
-    n += align + sizeof(void*);
-
-    auto aligned_ptr = [align](void* p)
-    {
-        if (p == nullptr) [[unlikely]] throw std::bad_alloc { };
-        auto b = ((reinterpret_cast<std::uintptr_t>(p) + sizeof(void*)) & -align) + align;
-        *(reinterpret_cast<void**>(b) - 1) = p;
-        return reinterpret_cast<void*>(b);
-    };
-
     if (dpmi::in_irq_context() or dpmi::get_cs() == dpmi::detail::ring0_cs)
     {
-        if (new_alloc_initialized == yes) return aligned_ptr(new_alloc->allocate(n));
+        if (irq_alloc_initialized == yes)
+        {
+            debug::trap_mask dont_trap_here { };
+            auto* p = irq_alloc->allocate(n, static_cast<std::size_t>(alignment));
+            min_chunk_size = std::min(min_chunk_size, irq_alloc->max_chunk_size());
+            return p;
+        }
         else throw std::bad_alloc { };
     }
-    if (new_alloc_initialized == no)
+    if (irq_alloc_initialized == no) [[unlikely]]
     {
-        [[unlikely]];
         dpmi::interrupt_mask no_interrupts_here { };
         try
         {
-            new_alloc_initialized = almost;
+            irq_alloc_initialized = almost;
             {
                 debug::trap_mask dont_trap_here { };
-                if (new_alloc != nullptr) delete new_alloc;
-                new_alloc = nullptr;
-                new_alloc = new dpmi::detail::new_allocator { };
-                new_alloc_initialized = yes;
+                if (irq_alloc != nullptr) delete irq_alloc;
+                irq_alloc = nullptr;
+                half_irq_alloc_size = config::interrupt_initial_memory_pool / 2;
+                irq_alloc = new dpmi::locked_pool_resource<true> { half_irq_alloc_size * 2 };
+                min_chunk_size = half_irq_alloc_size * 2;
+                irq_alloc_initialized = yes;
             }
         }
         catch (...)
         {
-            new_alloc_initialized = no;
+            irq_alloc_initialized = no;
             throw;
         }
     }
-    else if (new_alloc_initialized == yes and not new_alloc_resize_reentry.test_and_set())
+    else if (irq_alloc_initialized == yes
+        and min_chunk_size < half_irq_alloc_size
+        and not irq_alloc_resize.test_and_set()) [[unlikely]]
     {
         dpmi::interrupt_mask no_interrupts_here { };
         debug::trap_mask dont_trap_here { };
         try
         {
-            new_alloc_initialized = almost;
-            jw::new_alloc->resize_if_necessary();
-            new_alloc_initialized = yes;
+            irq_alloc_initialized = almost;
+            irq_alloc->grow(half_irq_alloc_size);
+            half_irq_alloc_size += half_irq_alloc_size / 2;
+            min_chunk_size = irq_alloc->max_chunk_size();
+            irq_alloc_initialized = yes;
         }
         catch (...)
         {
-            new_alloc_initialized = no;
-            new_alloc_resize_reentry.clear();
+            irq_alloc_initialized = no;
+            irq_alloc_resize.clear();
             throw;
         }
-        new_alloc_resize_reentry.clear();
+        irq_alloc_resize.clear();
     }
 
-    return aligned_ptr(std::malloc(n));
+    auto align = std::max(static_cast<std::size_t>(alignment), sizeof(std::size_t));
+    n += align + sizeof(void*);
+
+    auto* p = std::malloc(n);
+    if (p == nullptr) [[unlikely]] throw std::bad_alloc { };
+    auto b = ((reinterpret_cast<std::uintptr_t>(p) + sizeof(void*)) & -align) + align;
+    *(reinterpret_cast<void**>(b) - 1) = p;
+    return reinterpret_cast<void*>(b);
 }
 
 [[nodiscard]] void* operator new(std::size_t n)
@@ -305,16 +308,17 @@ namespace jw
     return ::operator new(n, std::align_val_t { __STDCPP_DEFAULT_NEW_ALIGNMENT__ });
 }
 
-void operator delete(void* p, std::size_t, std::align_val_t) noexcept
+void operator delete(void* p, std::size_t n, std::align_val_t a) noexcept
 {
     try
     {
-        p = *(reinterpret_cast<void**>(p) - 1);
-        if (new_alloc_initialized == yes and new_alloc->in_pool(static_cast<byte*>(p)))
+        if (irq_alloc_initialized == yes and irq_alloc->in_pool(p))
         {
-            new_alloc->deallocate(p);
+            debug::trap_mask dont_trap_here { };
+            irq_alloc->deallocate(p, n, static_cast<std::size_t>(a));
             return;
         }
+        p = *(reinterpret_cast<void**>(p) - 1);
         std::free(p);
     }
     catch (...)
