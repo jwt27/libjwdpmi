@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <span>
 #include <array>
+#include <jw/dpmi/irq_mask.h>
 
 namespace jw
 {
@@ -75,12 +76,7 @@ namespace jw
 
         constexpr bool empty() const noexcept { return num_allocs == 0; }
 
-        void grow(const std::span<std::byte>& ptr) noexcept
-        {
-            auto* n = new(ptr.data()) pool_node { ptr.size_bytes() };
-            if (root == nullptr) root = n;
-            else root = root->insert(n);
-        }
+        virtual void grow(const std::span<std::byte>& ptr) noexcept { do_grow<false>(ptr); }
 
         // Returns the size of the largest chunk.
         constexpr std::size_t max_chunk_size() const noexcept
@@ -214,56 +210,70 @@ namespace jw
             root = nullptr;
         }
 
-        static constexpr void* aligned_ptr(void* p, std::size_t align, bool down = false) noexcept
+        template<bool irq_safe>
+        void do_grow(const std::span<std::byte>& ptr) noexcept
         {
-            auto a = reinterpret_cast<std::uintptr_t>(p);
-            auto b = a & -align;
-            if (not down and b != a) b += align;
-            return reinterpret_cast<void*>(b);
+            auto* n = new(ptr.data()) pool_node { ptr.size_bytes() };
+            if (root == nullptr) root = n;
+            else
+            {
+                std::optional<dpmi::interrupt_mask> no_irqs;
+                if constexpr (irq_safe) no_irqs.emplace();
+                root = root->insert(n);
+            }
+        }
+
+        template<bool irq_safe>
+        [[nodiscard]] void* do_do_allocate(std::size_t n, std::size_t a)
+        {
+            auto aligned_ptr = [](void* p, std::size_t align, bool down = false) noexcept
+            {
+                auto a = reinterpret_cast<std::uintptr_t>(p);
+                auto b = a & -align;
+                if (not down and b != a) b += align;
+                return reinterpret_cast<std::byte*>(b);
+            };
+
+            n += a + sizeof(std::size_t) + sizeof(std::uint8_t);
+            n = std::max(n, sizeof(pool_node) + alignof(pool_node));
+
+            std::size_t p_size;
+            std::byte* p;
+            {
+                std::optional<dpmi::interrupt_mask> no_irqs;
+                if constexpr (irq_safe) no_irqs.emplace();
+                if (root == nullptr) throw std::bad_alloc { };
+                p_size = root->size;
+                p = root->begin();
+
+                if (p_size > n + sizeof(pool_node) + alignof(pool_node))    // Split chunk
+                {
+                    auto split_at = root->alloc_hi ? root->end() - n : root->begin() + n;
+                    auto* q = aligned_ptr(split_at, alignof(pool_node), root->alloc_hi);
+                    std::size_t q_size = p_size - (q - p);
+                    p_size -= q_size;
+                    if (root->alloc_hi)
+                    {
+                        std::swap(p, q);
+                        std::swap(p_size, q_size);
+                        root->resize(q_size);
+                    }
+                    else root = root->replace(new(q) pool_node { static_cast<std::uintptr_t>(q_size) });
+                    root->alloc_hi ^= true;
+                }
+                else if (p_size >= n) root = root->erase();                 // Use entire chunk
+                else throw std::bad_alloc { };
+                ++num_allocs;
+            }
+            *reinterpret_cast<std::size_t*>(p) = p_size;
+            auto* p_aligned = aligned_ptr(p + sizeof(std::size_t) + sizeof(std::uint8_t), a);
+            *reinterpret_cast<std::uint8_t*>(p_aligned - 1) = p_aligned - p;
+            return p_aligned;
         }
 
         [[nodiscard]] virtual void* do_allocate(std::size_t n, std::size_t a) override
         {
-            n += a + sizeof(std::size_t) + sizeof(std::uint8_t);
-            n = std::max(n, sizeof(pool_node) + alignof(pool_node));
-
-            auto ptr = [a](void* begin, std::size_t size)
-            {
-                *static_cast<std::size_t*>(begin) = size;
-                auto* ptr = static_cast<std::uint8_t*>(begin);
-                auto* p = static_cast<std::uint8_t*>(aligned_ptr(ptr + sizeof(std::size_t) + sizeof(std::uint8_t), a));
-                *(p - 1) = p - ptr;
-                return p;
-            };
-
-            if (root == nullptr) throw std::bad_alloc { };
-            auto size = root->size;
-            ++num_allocs;
-            if (size > n + sizeof(pool_node) + alignof(pool_node))  // Split chunk
-            {
-                auto split_at = root->alloc_hi ? root->end() - n : root->begin() + n;
-                auto* p = root->begin();
-                auto* q = static_cast<std::byte*>(aligned_ptr(split_at, alignof(pool_node), root->alloc_hi));
-                std::size_t p_size = q - p;
-                std::size_t q_size = size - p_size;
-                if (root->alloc_hi)
-                {
-                    std::swap(p, q);
-                    std::swap(p_size, q_size);
-                    root->resize(q_size);
-                }
-                else root = root->replace(new(q) pool_node { static_cast<std::uintptr_t>(q_size) });
-                root->alloc_hi ^= true;
-                return ptr(p, p_size);
-            }
-            else if (size >= n)                                     // Use entire chunk
-            {
-                auto* p = ptr(root->begin(), size);
-                root = root->erase();
-                return p;
-            }
-            --num_allocs;
-            throw std::bad_alloc { };
+            return do_do_allocate<false>(n, a);
         }
 
         virtual void do_deallocate(void* ptr, std::size_t, std::size_t) noexcept override
@@ -331,29 +341,7 @@ namespace jw
             reset();
         }
 
-        void grow(std::size_t bytes)
-        {
-            bytes = std::max(bytes, sizeof(pool_node));
-            auto* p = res->allocate(bytes, alignof(pool_node));
-            pool_type* new_pools;
-            try
-            {
-                new_pools = static_cast<pool_type*>(res->allocate(sizeof(pool_type) * (num_pools + 1), alignof(pool_type)));
-            }
-            catch (...)
-            {
-                res->deallocate(p, bytes, alignof(pool_node));
-                throw;
-            }
-            if (pools != nullptr)
-            {
-                std::uninitialized_move(pools, pools + num_pools, new_pools);
-                std::destroy_n(pools, num_pools);
-                res->deallocate(pools, sizeof(pool_type) * num_pools, alignof(pool_type));
-            }
-            pools = new_pools;
-            grow(pools[num_pools++] = pool_type { static_cast<std::byte*>(p), bytes });
-        }
+        virtual void grow(std::size_t bytes) { do_grow_alloc<false>(bytes); }
 
         bool in_pool(const void* ptr) const noexcept
         {
@@ -372,6 +360,33 @@ namespace jw
             base::reset();
             num_pools = 0;
             pools = nullptr;
+        }
+
+        template<bool irq_safe>
+        void do_grow_alloc(std::size_t bytes)
+        {
+            bytes = std::max(bytes, sizeof(pool_node));
+            auto* p = res->allocate(bytes, alignof(pool_node));
+            pool_type* new_pools;
+            try
+            {
+                new_pools = static_cast<pool_type*>(res->allocate(sizeof(pool_type) * (num_pools + 1), alignof(pool_type)));
+            }
+            catch (...)
+            {
+                res->deallocate(p, bytes, alignof(pool_node));
+                throw;
+            }
+            std::optional<dpmi::interrupt_mask> no_irqs;
+            if constexpr (irq_safe) no_irqs.emplace();
+            if (pools != nullptr)
+            {
+                std::uninitialized_move(pools, pools + num_pools, new_pools);
+                std::destroy_n(pools, num_pools);
+                res->deallocate(pools, sizeof(pool_type) * num_pools, alignof(pool_type));
+            }
+            pools = new_pools;
+            do_grow<false>(pools[num_pools++] = pool_type { static_cast<std::byte*>(p), bytes });
         }
 
         using pool_type = std::span<std::byte>;

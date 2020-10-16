@@ -95,7 +95,7 @@ namespace jw
         // STL containers without risking page faults.
         // When specifying a pool size, make sure to account for overhead (reallocation, fragmentation, alignment overhead).
         template<bool lock_self = true>
-        struct locked_pool_resource : public pool_resource, private std::conditional_t<lock_self, class_lock<locked_pool_resource<lock_self>>, empty>
+        struct locked_pool_resource final : public pool_resource, private std::conditional_t<lock_self, class_lock<locked_pool_resource<lock_self>>, empty>
         {
             using base = pool_resource;
             constexpr locked_pool_resource() noexcept : base { &upstream } { }
@@ -108,18 +108,12 @@ namespace jw
 
             using base::empty;
 
-        protected:
-            [[nodiscard]] virtual void* do_allocate(std::size_t n, std::size_t a) override
-            {
-                interrupt_mask no_interrupts_please { };
-                return base::do_allocate(n, a);
-            }
+            virtual void grow(std::size_t bytes) override { do_grow_alloc<true>(bytes); }
 
-            virtual void do_deallocate(void* p, std::size_t n, std::size_t a) noexcept override
-            {
-                interrupt_mask no_interrupts_please { };
-                return base::do_deallocate(p, n, a);
-            }
+        private:
+            virtual void grow(const std::span<std::byte>& ptr) noexcept override { do_grow<true>(ptr); }
+
+            [[nodiscard]] virtual void* do_allocate(std::size_t n, std::size_t a) override { return do_do_allocate<true>(n, a); }
 
             locking_memory_resource upstream { };
         };
