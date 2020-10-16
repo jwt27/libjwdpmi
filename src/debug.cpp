@@ -464,9 +464,9 @@ namespace jw
 
             inline std::uint32_t checksum(const std::string_view& s)
             {
-                std::uint8_t r { 0 };
+                std::uint32_t r { 0 };
                 for (auto&& c : s) r += c;
-                return r;
+                return r & 0xff;
             }
 
             inline bool packet_available()
@@ -497,24 +497,23 @@ namespace jw
                 rle_output.reserve(output.size());
                 auto& s = rle_output;
 
-                for (auto i = output.cbegin(); i < output.cend();)
+                for (std::size_t j, i = 0; i < output.size(); i = j)
                 {
-                    auto j = i;
-                    while (*j == *i and j != output.cend()) ++j;
+                    j = output.find_first_not_of(output[i], i);
+                    if (j == output.npos) j = output.size();
                     auto count = j - i;
                     if (count > 3)
                     {
-                        count = std::min(count, 98);    // above 98, rle byte would be non-printable
+                        count = std::min(count, 98ul);  // above 98, rle byte would be non-printable
                         if (count == 7 or count == 8) count = 6;    // rle byte can't be '#' or '$'
-                        s += *i;
+                        s += output[i];
                         s += '*';
                         s += static_cast<char>(count + 28);
                     }
                     else
                     {
-                        s.append(count, *i);
+                        s.append(count, output[i]);
                     }
-                    i += count;
                 }
 
                 const auto sum = checksum(rle_output);
