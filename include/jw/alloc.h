@@ -107,19 +107,21 @@ namespace jw
             constexpr auto* end() noexcept { return begin() + size; }
 
             template<bool merge = true>
-            constexpr pool_node* insert(pool_node* node) noexcept
+            [[gnu::regparm(2), gnu::hot]] constexpr pool_node* insert(pool_node* node) noexcept
             {
                 if (node == nullptr) return this;
+                if (node->size > size) return node->template insert<merge>(this);
+
                 const auto higher = node > this;
                 const auto lower = not higher;
                 auto*& n = next[higher];
 
                 auto fits_between = [](auto* a, auto* x, auto* b)
                 {
-                    return ((x - a) xor (x - b)) < 0;
+                    return ((a - x) xor (b - x)) < 0;
                 };
 
-                if constexpr (merge) if (n != nullptr)
+                if constexpr (merge) if (n != nullptr and fits_between(this, node, n))
                 {
                     auto lo = n, hi = node;
                     if (higher) std::swap(lo, hi);
@@ -132,16 +134,7 @@ namespace jw
                     }
                 }
 
-                if (n != nullptr)
-                {
-                    if (fits_between(this, node, n) and node->size >= n->size)
-                    {
-                        node = node->template insert<merge>(n->next[lower]);
-                        n->next[lower] = nullptr;
-                        node = node->template insert<merge>(n);
-                    }
-                    else node = n->template insert<merge>(node);
-                }
+                if (n != nullptr) node = n->template insert<merge>(node);
 
                 if constexpr (merge)
                 {
@@ -151,17 +144,17 @@ namespace jw
                     {
                         lo->size += hi->size;
                         if (higher) lo->next[1] = hi->next[1];
-                        auto* node = lo->insert(hi->next[lower]);
+                        node = lo->insert(hi->next[lower]);
                         std::destroy_at(hi);
                         return node;
                     }
-                }
 
-                if (node->size > size)
-                {
-                    n = node->next[lower];
-                    node->next[lower] = this;
-                    return node;
+                    if (node->size > size)
+                    {
+                        n = node->next[lower];
+                        node->next[lower] = this;
+                        return node;
+                    }
                 }
 
                 n = node;
