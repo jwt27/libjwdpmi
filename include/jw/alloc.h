@@ -53,6 +53,11 @@ namespace jw
         return std::unique_ptr<T, deleter> { nullptr, deleter { rebind { alloc } } };
     }
 
+    // A std::pmr::memory_resource which allocates from one or multiple pools.  It is implemented
+    // as a binary tree which is horizontally ordered by address, and vertically sorted by size.
+    // This makes it quite fast, but prone to fragmentation.
+    // The pool size can be increased dynamically by feeding pointers to grow().  Note that this
+    // memory resource does not own (and thus free) the memory it allocates from.
     struct basic_pool_resource : public std::pmr::memory_resource
     {
         constexpr basic_pool_resource() noexcept = default;
@@ -251,6 +256,8 @@ namespace jw
 
                 if (p_size > n + sizeof(pool_node) + alignof(pool_node))    // Split chunk
                 {
+                    // Alternate between allocating from the low and high end
+                    // of each chunk, to keep the tree balanced.
                     auto split_at = root->alloc_hi ? root->end() - n : root->begin() + n;
                     auto* q = aligned_ptr(split_at, alignof(pool_node), root->alloc_hi);
                     std::size_t q_size = p_size - (q - p);
@@ -264,7 +271,7 @@ namespace jw
                     else root = root->replace(new(q) pool_node { static_cast<std::uintptr_t>(q_size) });
                     root->alloc_hi ^= true;
                 }
-                else if (p_size >= n) root = root->erase();                 // Use entire chunk
+                else if (p_size >= n) root = root->erase();     // Use entire chunk
                 else
                 {
                     auto_grow(n);
@@ -300,6 +307,8 @@ namespace jw
         pool_node* root { nullptr };
     };
 
+    // A specialization of basic_pool_resource, this pool type manages memory allocated from an
+    // upstream memory_resource.  It grows automatically when exhausted.
     struct pool_resource : public basic_pool_resource
     {
         using base = basic_pool_resource;
