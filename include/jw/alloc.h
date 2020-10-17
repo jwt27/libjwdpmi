@@ -180,7 +180,7 @@ namespace jw
                 auto next_size = [this](auto i) { return next[i] != nullptr ? next[i]->size : 0; };
                 auto max = std::max(next_size(0), next_size(1));
                 if (node->size > max) return node->template insert<false>(next[0])->template insert<false>(next[1]);
-                return erase()->template insert<false>(node);
+                else return erase()->template insert<false>(node);
             }
 
             constexpr pool_node* resize(std::size_t s) noexcept
@@ -193,7 +193,7 @@ namespace jw
                     next[0] = next[1] = nullptr;
                     return node->template insert<false>(this);
                 }
-                return this;
+                else return this;
             }
         };
 
@@ -313,14 +313,13 @@ namespace jw
         virtual ~pool_resource() noexcept { release(); }
 
         constexpr pool_resource(pool_resource&& o) noexcept
-            : base { std::move(o) }, num_pools { std::move(o.num_pools) }, pools { std::move(o.pools) } { o.reset(); }
+            : base { std::move(o) }, pools { std::move(o.pools) } { o.reset(); }
 
         constexpr pool_resource& operator=(pool_resource&& o) noexcept
         {
             base::operator=(std::move(o));
             using std::swap;
             swap(res, o.res);
-            swap(num_pools, o.num_pools);
             swap(pools, o.pools);
             return *this;
         }
@@ -331,19 +330,19 @@ namespace jw
         constexpr std::size_t size() const noexcept
         {
             std::size_t size = 0;
-            for (unsigned i = 0; i < num_pools; ++i)
-                size += pools[i].size_bytes();
+            for (auto&& i : pools)
+                size += i.size_bytes();
             return size;
         }
 
         // Deallocate the memory pool
         void release() noexcept
         {
-            if (pools != nullptr)
+            if (pools.data() != nullptr)
             {
-                for (unsigned i = 0; i < num_pools; ++i)
-                    res->deallocate(pools[i].data(), pools[i].size_bytes(), alignof(pool_node));
-                res->deallocate(pools, sizeof(pool_type) * num_pools, alignof(pool_type));
+                for (auto&& i : pools)
+                    res->deallocate(i.data(), i.size_bytes(), alignof(pool_node));
+                res->deallocate(pools.data(), pools.size_bytes(), alignof(pool_type));
             }
             reset();
         }
@@ -352,10 +351,10 @@ namespace jw
 
         bool in_pool(const void* ptr) const noexcept
         {
-            if (pools == nullptr) return false;
+            if (pools.data() == nullptr) return false;
             auto p = static_cast<const std::byte*>(ptr);
-            for (unsigned i = 0; i < num_pools; ++i)
-                if (p < (&*pools[i].end()) and p >= &*pools[i].begin()) return true;
+            for (auto&& i : pools)
+                if (p < (&*i.end()) and p >= &*i.begin()) return true;
             return false;
         }
 
@@ -365,8 +364,7 @@ namespace jw
         constexpr void reset() noexcept
         {
             base::reset();
-            num_pools = 0;
-            pools = nullptr;
+            pools = { };
         }
 
         virtual void auto_grow(std::size_t needed) override
@@ -382,7 +380,7 @@ namespace jw
             pool_type* new_pools;
             try
             {
-                new_pools = static_cast<pool_type*>(res->allocate(sizeof(pool_type) * (num_pools + 1), alignof(pool_type)));
+                new_pools = static_cast<pool_type*>(res->allocate(sizeof(pool_type) * (pools.size() + 1), alignof(pool_type)));
             }
             catch (...)
             {
@@ -391,20 +389,19 @@ namespace jw
             }
             std::optional<dpmi::interrupt_mask> no_irqs;
             if constexpr (irq_safe) no_irqs.emplace();
-            if (pools != nullptr)
+            if (pools.data() != nullptr)
             {
-                std::uninitialized_move(pools, pools + num_pools, new_pools);
-                std::destroy_n(pools, num_pools);
-                res->deallocate(pools, sizeof(pool_type) * num_pools, alignof(pool_type));
+                std::uninitialized_move(pools.begin(), pools.end(), new_pools);
+                std::destroy(pools.begin(), pools.end());
+                res->deallocate(pools.data(), pools.size_bytes(), alignof(pool_type));
             }
-            pools = new_pools;
-            do_grow<false>(pools[num_pools++] = pool_type { static_cast<std::byte*>(p), bytes });
+            pools = { new_pools, pools.size() + 1 };
+            do_grow<false>(pools.back() = pool_type { static_cast<std::byte*>(p), bytes });
         }
 
         using pool_type = std::span<std::byte>;
 
         std::pmr::memory_resource* res { };
-        std::size_t num_pools { 0 };
-        pool_type* pools { nullptr };
+        std::span<pool_type> pools { };
     };
 }
