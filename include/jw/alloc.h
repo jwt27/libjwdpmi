@@ -86,8 +86,7 @@ namespace jw
         // Returns the size of the largest chunk.
         constexpr std::size_t max_chunk_size() const noexcept
         {
-            if (root == nullptr) return 0;
-            return root->size;
+            return pool_node::size_or_zero(root);
         }
 
         // Returns maximum number of bytes that can be allocated at once, with the given alignment.
@@ -114,77 +113,69 @@ namespace jw
             template<bool merge = true>
             [[gnu::regparm(2), gnu::hot]] constexpr pool_node* insert(pool_node* node) noexcept
             {
+                auto* dst = this;
                 if (node == nullptr) return this;
-                if (node->size > size) return node->template insert<merge>(this);
-
-                const auto higher = node > this;
-                const auto lower = not higher;
-                auto*& n = next[higher];
-
-                auto fits_between = [](auto* a, auto* x, auto* b)
-                {
-                    return ((a - x) xor (b - x)) < 0;
-                };
-
-                if constexpr (merge) if (n != nullptr and fits_between(this, node, n))
-                {
-                    auto lo = n, hi = node;
-                    if (higher) std::swap(lo, hi);
-                    if (lo->end() == hi->begin())
-                    {
-                        lo->size += hi->size;
-                        node = lo->insert(hi->next[1])->insert(hi->next[0]);
-                        std::destroy_at(hi);
-                        n = nullptr;
-                    }
-                }
-
-                if (n != nullptr) node = n->template insert<merge>(node);
+                if constexpr (not merge) if (node->size > dst->size) std::swap(dst, node);
 
                 if constexpr (merge)
                 {
-                    auto lo = node, hi = this;
-                    if (higher) std::swap(lo, hi);
+                    auto lo = node, hi = dst;
+                    if (node > dst) std::swap(lo, hi);
                     if (lo->end() == hi->begin())
                     {
                         lo->size += hi->size;
-                        if (higher) lo->next[1] = hi->next[1];
-                        node = lo->insert(hi->next[lower]);
+                        dst = dst->erase();
+                        node = lo;
+                        node->next[0] = node->next[1] = nullptr;
                         std::destroy_at(hi);
-                        return node;
-                    }
-
-                    if (node->size > size)
-                    {
-                        n = node->next[lower];
-                        node->next[lower] = this;
-                        return node;
+                        if (dst == nullptr) return node;
+                        return dst->template insert<false>(node);
                     }
                 }
+                const auto higher = node > dst;
+                const auto lower = not higher;
 
-                n = node;
-                return this;
+                if (dst->next[higher] != nullptr) node = dst->next[higher]->template insert<merge>(node);
+
+                if constexpr (merge) if (node->size > dst->size)
+                {
+                    dst->next[higher] = node->next[lower];
+                    node->next[lower] = dst;
+                    return node;
+                }
+
+                dst->next[higher] = node;
+                return dst;
+            }
+
+            static constexpr std::size_t size_or_zero(const pool_node* node)
+            {
+                return node != nullptr ? node->size : 0;
             }
 
             constexpr auto minmax() noexcept
             {
-                auto cmp = [](const auto& a, const auto& b) { return a == nullptr or (b != nullptr and a->size < b->size); };
-                return std::minmax_element(next.begin(), next.end(), cmp);
+                auto min = next[0], max = next[1];
+                if (size_or_zero(min) > size_or_zero(max)) std::swap(min, max);
+                return std::make_tuple(min, max);
             }
 
             constexpr pool_node* erase() noexcept
             {
                 auto [min, max] = minmax();
-                auto* node = (*max)->template insert<false>(*min);
-                std::destroy_at(this);
+                auto* node = max;
+                if (min != nullptr) node = max->template insert<false>(min);
                 return node;
             }
 
             constexpr pool_node* replace(pool_node* node) noexcept
             {
-                auto next_size = [this](auto i) { return next[i] != nullptr ? next[i]->size : 0; };
-                auto max = std::max(next_size(0), next_size(1));
-                if (node->size > max) return node->template insert<false>(next[0])->template insert<false>(next[1]);
+                auto max = std::max(size_or_zero(next[0]), size_or_zero(next[0]));
+                if (node->size > max)
+                {
+                    node->next = next;
+                    return node;
+                }
                 else return erase()->template insert<false>(node);
             }
 
@@ -192,9 +183,10 @@ namespace jw
             {
                 size = s;
                 auto [min, max] = minmax();
-                if (*max != nullptr and (*max)->size > size)
+                if (max != nullptr and max->size > size)
                 {
-                    auto* node = (*max)->template insert<false>(*min);
+                    auto* node = max;
+                    if(min != nullptr) node = max->template insert<false>(min);
                     next[0] = next[1] = nullptr;
                     return node->template insert<false>(this);
                 }
