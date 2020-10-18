@@ -110,42 +110,50 @@ namespace jw
             constexpr auto* begin() noexcept { return static_cast<std::byte*>(static_cast<void*>(this)); }
             constexpr auto* end() noexcept { return begin() + size; }
 
-            template<bool merge = true>
-            [[gnu::regparm(2), gnu::hot]] constexpr pool_node* insert(pool_node* node) noexcept
+            // Combine two trees into one.
+            [[gnu::regparm(2), gnu::hot]] constexpr pool_node* combine(pool_node* node) noexcept
             {
                 auto* dst = this;
-                if (node == nullptr) return this;
-                if constexpr (not merge) if (node->size > dst->size) std::swap(dst, node);
+                if (node->size > dst->size) std::swap(dst, node);
 
-                if constexpr (merge)
-                {
-                    auto lo = node, hi = dst;
-                    if (node > dst) std::swap(lo, hi);
-                    if (lo->end() == hi->begin())
-                    {
-                        lo->size += hi->size;
-                        dst = dst->erase();
-                        node = lo;
-                        node->next[0] = node->next[1] = nullptr;
-                        std::destroy_at(hi);
-                        if (dst == nullptr) return node;
-                        return dst->template insert<false>(node);
-                    }
-                }
                 const auto higher = node > dst;
-                const auto lower = not higher;
 
-                if (dst->next[higher] != nullptr) node = dst->next[higher]->template insert<merge>(node);
-
-                if constexpr (merge) if (node->size > dst->size)
-                {
-                    dst->next[higher] = node->next[lower];
-                    node->next[lower] = dst;
-                    return node;
-                }
+                if (dst->next[higher] != nullptr) node = dst->next[higher]->combine(node);
 
                 dst->next[higher] = node;
                 return dst;
+            }
+
+            // Insert a new node into the tree, merging it with adjacent nodes where possible.
+            [[gnu::regparm(2), gnu::hot]] constexpr pool_node* insert(pool_node* node) noexcept
+            {
+                auto lo = node, hi = this;
+                if (lo > hi) std::swap(lo, hi);
+                if (lo->end() == hi->begin())
+                {
+                    lo->size += hi->size;
+                    auto* dst = this->erase();
+                    node = lo;
+                    node->next[0] = node->next[1] = nullptr;
+                    std::destroy_at(hi);
+                    if (dst == nullptr) return node;
+                    return dst->combine(node);
+                }
+
+                const auto higher = node > this;
+                const auto lower = not higher;
+
+                if (next[higher] != nullptr) node = next[higher]->insert(node);
+
+                if (node->size > size)
+                {
+                    next[higher] = node->next[lower];
+                    node->next[lower] = this;
+                    return node;
+                }
+
+                next[higher] = node;
+                return this;
             }
 
             static constexpr std::size_t size_or_zero(const pool_node* node)
@@ -164,7 +172,7 @@ namespace jw
             {
                 auto [min, max] = minmax();
                 auto* node = max;
-                if (min != nullptr) node = max->template insert<false>(min);
+                if (min != nullptr) node = max->combine(min);
                 return node;
             }
 
@@ -176,7 +184,7 @@ namespace jw
                     node->next = next;
                     return node;
                 }
-                else return erase()->template insert<false>(node);
+                else return erase()->combine(node);
             }
 
             constexpr pool_node* resize(std::size_t s) noexcept
@@ -186,9 +194,9 @@ namespace jw
                 if (max != nullptr and max->size > size)
                 {
                     auto* node = max;
-                    if(min != nullptr) node = max->template insert<false>(min);
+                    if(min != nullptr) node = max->combine(min);
                     next[0] = next[1] = nullptr;
-                    return node->template insert<false>(this);
+                    return node->combine(this);
                 }
                 else return this;
             }
