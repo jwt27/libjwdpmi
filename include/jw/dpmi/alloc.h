@@ -108,14 +108,11 @@ namespace jw
 
             using base::empty;
 
-            virtual void grow(std::size_t bytes) override { do_grow_alloc<true>(bytes); }
-
         private:
-            virtual void grow(const std::span<std::byte>& ptr) noexcept override { do_grow<true>(ptr); }
-
+            virtual void do_grow(std::size_t bytes) override { grow_alloc<interrupt_mask>(bytes); }
+            virtual void do_grow(const std::span<std::byte>& ptr) noexcept override { grow_impl<interrupt_mask>(ptr); }
             virtual void auto_grow(std::size_t) override { throw std::bad_alloc { }; }
-
-            [[nodiscard]] virtual void* do_allocate(std::size_t n, std::size_t a) override { return do_do_allocate<true>(n, a); }
+            [[nodiscard]] virtual void* do_allocate(std::size_t n, std::size_t a) override { return allocate_impl<interrupt_mask>(n, a); }
 
             locking_memory_resource upstream { };
         };

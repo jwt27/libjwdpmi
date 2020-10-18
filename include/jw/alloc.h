@@ -81,13 +81,10 @@ namespace jw
 
         constexpr bool empty() const noexcept { return num_allocs == 0; }
 
-        virtual void grow(const std::span<std::byte>& ptr) noexcept { do_grow<false>(ptr); }
+        void grow(const std::span<std::byte>& ptr) noexcept { do_grow(ptr); }
 
         // Returns the size of the largest chunk.
-        constexpr std::size_t max_chunk_size() const noexcept
-        {
-            return pool_node::size_or_zero(root);
-        }
+        constexpr std::size_t max_chunk_size() const noexcept { return pool_node::size_or_zero(root); }
 
         // Returns maximum number of bytes that can be allocated at once, with the given alignment.
         constexpr std::size_t max_size(std::size_t alignment = alignof(std::max_align_t)) const noexcept
@@ -208,26 +205,20 @@ namespace jw
             root = nullptr;
         }
 
-        virtual void auto_grow(std::size_t)
-        {
-            throw std::bad_alloc { };
-        }
-
-        template<bool irq_safe>
-        void do_grow(const std::span<std::byte>& ptr) noexcept
+        template<typename Lock = jw::empty, typename... Args>
+        void grow_impl(const std::span<std::byte>& ptr, Args&&... lock_args) noexcept
         {
             auto* n = new(ptr.data()) pool_node { ptr.size_bytes() };
             if (root == nullptr) root = n;
             else
             {
-                std::optional<dpmi::interrupt_mask> no_irqs;
-                if constexpr (irq_safe) no_irqs.emplace();
+                [[maybe_unused]] Lock lock { std::forward<Args>(lock_args)... };
                 root = root->insert(n);
             }
         }
 
-        template<bool irq_safe>
-        [[nodiscard]] void* do_do_allocate(std::size_t n, std::size_t a)
+        template<typename Lock = jw::empty, typename... Args>
+        [[nodiscard]] void* allocate_impl(std::size_t n, std::size_t a, Args&&... lock_args)
         {
             auto aligned_ptr = [](void* p, std::size_t align, bool down = false) noexcept
             {
@@ -243,8 +234,7 @@ namespace jw
             std::size_t p_size;
             std::byte* p;
             {
-                std::optional<dpmi::interrupt_mask> no_irqs;
-                if constexpr (irq_safe) no_irqs.emplace();
+                [[maybe_unused]] Lock lock { std::forward<Args>(lock_args)... };
             retry:
                 if (root == nullptr)
                 {
@@ -287,7 +277,7 @@ namespace jw
 
         [[nodiscard]] virtual void* do_allocate(std::size_t n, std::size_t a) override
         {
-            return do_do_allocate<false>(n, a);
+            return allocate_impl(n, a);
         }
 
         virtual void do_deallocate(void* ptr, std::size_t, std::size_t) noexcept override
@@ -302,6 +292,10 @@ namespace jw
         {
             return dynamic_cast<const basic_pool_resource*>(&other) == this;
         }
+
+        virtual void do_grow(const std::span<std::byte>& ptr) noexcept { grow_impl(ptr); }
+
+        virtual void auto_grow(std::size_t) { throw std::bad_alloc { }; }
 
         std::size_t num_allocs { 0 };
         pool_node* root { nullptr };
@@ -356,7 +350,7 @@ namespace jw
             reset();
         }
 
-        virtual void grow(std::size_t bytes) { do_grow_alloc<false>(bytes); }
+        void grow(std::size_t bytes) { do_grow(bytes); }
 
         bool in_pool(const void* ptr) const noexcept
         {
@@ -376,13 +370,8 @@ namespace jw
             pools = { };
         }
 
-        virtual void auto_grow(std::size_t needed) override
-        {
-            grow(std::max(needed * 2, size() / 2));
-        }
-
-        template<bool irq_safe>
-        void do_grow_alloc(std::size_t bytes)
+        template<typename Lock = jw::empty, typename... Args>
+        void grow_alloc(std::size_t bytes, Args&&... lock_args)
         {
             bytes = std::max(bytes, sizeof(pool_node));
             auto* p = res->allocate(bytes, alignof(pool_node));
@@ -396,8 +385,7 @@ namespace jw
                 res->deallocate(p, bytes, alignof(pool_node));
                 throw;
             }
-            std::optional<dpmi::interrupt_mask> no_irqs;
-            if constexpr (irq_safe) no_irqs.emplace();
+            [[maybe_unused]] Lock lock { std::forward<Args>(lock_args)... };
             if (pools.data() != nullptr)
             {
                 std::uninitialized_move(pools.begin(), pools.end(), new_pools);
@@ -405,7 +393,17 @@ namespace jw
                 res->deallocate(pools.data(), pools.size_bytes(), alignof(pool_type));
             }
             pools = { new_pools, pools.size() + 1 };
-            do_grow<false>(pools.back() = pool_type { static_cast<std::byte*>(p), bytes });
+            grow_impl(pools.back() = pool_type { static_cast<std::byte*>(p), bytes });
+        }
+
+        virtual void do_grow(std::size_t needed)
+        {
+            grow_alloc(needed);
+        }
+
+        virtual void auto_grow(std::size_t needed) override
+        {
+            grow(std::max(needed * 2, size() / 2));
         }
 
         using pool_type = std::span<std::byte>;
