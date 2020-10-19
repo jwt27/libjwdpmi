@@ -55,7 +55,6 @@ namespace jw
 
     // A std::pmr::memory_resource which allocates from one or multiple pools.  It is implemented
     // as a binary tree which is horizontally ordered by address, and vertically sorted by size.
-    // This makes it quite fast, but prone to fragmentation.
     // The pool size can be increased dynamically by feeding pointers to grow().  Note that this
     // memory resource does not own (and thus free) the memory it allocates from.
     struct basic_pool_resource : public std::pmr::memory_resource
@@ -108,7 +107,8 @@ namespace jw
             constexpr auto* end() noexcept { return begin() + size; }
 
             // Combine two trees into one.
-            [[nodiscard, gnu::regparm(2), gnu::hot]] constexpr pool_node* combine(pool_node* node) noexcept
+            [[nodiscard, gnu::regparm(2), gnu::hot, gnu::nonnull]]
+            constexpr pool_node* combine(pool_node* node) noexcept
             {
                 auto* dst = this;
                 if (node->size > dst->size) std::swap(dst, node);
@@ -121,20 +121,18 @@ namespace jw
                 return dst;
             }
 
-            // Insert a new node into the tree, merging it with adjacent nodes where possible.
-            [[nodiscard, gnu::regparm(2), gnu::hot]] constexpr pool_node* insert(pool_node* node) noexcept
+            // Insert one new node into the tree, merging it with adjacent nodes where possible.
+            [[nodiscard, gnu::regparm(2), gnu::hot, gnu::nonnull]]
+            constexpr pool_node* insert(pool_node* node) noexcept
             {
                 auto lo = node, hi = this;
                 if (lo > hi) std::swap(lo, hi);
-                if (lo->end() == hi->begin())
+                if (lo->end() == hi->begin()) [[likely]]
                 {
                     lo->size += hi->size;
-                    auto* dst = this->erase();
-                    node = lo;
-                    node->next[0] = node->next[1] = nullptr;
+                    if (hi == this) lo->next = next;
                     std::destroy_at(hi);
-                    if (dst == nullptr) return node;
-                    return dst->combine(node);
+                    return lo;
                 }
 
                 const auto higher = node > this;
@@ -173,10 +171,10 @@ namespace jw
                 return node;
             }
 
-            [[nodiscard]] constexpr pool_node* replace(pool_node* node) noexcept
+            [[nodiscard, gnu::nonnull]] constexpr pool_node* replace(pool_node* node) noexcept
             {
                 auto max = std::max(size_or_zero(next[0]), size_or_zero(next[0]));
-                if (node->size > max)
+                if (node->size > max) [[likely]]
                 {
                     node->next = next;
                     return node;
@@ -188,7 +186,7 @@ namespace jw
             {
                 size = s;
                 auto [min, max] = minmax();
-                if (max != nullptr and max->size > size)
+                if (max != nullptr and max->size > size) [[unlikely]]
                 {
                     auto* node = max;
                     if(min != nullptr) node = max->combine(min);
@@ -209,12 +207,12 @@ namespace jw
         void grow_impl(const std::span<std::byte>& ptr, Args&&... lock_args) noexcept
         {
             auto* n = new(ptr.data()) pool_node { ptr.size_bytes() };
-            if (root == nullptr) root = n;
-            else
+            if (root != nullptr) [[likely]]
             {
                 [[maybe_unused]] Lock lock { std::forward<Args>(lock_args)... };
                 root = root->insert(n);
             }
+            else root = n;
         }
 
         template<typename Lock = jw::empty, typename... Args>
@@ -236,7 +234,7 @@ namespace jw
             {
                 [[maybe_unused]] Lock lock { std::forward<Args>(lock_args)... };
             retry:
-                if (root == nullptr)
+                if (root == nullptr) [[unlikely]]
                 {
                     auto_grow(n);
                     goto retry;
@@ -262,7 +260,7 @@ namespace jw
                     root->alloc_hi ^= true;
                 }
                 else if (p_size >= n) root = root->erase();     // Use entire chunk
-                else
+                else [[unlikely]]
                 {
                     auto_grow(n);
                     goto retry;
