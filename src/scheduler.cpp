@@ -170,22 +170,23 @@ namespace jw
             // May only be called from context_switch()!
             thread_context* scheduler::set_next_thread()
             {
-                dpmi::interrupt_mask no_interrupts_please { };
                 for(std::size_t i = 0; ; ++i)
                 {
-                    if (current_thread->is_running()) [[likely]] threads.push_back(current_thread);
+                    {
+                        dpmi::interrupt_mask no_interrupts_please { };
+                        if (current_thread->is_running()) [[likely]] threads.push_back(current_thread);
+                        current_thread = threads.front();
+                        threads.pop_front();
+                    }
 
-                    current_thread = threads.front();
-                    threads.pop_front();
-
-                    if (current_thread->state == starting) [[unlikely]]     // new task, initialize new context on stack
+                    if (current_thread->state == starting) [[unlikely]]     // new thread, initialize new context on stack
                     {
                         byte* esp = (current_thread->stack.get() + current_thread->stack_size - 4) - sizeof(thread_context);
-                        *reinterpret_cast<std::uint32_t*>(current_thread->stack.get()) = 0xDEADBEEF;  // stack overflow protection
+                        *reinterpret_cast<std::uint32_t*>(current_thread->stack.get()) = 0xDEADBEEF;    // stack overflow protection
 
-                        current_thread->context = reinterpret_cast<thread_context*>(esp);           // *context points to top of stack
+                        current_thread->context = reinterpret_cast<thread_context*>(esp);               // *context points to top of stack
                         if (current_thread->parent == nullptr) current_thread->parent = main_thread;
-                        *current_thread->context = *current_thread->parent->context;                // clone parent's context to new stack
+                        *current_thread->context = *current_thread->parent->context;                    // clone parent's context to new stack
                         current_thread->context->return_address = reinterpret_cast<std::uintptr_t>(run_thread);
                     }
 
