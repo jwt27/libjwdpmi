@@ -108,7 +108,7 @@ namespace jw
             constexpr auto* end() noexcept { return begin() + size; }
 
             // Combine two trees into one.
-            [[gnu::regparm(2), gnu::hot]] constexpr pool_node* combine(pool_node* node) noexcept
+            [[nodiscard, gnu::regparm(2), gnu::hot]] constexpr pool_node* combine(pool_node* node) noexcept
             {
                 auto* dst = this;
                 if (node->size > dst->size) std::swap(dst, node);
@@ -122,7 +122,7 @@ namespace jw
             }
 
             // Insert a new node into the tree, merging it with adjacent nodes where possible.
-            [[gnu::regparm(2), gnu::hot]] constexpr pool_node* insert(pool_node* node) noexcept
+            [[nodiscard, gnu::regparm(2), gnu::hot]] constexpr pool_node* insert(pool_node* node) noexcept
             {
                 auto lo = node, hi = this;
                 if (lo > hi) std::swap(lo, hi);
@@ -165,7 +165,7 @@ namespace jw
                 return std::make_tuple(min, max);
             }
 
-            constexpr pool_node* erase() noexcept
+            [[nodiscard]] constexpr pool_node* erase() noexcept
             {
                 auto [min, max] = minmax();
                 auto* node = max;
@@ -173,7 +173,7 @@ namespace jw
                 return node;
             }
 
-            constexpr pool_node* replace(pool_node* node) noexcept
+            [[nodiscard]] constexpr pool_node* replace(pool_node* node) noexcept
             {
                 auto max = std::max(size_or_zero(next[0]), size_or_zero(next[0]));
                 if (node->size > max)
@@ -184,7 +184,7 @@ namespace jw
                 else return erase()->combine(node);
             }
 
-            constexpr pool_node* resize(std::size_t s) noexcept
+            [[nodiscard]] constexpr pool_node* resize(std::size_t s) noexcept
             {
                 size = s;
                 auto [min, max] = minmax();
@@ -256,7 +256,7 @@ namespace jw
                     {
                         std::swap(p, q);
                         std::swap(p_size, q_size);
-                        root->resize(q_size);
+                        root = root->resize(q_size);
                     }
                     else root = root->replace(new(q) pool_node { static_cast<std::uintptr_t>(q_size) });
                     root->alloc_hi ^= true;
