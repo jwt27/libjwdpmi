@@ -464,9 +464,9 @@ namespace jw
 
             inline std::uint32_t checksum(const std::string_view& s)
             {
-                std::uint32_t r { 0 };
+                std::uint8_t r { 0 };
                 for (auto&& c : s) r += c;
-                return r & 0xff;
+                return r;
             }
 
             inline bool packet_available()
@@ -476,7 +476,6 @@ namespace jw
                 std::string_view str { p, size };
                 bool result = str.find(0x03) != std::string_view::npos
                     or str.find('#', str.find('$')) != std::string_view::npos;
-                //if (result) std::clog << "(packet available)";
                 return result;
             }
 
