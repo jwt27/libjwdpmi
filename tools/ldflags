@@ -1,0 +1,4 @@
+--wrap=malloc
+--wrap=calloc
+--wrap=realloc
+--wrap=free

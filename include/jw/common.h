@@ -36,6 +36,8 @@ namespace jw
 
     [[noreturn]] void terminate();
 
+    [[nodiscard]] void* realloc(void* pointer, std::size_t new_size, std::size_t alignment);
+
 #   ifdef HAVE__MMX__
     inline constexpr bool mmx = true;
 #   else

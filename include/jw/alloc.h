@@ -96,6 +96,14 @@ namespace jw
             return size;
         }
 
+        // Return size allocated to the given pointer.
+        constexpr std::size_t size(void* p) const noexcept
+        {
+            auto offset = *(static_cast<std::uint8_t*>(p) - 1);
+            auto size = *reinterpret_cast<std::size_t*>((static_cast<std::byte*>(p) - offset));
+            return size - offset;
+        }
+
     protected:
         struct pool_node
         {
@@ -334,6 +342,7 @@ namespace jw
         pool_resource(const pool_resource&) = delete;
         pool_resource& operator=(const pool_resource&) = delete;
 
+        using base::size;
         constexpr std::size_t size() const noexcept
         {
             std::size_t size = 0;

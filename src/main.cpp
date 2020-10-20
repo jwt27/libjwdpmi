@@ -37,6 +37,12 @@ int jwdpmi_main(const std::vector<std::string_view>&);
 
 namespace jw
 {
+    namespace debug::detail
+    {
+        void setup_gdb_interface(io::rs232_config);
+        void notify_gdb_exit(byte result);
+    }
+
     void print_exception(const std::exception& e, int level) noexcept
     {
         std::cerr << "Exception " << std::dec << level << ": " << e.what() << '\n';
@@ -45,36 +51,9 @@ namespace jw
         catch (...) { std::cerr << "Exception " << std::dec << (level + 1) << ": Unknown exception.\n"; }
     }
 
-    extern "C" void* irq_safe_malloc(std::size_t n)
-    {
-        if (dpmi::in_irq_context() or dpmi::get_cs() == dpmi::detail::ring0_cs) return nullptr;
-        else return std::malloc(n);
-    }
-
-    [[gnu::no_sanitize("undefined")]] void setup_irq_safe_exceptions()
-    {
-        auto p = reinterpret_cast<byte*>(abi::__cxa_allocate_exception);
-        p = std::find(p, p + 0x20, 0xe8);
-        auto call_offset = reinterpret_cast<volatile std::ptrdiff_t*>(p + 1);
-        auto next_insn = reinterpret_cast<std::uintptr_t>(p + 5);               // e8 call instruction is 5 bytes
-
-        if (*p != 0xe8 or reinterpret_cast<std::uintptr_t>(next_insn + *call_offset) != reinterpret_cast<std::uintptr_t>(std::malloc)) [[unlikely]] { asm ("int 3"); }
-
-        *call_offset = reinterpret_cast<std::uintptr_t>(irq_safe_malloc) - next_insn;
-    }
-
     [[noreturn]] void terminate()
     {
         throw terminate_exception { };
-    }
-
-    namespace debug
-    {
-        namespace detail
-        {
-            void setup_gdb_interface(io::rs232_config);
-            void notify_gdb_exit(byte result);
-        }
     }
 
     std::terminate_handler original_terminate_handler;
@@ -110,66 +89,11 @@ namespace jw
     }
 
     int exit_code { -1 };
-
-    struct init
-    {
-        init() noexcept
-        {
-            using namespace jw::dpmi;
-            using namespace jw::dpmi::detail;
-
-            setup_exception_throwers();
-
-            fpu_context_switcher.reset(new fpu_context_switcher_t { });
-
-            bool use_ring0 { false };
-        retry_cr0:
-            try     // This part is really tricky without irq-safe exceptions set up.
-            {
-                std::optional<ring0_privilege> r0;  // try to access control registers in ring 0
-                if (use_ring0) r0 = ring0_privilege { };
-                // if we have no ring0 access, the dpmi host might still trap and emulate control register access.
-
-                set_control_registers();
-            }
-            catch (const cpu_exception&)
-            {
-                if (not use_ring0 and ring0_privilege::wont_throw())
-                {
-                    use_ring0 = true;
-                    goto retry_cr0;
-                }
-                // setting cr0 or cr4 failed. if compiled with SSE then this might be a problem.
-                // for now, assume that the dpmi server already enabled these bits (HDPMI does this).
-                // if not, then we'll soon crash with an invalid opcode on the first SSE instruction.
-            }
-
-            original_terminate_handler = std::set_terminate(terminate_handler);
-        }
-
-        ~init() noexcept
-        {
-            if (debug::debug()) debug::detail::notify_gdb_exit(exit_code);
-        }
-
-        [[gnu::noipa]] static void set_control_registers()
-        {
-            std::uint32_t cr;
-            asm ("mov %0, cr0" : "=r" (cr));
-            asm ("mov cr0, %0" :: "r" (cr | 0x10));       // enable native x87 exceptions
-            if constexpr (sse)
-            {
-                asm ("mov %0, cr4" : "=r" (cr));
-                asm ("mov cr4, %0" :: "r" (cr | 0x600));  // enable SSE and SSE exceptions
-            }
-        }
-    } initializer [[gnu::init_priority(101)]];
 }
 
 [[gnu::force_align_arg_pointer]]
 int main(int argc, const char** argv)
 {
-    setup_irq_safe_exceptions();    // This should really be done in init() above.
     _crt0_startup_flags &= ~_CRT0_FLAG_LOCK_MEMORY;
     try
     {
@@ -219,113 +143,207 @@ int main(int argc, const char** argv)
             }
             catch (const std::exception& e) { std::cerr << "Caught exception from thread!\n"; jw::print_exception(e); }
             catch (const jw::terminate_exception& e) { }
-            catch (...) { std::cerr << "Caught unknown exception from thread()!\n"; }
+            catch (...) { std::cerr << "Caught unknown exception from thread!\n"; }
         }
     }
 
     return jw::exit_code;
 }
 
-namespace jw
+extern "C"
 {
-    enum : unsigned { yes, no, almost } irq_alloc_initialized { no };
-    dpmi::locked_pool_resource<true>* irq_alloc { nullptr };
-    std::atomic_flag irq_alloc_resize { false };
-    std::size_t half_irq_alloc_size;
-    std::size_t min_chunk_size;
+    decltype(std::malloc) __real_malloc;
+    decltype(std::free) __real_free;
 }
 
-[[nodiscard]] void* operator new(std::size_t n, std::align_val_t alignment)
+namespace jw
+{
+    constinit dpmi::locked_pool_resource<true>* irq_alloc { nullptr };
+    constinit std::atomic_flag irq_alloc_resize { false };
+    constexpr std::size_t irq_alloc_size = config::interrupt_initial_memory_pool;
+    constinit std::size_t min_chunk_size { 0 };
+
+    struct init
+    {
+        init() noexcept
+        {
+            using namespace jw::dpmi;
+            using namespace jw::dpmi::detail;
+
+            try
+            {
+                min_chunk_size = irq_alloc_size;
+                irq_alloc = new dpmi::locked_pool_resource<true> { irq_alloc_size };
+            }
+            catch (...)
+            {
+                std::abort();
+            }
+
+            setup_exception_throwers();
+
+            fpu_context_switcher.reset(new fpu_context_switcher_t { });
+
+            // Try setting control registers first in ring 3.  If we have no ring0 access, the
+            // dpmi host might still trap and emulate control register access.
+            std::optional<ring0_privilege> r0;
+        retry:
+            try { set_control_registers(); }
+            catch (const cpu_exception&)
+            {
+                if (not r0 and ring0_privilege::wont_throw())
+                {
+                    r0.emplace();
+                    goto retry;
+                }
+                // Setting cr0 or cr4 failed.  If compiled with SSE then this might be a problem.
+                // For now, assume that the dpmi server already enabled these bits (HDPMI does this).
+                // If not, then we'll soon crash with an invalid opcode on the first SSE instruction.
+            }
+
+            original_terminate_handler = std::set_terminate(terminate_handler);
+        }
+
+        ~init() noexcept
+        {
+            if (debug::debug()) debug::detail::notify_gdb_exit(exit_code);
+            jw::dpmi::detail::fpu_context_switcher.reset();
+            delete irq_alloc;
+            irq_alloc = nullptr;
+        }
+
+    private:
+        [[gnu::noipa]] static void set_control_registers()
+        {
+            std::uint32_t cr;
+            asm ("mov %0, cr0" : "=r" (cr));
+            asm ("mov cr0, %0" :: "r" (cr | 0x10));       // enable native x87 exceptions
+            if constexpr (sse)
+            {
+                asm ("mov %0, cr4" : "=r" (cr));
+                asm ("mov cr4, %0" :: "r" (cr | 0x600));  // enable SSE and SSE exceptions
+            }
+        }
+    } initializer [[gnu::init_priority(101)]];
+
+    [[nodiscard]] void* realloc(void* p, std::size_t new_size, std::size_t align)
+    {
+        void* const new_p = ::operator new(new_size, std::align_val_t { align });
+        if (p != nullptr) [[likely]]
+        {
+            const auto old_size = [p]()
+            {
+                if (irq_alloc != nullptr and irq_alloc->in_pool(p)) return irq_alloc->size(p);
+                auto* const q = static_cast<std::uint8_t*>(p);
+                return *reinterpret_cast<std::size_t*>(q - *(q - 1));
+            }();
+            std::memcpy(new_p, p, old_size);
+            ::operator delete(p);
+        }
+        return new_p;
+    }
+}
+
+[[nodiscard]] void* operator new(std::size_t size, std::align_val_t alignment)
 {
     if (dpmi::in_irq_context() or dpmi::get_cs() == dpmi::detail::ring0_cs)
     {
-        if (irq_alloc_initialized == yes)
+        if (irq_alloc != nullptr)
         {
             debug::trap_mask dont_trap_here { };
-            auto* p = irq_alloc->allocate(n, static_cast<std::size_t>(alignment));
+            auto* p = irq_alloc->allocate(size, static_cast<std::size_t>(alignment));
             min_chunk_size = std::min(min_chunk_size, irq_alloc->max_chunk_size());
             return p;
         }
         else throw std::bad_alloc { };
     }
-    if (irq_alloc_initialized == no) [[unlikely]]
-    {
-        dpmi::interrupt_mask no_interrupts_here { };
-        try
-        {
-            irq_alloc_initialized = almost;
-            {
-                debug::trap_mask dont_trap_here { };
-                if (irq_alloc != nullptr) delete irq_alloc;
-                irq_alloc = nullptr;
-                half_irq_alloc_size = config::interrupt_initial_memory_pool / 2;
-                irq_alloc = new dpmi::locked_pool_resource<true> { half_irq_alloc_size * 2 };
-                min_chunk_size = half_irq_alloc_size * 2;
-                irq_alloc_initialized = yes;
-            }
-        }
-        catch (...)
-        {
-            irq_alloc_initialized = no;
-            throw;
-        }
-    }
-    else if (irq_alloc_initialized == yes
-        and min_chunk_size < half_irq_alloc_size
+
+    if (min_chunk_size < irq_alloc_size / 4
+        and irq_alloc != nullptr
         and not irq_alloc_resize.test_and_set()) [[unlikely]]
     {
+        struct x { ~x() { irq_alloc_resize.clear(); } } scope_guard;
         dpmi::interrupt_mask no_interrupts_here { };
         debug::trap_mask dont_trap_here { };
+        auto* ia = irq_alloc;
+        irq_alloc = nullptr;
         try
         {
-            irq_alloc_initialized = almost;
-            irq_alloc->grow(half_irq_alloc_size);
-            half_irq_alloc_size += half_irq_alloc_size / 2;
-            min_chunk_size = irq_alloc->max_chunk_size();
-            irq_alloc_initialized = yes;
+            ia->grow(irq_alloc_size / 2);
+            min_chunk_size = ia->max_chunk_size();
         }
-        catch (...)
-        {
-            irq_alloc_initialized = no;
-            irq_alloc_resize.clear();
-            throw;
-        }
-        irq_alloc_resize.clear();
+        catch (const std::bad_alloc&) { } // Relatively safe to ignore.
+        irq_alloc = ia;
     }
 
-    auto align = std::max(static_cast<std::size_t>(alignment), sizeof(std::size_t));
-    n += align + sizeof(void*);
+    auto do_malloc = [](std::size_t n)
+    {
+        void* const p = __real_malloc(n);
+        if (p == nullptr) throw std::bad_alloc { };
+        return p;
+    };
 
-    auto* p = std::malloc(n);
-    if (p == nullptr) [[unlikely]] throw std::bad_alloc { };
-    auto b = ((reinterpret_cast<std::uintptr_t>(p) + sizeof(void*)) & -align) + align;
-    *(reinterpret_cast<void**>(b) - 1) = p;
-    return reinterpret_cast<void*>(b);
+    const auto align = static_cast<std::size_t>(alignment);
+    const auto overhead = sizeof(std::size_t) + sizeof(std::uint8_t);
+    const auto n = size + align + overhead;
+
+    void* const p_malloc = do_malloc(n);
+    const auto p = reinterpret_cast<std::uintptr_t>(p_malloc);
+
+    const auto a = p + overhead;
+    auto b = a & -align;
+    if (b != a) b += align;
+    auto* const p_aligned = reinterpret_cast<void*>(b);
+    *reinterpret_cast<std::size_t*>(p) = size;          // Store original size (for realloc).
+    *reinterpret_cast<std::uint8_t*>(b - 1) = b - p;    // Store alignment offset.
+
+    return p_aligned;
+}
+
+void operator delete(void* ptr, std::size_t n, std::align_val_t a) noexcept
+{
+    if (irq_alloc != nullptr and irq_alloc->in_pool(ptr))
+    {
+        debug::trap_mask dont_trap_here { };
+        irq_alloc->deallocate(ptr, n, static_cast<std::size_t>(a));
+    }
+    else
+    {
+        auto* p = static_cast<std::uint8_t*>(ptr);
+        p -= *(p - 1);
+        __real_free(p);
+    }
+}
+
+extern "C"
+{
+    void* __wrap_malloc(std::size_t n) noexcept
+    {
+        constinit static std::atomic_flag in_malloc { false };
+        // Fail here on re-entry.  This happens when an exception is thrown in
+        // operator new, and malloc is called to allocate the exception.
+        // Returning nullptr ensures the exception is allocated from an emergency
+        // pool instead.
+        if (in_malloc.test_and_set()) [[unlikely]] return nullptr;
+        struct x { ~x() { in_malloc.clear(); } } scope_guard;
+        try { return ::operator new(n); }
+        catch (const std::bad_alloc&) { return nullptr; }
+    }
+
+    void* __wrap_realloc(void* p, std::size_t n) noexcept
+    {
+        try { return jw::realloc(p, n, __STDCPP_DEFAULT_NEW_ALIGNMENT__); }
+        catch (const std::bad_alloc&) { return p; }
+    }
+
+    void* __wrap_calloc(std::size_t n, std::size_t size) noexcept { return __wrap_malloc(n * size); }
+
+    void __wrap_free(void* p) noexcept { ::operator delete(p); }
 }
 
 [[nodiscard]] void* operator new(std::size_t n)
 {
     return ::operator new(n, std::align_val_t { __STDCPP_DEFAULT_NEW_ALIGNMENT__ });
-}
-
-void operator delete(void* p, std::size_t n, std::align_val_t a) noexcept
-{
-    try
-    {
-        if (irq_alloc_initialized == yes and irq_alloc->in_pool(p))
-        {
-            debug::trap_mask dont_trap_here { };
-            irq_alloc->deallocate(p, n, static_cast<std::size_t>(a));
-            return;
-        }
-        p = *(reinterpret_cast<void**>(p) - 1);
-        std::free(p);
-    }
-    catch (...)
-    {
-        std::cerr << "Caught exception in operator delete!\n";
-        std::terminate();
-    }
 }
 
 void operator delete(void* p) noexcept
