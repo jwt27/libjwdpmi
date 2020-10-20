@@ -165,9 +165,11 @@ namespace jw
 
             [[nodiscard]] constexpr pool_node* erase() noexcept
             {
-                auto [min, max] = minmax();
-                auto* node = max;
-                if (min != nullptr) node = max->combine(min);
+                pool_node* node;
+                if (next[0] == nullptr) node = next[1];
+                else if (next[1] == nullptr) node = next[0];
+                else node = next[0]->combine(next[1]);
+                next.fill(nullptr);
                 return node;
             }
 
