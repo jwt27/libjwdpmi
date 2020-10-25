@@ -175,7 +175,7 @@ namespace jw
 
             [[nodiscard, gnu::nonnull]] constexpr pool_node* replace(pool_node* node) noexcept
             {
-                auto max = std::max(size_or_zero(next[0]), size_or_zero(next[0]));
+                auto max = std::max(size_or_zero(next[0]), size_or_zero(next[1]));
                 if (node->size > max) [[likely]]
                 {
                     node->next = next;
