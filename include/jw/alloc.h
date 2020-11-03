@@ -106,7 +106,7 @@ namespace jw
             constexpr auto* begin() noexcept { return static_cast<std::byte*>(static_cast<void*>(this)); }
             constexpr auto* end() noexcept { return begin() + size; }
 
-            // Combine two trees into one.
+            // Combine two sorted, non-overlapping trees into one.
             [[nodiscard, gnu::regparm(2), gnu::hot, gnu::nonnull]]
             constexpr pool_node* combine(pool_node* node) noexcept
             {
@@ -125,18 +125,22 @@ namespace jw
             [[nodiscard, gnu::regparm(2), gnu::hot, gnu::nonnull]]
             constexpr pool_node* insert(pool_node* node) noexcept
             {
+                auto higher = node > this;
+                auto lower = not higher;
+
                 auto lo = node, hi = this;
-                if (lo > hi) std::swap(lo, hi);
-                if (lo->end() == hi->begin()) [[likely]]
+                if (higher) std::swap(lo, hi);
+                if (lo->end() == hi->begin())
                 {
                     lo->size += hi->size;
-                    if (hi == this) lo->next = next;
+                    auto tmp = next;
+                    next.fill(nullptr);
+                    node = lo;
                     std::destroy_at(hi);
-                    return lo;
+                    if (tmp[higher] != nullptr) node = tmp[higher]->insert(node);
+                    if (tmp[lower] != nullptr) node = node->combine(tmp[lower]);
+                    return node;
                 }
-
-                const auto higher = node > this;
-                const auto lower = not higher;
 
                 if (next[higher] != nullptr) node = next[higher]->insert(node);
 
@@ -192,7 +196,7 @@ namespace jw
                 {
                     auto* node = max;
                     if(min != nullptr) node = max->combine(min);
-                    next[0] = next[1] = nullptr;
+                    next.fill(nullptr);
                     return node->combine(this);
                 }
                 else return this;
