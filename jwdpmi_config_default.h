@@ -38,6 +38,9 @@ namespace jw
         // Set up cpu exception handlers to throw C++ exceptions instead.
         constexpr bool enable_throwing_from_cpu_exceptions = true;
 
+        // Assume memory page size is 4kB.  Use DPMI function 0x0604 otherwise.
+        constexpr bool assume_4k_pages = true;
+
         // Enable interrupts while the gdb interface is active
         constexpr bool enable_gdb_interrupts = true;
 

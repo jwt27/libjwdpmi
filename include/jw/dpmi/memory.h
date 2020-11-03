@@ -8,6 +8,7 @@
 #include <limits>
 #include <memory_resource>
 #include <jw/dpmi/dpmi.h>
+#include <../jwdpmi_config.h>
 
 namespace jw
 {
@@ -30,7 +31,7 @@ namespace jw
             constexpr operator selector() const noexcept { return value; }
         };
 
-        inline const std::size_t page_size = []
+        inline const std::size_t page_size = config::assume_4k_pages ? std::size_t { 4_KB } : []
         {
             dpmi_error_code error;
             split_uint32_t size;
@@ -44,7 +45,7 @@ namespace jw
                 : "a" (0x0604));
             if (c) throw dpmi_error(error, "page_size");
 
-            return size;
+            return static_cast<std::size_t>(size);
         }();
 
         inline std::size_t round_down_to_page_size(std::size_t num_bytes)
