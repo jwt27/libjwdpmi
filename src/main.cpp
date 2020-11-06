@@ -149,12 +149,6 @@ int main(int argc, const char** argv)
     return jw::exit_code;
 }
 
-extern "C"
-{
-    decltype(std::malloc) __real_malloc;
-    decltype(std::free) __real_free;
-}
-
 namespace jw
 {
     constinit dpmi::locked_pool_resource<true>* irq_alloc { nullptr };
@@ -174,10 +168,7 @@ namespace jw
                 min_chunk_size = irq_alloc_size;
                 irq_alloc = new dpmi::locked_pool_resource<true> { irq_alloc_size };
             }
-            catch (...)
-            {
-                std::abort();
-            }
+            catch (...) { std::abort(); }
 
             setup_exception_throwers();
 
@@ -233,7 +224,7 @@ namespace jw
         void* const new_p = ::operator new(new_size, std::align_val_t { align });
         if (p != nullptr) [[likely]]
         {
-            const auto old_size = [p]()
+            const auto old_size = [p]
             {
                 if (irq_alloc != nullptr and irq_alloc->in_pool(p)) return irq_alloc->size(p);
                 auto* const q = static_cast<std::uint8_t*>(p);
@@ -244,6 +235,35 @@ namespace jw
         }
         return new_p;
     }
+}
+
+extern "C"
+{
+    decltype(std::malloc) __real_malloc;
+    decltype(std::free) __real_free;
+
+    void* __wrap_malloc(std::size_t n) noexcept
+    {
+        constinit static std::atomic_flag in_malloc { false };
+        // Fail here on re-entry.  This happens when an exception is thrown in
+        // operator new, and malloc is called to allocate the exception.
+        // Returning nullptr ensures the exception is allocated from an emergency
+        // pool instead.
+        if (in_malloc.test_and_set()) [[unlikely]] return nullptr;
+        struct x { ~x() { in_malloc.clear(); } } scope_guard;
+        try { return ::operator new(n); }
+        catch (const std::bad_alloc&) { return nullptr; }
+    }
+
+    void* __wrap_realloc(void* p, std::size_t n) noexcept
+    {
+        try { return jw::realloc(p, n, __STDCPP_DEFAULT_NEW_ALIGNMENT__); }
+        catch (const std::bad_alloc&) { return p; }
+    }
+
+    void* __wrap_calloc(std::size_t n, std::size_t size) noexcept { return __wrap_malloc(n * size); }
+
+    void __wrap_free(void* p) noexcept { ::operator delete(p); }
 }
 
 [[nodiscard]] void* operator new(std::size_t size, std::align_val_t alignment)
@@ -315,32 +335,6 @@ void operator delete(void* ptr, std::size_t n, std::align_val_t a) noexcept
         p -= *(p - 1);
         __real_free(p);
     }
-}
-
-extern "C"
-{
-    void* __wrap_malloc(std::size_t n) noexcept
-    {
-        constinit static std::atomic_flag in_malloc { false };
-        // Fail here on re-entry.  This happens when an exception is thrown in
-        // operator new, and malloc is called to allocate the exception.
-        // Returning nullptr ensures the exception is allocated from an emergency
-        // pool instead.
-        if (in_malloc.test_and_set()) [[unlikely]] return nullptr;
-        struct x { ~x() { in_malloc.clear(); } } scope_guard;
-        try { return ::operator new(n); }
-        catch (const std::bad_alloc&) { return nullptr; }
-    }
-
-    void* __wrap_realloc(void* p, std::size_t n) noexcept
-    {
-        try { return jw::realloc(p, n, __STDCPP_DEFAULT_NEW_ALIGNMENT__); }
-        catch (const std::bad_alloc&) { return p; }
-    }
-
-    void* __wrap_calloc(std::size_t n, std::size_t size) noexcept { return __wrap_malloc(n * size); }
-
-    void __wrap_free(void* p) noexcept { ::operator delete(p); }
 }
 
 [[nodiscard]] void* operator new(std::size_t n)
