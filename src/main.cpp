@@ -56,7 +56,6 @@ namespace jw
         throw terminate_exception { };
     }
 
-    std::terminate_handler original_terminate_handler;
     [[noreturn]] void terminate_handler() noexcept
     {
         static unsigned terminated = 0;
@@ -207,6 +206,7 @@ namespace jw
         ~init() noexcept
         {
             if (debug::debug()) debug::detail::notify_gdb_exit(exit_code);
+            std::set_terminate(original_terminate_handler);
             jw::dpmi::detail::fpu_context_switcher.reset();
             delete irq_alloc;
             irq_alloc = nullptr;
@@ -224,6 +224,8 @@ namespace jw
                 asm ("mov cr4, %0" :: "r" (cr | 0x600));  // enable SSE and SSE exceptions
             }
         }
+
+        std::terminate_handler original_terminate_handler;
     } initializer [[gnu::init_priority(101)]];
 
     [[nodiscard]] void* realloc(void* p, std::size_t new_size, std::size_t align)

@@ -31,7 +31,7 @@ namespace jw
             constexpr operator selector() const noexcept { return value; }
         };
 
-        inline const std::size_t page_size = config::assume_4k_pages ? std::size_t { 4_KB } : []
+        inline const std::size_t page_size [[gnu::init_priority(101)]] = config::assume_4k_pages ? std::size_t { 4_KB } : []
         {
             dpmi_error_code error;
             split_uint32_t size;
