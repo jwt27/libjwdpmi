@@ -46,6 +46,7 @@ namespace jw
     void print_exception(const std::exception& e, int level) noexcept
     {
         std::cerr << "Exception " << std::dec << level << ": " << e.what() << '\n';
+        if (auto* cpu_ex = dynamic_cast<const dpmi::cpu_exception*>(&e)) cpu_ex->print();
         try { std::rethrow_if_nested(e); }
         catch (const std::exception& e) { print_exception(e, level + 1); }
         catch (...) { std::cerr << "Exception " << std::dec << (level + 1) << ": Unknown exception.\n"; }

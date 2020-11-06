@@ -38,7 +38,7 @@ namespace jw
             far_ptr32 fault_address;
             union [[gnu::packed]]
             {
-                struct[[gnu::packed]] // DPMI 1.0 only
+                struct [[gnu::packed]] // DPMI 1.0 only
                 {
                     bool host_exception : 1;
                     bool cannot_retry : 1;
@@ -68,16 +68,16 @@ namespace jw
             }
             friend auto& operator<<(std::ostream& out, const old_exception_frame& in) { return in.print(out); }
         };
-        struct[[gnu::packed]] new_exception_frame : public old_exception_frame
+        struct [[gnu::packed]] new_exception_frame : public old_exception_frame
         {
-            selector es; unsigned : 16;
-            selector ds; unsigned : 16;
-            selector fs; unsigned : 16;
-            selector gs; unsigned : 16;
-            std::uintptr_t linear_page_fault_address : 32;
+            selector es { }; unsigned : 16;
+            selector ds { }; unsigned : 16;
+            selector fs { }; unsigned : 16;
+            selector gs { }; unsigned : 16;
+            std::uintptr_t linear_page_fault_address : 32 { };
             union
             {
-                struct[[gnu::packed]]
+                struct [[gnu::packed]]
                 {
                     bool present : 1;
                     bool write_access : 1;
@@ -91,7 +91,7 @@ namespace jw
                     unsigned physical_address : 21;
                 };
                 unsigned raw_pte : 32;
-            } page_table_entry;
+            } page_table_entry { };
 
             std::ostream& print(std::ostream& out) const
             {
@@ -107,7 +107,7 @@ namespace jw
             friend auto& operator<<(std::ostream& out, const new_exception_frame& in) { return in.print(out); }
         };
 
-        struct[[gnu::packed]] raw_exception_frame
+        struct [[gnu::packed]] raw_exception_frame
         {
             cpu_registers reg;
             old_exception_frame frame_09;
@@ -222,26 +222,26 @@ namespace jw
 
         struct cpu_exception : public std::system_error
         {
-            cpu_exception(exception_num n, cpu_registers* reg, exception_frame* frame, bool new_type) : cpu_exception { n, create_exception_message(reg, frame, new_type) } { }
+            const cpu_registers registers;
+            const new_exception_frame frame;
+            const bool new_frame_type;
 
-        protected:
-            cpu_exception(exception_num n) : system_error { static_cast<int>(n), cpu_category { } } { }
-            cpu_exception(exception_num n, const std::string& msg) : system_error { static_cast<int>(n), cpu_category { }, msg } { }
+            cpu_exception(exception_num n, cpu_registers* r, exception_frame* f, bool t)
+                : system_error { static_cast<int>(n), cpu_category { } }
+                , registers { *r }, frame { t ? *static_cast<new_exception_frame*>(f) : *f }, new_frame_type { t } { }
 
-            std::string create_exception_message(cpu_registers* reg, exception_frame* frame, bool new_type)
+            void print(std::ostream& s = std::cerr) const
             {
-                std::stringstream s;
-                if (new_type) s << *static_cast<new_exception_frame*>(frame);
-                else s << *frame;
-                s << *reg;
-                return s.str();
+                if (new_frame_type) s << frame;
+                else s << *static_cast<const old_exception_frame*>(&frame);
+                s << registers;
             }
         };
 
         template<exception_num N>
         struct specific_cpu_exception : public cpu_exception
         {
-            specific_cpu_exception(cpu_registers* reg, exception_frame* frame, bool new_type) : cpu_exception { N, reg, frame, new_type } { }
+            specific_cpu_exception(cpu_registers* r, exception_frame* f, bool t) : cpu_exception { N, r, f, t } { }
         };
 
         using divide_error             = specific_cpu_exception<exception_num::divide_error>;
