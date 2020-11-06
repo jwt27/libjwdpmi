@@ -125,7 +125,7 @@ namespace jw
         {
             using E = enum_struct<std::uint32_t>;
             using T = typename E::underlying_type;
-            enum
+            enum : T
             {
                 divide_error = 0,
                 trap,
@@ -222,6 +222,12 @@ namespace jw
 
         struct cpu_exception : public std::system_error
         {
+            cpu_exception(exception_num n, cpu_registers* reg, exception_frame* frame, bool new_type) : cpu_exception { n, create_exception_message(reg, frame, new_type) } { }
+
+        protected:
+            cpu_exception(exception_num n) : system_error { static_cast<int>(n), cpu_category { } } { }
+            cpu_exception(exception_num n, const std::string& msg) : system_error { static_cast<int>(n), cpu_category { }, msg } { }
+
             std::string create_exception_message(cpu_registers* reg, exception_frame* frame, bool new_type)
             {
                 std::stringstream s;
@@ -230,10 +236,34 @@ namespace jw
                 s << *reg;
                 return s.str();
             }
-
-            cpu_exception(exception_num n) : system_error(n, cpu_category { }) { }
-            cpu_exception(exception_num n, const std::string& msg) : system_error(n, cpu_category { }, msg) { }
-            cpu_exception(exception_num n, cpu_registers* reg, exception_frame* frame, bool new_type) : cpu_exception(n, create_exception_message(reg, frame, new_type)) { }
         };
+
+        template<exception_num N>
+        struct specific_cpu_exception : public cpu_exception
+        {
+            specific_cpu_exception(cpu_registers* reg, exception_frame* frame, bool new_type) : cpu_exception { N, reg, frame, new_type } { }
+        };
+
+        using divide_error             = specific_cpu_exception<exception_num::divide_error>;
+        using trap                     = specific_cpu_exception<exception_num::trap>;
+        using non_maskable_interrupt   = specific_cpu_exception<exception_num::non_maskable_interrupt>;
+        using breakpoint               = specific_cpu_exception<exception_num::breakpoint>;
+        using overflow                 = specific_cpu_exception<exception_num::overflow>;
+        using bound_range_exceeded     = specific_cpu_exception<exception_num::bound_range_exceeded>;
+        using invalid_opcode           = specific_cpu_exception<exception_num::invalid_opcode>;
+        using device_not_available     = specific_cpu_exception<exception_num::device_not_available>;
+        using double_fault             = specific_cpu_exception<exception_num::double_fault>;
+        using x87_segment_not_present  = specific_cpu_exception<exception_num::x87_segment_not_present>;
+        using invalid_tss              = specific_cpu_exception<exception_num::invalid_tss>;
+        using segment_not_present      = specific_cpu_exception<exception_num::segment_not_present>;
+        using stack_segment_fault      = specific_cpu_exception<exception_num::stack_segment_fault>;
+        using general_protection_fault = specific_cpu_exception<exception_num::general_protection_fault>;
+        using page_fault               = specific_cpu_exception<exception_num::page_fault>;
+        using x87_exception            = specific_cpu_exception<exception_num::x87_exception>;
+        using alignment_check          = specific_cpu_exception<exception_num::alignment_check>;
+        using machine_check            = specific_cpu_exception<exception_num::machine_check>;
+        using sse_exception            = specific_cpu_exception<exception_num::sse_exception>;
+        using virtualization_exception = specific_cpu_exception<exception_num::virtualization_exception>;
+        using security_exception       = specific_cpu_exception<exception_num::security_exception>;
     }
 }

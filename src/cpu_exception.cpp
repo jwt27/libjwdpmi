@@ -266,28 +266,38 @@ namespace jw
 
         namespace detail
         {
-            std::array<std::unique_ptr<exception_handler>, 0x20> exception_throwers;
+            std::array<std::optional<exception_handler>, 0x20> exception_throwers;
+
+            template <exception_num N>
+            void make_thrower()
+            {
+                exception_throwers[N].emplace(N, [](cpu_registers* r, exception_frame* f, bool t) -> bool
+                {
+                    throw specific_cpu_exception<N> { r, f, t };
+                });
+            }
+
+            template <exception_num N, exception_num... Next>
+            void make_throwers()
+            {
+                make_thrower<N>();
+                if constexpr (sizeof...(Next) > 0) make_throwers<Next...>();
+            };
 
             bool exception_throwers_setup { false };
             void setup_exception_throwers()
             {
-                if (not config::enable_throwing_from_cpu_exceptions) return;
+                if constexpr (not config::enable_throwing_from_cpu_exceptions) return;
                 if (exception_throwers_setup) [[likely]] return;
                 exception_throwers_setup = true;
 
-                auto make_thrower = [](exception_num n)
-                {
-                    exception_throwers[n] = std::make_unique<exception_handler>(n, [n](cpu_registers* r, exception_frame* f, bool t) -> bool { throw cpu_exception { n, r, f, t }; });
-                };
-
-                for (auto i = 0; i <= 0xe; ++i)
-                    make_thrower(i);
+                make_throwers<0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+                              0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e>();
 
                 capabilities c { };
-                if (!c.supported) return;
+                if (not c.supported) return;
                 if (std::strncmp(c.vendor_info.name, "HDPMI", 5) != 0) return;  // TODO: figure out if other hosts support these too
-                for (auto&& i : { 0x10, 0x11, 0x12, 0x13, 0x14, 0x1e })
-                    make_thrower(i);
+                make_throwers<0x10, 0x11, 0x12, 0x13, 0x14, 0x1e>();
             }
         }
     }
