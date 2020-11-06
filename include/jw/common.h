@@ -27,9 +27,9 @@ namespace jw
 {
     void print_exception(const std::exception& e, int level = 0) noexcept;
 
-    struct terminate_exception
+    struct terminate_exception final
     {
-        virtual const char* what() const noexcept { return "Terminating."; }
+        const char* what() const noexcept { return "Terminating."; }
     };
 
     [[noreturn]] void terminate();
