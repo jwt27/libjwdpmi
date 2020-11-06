@@ -73,7 +73,7 @@ namespace jw
             template <std::uint16_t dpmi_function>
             void call(int_vector interrupt)
             {
-                FORCE_FRAME_POINTER;
+                force_frame_pointer();
                 selector new_reg_ds = get_ds();
                 realmode_registers* new_reg;
                 dpmi_error_code error;
@@ -104,7 +104,7 @@ namespace jw
                 auto ptr = linear_memory { new_reg_ds, new_reg };
                 if (ptr.requires_new_selector()) [[unlikely]]
                 {
-                    FORCE_FRAME_POINTER;
+                    force_frame_pointer();
                     asm("push es;"
                         "push ds;"
                         "pop es;"

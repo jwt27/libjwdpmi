@@ -16,8 +16,6 @@ constexpr std::uint64_t operator"" _MB(std::uint64_t n) { return n << 20; }
 constexpr std::uint64_t operator"" _GB(std::uint64_t n) { return n << 30; }
 constexpr std::uint64_t operator"" _TB(std::uint64_t n) { return n << 40; }
 
-#define FORCE_FRAME_POINTER asm(""::"r"(__builtin_frame_address(0)));
-
 #ifdef __MMX__
 #   define HAVE__MMX__
 #endif
@@ -37,6 +35,13 @@ namespace jw
     [[noreturn]] void terminate();
 
     [[nodiscard]] void* realloc(void* pointer, std::size_t new_size, std::size_t alignment);
+
+    // Prevent omission of the frame pointer in the function where this is
+    // called.  If a frame pointer is present, stack memory operands in asm
+    // statements are always addressed through it.  Without a frame pointer,
+    // such operands are addressed via esp which is invalidated by push/pop
+    // operations.
+    [[gnu::always_inline]] inline void force_frame_pointer() noexcept { asm(""::"r"(__builtin_frame_address(0))); }
 
 #   ifdef HAVE__MMX__
     inline constexpr bool mmx = true;

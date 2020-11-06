@@ -219,7 +219,7 @@ namespace jw
         // Call a function which returns with RETF
         inline void call_far(far_ptr32 ptr)
         {
-            FORCE_FRAME_POINTER;
+            force_frame_pointer();
             asm volatile(
                 "pusha;"
                 "call fword ptr %0;"
@@ -231,7 +231,7 @@ namespace jw
         // Call a function which returns with IRET
         inline void call_far_iret(far_ptr32 ptr)
         {
-            FORCE_FRAME_POINTER;
+            force_frame_pointer();
             asm volatile(
                 "pusha;"
                 "pushf;"

@@ -441,7 +441,7 @@ namespace jw
 
             dpmi::selector mmio = vbe2_mmio ? vbe2_mmio->get_selector() : dpmi::get_ds();
             std::uint16_t ax;
-            FORCE_FRAME_POINTER;
+            force_frame_pointer();
             asm volatile(
                 "push es;"
                 "mov es, %w2;"
@@ -607,7 +607,7 @@ namespace jw
                 }
 
                 dpmi::selector mmio = vbe2_mmio ? vbe2_mmio->get_selector() : dpmi::get_ds();
-                FORCE_FRAME_POINTER;
+                force_frame_pointer();
                 asm volatile(
                     "push ds;"
                     "push es;"
@@ -666,7 +666,7 @@ namespace jw
 
             dpmi::linear_memory data_mem { dpmi::get_ds(), reinterpret_cast<const px32n*>(ptr),  static_cast<std::size_t>(end - begin) };
             std::uint16_t ax;
-            FORCE_FRAME_POINTER;
+            force_frame_pointer();
             asm volatile(
                 "push es;"
                 "mov es, %w1;"
