@@ -226,7 +226,7 @@ namespace jw
         }
 
         std::terminate_handler original_terminate_handler;
-    } initializer [[gnu::init_priority(101)]];
+    } [[gnu::init_priority(102)]] initializer;
 
     [[nodiscard]] void* realloc(void* p, std::size_t new_size, std::size_t align)
     {

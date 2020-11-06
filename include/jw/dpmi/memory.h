@@ -31,22 +31,39 @@ namespace jw
             constexpr operator selector() const noexcept { return value; }
         };
 
-        inline const std::size_t page_size [[gnu::init_priority(101)]] = config::assume_4k_pages ? std::size_t { 4_KB } : []
+        struct page_size_t final
         {
-            dpmi_error_code error;
-            split_uint32_t size;
-            bool c;
+            constexpr operator std::size_t() const noexcept { return size; }
 
-            asm("int 0x31;"
-                : "=@ccc" (c)
-                , "=a" (error)
-                , "=b" (size.hi)
-                , "=c" (size.lo)
-                : "a" (0x0604));
-            if (c) throw dpmi_error(error, "page_size");
+            explicit constexpr page_size_t(std::true_type) noexcept : size { 4_KB } { }
+            explicit page_size_t(std::false_type) : size { init() } { }
 
-            return static_cast<std::size_t>(size);
-        }();
+        private:
+            page_size_t() = delete;
+            page_size_t(const page_size_t&) = delete;
+            page_size_t(page_size_t&&) = delete;
+            page_size_t& operator=(const page_size_t&) = delete;
+            page_size_t& operator=(page_size_t&&) = delete;
+
+            static std::size_t init()
+            {
+                dpmi_error_code error;
+                split_uint32_t size;
+                bool c;
+
+                asm("int 0x31;"
+                    : "=@ccc" (c)
+                    , "=a" (error)
+                    , "=b" (size.hi)
+                    , "=c" (size.lo)
+                    : "a" (0x0604));
+                if (c) throw dpmi_error(error, "page_size");
+
+                return size;
+            }
+
+            std::size_t size;
+        } inline const [[gnu::init_priority(101)]] page_size { std::integral_constant<bool, config::assume_4k_pages> { } };
 
         inline std::size_t round_down_to_page_size(std::size_t num_bytes)
         {
@@ -55,8 +72,7 @@ namespace jw
 
         inline std::size_t round_up_to_page_size(std::size_t num_bytes)
         {
-            auto page = page_size;
-            return round_down_to_page_size(num_bytes) + ((num_bytes & (page - 1)) == 0 ? 0 : page);
+            return round_down_to_page_size(num_bytes) + ((num_bytes & (page_size - 1)) == 0 ? 0 : page_size);
         }
 
         enum segment_type
