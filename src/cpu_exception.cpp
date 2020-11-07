@@ -235,30 +235,31 @@ namespace jw
 
         std::string cpu_category::message(int ev) const
         {
+            using namespace std::string_literals;
             switch (ev)
             {
-            case exception_num::divide_error:             return "Divide error.";
-            case exception_num::trap:                     return "Debug exception.";
-            case exception_num::non_maskable_interrupt:   return "Non-maskable interrupt.";
-            case exception_num::breakpoint:               return "Breakpoint.";
-            case exception_num::overflow:                 return "Overflow.";
-            case exception_num::bound_range_exceeded:     return "Bound range exceeded.";
-            case exception_num::invalid_opcode:           return "Invalid opcode.";
-            case exception_num::device_not_available:     return "Device not available.";
-            case exception_num::double_fault:             return "Double fault.";
-            case exception_num::x87_segment_not_present:  return "x87 Segment overrun.";
-            case exception_num::invalid_tss:              return "Invalid Task State Segment.";
-            case exception_num::segment_not_present:      return "Segment not present.";
-            case exception_num::stack_segment_fault:      return "Stack Segment fault.";
-            case exception_num::general_protection_fault: return "General Protection fault.";
-            case exception_num::page_fault:               return "Page fault.";
-            case exception_num::x87_exception:            return "x87 Floating-point exception.";
-            case exception_num::alignment_check:          return "Alignment check.";
-            case exception_num::machine_check:            return "Machine check.";
-            case exception_num::sse_exception:            return "SSE Floating-point exception.";
-            case exception_num::virtualization_exception: return "Virtualization exception.";
-            case exception_num::security_exception:       return "Security exception.";
-            default:std::stringstream s; s << "Unknown CPU exception 0x" << std::hex << ev << "."; return s.str();
+            case exception_num::divide_error:             return "Divide error"s;
+            case exception_num::trap:                     return "Debug exception"s;
+            case exception_num::non_maskable_interrupt:   return "Non-maskable interrupt"s;
+            case exception_num::breakpoint:               return "Breakpoint"s;
+            case exception_num::overflow:                 return "Overflow"s;
+            case exception_num::bound_range_exceeded:     return "Bound range exceeded"s;
+            case exception_num::invalid_opcode:           return "Invalid opcode"s;
+            case exception_num::device_not_available:     return "Device not available"s;
+            case exception_num::double_fault:             return "Double fault"s;
+            case exception_num::x87_segment_not_present:  return "x87 Segment overrun"s;
+            case exception_num::invalid_tss:              return "Invalid Task State Segment"s;
+            case exception_num::segment_not_present:      return "Segment not present"s;
+            case exception_num::stack_segment_fault:      return "Stack Segment fault"s;
+            case exception_num::general_protection_fault: return "General protection fault"s;
+            case exception_num::page_fault:               return "Page fault"s;
+            case exception_num::x87_exception:            return "x87 Floating-point exception"s;
+            case exception_num::alignment_check:          return "Alignment check"s;
+            case exception_num::machine_check:            return "Machine check"s;
+            case exception_num::sse_exception:            return "SSE Floating-point exception"s;
+            case exception_num::virtualization_exception: return "Virtualization exception"s;
+            case exception_num::security_exception:       return "Security exception"s;
+            default:std::stringstream s; s << "Unknown CPU exception 0x" << std::hex << ev; return s.str();
             }
         }
 
