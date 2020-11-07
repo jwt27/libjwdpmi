@@ -229,7 +229,7 @@ namespace jw
                 auto* const q = static_cast<std::uint8_t*>(p);
                 return *reinterpret_cast<std::size_t*>(q - *(q - 1));
             }();
-            std::memcpy(new_p, p, old_size);
+            std::memcpy(new_p, p, std::min(old_size, new_size));
             ::operator delete(p);
         }
         return new_p;
