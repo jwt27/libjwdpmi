@@ -45,7 +45,7 @@ obj/%.o: src/%.cpp
     $(CXX) $(CXXFLAGS) -o $@ -Ilib/libjwdpmi/include -c $<
 
 bin/program.exe: $(OBJ) libjwdpmi
-    $(CXX) $(CXXFLAGS) -o $@ $(OBJ) -Llib/libjwdpmi/bin -ljwdpmi
+    $(CXX) $(CXXFLAGS) -o $@ $(OBJ) -Llib/libjwdpmi/bin -ljwdpmi -Wl,@lib/libjwdpmi/tools/ldflags
 ```
 
 ## Using
