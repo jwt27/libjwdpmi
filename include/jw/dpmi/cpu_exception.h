@@ -228,13 +228,19 @@ namespace jw
 
             cpu_exception(exception_num n, cpu_registers* r, exception_frame* f, bool t)
                 : system_error { static_cast<int>(n), cpu_category { } }
-                , registers { *r }, frame { t ? *static_cast<new_exception_frame*>(f) : *f }, new_frame_type { t } { }
+                , registers { *r }, frame { init_frame(f, t) }, new_frame_type { t } { }
 
             void print(std::ostream& s = std::cerr) const
             {
                 if (new_frame_type) s << frame;
                 else s << *static_cast<const old_exception_frame*>(&frame);
                 s << registers;
+            }
+        private:
+            static new_exception_frame init_frame(old_exception_frame* f, bool t) noexcept
+            {
+                if (t) return *static_cast<new_exception_frame*>(f);
+                else return { *f };
             }
         };
 
