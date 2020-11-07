@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
@@ -102,11 +103,15 @@ namespace jw
 
             [[noreturn, gnu::no_caller_saved_registers]] void kill();
 
+            [[gnu::naked, gnu::stdcall]] void call_from_exception(void(*)());
+
             inline void simulate_call(exception_frame* frame, void(*func)()) noexcept
             {
-                frame->stack.offset -= 4;                                                               // "sub esp, 4"
-                *reinterpret_cast<std::uintptr_t*>(frame->stack.offset) = frame->fault_address.offset;  // "mov [esp], eip"
-                frame->fault_address.offset = reinterpret_cast<std::uintptr_t>(func);                   // "mov eip, func"
+                frame->stack.offset -= 4;
+                *reinterpret_cast<std::uintptr_t*>(frame->stack.offset) = reinterpret_cast<std::uintptr_t>(func);
+                frame->stack.offset -= 4;
+                *reinterpret_cast<std::uintptr_t*>(frame->stack.offset) = frame->fault_address.offset;
+                frame->fault_address.offset = reinterpret_cast<std::uintptr_t>(call_from_exception);
                 frame->info_bits.redirect_elsewhere = true;
             }
         }

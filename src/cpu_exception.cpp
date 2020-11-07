@@ -17,29 +17,27 @@ namespace jw
     {
         namespace detail
         {
-            inline std::vector<std::exception_ptr> pending_exceptions { };
+            std::vector<std::exception_ptr> pending_exceptions { };
 
-            [[noreturn, gnu::no_caller_saved_registers]]
+            [[noreturn, gnu::no_caller_saved_registers, gnu::force_align_arg_pointer]]
             void kill()
             {
-                asm(".cfi_signal_frame");
                 jw::terminate();
             }
 
-            [[noreturn, gnu::no_caller_saved_registers]]
+            [[noreturn, gnu::no_caller_saved_registers, gnu::force_align_arg_pointer]]
             void rethrow_cpu_exception()
             {
-                asm(".cfi_signal_frame");
+                auto e = pending_exceptions.back();
+                pending_exceptions.pop_back();
+                std::rethrow_exception(e);
+            }
 
-                try
-                {
-                    std::rethrow_exception(pending_exceptions.back());
-                }
-                catch (...)
-                {
-                    pending_exceptions.pop_back();
-                    throw;
-                }
+            [[gnu::naked, gnu::stdcall]]
+            void call_from_exception(void(*)())
+            {
+                asm (".cfi_signal_frame");
+                asm ("call [esp+4]; ret 4");
             }
 
             bool enter_exception_context(exception_num exc) noexcept
