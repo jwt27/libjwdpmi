@@ -264,21 +264,15 @@ namespace jw
 
         namespace detail
         {
-            std::array<std::optional<exception_handler>, 0x20> exception_throwers;
+            constinit std::array<std::optional<exception_handler>, 0x20> exception_throwers { };
 
-            template <exception_num N>
-            void make_thrower()
+            template <exception_num N, exception_num... Next>
+            void make_throwers()
             {
                 exception_throwers[N].emplace(N, [](cpu_registers* r, exception_frame* f, bool t) -> bool
                 {
                     throw specific_cpu_exception<N> { r, f, t };
                 });
-            }
-
-            template <exception_num N, exception_num... Next>
-            void make_throwers()
-            {
-                make_thrower<N>();
                 if constexpr (sizeof...(Next) > 0) make_throwers<Next...>();
             };
 
