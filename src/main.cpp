@@ -200,8 +200,6 @@ namespace jw
             if (debug::debug()) debug::detail::notify_gdb_exit(exit_code);
             std::set_terminate(original_terminate_handler);
             jw::dpmi::detail::fpu_context_switcher.reset();
-            delete irq_alloc;
-            irq_alloc = nullptr;
         }
 
     private:
