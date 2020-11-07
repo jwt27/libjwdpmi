@@ -158,6 +158,7 @@ namespace jw
                 , alloc(pool_size), reg_pool(alloc) { init_code(); }
 
         private:
+            [[gnu::cdecl]]
             static void entry_point(realmode_callback* self, std::uint32_t rm_stack_selector, std::uint32_t rm_stack_offset) noexcept;
             void init_code() noexcept;
 

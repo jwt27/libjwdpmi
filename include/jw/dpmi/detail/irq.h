@@ -186,7 +186,7 @@ namespace jw
                 }
 
                 INTERRUPT static byte* get_stack_ptr() noexcept;
-                INTERRUPT [[gnu::force_align_arg_pointer]] static void interrupt_entry_point(int_vector vec) noexcept;
+                INTERRUPT [[gnu::force_align_arg_pointer, gnu::cdecl]] static void interrupt_entry_point(int_vector vec) noexcept;
 
                 static constexpr io::io_port<byte> pic0_cmd { 0x20 };
                 static constexpr io::io_port<byte> pic1_cmd { 0xA0 };
