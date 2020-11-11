@@ -84,7 +84,7 @@ namespace jw::audio
     {
         static constexpr unsigned channel_4op[] { 0x0, 0x1, 0x2, 0x9, 0xa, 0xb };
         auto is_4op = common.value.enable_4op.bitset();
-        for (unsigned i = 0; i < 6; ++i)
+        if (type != opl_type::opl2) for (unsigned i = 0; i < 6; ++i)
         {
             if (ch == channel_4op[i] + 3 and is_4op[i])
             {
