@@ -157,10 +157,17 @@ namespace jw::audio
         status_t status() const noexcept { return status_register.read(); }
         void reset();
 
-        // Return absolute oscillator slot number for given operator in given channel.
+        // Returns absolute oscillator slot number for given operator in given channel.
         static constexpr std::uint8_t oscillator_slot(std::uint8_t ch, std::uint8_t osc) noexcept
         {
             return ch + 3 * (ch / 3) + 3 * osc;
+        }
+
+        // Returns effective base 2op channel number for given 4op channel number.  Add 3 to find the second half.
+        static constexpr std::uint8_t lookup_4op(std::uint8_t ch_4op) noexcept
+        {
+            constexpr unsigned lookup[] { 0x0, 0x1, 0x2, 0x9, 0xa, 0xb };
+            return lookup[ch_4op];
         }
 
     private:
