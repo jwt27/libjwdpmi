@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
@@ -12,4 +13,6 @@ namespace jw::io
     struct framing_error : public io_error { using io_error::io_error; };
     struct line_break : public io_error { using io_error::io_error; };
     struct timeout_error : public io_error { using io_error::io_error; };
+
+    struct device_not_found : public std::runtime_error { using runtime_error::runtime_error; };
 }

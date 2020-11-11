@@ -55,7 +55,7 @@ namespace jw
                 fctrl.irq_threshold = uart_fifo_control_reg::bytes_8;
                 fifo_control.write(fctrl);
 
-                if (irq_id.read().fifo_enabled != 0b11) throw std::runtime_error("16550A not detected"); // HACK
+                if (irq_id.read().fifo_enabled != 0b11) throw device_not_found("16550A not detected"); // HACK
 
                 irq_handler.set_irq(config.irq);
                 irq_handler.enable();
