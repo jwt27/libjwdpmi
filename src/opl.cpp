@@ -33,6 +33,8 @@ namespace jw::audio
         common_registers c { };
         c.mask_timer0 = true;
         c.mask_timer1 = true;
+        c.enable_opl3 = common.value.enable_opl3;
+        c.enable_opl3_l = common.value.enable_opl3_l;
         write(c);
     }
 
