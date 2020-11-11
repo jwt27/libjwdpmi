@@ -1,10 +1,10 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
-#include <jw/common.h>
 #include <cstdint>
 #include <type_traits>
 
@@ -66,38 +66,36 @@ namespace jw
         #undef PORT_IN_NONTRIVIAL
         }
 
-        template <typename T = byte>
+        template <typename T = std::byte>
         struct out_port
         {
-            void write(T value) const { detail::out<T>(p, value); }
-            auto& operator=(auto value) const { write(value); return *this; }
+            void write(T value) const { detail::out<T>(port, value); }
             void operator()(T value) const { return write(value); }
 
-            constexpr out_port(auto _p) noexcept : p(_p) { }
+            constexpr out_port(port_num p) noexcept : port { p } { }
             out_port(const out_port&) = delete;
             out_port& operator=(const out_port&) = delete;
-        private:
-            const port_num p;
+
+            const port_num port;
         };
 
-        template <typename T = byte>
+        template <typename T = std::byte>
         struct in_port
         {
-            auto read() const { return detail::in<T>(p); }
-            operator T() const { return read(); }
+            auto read() const { return detail::in<T>(port); }
             T operator()() const { return read(); }
 
-            constexpr in_port(auto _p) noexcept : p(_p) { }
+            constexpr in_port(port_num p) noexcept : port { p } { }
             in_port(const in_port&) = delete;
             in_port& operator=(const in_port&) = delete;
-        private:
-            const port_num p;
+
+            const port_num port;
         };
 
-        template <typename T = byte>
+        template <typename T = std::byte>
         struct io_port final : public in_port<T>, public out_port<T>
         {
-            constexpr io_port(auto _p) noexcept : in_port<T>(_p), out_port<T>(_p) { }
+            constexpr io_port(port_num p) noexcept : in_port<T> { p }, out_port<T> { p } { }
         };
     }
 }
