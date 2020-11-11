@@ -12,7 +12,7 @@ namespace jw::dpmi::detail
     {
         static far_ptr32 get_pm_handler(exception_num n)
         {
-            try { return  int31_get<0x0210>(n); }
+            try { return int31_get<0x0210>(n); }
             catch (const dpmi_error& e)
             {
                 switch (e.code().value())
