@@ -80,6 +80,18 @@ namespace jw::audio
 
     void basic_opl::write(const channel& value, std::uint8_t ch)
     {
+        static constexpr unsigned channel_4op[] { 0x0, 0x1, 0x2, 0x9, 0xa, 0xb };
+        auto is_4op = common.value.enable_4op.bitset();
+        for (unsigned i = 0; i < 6; ++i)
+        {
+            if (ch == channel_4op[i] + 3 and is_4op[i])
+            {
+                if (ch >= 9) write<0x1c0>(value, channels[ch], ch - 9);
+                else write<0xc0>(value, channels[ch], ch);
+                return;
+            }
+        }
+
         if (ch >= 9) write<0x1c0, 0x1a0, 0x1b0>(value, channels[ch], ch - 9);
         else write<0xc0, 0xa0, 0xb0>(value, channels[ch], ch);
     }
@@ -87,10 +99,10 @@ namespace jw::audio
     template<unsigned... R, typename T>
     void basic_opl::write(const T& v, cached_reg<T>& cache, unsigned offset)
     {
-        static_assert(sizeof...(R) == sizeof(T));
+        static_assert(sizeof...(R) <= sizeof(T));
         static constexpr unsigned regnum[] { R... };
         const reg<T> value { v };
-        for (unsigned i = 0; i < sizeof(T); ++i)
+        for (unsigned i = 0; i < sizeof...(R); ++i)
         {
             if (value.raw[i] == cache.raw[i] and cache.written[i]) continue;
             write(regnum[i] + offset, value.raw[i]);
