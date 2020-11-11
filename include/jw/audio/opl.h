@@ -14,7 +14,7 @@ namespace jw::audio
 {
     enum class opl_type
     {
-        unknown, opl2, opl3, opl3_l
+        opl2, opl3, opl3_l
     };
 
     struct basic_opl final

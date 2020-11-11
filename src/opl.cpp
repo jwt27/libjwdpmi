@@ -116,7 +116,6 @@ namespace jw::audio
     {
         switch (type)
         {
-        case opl_type::unknown: return do_write<opl_type::unknown>(reg, value);
         case opl_type::opl2: return do_write<opl_type::opl2>(reg, value);
         case opl_type::opl3: return do_write<opl_type::opl3>(reg, value);
         case opl_type::opl3_l: return do_write<opl_type::opl3_l>(reg, value);
