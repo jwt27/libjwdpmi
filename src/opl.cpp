@@ -150,4 +150,14 @@ namespace jw::audio
         data[hi].write(value);
         if constexpr (opl2 or opl3) last_access = clock::now();
     }
+
+    void basic_opl::set_4op(std::uint8_t n, bool v)
+    {
+        reg enable_4op { common.value.enable_4op };
+        auto bits = enable_4op.value.bitset();
+        bits[n] = v;
+        enable_4op.value.bitset(bits);
+        if (common.value.enable_4op.bitset() != bits) write(0x104, enable_4op.raw[0]);
+        common.value.enable_4op = enable_4op.value;
+    };
 }

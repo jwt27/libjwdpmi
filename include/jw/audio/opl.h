@@ -155,6 +155,8 @@ namespace jw::audio
         void write(const channel& value, std::uint8_t ch);
         const common_registers& read() const noexcept { return common.value; }
         status_t status() const noexcept { return status_register.read(); }
+        bool is_4op(std::uint8_t ch_4op) const noexcept { return read().enable_4op.bitset()[ch_4op]; };
+        void set_4op(std::uint8_t ch_4op, bool enable);
         void reset();
 
         // Returns absolute oscillator slot number for given operator in given channel.
