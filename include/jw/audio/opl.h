@@ -164,19 +164,10 @@ namespace jw::audio
         }
 
         // Returns base 2op channel number for given 4op channel number.  Add 3 to find the second half.
-        static constexpr std::uint8_t lookup_4to2(std::uint8_t ch_4op) noexcept
-        {
-            constexpr std::uint8_t lookup[] { 0, 1, 2, 9, 10, 11 };
-            return lookup[ch_4op];
-        }
+        static constexpr std::uint8_t lookup_4to2(std::uint8_t ch_4op) noexcept { return table_4to2[ch_4op]; }
 
         // Returns 4op channel number that the given 2op channel is part of, or 0xff if none.
-        static constexpr std::uint8_t lookup_2to4(std::uint8_t ch_2op) noexcept
-        {
-            constexpr std::uint8_t lookup[] { 0, 1, 2, 0, 1, 2, 0xff, 0xff, 0xff,
-                                              3, 4, 5, 3, 4, 5, 0xff, 0xff, 0xff };
-            return lookup[ch_2op];
-        }
+        static constexpr std::uint8_t lookup_2to4(std::uint8_t ch_2op) noexcept { return table_2to4[ch_2op]; }
 
     private:
         basic_opl(const basic_opl&) = delete;
@@ -207,6 +198,10 @@ namespace jw::audio
         template<opl_type t> void do_write(std::uint16_t reg, std::byte value);
         void write(std::uint16_t reg, std::byte value);
         opl_type detect();
+
+        static constexpr std::uint8_t table_4to2[] { 0, 1, 2, 9, 10, 11 };
+        static constexpr std::uint8_t table_2to4[] { 0, 1, 2, 0, 1, 2, 0xff, 0xff, 0xff,
+                                                     3, 4, 5, 3, 4, 5, 0xff, 0xff, 0xff };
 
         cached_reg<common_registers> common { };
         std::array<cached_reg<oscillator>, 36> oscillators { };
