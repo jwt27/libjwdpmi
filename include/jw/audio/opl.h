@@ -153,7 +153,7 @@ namespace jw::audio
         void write(const oscillator& value, std::uint8_t slot);
         void write(const oscillator& value, std::uint8_t ch, std::uint8_t osc) { write(value, oscillator_slot(ch, osc)); }
         void write(const channel& value, std::uint8_t ch);
-        common_registers read() const noexcept { return common.value; }
+        const common_registers& read() const noexcept { return common.value; }
         status_t status() const noexcept { return status_register.read(); }
         void reset();
 
