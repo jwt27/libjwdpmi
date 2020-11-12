@@ -23,7 +23,9 @@ namespace jw::audio
 
         struct [[gnu::packed]] common_registers
         {
-            unsigned test : 8;
+            unsigned test0 : 5;
+            bool enable_waveform_select : 1;    // OPL2 only
+            unsigned test1 : 2;
             unsigned timer0 : 8;
             unsigned timer1 : 8;
             bool start_timer0 : 1;

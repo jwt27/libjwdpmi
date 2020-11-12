@@ -15,6 +15,7 @@ namespace jw::audio
         common_registers c { };
         c.mask_timer0 = true;
         c.mask_timer1 = true;
+        c.enable_waveform_select = type == opl_type::opl2;
         c.enable_opl3 = type != opl_type::opl2;
         c.enable_opl3_l = type == opl_type::opl3_l;
         write(c);
@@ -33,6 +34,7 @@ namespace jw::audio
         common_registers c { };
         c.mask_timer0 = true;
         c.mask_timer1 = true;
+        c.enable_waveform_select = common.value.enable_waveform_select;
         c.enable_opl3 = common.value.enable_opl3;
         c.enable_opl3_l = common.value.enable_opl3_l;
         write(c);
