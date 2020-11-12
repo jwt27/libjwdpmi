@@ -36,6 +36,8 @@ namespace jw::audio
         c.enable_opl3 = common.value.enable_opl3;
         c.enable_opl3_l = common.value.enable_opl3_l;
         write(c);
+        c.reset_irq = true;
+        write(c);
     }
 
     opl_type basic_opl::detect()
