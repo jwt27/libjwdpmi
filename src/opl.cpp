@@ -80,8 +80,9 @@ namespace jw::audio
 
     void basic_opl::write(const oscillator& value, std::uint8_t slot)
     {
-        if (slot >= 18) write<0x120, 0x140, 0x160, 0x180, 0x1e0>(value, oscillators[slot], slot - 18);
-        else write<0x20, 0x40, 0x60, 0x80, 0xe0>(value, oscillators[slot], slot);
+        constexpr auto offset = [](std::uint8_t n) { return n + 2 * (n / 6); };
+        if (slot >= 18) write<0x120, 0x140, 0x160, 0x180, 0x1e0>(value, oscillators[slot], offset(slot - 18));
+        else write<0x20, 0x40, 0x60, 0x80, 0xe0>(value, oscillators[slot], offset(slot));
     }
 
     void basic_opl::write(const channel& value, std::uint8_t ch)
