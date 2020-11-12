@@ -82,10 +82,11 @@ namespace jw::audio
 
     void basic_opl::write(const channel& value, std::uint8_t ch)
     {
-        auto is_4op = common.value.enable_4op.bitset();
-        if (type != opl_type::opl2) for (unsigned i = 0; i < 6; ++i)
+        if (type != opl_type::opl2)
         {
-            if (ch == lookup_4op(i) + 3 and is_4op[i])
+            auto enable_4op = read().enable_4op.bitset();
+            auto ch_4op = lookup_2to4(ch);
+            if (ch_4op != 0xff and ch == lookup_4to2(ch_4op) + 3 and enable_4op[ch_4op])
             {
                 if (ch >= 9) write<0x1c0>(value, channels[ch], ch - 9);
                 else write<0xc0>(value, channels[ch], ch);

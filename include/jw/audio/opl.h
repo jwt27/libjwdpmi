@@ -163,11 +163,19 @@ namespace jw::audio
             return ch + 3 * (ch / 3) + 3 * osc;
         }
 
-        // Returns effective base 2op channel number for given 4op channel number.  Add 3 to find the second half.
-        static constexpr std::uint8_t lookup_4op(std::uint8_t ch_4op) noexcept
+        // Returns base 2op channel number for given 4op channel number.  Add 3 to find the second half.
+        static constexpr std::uint8_t lookup_4to2(std::uint8_t ch_4op) noexcept
         {
-            constexpr unsigned lookup[] { 0x0, 0x1, 0x2, 0x9, 0xa, 0xb };
+            constexpr std::uint8_t lookup[] { 0, 1, 2, 9, 10, 11 };
             return lookup[ch_4op];
+        }
+
+        // Returns 4op channel number that the given 2op channel is part of, or 0xff if none.
+        static constexpr std::uint8_t lookup_2to4(std::uint8_t ch_2op) noexcept
+        {
+            constexpr std::uint8_t lookup[] { 0, 1, 2, 0, 1, 2, 0xff, 0xff, 0xff,
+                                              3, 4, 5, 3, 4, 5, 0xff, 0xff, 0xff };
+            return lookup[ch_2op];
         }
 
     private:
