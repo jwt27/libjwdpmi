@@ -97,7 +97,7 @@ namespace jw::audio
             unsigned : 2;
 
             template<unsigned sample_rate>
-            constexpr void set_freq(float f)
+            constexpr void freq(float f)
             {
                 constexpr auto calc_blocks = []
                 {
@@ -115,10 +115,10 @@ namespace jw::audio
                 freq_num = static_cast<unsigned>(f * (1 << (20 - i))) / sample_rate;
             }
 
-            constexpr void set_freq(const basic_opl& opl, float f)
+            constexpr void freq(const basic_opl& opl, float f)
             {
-                if (opl.type == opl_type::opl3_l) set_freq<49518>(f);
-                else set_freq<49716>(f);
+                if (opl.type == opl_type::opl3_l) freq<49518>(f);
+                else freq<49716>(f);
             }
 
             void output(std::bitset<4> value) noexcept
