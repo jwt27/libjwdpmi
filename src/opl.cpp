@@ -163,4 +163,285 @@ namespace jw::audio
         if (common.value.enable_4op.bitset() != bits) write(0x104, enable_4op.raw[0]);
         common.value.enable_4op = enable_4op.value;
     };
+
+    opl::~opl()
+    {
+        for (auto&& i : channels_2op) if (i != nullptr) remove(i);
+        for (auto&& i : channels_4op) if (i != nullptr) remove(i);
+    }
+
+    template<unsigned N> void opl::update(channel<N>* ch)
+    {
+        auto pri = N == 4 ? lookup_4to2_pri(ch->channel_num) : ch->channel_num;
+        ch->key_on = base::read_channel(pri).key_on;
+        write(ch);
+    }
+
+    template<unsigned N> void opl::stop(channel<N>* ch)
+    {
+        ch->key_on = false;
+        write(ch);
+        ch->off_time = clock::now();
+    }
+
+    template<unsigned N> void opl::retrigger(channel<N>* ch)
+    {
+        auto pri = N == 4 ? lookup_4to2_pri(ch->channel_num) : ch->channel_num;
+        if (ch->owner == this and base::read_channel(pri).key_on)
+        {
+            ch->off_time = clock::time_point::max();
+            ch->key_on = false;
+            write(ch);
+            ch->key_on = true;
+            write(ch);
+        }
+        else insert(ch);
+    }
+
+    template<unsigned N> void opl::insert_at(std::uint8_t n, channel<N>* ch)
+    {
+        if (ch->owner != nullptr)
+        {
+            ch->stop();
+            ch->owner->remove(ch);
+        }
+        if constexpr (N == 2)
+        {
+            if (channels_2op[n] != nullptr) channels_2op[n]->stop();
+            channels_2op[n] = ch;
+            auto ch_4op = lookup_2to4(n);
+            if (type != opl_type::opl2 and ch_4op != 0xff)
+            {
+                remove(channels_4op[ch_4op]);
+                set_4op(ch_4op, false);
+            }
+        }
+        if constexpr (N == 4)
+        {
+            if (channels_4op[n] != nullptr) channels_4op[n]->stop();
+            channels_4op[n] = ch;
+            remove(channels_2op[lookup_4to2_pri(n)]);
+            remove(channels_2op[lookup_4to2_sec(n)]);
+            set_4op(n, true);
+        }
+        ch->channel_num = n;
+        ch->owner = this;
+        ch->key_on = true;
+        write(ch);
+        ch->off_time = clock::time_point::max();
+    };
+
+    template<unsigned N> void opl::insert(channel<N>* ch)
+    {
+        if (ch->owner == this)
+        {
+            ch->key_on = false;
+            write(ch);
+            ch->key_on = true;
+            write(ch);
+            return;
+        }
+
+        std::uint8_t min_time = 0xff;
+        clock::time_point min_time_value { clock::time_point::max() };
+        std::uint8_t min_prio = 0xff;
+        int min_prio_value { std::numeric_limits<int>::max() };
+
+        auto check_time = [&](auto i, auto time)
+        {
+            if (time < min_time_value)
+            {
+            min_time = i;
+            min_time_value = time;
+            }
+        };
+
+        auto check_prio = [&](auto i, auto prio)
+        {
+            if (prio <= ch->priority and (prio < min_prio_value))
+            {
+                min_prio = i;
+                min_prio_value = prio;
+            }
+        };
+
+        auto search_2op = [&] (auto... order)
+        {
+            for (auto i : { order... })
+            {
+                if (channels_2op[i] == nullptr)
+                {
+                    insert_at(i, ch);
+                    return true;
+                }
+                if (not base::read_channel(i).key_on) check_time(i, channels_2op[i]->off_time);
+                check_prio(i, channels_2op[i]->priority);
+            }
+            return false;
+        };
+
+        auto search_4op = [&] (auto... order)
+        {
+            for (auto i : { order... })
+            {
+                if constexpr (N == 4)
+                {
+                    if (is_4op(i))
+                    {
+                        if (channels_4op[i] == nullptr)
+                        {
+                            insert_at(i, ch);
+                            return true;
+                        }
+                        if (not base::read_channel(lookup_4to2_pri(i)).key_on) check_time(i, channels_4op[i]->off_time);
+                        check_prio(i, channels_4op[i]->priority);
+                    }
+                    else
+                    {
+                        auto pri = lookup_4to2_pri(i);
+                        auto sec = lookup_4to2_sec(i);
+                        if (channels_2op[pri] == nullptr and channels_2op[sec] == nullptr)
+                        {
+                            insert_at(i, ch);
+                            return true;
+                        }
+
+                        auto [max_prio, max_time, key_on] = [this, pri, sec]()
+                        {
+                            auto* a = channels_2op[pri];
+                            auto* b = channels_2op[sec];
+                            if (a == nullptr) return std::make_tuple(b->priority, b->off_time, base::read_channel(sec).key_on);
+                            if (b == nullptr) return std::make_tuple(a->priority, a->off_time, base::read_channel(pri).key_on);
+                            return std::make_tuple(std::max(a->priority, b->priority),
+                                                   std::max(a->off_time, b->off_time),
+                                                   base::read_channel(pri).key_on or base::read_channel(sec).key_on);
+                        }();
+
+                        if (not key_on) check_time(i, max_time);
+                        check_prio(i, max_prio);
+                    }
+                }
+                else if constexpr (N == 2)
+                {
+                    if (is_4op(i))
+                    {
+                        if (channels_4op[i] == nullptr)
+                        {
+                            insert_at(lookup_4to2_pri(i), ch);
+                            return true;
+                        }
+                        if (not base::read_channel(lookup_4to2_pri(i)).key_on) check_time(i, channels_4op[i]->off_time);
+                        check_prio(i, channels_4op[i]->priority);
+                    }
+                    else search_2op(lookup_4to2_pri(i), lookup_4to2_sec(i));
+                }
+            }
+            return false;
+        };
+
+        if (type == opl_type::opl2)
+        {
+            if constexpr (N == 2) if (search_2op(0, 1, 2, 3, 4, 5, 6, 7, 8)) return;
+        }
+        else
+        {
+            if constexpr (N == 2) if (search_2op(6, 7, 8, 15, 16, 17)) return;
+            if (search_4op(0, 1, 2, 3, 4, 5)) return;
+        }
+
+        if (min_time != 0xff) insert_at(min_time, ch);
+        else if (min_prio != 0xff) insert_at(min_prio, ch);
+    };
+
+    template <unsigned N> void opl::remove(channel<N>* ch) noexcept
+    {
+        if (ch == nullptr) return;
+        if (ch->owner != this) return;
+        if constexpr (N == 2) channels_2op[ch->channel_num] = nullptr;
+        if constexpr (N == 4) channels_4op[ch->channel_num] = nullptr;
+        ch->owner = nullptr;
+    };
+
+    template<unsigned N>
+    void opl::write(channel<N>* ch)
+    {
+        constexpr auto translate = [](auto n) { return N == 4 ? lookup_4to2_pri(n) : n; };
+
+        for (unsigned i = 0; i < N; ++i)
+            base::write(ch->osc[i], translate(ch->channel_num), i);
+
+        if constexpr (N == 4)
+        {
+            base::channel ch2 { *ch };
+            ch2.connection = ch->connection[1];
+            base::write(ch2, lookup_4to2_sec(ch->channel_num));
+        }
+        static_cast<base::channel*>(ch)->connection = ch->connection[0];
+        base::write(*ch, translate(ch->channel_num));
+    }
+
+    template<unsigned N> void opl::move(channel<N>* ch) noexcept
+    {
+        if constexpr (N == 2) channels_2op[ch->channel_num] = ch;
+        if constexpr (N == 4) channels_4op[ch->channel_num] = ch;
+    };
+
+    template<unsigned N>
+    opl::channel<N>::channel(const channel& c) noexcept
+        : base { c }
+        , connection { c.connection }
+        , osc { c.osc }
+        , priority { c.priority } { }
+
+    template<unsigned N>
+    opl::channel<N>& opl::channel<N>::operator=(const channel& c) noexcept
+    {
+        *static_cast<base*>(this) = c;
+        connection = c.connection;
+        osc = c.osc;
+        priority = c.priority;
+        return *this;
+    }
+
+    template<unsigned N>
+    opl::channel<N>::channel(channel&& c) noexcept
+        : base { std::move(c) }
+        , connection { std::move(c.connection) }
+        , osc { std::move(c.osc) }
+        , priority { std::move(c.priority) }
+        , owner { std::move(c.owner) }
+        , channel_num { std::move(c.channel_num) }
+        , off_time { std::move(c.off_time) }
+    {
+        if (owner != nullptr) owner->move(this);
+        c.owner = nullptr;
+    }
+
+    template<unsigned N>
+    opl::channel<N>& opl::channel<N>::operator=(channel&& c) noexcept
+    {
+        this->~channel();
+        return *new (this) channel { std::move(c) };
+    }
+
+    template void opl::update(channel<2>* ch);
+    template void opl::stop(channel<2>* ch);
+    template void opl::retrigger(channel<2>* ch);
+    template void opl::insert_at(std::uint8_t n, channel<2>* ch);
+    template void opl::insert(channel<2>*);
+    template void opl::remove(channel<2>*) noexcept;
+    template void opl::write(channel<2>*);
+    template void opl::move(channel<2>*) noexcept;
+
+    template void opl::update(channel<4>* ch);
+    template void opl::stop(channel<4>* ch);
+    template void opl::retrigger(channel<4>* ch);
+    template void opl::insert_at(std::uint8_t n, channel<4>* ch);
+    template void opl::insert(channel<4>*);
+    template void opl::remove(channel<4>*) noexcept;
+    template void opl::write(channel<4>*);
+    template void opl::move(channel<4>*) noexcept;
+
+    template struct opl::channel<2>;
+    template struct opl::channel<4>;
 }

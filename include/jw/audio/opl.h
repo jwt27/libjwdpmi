@@ -1,7 +1,8 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+﻿/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
+
 #include <bitset>
 #include <array>
 #include <cstring>
@@ -17,9 +18,9 @@ namespace jw::audio
         opl2, opl3, opl3_l
     };
 
-    struct basic_opl final
+    struct basic_opl
     {
-        using clock = config::thread_clock;
+        using clock = config::midi_clock;
 
         struct [[gnu::packed]] common_registers
         {
@@ -149,7 +150,7 @@ namespace jw::audio
         static_assert(sizeof(status_t) == 1);
 
         basic_opl(io::port_num port);
-        ~basic_opl() { reset(); }
+        virtual ~basic_opl() { reset(); }
 
         void write(const common_registers& value);
         void write(const oscillator& value, std::uint8_t slot);
@@ -175,6 +176,11 @@ namespace jw::audio
 
         // Returns 4op channel number that the given 2op channel is part of, or 0xff if none.
         static constexpr std::uint8_t lookup_2to4(std::uint8_t ch_2op) noexcept { return table_2to4[ch_2op]; }
+
+    protected:
+        const channel& read_channel(std::uint8_t ch) const noexcept { return channels[ch].value; }
+        const oscillator& read_oscillator(std::uint8_t osc) const noexcept { return oscillators[osc].value; }
+        const oscillator& read_oscillator(std::uint8_t ch, std::uint8_t osc) const noexcept { return read_oscillator(oscillator_slot(ch, osc)); }
 
     private:
         basic_opl(const basic_opl&) = delete;
@@ -221,5 +227,65 @@ namespace jw::audio
 
     public:
         const opl_type type;
+    };
+
+    struct opl final : private basic_opl
+    {
+        using base = basic_opl;
+
+        template<unsigned N>
+        struct channel final : basic_opl::channel
+        {
+            static_assert(N == 2 or N == 4);
+            using base = basic_opl::channel;
+            friend struct opl;
+
+            std::bitset<N/2> connection { 0b00 };
+            std::array<basic_opl::oscillator, N> osc { };
+            int priority { 0 };
+
+            constexpr channel() noexcept = default;
+            ~channel() { if (owner != nullptr) owner->remove(this); }
+
+            channel(const channel&) noexcept;
+            channel& operator=(const channel&) noexcept;
+            channel(channel&& c) noexcept;
+            channel& operator=(channel&& c) noexcept;
+
+            void freq(const opl& o, float f) noexcept { base::freq(o, f); }
+            void play(opl& o) { o.insert(this); }
+            bool playing() const noexcept { return owner != nullptr; }
+            void update() { if (owner != nullptr) owner->update(this); }
+            void stop() { if (owner != nullptr) owner->stop(this); }
+            void retrigger(opl& o) { o.retrigger(this); }
+
+        private:
+            opl* owner { nullptr };
+            unsigned channel_num { };
+            clock::time_point off_time { };
+        };
+        using channel_2op = channel<2>;
+        using channel_4op = channel<4>;
+
+        opl(io::port_num port) : basic_opl { port } { }
+        virtual ~opl();
+
+    private:
+        opl(const opl&) = delete;
+        opl(opl&&) = delete;
+        opl& operator=(const opl&) = delete;
+        opl& operator=(opl&&) = delete;
+
+        template<unsigned N> void update(channel<N>* ch);
+        template<unsigned N> void stop(channel<N>* ch);
+        template<unsigned N> void retrigger(channel<N>* ch);
+        template<unsigned N> void insert_at(std::uint8_t n, channel<N>* ch);
+        template<unsigned N> void insert(channel<N>*);
+        template<unsigned N> void remove(channel<N>*) noexcept;
+        template<unsigned N> void write(channel<N>*);
+        template<unsigned N> void move(channel<N>*) noexcept;
+
+        std::array<channel_4op*, 6> channels_4op { };
+        std::array<channel_2op*, 18> channels_2op { };
     };
 }
