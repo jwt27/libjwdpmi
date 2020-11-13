@@ -3,6 +3,7 @@
 
 #include <jw/audio/opl.h>
 #include <jw/io/io_error.h>
+#include <jw/thread/thread.h>
 
 namespace jw::audio
 {

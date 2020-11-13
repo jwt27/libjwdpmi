@@ -5,10 +5,8 @@
 
 #include <bitset>
 #include <array>
-#include <cstring>
 #include <jw/io/ioport.h>
 #include <jw/chrono/chrono.h>
-#include <jw/thread/thread.h>
 #include <../jwdpmi_config.h>
 
 namespace jw::audio
