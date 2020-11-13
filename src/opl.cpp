@@ -239,15 +239,6 @@ namespace jw::audio
 
     template<unsigned N> void opl::insert(channel<N>* ch)
     {
-        if (ch->owner == this)
-        {
-            ch->key_on = false;
-            write(ch);
-            ch->key_on = true;
-            write(ch);
-            return;
-        }
-
         std::uint8_t min_time = 0xff;
         clock::time_point min_time_value { clock::time_point::max() };
         std::uint8_t min_prio = 0xff;
