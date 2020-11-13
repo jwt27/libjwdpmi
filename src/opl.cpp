@@ -415,27 +415,18 @@ namespace jw::audio
 
     template<unsigned N>
     opl::channel<N>::channel(const channel& c) noexcept
-        : base { c }
-        , connection { c.connection }
-        , osc { c.osc }
-        , priority { c.priority } { }
+        : base { c } { }
 
     template<unsigned N>
     opl::channel<N>& opl::channel<N>::operator=(const channel& c) noexcept
     {
         *static_cast<base*>(this) = c;
-        connection = c.connection;
-        osc = c.osc;
-        priority = c.priority;
         return *this;
     }
 
     template<unsigned N>
     opl::channel<N>::channel(channel&& c) noexcept
         : base { std::move(c) }
-        , connection { std::move(c.connection) }
-        , osc { std::move(c.osc) }
-        , priority { std::move(c.priority) }
         , owner { std::move(c.owner) }
         , channel_num { std::move(c.channel_num) }
         , on_time { std::move(c.on_time) }
@@ -450,6 +441,20 @@ namespace jw::audio
     {
         this->~channel();
         return *new (this) channel { std::move(c) };
+    }
+
+    template<unsigned N>
+    opl::channel<N> opl::channel<N>::from_bytes(std::span<std::byte, sizeof(base)> bytes) noexcept
+    {
+        return *reinterpret_cast<const base*>(bytes.data());
+    }
+
+    template<unsigned N>
+    std::array<std::byte, sizeof(typename opl::channel<N>::base)> opl::channel<N>::to_bytes() const noexcept
+    {
+        std::array<std::byte, sizeof(base)> array;
+        std::copy_n(reinterpret_cast<const std::byte*>(this), array.size(), array.begin());
+        return array;
     }
 
     template void opl::update(channel<2>* ch);

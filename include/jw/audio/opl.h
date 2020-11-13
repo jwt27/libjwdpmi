@@ -248,15 +248,20 @@ namespace jw::audio
         using base = basic_opl;
 
         template<unsigned N>
-        struct channel final : basic_opl::channel
+        struct channel_base : basic_opl::channel
         {
             static_assert(N == 2 or N == 4);
-            using base = basic_opl::channel;
-            friend struct opl;
 
-            std::bitset<N/2> connection { 0b00 };
-            std::array<basic_opl::oscillator, N> osc { };
-            int priority { 0 };
+            std::bitset<N / 2> connection;
+            std::array<basic_opl::oscillator, N> osc;
+            int priority;
+        };
+
+        template<unsigned N>
+        struct channel final : channel_base<N>
+        {
+            using base = channel_base<N>;
+            friend struct opl;
 
             constexpr channel() noexcept = default;
             ~channel() { if (owner != nullptr) owner->remove(this); }
@@ -273,7 +278,12 @@ namespace jw::audio
             void stop() { if (owner != nullptr) owner->stop(this); }
             bool retrigger(opl& o) { return o.retrigger(this); }
 
+            static channel from_bytes(std::span<std::byte, sizeof(base)>) noexcept;
+            std::array<std::byte, sizeof(base)> to_bytes() const noexcept;
+
         private:
+            channel(const base& c) noexcept : base { c } { };
+
             opl* owner { nullptr };
             unsigned channel_num { };
             clock::time_point on_time { };
