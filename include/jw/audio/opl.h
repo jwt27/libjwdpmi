@@ -111,7 +111,7 @@ namespace jw::audio
 
                 unsigned i;
                 for (i = 0; i < 8; ++i)
-                    if (f <= block_maxfreq[i]) break;
+                    if (static_cast<unsigned>(f) <= block_maxfreq[i]) break;
 
                 freq_block = i;
                 freq_num = round(f * (1 << (20 - i))) / sample_rate;
