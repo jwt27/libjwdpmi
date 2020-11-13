@@ -8,13 +8,14 @@ Current features include:
 * Interrupt handling, including dynamic IRQ assignment, IRQ sharing, and nested interrupts.
 * CPU exception handling, also nested and re-entrant.
 * Cooperative multi-threading and coroutines.
-* RS-232 serial communication using `std::iostream`.
 * Event-driven keyboard interface.
 * Integrated GDB remote debugging backend.
 * Access to PIT, RTC and RDTSC clocks using `std::chrono`.
 * VESA VBE3 graphics interface.
 * Accurate analog game port interface.
-* MIDI protocol implementation.
+* MIDI protocol implementation and MPU-401 interface.
+* Yamaha OPL2/OPL3 interface with automatic priority-based channel allocation.
+* RS-232 serial communication using `std::iostream`.
 
 ## Installing
 * Build and install gcc with `--target=i386-pc-msdosdjgpp`, and install the djgpp standard library.  
