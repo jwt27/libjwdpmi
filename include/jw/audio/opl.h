@@ -229,6 +229,15 @@ namespace jw::audio
         const opl_type type;
     };
 
+    struct opl_config
+    {
+        // Determines if key scale rate/level is calculated by highest or second highest bit in freq_num.
+        bool note_select { false };
+
+        // For tremolo: low = 1dB, high = 4.8dB.  For vibrato: low = 7%, high = 14%.
+        enum { low, high } tremolo_depth : 1 { low }, vibrato_depth : 1 { low };
+    };
+
     struct opl final : private basic_opl
     {
         using base = basic_opl;
@@ -268,10 +277,12 @@ namespace jw::audio
         using channel_2op = channel<2>;
         using channel_4op = channel<4>;
 
-        opl(io::port_num port) : basic_opl { port } { }
+        opl(io::port_num port, opl_config c = { }) : basic_opl { port }, cfg { c } { update_config(); }
         virtual ~opl();
 
         void update();
+        const opl_config& config() const noexcept { return cfg; }
+        void config(const opl_config& c) { cfg = c; update_config(); };
 
     private:
         opl(const opl&) = delete;
@@ -279,6 +290,7 @@ namespace jw::audio
         opl& operator=(const opl&) = delete;
         opl& operator=(opl&&) = delete;
 
+        void update_config();
         template<unsigned N> void update(channel<N>* ch);
         template<unsigned N> void stop(channel<N>* ch);
         template<unsigned N> bool retrigger(channel<N>* ch);
@@ -288,6 +300,7 @@ namespace jw::audio
         template<unsigned N> void write(channel<N>*);
         template<unsigned N> void move(channel<N>*) noexcept;
 
+        opl_config cfg { };
         std::array<channel_4op*, 6> channels_4op { };
         std::array<channel_2op*, 18> channels_2op { };
     };

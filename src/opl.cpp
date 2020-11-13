@@ -183,6 +183,15 @@ namespace jw::audio
         write(ch);
     }
 
+    void opl::update_config()
+    {
+        auto r = base::read();
+        r.note_sel = cfg.note_select;
+        r.tremolo_depth = cfg.tremolo_depth;
+        r.vibrato_depth = cfg.vibrato_depth;
+        base::write(r);
+    }
+
     template<unsigned N> void opl::stop(channel<N>* ch)
     {
         ch->key_on = false;
