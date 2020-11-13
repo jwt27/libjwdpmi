@@ -253,11 +253,11 @@ namespace jw::audio
             channel& operator=(channel&& c) noexcept;
 
             void freq(const opl& o, float f) noexcept { base::freq(o, f); }
-            void play(opl& o) { o.insert(this); }
+            bool play(opl& o) { return o.insert(this); }
             bool playing() const noexcept { return owner != nullptr; }
             void update() { if (owner != nullptr) owner->update(this); }
             void stop() { if (owner != nullptr) owner->stop(this); }
-            void retrigger(opl& o) { o.retrigger(this); }
+            bool retrigger(opl& o) { return o.retrigger(this); }
 
         private:
             opl* owner { nullptr };
@@ -281,9 +281,9 @@ namespace jw::audio
 
         template<unsigned N> void update(channel<N>* ch);
         template<unsigned N> void stop(channel<N>* ch);
-        template<unsigned N> void retrigger(channel<N>* ch);
+        template<unsigned N> bool retrigger(channel<N>* ch);
         template<unsigned N> bool insert_at(std::uint8_t n, channel<N>* ch);
-        template<unsigned N> void insert(channel<N>*);
+        template<unsigned N> bool insert(channel<N>*);
         template<unsigned N> void remove(channel<N>*) noexcept;
         template<unsigned N> void write(channel<N>*);
         template<unsigned N> void move(channel<N>*) noexcept;

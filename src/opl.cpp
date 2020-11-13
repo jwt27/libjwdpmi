@@ -190,7 +190,7 @@ namespace jw::audio
         ch->off_time = clock::now();
     }
 
-    template<unsigned N> void opl::retrigger(channel<N>* ch)
+    template<unsigned N> bool opl::retrigger(channel<N>* ch)
     {
         auto pri = N == 4 ? lookup_4to2_pri(ch->channel_num) : ch->channel_num;
         if (ch->owner == this and base::read_channel(pri).key_on)
@@ -201,8 +201,9 @@ namespace jw::audio
             ch->key_on = true;
             write(ch);
             ch->on_time = clock::now();
+            return true;
         }
-        else insert(ch);
+        else return insert(ch);
     }
 
     template<unsigned N> bool opl::insert_at(std::uint8_t n, channel<N>* ch)
@@ -240,7 +241,7 @@ namespace jw::audio
         return true;
     };
 
-    template<unsigned N> void opl::insert(channel<N>* ch)
+    template<unsigned N> bool opl::insert(channel<N>* ch)
     {
         struct
         {
@@ -342,15 +343,16 @@ namespace jw::audio
 
         if (type == opl_type::opl2)
         {
-            if constexpr (N == 2) if (search_2op(0, 1, 2, 3, 4, 5, 6, 7, 8)) return;
+            if constexpr (N == 2) if (search_2op(0, 1, 2, 3, 4, 5, 6, 7, 8)) return true;
         }
         else
         {
-            if constexpr (N == 2) if (search_2op(6, 7, 8, 15, 16, 17)) return;
-            if (search_4op(0, 1, 2, 3, 4, 5)) return;
+            if constexpr (N == 2) if (search_2op(6, 7, 8, 15, 16, 17)) return true;
+            if (search_4op(0, 1, 2, 3, 4, 5)) return true;
         }
 
-        if (best.i != 0xff) insert_at(best.i, ch);
+        if (best.i != 0xff) return insert_at(best.i, ch);
+        return false;
     };
 
     template <unsigned N> void opl::remove(channel<N>* ch) noexcept
@@ -427,18 +429,18 @@ namespace jw::audio
 
     template void opl::update(channel<2>* ch);
     template void opl::stop(channel<2>* ch);
-    template void opl::retrigger(channel<2>* ch);
+    template bool opl::retrigger(channel<2>* ch);
     template bool opl::insert_at(std::uint8_t n, channel<2>* ch);
-    template void opl::insert(channel<2>*);
+    template bool opl::insert(channel<2>*);
     template void opl::remove(channel<2>*) noexcept;
     template void opl::write(channel<2>*);
     template void opl::move(channel<2>*) noexcept;
 
     template void opl::update(channel<4>* ch);
     template void opl::stop(channel<4>* ch);
-    template void opl::retrigger(channel<4>* ch);
+    template bool opl::retrigger(channel<4>* ch);
     template bool opl::insert_at(std::uint8_t n, channel<4>* ch);
-    template void opl::insert(channel<4>*);
+    template bool opl::insert(channel<4>*);
     template void opl::remove(channel<4>*) noexcept;
     template void opl::write(channel<4>*);
     template void opl::move(channel<4>*) noexcept;
