@@ -7,6 +7,7 @@
 #include <array>
 #include <jw/io/ioport.h>
 #include <jw/chrono/chrono.h>
+#include <jw/math.h>
 #include <../jwdpmi_config.h>
 
 namespace jw::audio
@@ -113,7 +114,7 @@ namespace jw::audio
                     if (f <= block_maxfreq[i]) break;
 
                 freq_block = i;
-                freq_num = static_cast<unsigned>(f * (1 << (20 - i))) / sample_rate;
+                freq_num = round(f * (1 << (20 - i))) / sample_rate;
             }
 
             constexpr void freq(const basic_opl& opl, float f)
