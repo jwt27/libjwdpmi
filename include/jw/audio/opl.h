@@ -270,6 +270,8 @@ namespace jw::audio
         opl(io::port_num port) : basic_opl { port } { }
         virtual ~opl();
 
+        void update();
+
     private:
         opl(const opl&) = delete;
         opl(opl&&) = delete;

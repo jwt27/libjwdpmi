@@ -170,6 +170,12 @@ namespace jw::audio
         for (auto&& i : channels_4op) if (i != nullptr) remove(i);
     }
 
+    void opl::update()
+    {
+        for (auto&& i : channels_4op) if (i != nullptr) update(i);
+        for (auto&& i : channels_2op) if (i != nullptr) update(i);
+    }
+
     template<unsigned N> void opl::update(channel<N>* ch)
     {
         auto pri = N == 4 ? lookup_4to2_pri(ch->channel_num) : ch->channel_num;
