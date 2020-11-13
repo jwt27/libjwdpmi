@@ -345,7 +345,7 @@ namespace jw::audio
                             return insert_at(pri, ch);
 
                         auto* c = channels_4op[i];
-                        check(i, base::read_channel(pri).key_on, c->priority, c->on_time, c->off_time);
+                        check(pri, base::read_channel(pri).key_on, c->priority, c->on_time, c->off_time);
                     }
                     else search_2op(pri, sec);
                 }
