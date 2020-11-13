@@ -266,8 +266,11 @@ namespace jw::audio
             if (key_on)
             {
                 if (not best.key_on) return;
-                if (prio > ch->priority) return;
-                if (prio > best.priority) return;
+                if (not cfg.ignore_priority)
+                {
+                    if (prio > ch->priority) return;
+                    if (prio > best.priority) return;
+                }
                 if (on_time > best.on_time) return;
                 best.priority = prio;
                 best.on_time = on_time;

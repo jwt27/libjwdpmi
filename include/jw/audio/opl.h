@@ -231,6 +231,9 @@ namespace jw::audio
 
     struct opl_config
     {
+        // Ignore channel priority field.
+        bool ignore_priority { false };
+
         // Determines if key scale rate/level is calculated by highest or second highest bit in freq_num.
         bool note_select { false };
 
