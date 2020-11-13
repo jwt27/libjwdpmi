@@ -231,6 +231,10 @@ namespace jw::audio
 
     struct opl_config
     {
+        // Try to allocate 2op channels so that they don't overlap with 4op channels.  Has no effect for OPL2.
+        // In automatic mode, this setting is activated only if there are any active 4op channels.
+        enum : std::uint8_t { no, yes, automatic } prioritize_4op { automatic };
+
         // Ignore channel priority field.
         bool ignore_priority { false };
 
@@ -238,7 +242,7 @@ namespace jw::audio
         bool note_select { false };
 
         // For tremolo: low = 1dB, high = 4.8dB.  For vibrato: low = 7%, high = 14%.
-        enum { low, high } tremolo_depth : 1 { low }, vibrato_depth : 1 { low };
+        enum : unsigned { low, high } tremolo_depth : 1 { low }, vibrato_depth : 1 { low };
     };
 
     struct opl final : private basic_opl
