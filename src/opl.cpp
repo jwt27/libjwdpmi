@@ -200,11 +200,12 @@ namespace jw::audio
             write(ch);
             ch->key_on = true;
             write(ch);
+            ch->on_time = clock::now();
         }
         else insert(ch);
     }
 
-    template<unsigned N> void opl::insert_at(std::uint8_t n, channel<N>* ch)
+    template<unsigned N> bool opl::insert_at(std::uint8_t n, channel<N>* ch)
     {
         if (ch->owner != nullptr)
         {
@@ -234,103 +235,106 @@ namespace jw::audio
         ch->owner = this;
         ch->key_on = true;
         write(ch);
+        ch->on_time = clock::now();
         ch->off_time = clock::time_point::max();
+        return true;
     };
 
     template<unsigned N> void opl::insert(channel<N>* ch)
     {
-        std::uint8_t min_time = 0xff;
-        clock::time_point min_time_value { clock::time_point::max() };
-        std::uint8_t min_prio = 0xff;
-        int min_prio_value { std::numeric_limits<int>::max() };
-
-        auto check_time = [&](auto i, auto time)
+        struct
         {
-            if (time < min_time_value)
-            {
-            min_time = i;
-            min_time_value = time;
-            }
-        };
+            std::uint8_t i { 0xff };
+            bool key_on { true };
+            int priority { std::numeric_limits<int>::max() };
+            clock::time_point on_time { clock::time_point::max() };
+            clock::time_point off_time { clock::time_point::max() };
+        } best { };
 
-        auto check_prio = [&](auto i, auto prio)
+        auto check = [&](std::uint8_t i, bool key_on, auto prio, auto on_time, auto off_time)
         {
-            if (prio <= ch->priority and (prio < min_prio_value))
+            if (key_on)
             {
-                min_prio = i;
-                min_prio_value = prio;
+                if (not best.key_on) return;
+                if (prio > ch->priority) return;
+                if (prio > best.priority) return;
+                if (on_time > best.on_time) return;
+                best.priority = prio;
+                best.on_time = on_time;
             }
+            else
+            {
+                if (off_time > best.off_time) return;
+                best.key_on = false;
+                best.off_time = off_time;
+            }
+            best.i = i;
         };
 
         auto search_2op = [&] (auto... order)
         {
-            for (auto i : { order... })
+            for (std::uint8_t i : { order... })
             {
                 if (channels_2op[i] == nullptr)
-                {
-                    insert_at(i, ch);
-                    return true;
-                }
-                if (not base::read_channel(i).key_on) check_time(i, channels_2op[i]->off_time);
-                check_prio(i, channels_2op[i]->priority);
+                    return insert_at(i, ch);
+
+                auto* c = channels_2op[i];
+                check(i, base::read_channel(i).key_on, c->priority, c->on_time, c->off_time);
             }
             return false;
         };
 
         auto search_4op = [&] (auto... order)
         {
-            for (auto i : { order... })
+            for (std::uint8_t i : { order... })
             {
                 if constexpr (N == 4)
                 {
                     if (is_4op(i))
                     {
                         if (channels_4op[i] == nullptr)
-                        {
-                            insert_at(i, ch);
-                            return true;
-                        }
-                        if (not base::read_channel(lookup_4to2_pri(i)).key_on) check_time(i, channels_4op[i]->off_time);
-                        check_prio(i, channels_4op[i]->priority);
+                            return insert_at(i, ch);
+
+                        auto* c = channels_4op[i];
+                        check(i, base::read_channel(i).key_on, c->priority, c->on_time, c->off_time);
                     }
                     else
                     {
                         auto pri = lookup_4to2_pri(i);
                         auto sec = lookup_4to2_sec(i);
                         if (channels_2op[pri] == nullptr and channels_2op[sec] == nullptr)
-                        {
-                            insert_at(i, ch);
-                            return true;
-                        }
+                            return insert_at(i, ch);
 
-                        auto [max_prio, max_time, key_on] = [this, pri, sec]()
+                        auto [key_on, prio, on_time, off_time] = [this, pri, sec]()
                         {
                             auto* a = channels_2op[pri];
                             auto* b = channels_2op[sec];
-                            if (a == nullptr) return std::make_tuple(b->priority, b->off_time, base::read_channel(sec).key_on);
-                            if (b == nullptr) return std::make_tuple(a->priority, a->off_time, base::read_channel(pri).key_on);
-                            return std::make_tuple(std::max(a->priority, b->priority),
-                                                   std::max(a->off_time, b->off_time),
-                                                   base::read_channel(pri).key_on or base::read_channel(sec).key_on);
+                            if (a == nullptr) return std::make_tuple(base::read_channel(sec).key_on, b->priority, b->on_time, b->off_time);
+                            if (b == nullptr) return std::make_tuple(base::read_channel(pri).key_on, a->priority, a->on_time, a->off_time);
+                            auto a_on = base::read_channel(pri).key_on;
+                            auto b_on = base::read_channel(sec).key_on;
+                            auto max = [a_on, b_on](auto va, auto vb) { return a_on == b_on ? std::max(va, vb) : a_on ? va : vb; };
+                            auto on_time = max(a->on_time, b->on_time);
+                            auto prio = max(a->priority, b->priority);
+                            return std::make_tuple(a_on or b_on, prio, on_time, std::max(a->off_time, b->off_time));
                         }();
 
-                        if (not key_on) check_time(i, max_time);
-                        check_prio(i, max_prio);
+                        check(i, key_on, prio, on_time, off_time);
                     }
                 }
                 else if constexpr (N == 2)
                 {
+                    auto pri = lookup_4to2_pri(i);
+                    auto sec = lookup_4to2_sec(i);
                     if (is_4op(i))
                     {
                         if (channels_4op[i] == nullptr)
-                        {
-                            insert_at(lookup_4to2_pri(i), ch);
-                            return true;
-                        }
-                        if (not base::read_channel(lookup_4to2_pri(i)).key_on) check_time(i, channels_4op[i]->off_time);
-                        check_prio(i, channels_4op[i]->priority);
+                            return insert_at(pri, ch);
+
+                        auto* c = channels_4op[i];
+                        check(i, base::read_channel(pri).key_on, c->priority, c->on_time, c->off_time);
                     }
-                    else search_2op(lookup_4to2_pri(i), lookup_4to2_sec(i));
+                    else search_2op(pri, sec);
                 }
             }
             return false;
@@ -346,8 +350,7 @@ namespace jw::audio
             if (search_4op(0, 1, 2, 3, 4, 5)) return;
         }
 
-        if (min_time != 0xff) insert_at(min_time, ch);
-        else if (min_prio != 0xff) insert_at(min_prio, ch);
+        if (best.i != 0xff) insert_at(best.i, ch);
     };
 
     template <unsigned N> void opl::remove(channel<N>* ch) noexcept
@@ -408,6 +411,7 @@ namespace jw::audio
         , priority { std::move(c.priority) }
         , owner { std::move(c.owner) }
         , channel_num { std::move(c.channel_num) }
+        , on_time { std::move(c.on_time) }
         , off_time { std::move(c.off_time) }
     {
         if (owner != nullptr) owner->move(this);
@@ -424,7 +428,7 @@ namespace jw::audio
     template void opl::update(channel<2>* ch);
     template void opl::stop(channel<2>* ch);
     template void opl::retrigger(channel<2>* ch);
-    template void opl::insert_at(std::uint8_t n, channel<2>* ch);
+    template bool opl::insert_at(std::uint8_t n, channel<2>* ch);
     template void opl::insert(channel<2>*);
     template void opl::remove(channel<2>*) noexcept;
     template void opl::write(channel<2>*);
@@ -433,7 +437,7 @@ namespace jw::audio
     template void opl::update(channel<4>* ch);
     template void opl::stop(channel<4>* ch);
     template void opl::retrigger(channel<4>* ch);
-    template void opl::insert_at(std::uint8_t n, channel<4>* ch);
+    template bool opl::insert_at(std::uint8_t n, channel<4>* ch);
     template void opl::insert(channel<4>*);
     template void opl::remove(channel<4>*) noexcept;
     template void opl::write(channel<4>*);

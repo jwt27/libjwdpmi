@@ -262,6 +262,7 @@ namespace jw::audio
         private:
             opl* owner { nullptr };
             unsigned channel_num { };
+            clock::time_point on_time { };
             clock::time_point off_time { };
         };
         using channel_2op = channel<2>;
@@ -281,7 +282,7 @@ namespace jw::audio
         template<unsigned N> void update(channel<N>* ch);
         template<unsigned N> void stop(channel<N>* ch);
         template<unsigned N> void retrigger(channel<N>* ch);
-        template<unsigned N> void insert_at(std::uint8_t n, channel<N>* ch);
+        template<unsigned N> bool insert_at(std::uint8_t n, channel<N>* ch);
         template<unsigned N> void insert(channel<N>*);
         template<unsigned N> void remove(channel<N>*) noexcept;
         template<unsigned N> void write(channel<N>*);
