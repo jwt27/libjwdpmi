@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <bit>
 #include <bitset>
 #include <array>
 #include <jw/io/ioport.h>
@@ -304,22 +305,17 @@ namespace jw::audio
     };
 
     template<unsigned sample_rate>
-    inline constexpr void basic_opl::channel::freq(float f) noexcept
+    inline constexpr void basic_opl::channel::freq(float freq) noexcept
     {
-        constexpr auto calc_blocks = []
-        {
-            std::array<unsigned, 8> result;
-            for (int i = 0; i < 8; i++) result[i] = 1023 * sample_rate / (1 << (20 - i));
-            return result;
-        };
-        constexpr std::array<unsigned, 8> block_maxfreq { calc_blocks() };
+        constexpr auto block_maxfreq = [](unsigned n) { return 1023 * sample_rate / (1 << (20 - n)); };
+        constexpr unsigned max = block_maxfreq(7);
+        constexpr unsigned shift = std::bit_width(block_maxfreq(0));
 
-        unsigned i;
-        for (i = 0; i < 8; ++i)
-            if (static_cast<unsigned>(f) <= block_maxfreq[i]) break;
-
+        const auto f = static_cast<unsigned>(freq);
+        unsigned i = std::bit_width(f >> shift);
+        if ((f << (7 - i)) > max) ++i;
         freq_block = i;
-        freq_num = round(f * (1 << (20 - i))) / sample_rate;
+        freq_num = jw::round(freq * (1 << (20 - i))) / sample_rate;
     }
 
     inline constexpr void basic_opl::channel::freq(const basic_opl& opl, float f) noexcept
