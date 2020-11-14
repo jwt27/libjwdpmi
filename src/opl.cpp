@@ -372,12 +372,19 @@ namespace jw::audio
                 if (search_2op(6, 7, 8, 15, 16, 17)) return true;
                 switch (cfg.prioritize_4op)
                 {
+                case opl_config::auto_force:
+                    if (read().enable_4op.bitset().none()) break;
+                    [[fallthrough]];
+                case opl_config::force:
+                    if (best.i != 0xff) return insert_at(best.i, ch);
+                    return false;
                 case opl_config::automatic:
                     if (read().enable_4op.bitset().none()) break;
                     [[fallthrough]];
                 case opl_config::yes:
                     if (best.i != 0xff and not best.key_on and best.off_time < clock::now()) return insert_at(best.i, ch);
-                default:;
+                case opl_config::no:
+                    break;
                 }
             }
             if (search_4op(0, 1, 2, 3, 4, 5)) return true;

@@ -202,8 +202,12 @@ namespace jw::audio
     struct opl_config
     {
         // Try to allocate 2op channels so that they don't overlap with 4op channels.  Has no effect for OPL2.
-        // In automatic mode, this setting is activated only if there are any active 4op channels.
-        enum : std::uint8_t { no, yes, automatic } prioritize_4op { automatic };
+        //         no: No special treatment is given to 4op slots.
+        //        yes: 2op channels may only be allocated in a 4op slot if all 2op-only slots are taken.
+        //      force: 2op channels are never allocated in a 4op slot.
+        //  automatic: Default to 'no', switch to 'yes' when there are any active 4op channels.
+        // auto_force: Default to 'no', latch to 'force' once a 4op channel is played.
+        enum : std::uint8_t { no, yes, force, automatic, auto_force } prioritize_4op { automatic };
 
         // Ignore channel priority field.
         bool ignore_priority { false };
