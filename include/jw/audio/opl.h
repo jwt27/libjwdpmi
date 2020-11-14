@@ -245,7 +245,7 @@ namespace jw::audio
 
             void freq(const opl& o, float f) noexcept { base::freq(o, f); }
             bool play(opl& o) { return o.insert(this); }
-            bool playing() const noexcept { return owner != nullptr; }
+            bool playing() const noexcept { return owner != nullptr and not key_on() and off_time < clock::now(); }
             void update() { if (owner != nullptr) owner->update(this); }
             void stop() { if (owner != nullptr) owner->stop(this); }
             bool retrigger(opl& o) { return o.retrigger(this); }
