@@ -182,9 +182,9 @@ namespace jw::audio
         void write(std::uint16_t reg, std::byte value);
         opl_type detect();
 
-        static constexpr std::uint8_t table_4to2[] { 0, 1, 2, 9, 10, 11 };
-        static constexpr std::uint8_t table_2to4[] { 0, 1, 2, 0, 1, 2, 0xff, 0xff, 0xff,
-                                                     3, 4, 5, 3, 4, 5, 0xff, 0xff, 0xff };
+        static inline constexpr std::uint8_t table_4to2[] { 0, 1, 2, 9, 10, 11 };
+        static inline constexpr std::uint8_t table_2to4[] { 0, 1, 2, 0, 1, 2, 0xff, 0xff, 0xff,
+                                                            3, 4, 5, 3, 4, 5, 0xff, 0xff, 0xff };
 
         cached_reg<common_registers> common { };
         std::array<cached_reg<oscillator>, 36> oscillators { };
