@@ -199,20 +199,24 @@ namespace jw::audio
     {
         ch->key_on(false);
         write(ch);
-        ch->off_time = clock::now();
+        ch->off_time = off_time(ch, clock::now());
     }
 
     template<unsigned N> bool opl::retrigger(channel<N>* ch)
     {
         auto pri = N == 4 ? lookup_4to2_pri(ch->channel_num) : ch->channel_num;
-        if (ch->owner == this and base::read_channel(pri).key_on)
+        if (ch->owner == this)
         {
-            ch->off_time = clock::time_point::max();
-            ch->key_on(false);
-            write(ch);
+            if (read_channel(pri).key_on)
+            {
+                ch->key_on(false);
+                write(ch);
+            }
             ch->key_on(true);
             write(ch);
             ch->on_time = clock::now();
+            ch->off_time = off_time(ch, clock::time_point::max());
+            if (ch->off_time != clock::time_point::max()) ch->key_on(false);
             return true;
         }
         else return insert(ch);
@@ -249,7 +253,8 @@ namespace jw::audio
         ch->key_on(true);
         write(ch);
         ch->on_time = clock::now();
-        ch->off_time = clock::time_point::max();
+        ch->off_time = off_time(ch, clock::time_point::max());
+        if (ch->off_time != clock::time_point::max()) ch->key_on(false);
         return true;
     };
 
@@ -295,7 +300,7 @@ namespace jw::audio
                     return insert_at(i, ch);
 
                 auto* c = channels_2op[i];
-                check(i, base::read_channel(i).key_on, c->priority, c->on_time, c->off_time);
+                check(i, c->key_on(), c->priority, c->on_time, c->off_time);
             }
             return false;
         };
@@ -312,7 +317,7 @@ namespace jw::audio
                             return insert_at(i, ch);
 
                         auto* c = channels_4op[i];
-                        check(i, base::read_channel(i).key_on, c->priority, c->on_time, c->off_time);
+                        check(i, c->key_on(), c->priority, c->on_time, c->off_time);
                     }
                     else
                     {
@@ -327,8 +332,8 @@ namespace jw::audio
                             auto* b = channels_2op[sec];
                             if (a == nullptr) return std::make_tuple(base::read_channel(sec).key_on, b->priority, b->on_time, b->off_time);
                             if (b == nullptr) return std::make_tuple(base::read_channel(pri).key_on, a->priority, a->on_time, a->off_time);
-                            auto a_on = base::read_channel(pri).key_on;
-                            auto b_on = base::read_channel(sec).key_on;
+                            auto a_on = a->key_on();
+                            auto b_on = b->key_on();
                             auto max = [a_on, b_on](auto va, auto vb) { return a_on == b_on ? std::max(va, vb) : a_on ? va : vb; };
                             auto on_time = max(a->on_time, b->on_time);
                             auto prio = max(a->priority, b->priority);
@@ -348,7 +353,7 @@ namespace jw::audio
                             return insert_at(pri, ch);
 
                         auto* c = channels_4op[i];
-                        check(pri, base::read_channel(pri).key_on, c->priority, c->on_time, c->off_time);
+                        check(pri, c->key_on(), c->priority, c->on_time, c->off_time);
                     }
                     else search_2op(pri, sec);
                 }
@@ -371,7 +376,7 @@ namespace jw::audio
                     if (read().enable_4op.bitset().none()) break;
                     [[fallthrough]];
                 case opl_config::yes:
-                    if (best.i != 0xff and not best.key_on) return insert_at(best.i, ch);
+                    if (best.i != 0xff and not best.key_on and best.off_time < clock::now()) return insert_at(best.i, ch);
                 default:;
                 }
             }
@@ -414,6 +419,93 @@ namespace jw::audio
         if constexpr (N == 2) channels_2op[ch->channel_num] = ch;
         if constexpr (N == 4) channels_4op[ch->channel_num] = ch;
     };
+
+    template<unsigned N> opl::clock::time_point opl::off_time(const channel<N>* ch, const clock::time_point& key_off) const noexcept
+    {
+        auto saturate_add = [](clock::time_point a, clock::duration b)
+        {
+            auto c = a + b;
+            if (c < a) c = clock::time_point::max();
+            return c;
+        };
+
+        const std::bitset<N> carriers = [ch]
+        {
+            const std::uint8_t connection = ch->connection.to_ulong();
+            if constexpr (N == 2)
+            {
+                static constexpr std::uint8_t table[] { 0b10, 0b11 };
+                return table[connection];
+            }
+            else if constexpr (N == 4)
+            {
+                static constexpr std::uint8_t table[] { 0b1000, 0b1010, 0b1001, 0b1011 };
+                return table[connection];
+            }
+        }();
+
+        clock::time_point off_time { clock::time_point::min() };
+
+        const bool key_on = read_channel(N == 4 ? lookup_4to2_pri(ch->channel_num) : ch->channel_num).key_on;
+        const std::uint8_t freq_msb = (ch->freq_num >> (9 - read().note_sel)) & 1;
+        const std::uint8_t freq_rate = (ch->freq_block << 1) | freq_msb;
+
+        for (unsigned i = 0; i < N; ++i)
+        {
+            const auto& o = ch->osc[i];
+            if (not carriers[i]) continue;
+            if (o.attack == 0) continue;
+
+            const std::uint8_t key_scale = freq_rate >> (o.key_scale_rate << 1);
+            clock::time_point t { key_off };
+            if (not o.enable_sustain)
+            {
+                t = saturate_add(ch->on_time, attack_time((o.attack << 2) | key_scale));
+                if (o.decay != 0) t = saturate_add(t, release_time((o.decay << 2) | key_scale));
+            }
+            else if (key_on) return clock::time_point::max();
+            t = saturate_add(t, release_time((o.release << 2) | key_scale));
+            off_time = std::max(off_time, t);
+            if (off_time == clock::time_point::max()) break;
+        }
+        return off_time;
+    }
+
+    opl::clock::duration opl::attack_time(std::uint8_t rate) noexcept
+    {
+        using namespace std::chrono_literals;
+        static constexpr auto infinite = clock::duration::max();
+        static constexpr clock::duration table[]    // From YMF715 register description document
+        {
+              infinite,   infinite,   infinite,   infinite,  2826240us,  2252800us,  1884160us,  1597440us,
+             1413120us,  1126400us,   942080us,   798720us,   706560us,   563200us,   471040us,   399360us,
+              353280us,   281600us,   235520us,   199680us,   176760us,   140800us,   117760us,    99840us,
+               88320us,    70400us,    58880us,    49920us,    44160us,    35200us,    29440us,    24960us,
+               22080us,    17600us,    14720us,    12480us,    11040us,     8800us,     7360us,     6240us,
+                5520us,     4400us,     3680us,     3120us,     2760us,     2200us,     1840us,     1560us,
+                1400us,     1120us,      920us,      800us,      700us,      560us,      460us,      420us,
+                 380us,      300us,      240us,      200us,        0us,        0us,        0us,        0us
+        };
+        return table[rate];
+    }
+
+    opl::clock::duration opl::release_time(std::uint8_t rate) noexcept
+    {
+        using namespace std::chrono_literals;
+        static constexpr auto infinite = clock::duration::max();
+        static constexpr clock::duration table[]
+        {
+              infinite,   infinite,   infinite,   infinite, 39280640us, 31416320us, 26173440us, 22446080us,
+            19640320us, 15708160us, 13086720us, 11223040us,  9820160us,  7854080us,  6543360us,  5611520us,
+             4910080us,  3927040us,  3271680us,  2805760us,  2455040us,  1936520us,  1635840us,  1402880us,
+             1227520us,   981760us,   817920us,   701440us,   613760us,   490880us,   488960us,   350720us,
+              306880us,   245440us,   204480us,   175360us,   153440us,   122720us,   102240us,    87680us,
+               76720us,    61360us,    51120us,    43840us,    38360us,    30680us,    25560us,    21920us,
+               19200us,    15360us,    12800us,    10960us,     9600us,     7680us,     6400us,     5480us,
+                4800us,     3840us,     3200us,     2740us,     2400us,     2400us,     2400us,     2400us
+        };
+        return table[rate];
+    }
 
     template<unsigned N>
     opl::channel<N>::channel(const channel& c) noexcept

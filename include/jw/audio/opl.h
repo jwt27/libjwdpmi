@@ -318,6 +318,10 @@ namespace jw::audio
         template<unsigned N> void remove(channel<N>*) noexcept;
         template<unsigned N> void write(channel<N>*);
         template<unsigned N> void move(channel<N>*) noexcept;
+        template<unsigned N> clock::time_point off_time(const channel<N>*, const clock::time_point&) const noexcept;
+
+        static clock::duration attack_time(std::uint8_t) noexcept;
+        static clock::duration release_time(std::uint8_t) noexcept;
 
         opl_config cfg { };
         std::array<channel_4op*, 6> channels_4op { };
