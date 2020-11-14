@@ -99,40 +99,11 @@ namespace jw::audio
             unsigned : 2;
 
             template<unsigned sample_rate>
-            constexpr void freq(float f)
-            {
-                constexpr auto calc_blocks = []
-                {
-                    std::array<unsigned, 8> result;
-                    for (int i = 0; i < 8; i++) result[i] = 1023 * sample_rate / (1 << (20 - i));
-                    return result;
-                };
-                constexpr std::array<unsigned, 8> block_maxfreq { calc_blocks() };
+            constexpr void freq(float f) noexcept;
+            constexpr void freq(const basic_opl& opl, float f) noexcept;
 
-                unsigned i;
-                for (i = 0; i < 8; ++i)
-                    if (static_cast<unsigned>(f) <= block_maxfreq[i]) break;
-
-                freq_block = i;
-                freq_num = round(f * (1 << (20 - i))) / sample_rate;
-            }
-
-            constexpr void freq(const basic_opl& opl, float f)
-            {
-                if (opl.type == opl_type::opl3_l) freq<49518>(f);
-                else freq<49716>(f);
-            }
-
-            void output(std::bitset<4> value) noexcept
-            {
-                auto* const p = reinterpret_cast<std::uint8_t*>(this);
-                *p &= 0x0f;
-                *p |= value.to_ulong() << 4;
-            }
-            constexpr std::bitset<4> output() const noexcept
-            {
-                return { static_cast<unsigned>(*reinterpret_cast<const std::uint8_t*>(this) >> 4) };
-            }
+            void output(std::bitset<4> value) noexcept;
+            constexpr std::bitset<4> output() const noexcept;
         };
         static_assert(sizeof(channel) == 3);
 
@@ -327,4 +298,41 @@ namespace jw::audio
         std::array<channel_4op*, 6> channels_4op { };
         std::array<channel_2op*, 18> channels_2op { };
     };
+
+    template<unsigned sample_rate>
+    inline constexpr void basic_opl::channel::freq(float f) noexcept
+    {
+        constexpr auto calc_blocks = []
+        {
+            std::array<unsigned, 8> result;
+            for (int i = 0; i < 8; i++) result[i] = 1023 * sample_rate / (1 << (20 - i));
+            return result;
+        };
+        constexpr std::array<unsigned, 8> block_maxfreq { calc_blocks() };
+
+        unsigned i;
+        for (i = 0; i < 8; ++i)
+            if (static_cast<unsigned>(f) <= block_maxfreq[i]) break;
+
+        freq_block = i;
+        freq_num = round(f * (1 << (20 - i))) / sample_rate;
+    }
+
+    inline constexpr void basic_opl::channel::freq(const basic_opl& opl, float f) noexcept
+    {
+        if (opl.type == opl_type::opl3_l) freq<49518>(f);
+        else freq<49716>(f);
+    }
+
+    inline void basic_opl::channel::output(std::bitset<4> value) noexcept
+    {
+        auto* const p = reinterpret_cast<std::uint8_t*>(this);
+        *p &= 0x0f;
+        *p |= value.to_ulong() << 4;
+    }
+
+    inline constexpr std::bitset<4> basic_opl::channel::output() const noexcept
+    {
+        return { static_cast<unsigned>(*reinterpret_cast<const std::uint8_t*>(this) >> 4) };
+    }
 }
