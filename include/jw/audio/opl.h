@@ -285,6 +285,9 @@ namespace jw::audio
         private:
             channel(const base& c) noexcept : base { c } { };
 
+            bool key_on() const noexcept { return static_cast<const base*>(this)->key_on; }
+            void key_on(bool v) noexcept { static_cast<base*>(this)->key_on = v; }
+
             opl* owner { nullptr };
             unsigned channel_num { };
             clock::time_point on_time { };

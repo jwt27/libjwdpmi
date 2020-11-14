@@ -180,8 +180,10 @@ namespace jw::audio
     template<unsigned N> void opl::update(channel<N>* ch)
     {
         auto pri = N == 4 ? lookup_4to2_pri(ch->channel_num) : ch->channel_num;
-        ch->key_on = base::read_channel(pri).key_on;
+        auto key_on = ch->key_on();
+        ch->key_on(base::read_channel(pri).key_on);
         write(ch);
+        ch->key_on(key_on);
     }
 
     void opl::update_config()
@@ -195,7 +197,7 @@ namespace jw::audio
 
     template<unsigned N> void opl::stop(channel<N>* ch)
     {
-        ch->key_on = false;
+        ch->key_on(false);
         write(ch);
         ch->off_time = clock::now();
     }
@@ -206,9 +208,9 @@ namespace jw::audio
         if (ch->owner == this and base::read_channel(pri).key_on)
         {
             ch->off_time = clock::time_point::max();
-            ch->key_on = false;
+            ch->key_on(false);
             write(ch);
-            ch->key_on = true;
+            ch->key_on(true);
             write(ch);
             ch->on_time = clock::now();
             return true;
@@ -244,7 +246,7 @@ namespace jw::audio
         }
         ch->channel_num = n;
         ch->owner = this;
-        ch->key_on = true;
+        ch->key_on(true);
         write(ch);
         ch->on_time = clock::now();
         ch->off_time = clock::time_point::max();
