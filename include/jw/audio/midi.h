@@ -83,9 +83,20 @@ namespace jw::audio
             reset> msg;
         typename clock::time_point time;
 
-        constexpr midi() noexcept { }
-        midi(std::istream& in) { in >> *this; }
-        template<typename T> constexpr midi(T&& m, typename clock::time_point t = clock::time_point::min()) : msg(std::forward<T>(m)), time(t) { }
+        template<typename T, std::enable_if_t<not std::is_base_of_v<std::istream, T>, int> = 0> constexpr midi(T&& m)
+            : midi { std::forward<T>(m), clock::time_point::min() } { }
+
+        template<typename T, std::enable_if_t<std::is_base_of_v<std::istream, T>, int> = 0> constexpr midi(T& in)
+            : midi { } { in >> *this; }
+
+        template<typename T> constexpr midi(T&& m, clock::time_point t)
+            : msg(std::forward<T>(m)), time(t) { }
+
+        constexpr midi() noexcept = default;
+        midi(const midi&) noexcept = default;
+        midi(midi&&) noexcept = default;
+        midi& operator=(const midi&) noexcept = default;
+        midi& operator=(midi&&) noexcept = default;
 
         bool is_channel_message() const
         {
