@@ -45,11 +45,11 @@ namespace jw
 
     void print_exception(const std::exception& e, int level) noexcept
     {
-        std::cerr << "Exception " << std::dec << level << ": " << e.what() << '\n';
+        std::fprintf(stderr, "Exception %d: %s\n", level, e.what());
         if (auto* cpu_ex = dynamic_cast<const dpmi::cpu_exception*>(&e)) cpu_ex->print();
         try { std::rethrow_if_nested(e); }
         catch (const std::exception& e) { print_exception(e, level + 1); }
-        catch (...) { std::cerr << "Exception " << std::dec << (level + 1) << ": Unknown exception.\n"; }
+        catch (...) { std::fprintf(stderr, "Exception %u: Unknown exception.\n", level + 1); }
     }
 
     [[noreturn]] void terminate()
@@ -63,7 +63,7 @@ namespace jw
         ++terminated;
         if (terminated == 2)
         {
-            std::cerr << "Re-entry in std::terminate!\n";
+            std::fprintf(stderr, "Re-entry in std::terminate!\n");
             std::abort();
         }
         else if (terminated > 2)
@@ -76,13 +76,13 @@ namespace jw
         if (io::ps2_interface::instantiated()) io::ps2_interface::instance().reset();
         if (auto exc = std::current_exception())
         {
-            std::cerr << "std::terminate called after throwing an exception:\n";
+            std::fprintf(stderr, "std::terminate called after throwing an exception:\n");
             try { std::rethrow_exception(exc); }
             catch (const std::exception& e) { print_exception(e); }
-            catch (const terminate_exception& e) { std::cerr << "terminate_exception.\n"; }
-            catch (...) { std::cerr << "unknown exception.\n"; }
+            catch (const terminate_exception& e) { std::fprintf(stderr, "terminate_exception.\n"); }
+            catch (...) { std::fprintf(stderr, "unknown exception.\n"); }
         }
-        else std::cerr << "Terminating.\n";
+        else std::fprintf(stderr, "Terminating.\n");
         debug::print_backtrace();
 
         std::_Exit(-1);
