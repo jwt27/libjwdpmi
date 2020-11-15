@@ -130,7 +130,7 @@ namespace jw
 
         struct mpu401_stream : std::iostream
         {
-            mpu401_stream(const mpu401_config& c) : std::iostream(nullptr), streambuf(new detail::mpu401_streambuf { c })
+            mpu401_stream(mpu401_config c = { }) : std::iostream(nullptr), streambuf(new detail::mpu401_streambuf { c })
             {
                 this->rdbuf(streambuf.get());
             }
