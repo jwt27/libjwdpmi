@@ -167,9 +167,8 @@ namespace jw
             min_chunk_size = irq_alloc_size;
             irq_alloc = new dpmi::locked_pool_resource<true> { irq_alloc_size };
 
+            fpu_context_switcher.emplace();
             setup_exception_throwers();
-
-            fpu_context_switcher.reset(new fpu_context_switcher_t { });
 
             // Try setting control registers first in ring 3.  If we have no ring0 access, the
             // dpmi host might still trap and emulate control register access.
@@ -200,7 +199,6 @@ namespace jw
         {
             if (debug::debug()) debug::detail::notify_gdb_exit(exit_code);
             std::set_terminate(original_terminate_handler);
-            jw::dpmi::detail::fpu_context_switcher.reset();
         }
 
     private:

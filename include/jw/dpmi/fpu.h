@@ -6,7 +6,7 @@
 
 #pragma once
 #include <array>
-#include <memory>
+#include <optional>
 #include <atomic>
 #include <deque>
 #include <xmmintrin.h>
@@ -106,7 +106,7 @@ namespace jw
 
         namespace detail
         {
-            class fpu_context_switcher_t : class_lock<fpu_context_switcher_t>
+            class fpu_context_switcher_t
             {
                 locked_pool_allocator<false, fpu_context> alloc { config::interrupt_fpu_context_pool };
                 std::deque<fpu_context*, locked_pool_allocator<false, fpu_context*>> contexts { alloc };
@@ -133,7 +133,7 @@ namespace jw
                     return nullptr;
                 }
             };
-            inline std::unique_ptr<fpu_context_switcher_t> fpu_context_switcher;
+            inline constinit std::optional<fpu_context_switcher_t> fpu_context_switcher;
         }
     }
 }
