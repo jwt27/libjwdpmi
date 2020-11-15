@@ -164,12 +164,8 @@ namespace jw
             using namespace jw::dpmi;
             using namespace jw::dpmi::detail;
 
-            try
-            {
-                min_chunk_size = irq_alloc_size;
-                irq_alloc = new dpmi::locked_pool_resource<true> { irq_alloc_size };
-            }
-            catch (...) { std::abort(); }
+            min_chunk_size = irq_alloc_size;
+            irq_alloc = new dpmi::locked_pool_resource<true> { irq_alloc_size };
 
             setup_exception_throwers();
 
@@ -177,14 +173,19 @@ namespace jw
 
             // Try setting control registers first in ring 3.  If we have no ring0 access, the
             // dpmi host might still trap and emulate control register access.
-            std::optional<ring0_privilege> r0;
+            bool use_ring0 = false;
         retry:
-            try { set_control_registers(); }
-            catch (const cpu_exception&)
+            try
             {
-                if (not r0 and ring0_privilege::wont_throw())
+                std::optional<ring0_privilege> r0;
+                if (use_ring0) r0.emplace();
+                set_control_registers();
+            }
+            catch (const general_protection_fault&)
+            {
+                if (not use_ring0 and ring0_privilege::wont_throw())
                 {
-                    r0.emplace();
+                    use_ring0 = true;
                     goto retry;
                 }
                 // Setting cr0 or cr4 failed.  If compiled with SSE then this might be a problem.
@@ -205,6 +206,7 @@ namespace jw
     private:
         [[gnu::noipa]] static void set_control_registers()
         {
+            may_throw();    // HACK
             std::uint32_t cr;
             asm ("mov %0, cr0" : "=r" (cr));
             asm ("mov cr0, %0" :: "r" (cr | 0x10));       // enable native x87 exceptions
@@ -214,6 +216,8 @@ namespace jw
                 asm ("mov cr4, %0" :: "r" (cr | 0x600));  // enable SSE and SSE exceptions
             }
         }
+
+        [[gnu::noipa]] static void may_throw() { }
 
         std::terminate_handler original_terminate_handler;
     } [[gnu::init_priority(102)]] initializer;
