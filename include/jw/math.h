@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
@@ -23,6 +24,10 @@ namespace jw
     template<> constexpr inline auto round(long double a) { return __builtin_roundl(a); }
     template<> constexpr inline auto round(double a) { return __builtin_round(a); }
     template<> constexpr inline auto round(float a) { return __builtin_roundf(a); }
+
+    constexpr inline auto log2(long double a) { return __builtin_log2l(a); }
+    constexpr inline auto log2(double a) { return __builtin_log2(a); }
+    constexpr inline auto log2(float a) { return __builtin_log2f(a); }
 
     template<typename T> inline auto checksum8(const T& value)
     {

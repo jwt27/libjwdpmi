@@ -100,8 +100,21 @@ namespace jw::audio
             unsigned : 2;
 
             template<unsigned sample_rate>
-            constexpr void freq(float f) noexcept;
-            constexpr void freq(const basic_opl& opl, float f) noexcept;
+            constexpr void freq(float) noexcept;
+            constexpr void freq(const basic_opl& opl, float) noexcept;
+
+            template<unsigned sample_rate, unsigned A4 = 440>
+            void note(std::uint8_t) noexcept;
+            template<unsigned A4 = 440>
+            void note(const basic_opl&, std::uint8_t) noexcept;
+
+            template<unsigned sample_rate>
+            static constexpr unsigned fnum(std::uint8_t blk, float f) noexcept
+            { return static_cast<unsigned>(f * (1 << (20 - blk))) / sample_rate; }
+
+            template<unsigned sample_rate>
+            static consteval long double fnum_to_freq(std::uint8_t blk, unsigned fnum) noexcept
+            { return fnum * sample_rate / static_cast<long double>(1 << (20 - blk)); };
 
             void output(std::bitset<4> value) noexcept;
             constexpr std::bitset<4> output() const noexcept;
@@ -135,9 +148,7 @@ namespace jw::audio
 
         // Returns absolute oscillator slot number for given operator in given channel.
         static constexpr std::uint8_t oscillator_slot(std::uint8_t ch, std::uint8_t osc) noexcept
-        {
-            return ch + 3 * (ch / 3) + 3 * osc;
-        }
+        { return ch + 3 * (ch / 3) + 3 * osc; }
 
         // Returns primary 2op channel number for given 4op channel number.
         static constexpr std::uint8_t lookup_4to2_pri(std::uint8_t ch_4op) noexcept { return table_4to2[ch_4op]; }
@@ -249,6 +260,7 @@ namespace jw::audio
             channel& operator=(channel&& c) noexcept;
 
             void freq(const opl& o, float f) noexcept { base::freq(o, f); }
+            void note(const opl& o, std::uint8_t n) noexcept { base::note(o, n); }
             bool play(opl& o) { return o.insert(this); }
             bool playing() const noexcept { return owner != nullptr and not key_on() and off_time < clock::now(); }
             void update() { if (owner != nullptr) owner->update(this); }
@@ -307,21 +319,54 @@ namespace jw::audio
     template<unsigned sample_rate>
     inline constexpr void basic_opl::channel::freq(float freq) noexcept
     {
-        constexpr auto block_maxfreq = [](unsigned n) { return 1023 * sample_rate / (1 << (20 - n)); };
-        constexpr unsigned max = block_maxfreq(7);
-        constexpr unsigned shift = std::bit_width(block_maxfreq(0));
+        constexpr unsigned max = fnum_to_freq<sample_rate>(7, 1023);
+        constexpr std::uint8_t shift = std::bit_width(static_cast<unsigned>(fnum_to_freq<sample_rate>(0, 1023)));
 
         const auto f = static_cast<unsigned>(freq);
-        unsigned i = std::bit_width(f >> shift);
-        if ((f << (7 - i)) > max) ++i;
-        freq_block = i;
-        freq_num = jw::round(freq * (1 << (20 - i))) / sample_rate;
+        std::uint8_t b = std::bit_width(f) - shift;
+        b += (f << (7 - b)) > max;
+        freq_block = b;
+        freq_num = fnum<sample_rate>(b, freq);
+    }
+
+    template<unsigned sample_rate, unsigned A4>
+    inline void basic_opl::channel::note(std::uint8_t midi_note) noexcept
+    {
+        static constexpr std::uint8_t block0_max_note = jw::log2(fnum_to_freq<sample_rate>(0, 1023) / static_cast<long double>(A4)) * 12 + 69;
+        static constexpr std::uint8_t offset = block0_max_note - 11;
+        static constexpr auto scale = []
+        {
+            std::array<std::uint16_t, 12> array;
+            for (int i = 0; i < 12; ++i)
+                array[i] = fnum<sample_rate>(0, std::pow(2.0L, (i + offset - 69.0L) / 12.0L) * A4);
+            return array;
+        }();
+
+        constexpr std::uint8_t adjust = 12 - (offset % 12);
+        constexpr std::uint8_t adjust_div = (12 + offset) / 12;
+        const unsigned n = midi_note + adjust;
+        std::uint16_t f = scale[n % 12];
+        std::int8_t b = n / 12 - adjust_div;
+        if (b < 0)
+        {
+            f >>= -b;
+            b = 0;
+        }
+        freq_num = f;
+        freq_block = b;
     }
 
     inline constexpr void basic_opl::channel::freq(const basic_opl& opl, float f) noexcept
     {
         if (opl.type == opl_type::opl3_l) freq<49518>(f);
         else freq<49716>(f);
+    }
+
+    template<unsigned A4>
+    inline void basic_opl::channel::note(const basic_opl& opl, std::uint8_t midi_note) noexcept
+    {
+        if (opl.type == opl_type::opl3_l) note<49518, A4>(midi_note);
+        else note<49716, A4>(midi_note);
     }
 
     inline void basic_opl::channel::output(std::bitset<4> value) noexcept
