@@ -6,16 +6,10 @@
 #pragma once
 #include <variant>
 #include <vector>
-#include <deque>
 #include <iostream>
-#include <list>
-#include <mutex>
 #include <optional>
 #include <jw/common.h>
 #include <jw/split_stdint.h>
-#include <jw/thread/thread.h>
-#include <jw/thread/mutex.h>
-#include <jw/io/mpu401.h>
 #include <jw/chrono/chrono.h>
 #include <../jwdpmi_config.h>
 
@@ -87,7 +81,7 @@ namespace jw::audio
             : midi { std::forward<T>(m), clock::time_point::min() } { }
 
         template<typename T, std::enable_if_t<std::is_base_of_v<std::istream, T>, int> = 0> constexpr midi(T& in)
-            : midi { } { in >> *this; }
+            : midi { extract(in) } { }
 
         template<typename T> constexpr midi(T&& m, clock::time_point t)
             : msg(std::forward<T>(m)), time(t) { }
@@ -123,264 +117,10 @@ namespace jw::audio
             }, msg);
         }
 
-    protected:
-        struct istream_info
-        {
-            thread::mutex mutex { };
-            std::deque<byte> pending_msg { };
-            clock::time_point pending_msg_time;
-            byte last_status { 0 };
-        };
-        struct ostream_info
-        {
-            thread::mutex mutex { };
-            byte last_status { 0 };
-        };
-        inline static std::list<istream_info> istream_list { };
-        inline static std::list<ostream_info> ostream_list { };
-
-        template <typename S, typename L>
-        static void* get_pword(int i, S& stream, L& list)
-        {
-            void*& p = stream.pword(i);
-            if (p == nullptr) [[unlikely]]
-                p = &list.emplace_back();
-            return p;
-        }
-
-        static istream_info& rx_state(std::istream& stream)
-        {
-            static const int i = std::ios_base::xalloc();
-            return *static_cast<istream_info*>(get_pword(i, stream, istream_list));
-        }
-
-        static ostream_info& tx_state(std::ostream& stream)
-        {
-            static const int i = std::ios_base::xalloc();
-            return *static_cast<ostream_info*>(get_pword(i, stream, ostream_list));
-        }
-
-        struct stream_writer
-        {
-            std::streambuf& out;
-            ostream_info& tx;
-
-            void put_realtime(byte a)
-            {
-                if (auto* mpu = dynamic_cast<jw::io::detail::mpu401_streambuf*>(&out))
-                    mpu->put_realtime(a);
-                else
-                    out.sputc(a);
-            }
-
-            void put_status(byte a)
-            {
-                if (tx.last_status != a) out.sputc(a);
-                tx.last_status = a;
-            }
-
-            void clear_status() { tx.last_status = 0; }
-
-            void operator()(const note_event& msg)
-            {
-                if (not msg.on and tx.last_status == (0x90 | (msg.channel & 0x0f)))
-                {
-                    put_status(0x90 | (msg.channel & 0x0f));
-                    out.sputc(msg.key);
-                    out.sputc(0x00);
-                }
-                else
-                {
-                    put_status((msg.on ? 0x90 : 0x80) | (msg.channel & 0x0f));
-                    out.sputc(msg.key);
-                    out.sputc(msg.velocity);
-                }
-            }
-            void operator()(const key_pressure& msg)        { put_status(0xa0 | (msg.channel & 0x0f)); out.sputc(msg.key); out.sputc(msg.value); }
-            void operator()(const control_change& msg)      { put_status(0xb0 | (msg.channel & 0x0f)); out.sputc(msg.controller); out.sputc(msg.value); }
-            void operator()(const program_change& msg)      { put_status(0xc0 | (msg.channel & 0x0f)); out.sputc(msg.value); }
-            void operator()(const channel_pressure& msg)    { put_status(0xd0 | (msg.channel & 0x0f)); out.sputc(msg.value); }
-            void operator()(const pitch_change& msg)        { put_status(0xe0 | (msg.channel & 0x0f)); out.sputc(msg.value.lo); out.sputc(msg.value.hi); }
-
-            void operator()(const sysex& msg)               { clear_status(); out.sputc(0xf0); out.sputn(reinterpret_cast<const char*>(msg.data.data()), msg.data.size()); out.sputc(0xf7); }
-            void operator()(const mtc_quarter_frame& msg)   { clear_status(); out.sputc(0xf1); out.sputc(msg.data); }
-            void operator()(const song_position& msg)       { clear_status(); out.sputc(0xf2); out.sputc(msg.value.lo); out.sputc(msg.value.hi); }
-            void operator()(const song_select& msg)         { clear_status(); out.sputc(0xf3); out.sputc(msg.value); }
-            void operator()(const tune_request&)            { clear_status(); out.sputc(0xf6); }
-
-            void operator()(const clock_tick&)              { put_realtime(0xf8); }
-            void operator()(const clock_start&)             { put_realtime(0xfa); }
-            void operator()(const clock_continue&)          { put_realtime(0xfb); }
-            void operator()(const clock_stop&)              { put_realtime(0xfc); }
-            void operator()(const active_sense&)            { put_realtime(0xfe); }
-            void operator()(const reset&)                   { put_realtime(0xff); }
-
-            void operator()(const long_control_change& msg)
-            {
-                (*this)(control_change { { msg.channel }, msg.controller, static_cast<byte>(msg.value.hi) });
-                (*this)(control_change { { msg.channel }, static_cast<byte>(msg.controller + 0x20), static_cast<byte>(msg.value.lo) });
-            }
-
-            void operator()(const rpn_change& msg)
-            {
-                (*this)(control_change { { msg.channel }, 0x65, static_cast<byte>(msg.parameter.hi) });
-                (*this)(control_change { { msg.channel }, 0x64, static_cast<byte>(msg.parameter.lo) });
-                (*this)(long_control_change { { msg.channel }, 0x06, msg.value });
-            }
-
-            void operator()(const nrpn_change& msg)
-            {
-                (*this)(control_change { { msg.channel }, 0x63, static_cast<byte>(msg.parameter.hi) });
-                (*this)(control_change { { msg.channel }, 0x62, static_cast<byte>(msg.parameter.lo) });
-                (*this)(long_control_change { { msg.channel }, 0x06, msg.value });
-            }
-        };
-
-        template <typename S>
-        static void iostream_exception(S& stream)
-        {
-            stream.setstate(std::ios::badbit);
-            if (stream.exceptions() & stream.rdstate()) throw;
-        };
-
-    public:
-        friend std::ostream& operator<<(std::ostream& out, const midi& in)
-        {
-            auto& tx { tx_state(out) };
-            std::unique_lock<thread::mutex> lock { tx.mutex, std::defer_lock };
-            if (not in.is_realtime_message()) lock.lock();
-            std::ostream::sentry sentry { out };
-            try
-            {
-                if (sentry) std::visit(stream_writer { *out.rdbuf(), tx }, in.msg);
-            }
-            catch (const terminate_exception&)  { iostream_exception(out); throw; }
-            catch (const thread::abort_thread&) { iostream_exception(out); throw; }
-            catch (const abi::__forced_unwind&) { iostream_exception(out); throw; }
-            catch (...)                         { iostream_exception(out); }
-            return out;
-        }
-
-        friend std::istream& operator>>(std::istream& in, midi& out)
-        {
-            auto& rx { rx_state(in) };
-            std::unique_lock<thread::mutex> lock { rx.mutex };
-            std::ios::iostate error { std::ios::goodbit };
-            auto& buf = *in.rdbuf();
-            auto i { rx.pending_msg.cbegin() };
-
-            struct failure { };
-
-            auto fail = [&error]
-            {
-                error |= std::ios::failbit;
-                throw failure { };
-            };
-
-            auto get_any = [&]
-            {
-                if (i != rx.pending_msg.cend()) return *(i++);
-                auto b = static_cast<byte>(buf.sbumpc());
-                if (b >= 0xf8)  // system realtime messages may be mixed in
-                {
-                    out.time = clock::now();
-                    switch (b)
-                    {
-                    case 0xf8: out.msg = clock_tick { }; break;
-                    case 0xfa: out.msg = clock_start { }; break;
-                    case 0xfb: out.msg = clock_continue { }; break;
-                    case 0xfc: out.msg = clock_stop { }; break;
-                    case 0xfe: out.msg = active_sense { }; break;
-                    case 0xff: out.msg = reset { }; break;
-                    default: [[unlikely]] fail();
-                    }
-                    throw system_realtime_message { };
-                }
-                rx.pending_msg.push_back(b);
-                return b;
-            };
-
-            auto get = [&]
-            {
-                auto b = get_any();
-                if ((b & 0x80) != 0) [[unlikely]] fail();
-                return b;
-            };
-
-            std::istream::sentry sentry { in, true };
-            try
-            {
-                if (not sentry) [[unlikely]] throw failure { };
-                byte a { rx.last_status };
-
-                if (rx.pending_msg.empty())
-                {
-                    if (a == 0)
-                    {
-                        while ((buf.sgetc() & 0x80) == 0) buf.sbumpc(); // discard data until the first status byte
-                        a = get_any();
-                    }
-                    buf.sgetc();    // make sure there is data available before timestamping
-                    rx.pending_msg_time = clock::now();
-                }
-                else
-                {
-                    if ((rx.pending_msg[0] & 0x80) != 0) a = get_any();
-                }
-                out.time = rx.pending_msg_time;
-
-                if ((a & 0xf0) != 0xf0)   // channel message
-                {
-                    rx.last_status = a;
-                    byte ch = a & 0x0f;
-                    switch (a & 0xf0)
-                    {
-                    case 0x80: out.msg = note_event { { ch }, false, get(), get() }; break;
-                    case 0x90:
-                    {
-                        auto key = get();
-                        auto vel = get();
-                        if (vel == 0) out.msg = note_event { { ch }, false, key, vel };
-                        else out.msg = note_event { { ch }, true, key, vel };
-                        break;
-                    }
-                    case 0xa0: out.msg = key_pressure { { ch }, get(), get() }; break;
-                    case 0xb0: out.msg = control_change { { ch }, get(), get() }; break;
-                    case 0xc0: out.msg = program_change { { ch }, get() }; break;
-                    case 0xd0: out.msg = channel_pressure { { ch }, get() }; break;
-                    case 0xe0: out.msg = pitch_change { { ch }, { get(), get() } }; break;
-                    default: [[unlikely]] fail();
-                    }
-                }
-                else                    // system message
-                {
-                    rx.last_status = 0;
-                    switch (a)
-                    {
-                    case 0xf0:
-                    {
-                        auto& data = out.msg.emplace<sysex>().data;
-                        data.reserve(32);
-                        for (a = get_any(); a != 0xf7; a = get_any()) data.push_back(a);
-                        break;
-                    }
-                    case 0xf1: out.msg = mtc_quarter_frame { { }, get() }; break;
-                    case 0xf2: out.msg = song_position { { }, { get(), get() } }; break;
-                    case 0xf3: out.msg = song_select { { }, get() }; break;
-                    case 0xf6: out.msg = tune_request { }; break;
-                    default: [[unlikely]] fail();
-                    }
-                }
-                rx.pending_msg.clear();
-            }
-            catch (const failure&) { rx.pending_msg.clear(); }
-            catch (const system_realtime_message&) { }
-            catch (const terminate_exception&)  { iostream_exception(in); throw; }
-            catch (const thread::abort_thread&) { iostream_exception(in); throw; }
-            catch (const abi::__forced_unwind&) { iostream_exception(in); throw; }
-            catch (...)                         { iostream_exception(in); }
-            if (error != std::ios::goodbit) in.setstate(error);
-            return in;
-        }
+        void emit(std::ostream& out) const;
+        static midi extract(std::istream& in);
     };
+
+    inline std::ostream& operator<<(std::ostream& out, const midi& in) { in.emit(out); return out; }
+    inline std::istream& operator>>(std::istream& in, midi& out) { out = midi::extract(in); return in; }
 }
