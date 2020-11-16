@@ -44,9 +44,9 @@ namespace jw
                     bool cannot_retry : 1;
                     bool redirect_elsewhere : 1;
                     unsigned : 13;
-                };
+                } info_bits;
                 std::uint16_t raw_info_bits;
-            } info_bits;
+            };
             union
             {
                 cpu_flags flags;
@@ -54,19 +54,13 @@ namespace jw
             };
             far_ptr32 stack; unsigned : 16;
 
-            std::ostream& print(std::ostream& out) const
+            void print() const
             {
-                using namespace std;
-                out << hex << setfill('0');
-                out << "CPU exception at cs:eip=" << setw(4) << fault_address.segment << ':' << setw(8) << fault_address.offset;
-                out << ", ss:esp=" << setw(4) << stack.segment << ':' << setw(8) << stack.offset << '\n';
-                out << "Error code: " << setw(8) << error_code;
-                out << ", Info bits: " << std::bitset<3>(info_bits.raw_info_bits);
-                out << ", Flags: " << std::bitset<22>(raw_eflags) << '\n';
-                out << setfill(' ') << setw(0);
-                return out;
+                std::fprintf(stderr, "CPU exception at cs:eip=%.4hx:%.8lx, ss:eip=%.4hx:%.8lx\n",
+                    fault_address.segment, fault_address.offset, stack.segment, stack.offset);
+                std::fprintf(stderr, "Error code: %.8lx, info bits: %.1hx, flags: %.8lx\n",
+                    error_code, raw_info_bits, raw_eflags);
             }
-            friend auto& operator<<(std::ostream& out, const old_exception_frame& in) { return in.print(out); }
         };
         struct [[gnu::packed]] new_exception_frame : public old_exception_frame
         {
@@ -93,18 +87,14 @@ namespace jw
                 unsigned raw_pte : 32;
             } page_table_entry { };
 
-            std::ostream& print(std::ostream& out) const
+            void print() const
             {
-                out << static_cast<old_exception_frame>(*this);
-                using namespace std;
-                out << hex << setfill('0');
-                out << "(if page fault) Linear: " << setw(8) << linear_page_fault_address << ", Physical: " << setw(8) << page_table_entry.physical_address;
-                out << ", PTE: " << std::bitset<8>(page_table_entry.raw_pte) << '\n';
-                out << "ds=" << setw(4) << ds << " es=" << setw(4) << es << " fs=" << setw(4) << fs << " gs=" << setw(4) << gs << '\n';
-                out << setfill(' ') << setw(0);
-                return out;
+                old_exception_frame::print();
+                std::fprintf(stderr, "(if page fault) Linear: %.8lx, physical: %.8lx, PTE: %.1hhx\n",
+                    linear_page_fault_address, static_cast<long unsigned int>(page_table_entry.physical_address), page_table_entry.raw_pte);
+                std::fprintf(stderr, "ds=%.4hx es=%.4hx fs=%.4hx gs=%.4hx\n",
+                    ds, es, fs, gs);
             }
-            friend auto& operator<<(std::ostream& out, const new_exception_frame& in) { return in.print(out); }
         };
 
         struct [[gnu::packed]] raw_exception_frame
@@ -230,12 +220,13 @@ namespace jw
                 : system_error { static_cast<int>(n), cpu_category { } }
                 , registers { *r }, frame { init_frame(f, t) }, new_frame_type { t } { }
 
-            void print(std::ostream& s = std::cerr) const
+            void print() const
             {
-                if (new_frame_type) s << frame;
-                else s << *static_cast<const old_exception_frame*>(&frame);
-                s << registers;
+                if (new_frame_type) frame.print();
+                else static_cast<const old_exception_frame*>(&frame)->print();
+                registers.print();
             }
+
         private:
             static new_exception_frame init_frame(old_exception_frame* f, bool t) noexcept
             {

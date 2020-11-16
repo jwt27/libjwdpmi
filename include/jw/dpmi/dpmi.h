@@ -283,45 +283,45 @@ namespace jw
         // All general purpose registers, as pushed on the stack by the PUSHA instruction.
         struct alignas(2) [[gnu::packed]] cpu_registers
         {
-            union [[gnu::packed]]
+            union
             {
                 std::uint32_t edi;
                 std::uint16_t di;
             };
-            union [[gnu::packed]]
+            union
             {
                 std::uint32_t esi;
                 std::uint16_t si;
             };
-            union [[gnu::packed]]
+            union
             {
                 std::uint32_t ebp;
                 std::uint16_t bp;
             };
             unsigned : 32;  // esp, not used
-            union [[gnu::packed]]
+            union
             {
                 std::uint32_t ebx;
-                struct [[gnu::packed]] { std::uint16_t bx; };
-                struct [[gnu::packed]] { std::uint8_t bl, bh; };
+                std::uint16_t bx;
+                struct { std::uint8_t bl, bh; };
             };
-            union [[gnu::packed]]
+            union
             {
                 std::uint32_t edx;
-                struct [[gnu::packed]] { std::uint16_t dx; };
-                struct [[gnu::packed]] { std::uint8_t dl, dh; };
+                std::uint16_t dx;
+                struct { std::uint8_t dl, dh; };
             };
-            union [[gnu::packed]]
+            union
             {
                 std::uint32_t ecx;
-                struct [[gnu::packed]] { std::uint16_t cx; };
-                struct [[gnu::packed]] { std::uint8_t cl, ch; };
+                std::uint16_t cx;
+                struct { std::uint8_t cl, ch; };
             };
-            union [[gnu::packed]]
+            union
             {
                 std::uint32_t eax;
-                struct [[gnu::packed]] { std::uint16_t ax; };
-                struct [[gnu::packed]] { std::uint8_t al, ah; };
+                std::uint16_t ax;
+                struct { std::uint8_t al, ah; };
             };
 
             auto& print(std::ostream& out) const
@@ -334,8 +334,14 @@ namespace jw
                 return out;
             }
             friend auto& operator<<(std::ostream& out, const cpu_registers& in) { return in.print(out); }
+
+            void print() const
+            {
+                std::fprintf(stderr, "eax=%.8lx ebx=%.8lx ecx=%.8lx edx=%.8lx\n", eax, ebx, ecx, edx);
+                std::fprintf(stderr, "edi=%.8lx esi=%.8lx ebp=%.8lx\n", edi, esi, ebp);
+            }
         };
 
-        static_assert(sizeof(cpu_registers) == 0x20, "check sizeof struct dpmi::cpu_registers");
+        static_assert(sizeof(cpu_registers) == 0x20);
     }
 }

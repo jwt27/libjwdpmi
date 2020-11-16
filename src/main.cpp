@@ -72,7 +72,6 @@ namespace jw
         }
         dpmi::ring0_privilege::force_leave();
         debug::break_with_signal(SIGTERM);
-        std::cerr << video::ansi::set_80x50_mode();
         if (io::ps2_interface::instantiated()) io::ps2_interface::instance().reset();
         if (auto exc = std::current_exception())
         {
@@ -164,6 +163,8 @@ namespace jw
             using namespace jw::dpmi;
             using namespace jw::dpmi::detail;
 
+            std::set_terminate(terminate_handler);
+
             min_chunk_size = irq_alloc_size;
             irq_alloc = new dpmi::locked_pool_resource<true> { irq_alloc_size };
 
@@ -191,17 +192,15 @@ namespace jw
                 // For now, assume that the dpmi server already enabled these bits (HDPMI does this).
                 // If not, then we'll soon crash with an invalid opcode on the first SSE instruction.
             }
-
-            original_terminate_handler = std::set_terminate(terminate_handler);
         }
 
         ~init() noexcept
         {
             if (debug::debug()) debug::detail::notify_gdb_exit(exit_code);
-            std::set_terminate(original_terminate_handler);
         }
 
     private:
+        [[gnu::noipa]] static void may_throw() { }
         [[gnu::noipa]] static void set_control_registers()
         {
             may_throw();    // HACK
@@ -214,10 +213,6 @@ namespace jw
                 asm ("mov cr4, %0" :: "r" (cr | 0x600));  // enable SSE and SSE exceptions
             }
         }
-
-        [[gnu::noipa]] static void may_throw() { }
-
-        std::terminate_handler original_terminate_handler;
     } [[gnu::init_priority(102)]] initializer;
 
     [[nodiscard]] void* realloc(void* p, std::size_t new_size, std::size_t align)
