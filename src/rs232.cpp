@@ -118,7 +118,6 @@ namespace jw
 
             rs232_streambuf::int_type rs232_streambuf::underflow()
             {
-                //std::clog << "underflow() avail=" << std::boolalpha << read_status().data_available;
                 std::unique_lock<thread::recursive_mutex> lock { getting };
                 auto qsize = rx_buf.size() / 4;
                 if (rx_ptr > rx_buf.begin() + qsize * 3)
@@ -133,14 +132,12 @@ namespace jw
                 do
                 {
                     check_irq_exception();
-                    if (not dpmi::interrupt_mask::enabled() or
-                        not irq_enable.read().data_available or
-                        not dpmi::irq_mask::enabled(config.irq))
-                        get();
+                    if ((not dpmi::interrupt_mask::enabled()
+                         or not irq_enable.read().data_available
+                         or not dpmi::irq_mask::enabled(config.irq))
+                        and read_status().data_available) get();
                     else thread::yield();
-                    //std::clog << '.';
                 } while (gptr() == rx_ptr);
-                //std::clog << ". done. got: " << std::string_view { gptr(), egptr() - gptr() } << "\n";
                 return *gptr();
             }
 

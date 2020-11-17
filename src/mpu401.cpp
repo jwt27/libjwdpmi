@@ -96,10 +96,10 @@ namespace jw
                 do
                 {
                     check_irq_exception();
-                    if (not cfg.use_irq or
-                        not dpmi::interrupt_mask::enabled() or
-                        not dpmi::irq_mask::enabled(cfg.irq))
-                        get();
+                    if ((not cfg.use_irq
+                         or not dpmi::interrupt_mask::enabled()
+                         or not dpmi::irq_mask::enabled(cfg.irq))
+                        and not status_port.read().no_data_available) get();
                     else thread::yield();
                 } while (gptr() == rx_ptr);
                 return *gptr();
