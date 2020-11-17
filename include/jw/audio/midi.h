@@ -16,6 +16,23 @@
 namespace jw
 {
     using split_uint14_t = split_int<unsigned, 14>;
+
+    template <typename V, typename T, std::size_t I = 0>
+    consteval bool variant_contains()
+    {
+        if constexpr (I >= std::variant_size_v<V>) return false;
+        else if constexpr (std::is_same_v<T, std::variant_alternative_t<I, V>>) return true;
+        else return variant_contains<V, T, I + 1>();
+    }
+
+    template <typename V, typename T, std::size_t I = 0>
+    consteval std::size_t variant_index()
+    {
+        static_assert(variant_contains<V, T>());
+        if constexpr (not variant_contains<V, T>()) return std::variant_npos;
+        else if constexpr (std::is_same_v<T, std::variant_alternative_t<I, V>>) return I;
+        else return variant_index<V, T, I + 1>();
+    }
 }
 
 namespace jw::audio
@@ -24,67 +41,85 @@ namespace jw::audio
     {
         using clock = jw::config::midi_clock;
 
-        // tag types
-        struct channel_message { byte channel; };
-        struct system_message { };
-        struct system_common_message    : system_message { };
-        struct system_realtime_message  : system_message { };
+        // Channel message sub-types
+        struct note_event           { unsigned key        : 7, : 0, velocity : 7, : 0; bool on; };
+        struct key_pressure         { unsigned key        : 7, : 0, value    : 7; };
+        struct channel_pressure     { unsigned value      : 7; };
+        struct control_change       { unsigned controller : 7, : 0, value    : 7; };
+        struct long_control_change  { unsigned controller : 7, : 0; split_uint14_t value; }; // never received
+        struct program_change       { unsigned value      : 7; };
+        struct pitch_change         { split_uint14_t value; };
+        struct rpn_change           { split_uint14_t parameter, value; };    // never received
+        struct nrpn_change          { split_uint14_t parameter, value; };    // never received
 
-        // channel message types
-        struct note_event           : channel_message { bool on; byte key, velocity; };
-        struct key_pressure         : channel_message { byte key, value; };
-        struct channel_pressure     : channel_message { byte value; };
-        struct control_change       : channel_message { byte controller, value; };
-        struct long_control_change  : channel_message { byte controller; split_uint14_t value; };   // never received
-        struct program_change       : channel_message { byte value; };
-        struct pitch_change         : channel_message { split_uint14_t value; };
-        struct rpn_change           : channel_message { split_uint14_t parameter, value; };         // never received
-        struct nrpn_change          : channel_message { split_uint14_t parameter, value; };         // never received
+        // System Common message sub-types
+        struct sysex                { std::vector<byte> data; };
+        struct mtc_quarter_frame    { unsigned data : 7; };     // TODO
+        struct song_position        { split_uint14_t value; };
+        struct song_select          { unsigned value : 7; };
+        struct tune_request         { };
 
-        // system message types
-        struct sysex                : system_common_message { std::vector<byte> data; };
-        struct mtc_quarter_frame    : system_common_message { byte data; };                         // TODO
-        struct song_position        : system_common_message { split_uint14_t value; };
-        struct song_select          : system_common_message { byte value; };
-        struct tune_request         : system_common_message { };
-        struct clock_tick           : system_realtime_message { };
-        struct clock_start          : system_realtime_message { };
-        struct clock_continue       : system_realtime_message { };
-        struct clock_stop           : system_realtime_message { };
-        struct active_sense         : system_realtime_message { };
-        struct reset                : system_realtime_message { };
+        // Placeholder type for default-constructed message
+        struct no_message { };
 
-        std::variant<
-            note_event,
-            key_pressure,
-            channel_pressure,
-            control_change,
-            long_control_change,
-            program_change,
-            pitch_change,
-            rpn_change,
-            nrpn_change,
-            sysex,
-            mtc_quarter_frame,
-            song_position,
-            song_select,
-            tune_request,
+        // Channel message type
+        struct channel_message
+        {
+            unsigned channel : 4, : 0;
+            std::variant<note_event, key_pressure, channel_pressure, control_change,
+                long_control_change, program_change, pitch_change, rpn_change, nrpn_change> message;
+
+            template <typename T>
+            static consteval bool contains() { return variant_contains<decltype(message), T>(); }
+            template <typename T>
+            static consteval std::size_t index_of() { return variant_index<decltype(message), T>(); }
+        };
+
+        // System Common message type
+        struct system_message
+        {
+            std::variant<sysex, mtc_quarter_frame, song_position, song_select, tune_request> message;
+
+            template <typename T>
+            static consteval bool contains() { return variant_contains<decltype(message), T>(); }
+            template <typename T>
+            static consteval std::size_t index_of() { return variant_index<decltype(message), T>(); }
+        };
+
+        template <typename T>
+        static consteval std::size_t index_of() { return variant_index<decltype(type), T>(); }
+
+        // System Realtime message type
+        enum class realtime
+        {
             clock_tick,
             clock_start,
             clock_continue,
             clock_stop,
             active_sense,
-            reset> msg;
-        typename clock::time_point time;
+            reset
+        };
 
-        template<typename T, std::enable_if_t<not std::is_base_of_v<std::istream, T>, int> = 0> constexpr midi(T&& m)
-            : midi { std::forward<T>(m), clock::time_point::min() } { }
+        std::variant<no_message, channel_message, system_message, realtime> type;
+        clock::time_point time;
 
-        template<typename T, std::enable_if_t<std::is_base_of_v<std::istream, T>, int> = 0> constexpr midi(T& in)
-            : midi { extract(in) } { }
+        template<typename T, std::enable_if_t<channel_message::contains<T>(), int> = 0>
+        constexpr midi(unsigned ch, T&& m, clock::time_point t) : type { channel_message { ch, std::forward<T>(m) } }, time { t } { }
 
-        template<typename T> constexpr midi(T&& m, clock::time_point t)
-            : msg(std::forward<T>(m)), time(t) { }
+        template<typename T, std::enable_if_t<channel_message::contains<T>(), int> = 0>
+        constexpr midi(unsigned ch, T&& m) : midi { ch, std::forward<T>(m) } { }
+
+        template<typename T, std::enable_if_t<system_message::contains<T>(), int> = 0>
+        constexpr midi(T&& m, clock::time_point t) : type { system_message { std::forward<T>(m) } }, time { t } { }
+
+        template<typename T, std::enable_if_t<std::is_same_v<realtime, T>, int> = 0>
+        constexpr midi(T&& m, clock::time_point t) : type { realtime { std::forward<T>(m) } }, time { t } { }
+
+        template<typename T, std::enable_if_t<not std::is_base_of_v<std::istream, T>, int> = 0>
+        constexpr midi(T&& m) : midi { std::forward<T>(m), clock::time_point::min() } { }
+
+        template<typename T, std::enable_if_t<std::is_base_of_v<std::istream, T>, int> = 0>
+        constexpr midi(T& in) : midi { extract(in) } { }
 
         constexpr midi() noexcept = default;
         midi(const midi&) noexcept = default;
@@ -92,33 +127,26 @@ namespace jw::audio
         midi& operator=(const midi&) noexcept = default;
         midi& operator=(midi&&) noexcept = default;
 
-        bool is_channel_message() const
-        {
-            return std::visit([](auto&& m) { return std::is_base_of_v<channel_message, std::decay_t<decltype(m)>>; }, msg);
-        }
+        bool valid() const noexcept { return type.index() != index_of<no_message>() and type.index() != std::variant_npos; }
+        explicit operator bool() const noexcept { return valid(); };
 
-        bool is_system_message() const
-        {
-            return std::visit([](auto&& m) { return std::is_base_of_v<system_message, std::decay_t<decltype(m)>>; }, msg);
-        }
+        bool is_channel_message() const noexcept { return type.index() == index_of<channel_message>(); }
+        bool is_system_message() const noexcept { return type.index() == index_of<system_message>(); }
+        bool is_realtime_message() const noexcept { return type.index() == index_of<realtime>(); }
 
-        bool is_realtime_message() const
+        std::optional<unsigned> channel() const
         {
-            return std::visit([](auto&& m) { return std::is_base_of_v<system_realtime_message, std::decay_t<decltype(m)>>; }, msg);
-        }
-
-        auto channel() const
-        {
-            return std::visit([](auto&& m) -> std::optional<std::uint32_t>
-            {
-                if constexpr (std::is_base_of_v<channel_message, std::decay_t<decltype(m)>>)
-                    return { m.channel };
-                return { };
-            }, msg);
+            if (auto* t = std::get_if<channel_message>(&type))
+                return { t->channel };
+            return { };
         }
 
         void emit(std::ostream& out) const;
-        static midi extract(std::istream& in);
+        static midi extract(std::istream& in) { return do_extract(in, false); }
+        static midi try_extract(std::istream& in) { return do_extract(in, true); }
+
+    private:
+        static midi do_extract(std::istream&, bool);
     };
 
     inline std::ostream& operator<<(std::ostream& out, const midi& in) { in.emit(out); return out; }
