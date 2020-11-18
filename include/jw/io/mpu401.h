@@ -22,7 +22,7 @@ namespace jw
         {
             port_num port { 0x330 };
             dpmi::irq_level irq { 9 };
-            bool use_irq { false };
+            bool use_irq { true };
         };
 
         namespace detail
