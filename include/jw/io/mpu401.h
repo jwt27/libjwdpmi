@@ -44,21 +44,7 @@ namespace jw
                 mpu401_streambuf& operator=(const mpu401_streambuf&) = delete;
                 mpu401_streambuf& operator=(mpu401_streambuf&&) = delete;
 
-                void put_realtime(char_type out)
-                {
-                    while (true)
-                    {
-                        {
-                            dpmi::interrupt_mask no_irq { };
-                            if (not status_port.read().dont_send_data)
-                            {
-                                data_port.write(out);
-                                return;
-                            }
-                        }
-                        thread::yield();
-                    }
-                }
+                void put_realtime(char_type out);
 
             protected:
                 virtual int sync() override;
@@ -68,46 +54,49 @@ namespace jw
                 virtual int_type overflow(int_type c = traits_type::eof()) override;
 
             private:
-                void check_irq_exception()
+                void check_irq_exception();
+
+                mpu401_status get()
                 {
-                    if (irq_exception != nullptr) [[unlikely]]
+                    const auto qsize = rx_buf.size() / 4;
+                    const auto offset = gptr() - (rx_buf.begin() + qsize);
+                    if (rx_ptr > rx_buf.begin() + qsize * 3 and offset > 0) [[unlikely]]
                     {
-                        auto e = std::move(irq_exception);
-                        irq_exception = nullptr;
-                        std::rethrow_exception(e);
+                        std::copy(rx_buf.begin() + offset, rx_ptr, rx_buf.begin());
+                        rx_ptr -= offset;
+                        setg(rx_buf.begin(), rx_buf.begin() + qsize, rx_ptr);
                     }
-                }
 
-                void get()
-                {
-                    dpmi::interrupt_mask no_irq { };
-                    do
+                    auto status = status_port.read();
+                    while (not status.no_data_available)
                     {
-                        if (rx_ptr >= rx_buf.end()) throw io::overflow { "MPU401 receive buffer overflow" };
-                        *(rx_ptr++) = data_port.read();
-                    } while (not status_port.read().no_data_available);
+                        if (rx_ptr == rx_buf.end()) throw io::overflow { "MPU401 receive buffer overflow" };
+                        *rx_ptr++ = data_port.read();
+                        status = status_port.read();
+                    }
                     setg(rx_buf.begin(), gptr(), rx_ptr);
+                    return status;
                 }
 
-                void put()
+                void do_sync()
                 {
-                    std::unique_lock<thread::recursive_mutex> locked { putting, std::try_to_lock };
-                    if (not locked) return;
-                    dpmi::interrupt_mask no_irq { };
-                    while (tx_ptr < pptr() and not status_port.read().dont_send_data)
+                    while (true)
+                    {
+                        auto status = get();
+                        if (status.dont_send_data or tx_ptr == pptr()) break;
                         data_port.write(*tx_ptr++);
+                    }
                 }
 
                 dpmi::irq_handler irq_handler { [this]()
                 {
+                    dpmi::interrupt_mask no_irq { };
                     try
                     {
                         if (not status_port.read().no_data_available)
-                        {
                             dpmi::irq_handler::acknowledge();
-                            get();
-                        }
-                        put();
+
+                        do { do_sync(); } while (not status_port.read().no_data_available);
                     }
                     catch (...) { irq_exception = std::current_exception(); }
                 } };
@@ -116,7 +105,6 @@ namespace jw
                 out_port<byte> cmd_port;
                 in_port<mpu401_status> status_port;
                 io_port<byte> data_port;
-                thread::recursive_mutex getting, putting;
                 std::exception_ptr irq_exception;
 
                 std::array<char_type, 1_KB> rx_buf;
