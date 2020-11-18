@@ -24,6 +24,9 @@ namespace jw
 
                     auto fail = [] { throw device_not_found { "MPU401 not detected" }; };
 
+                    std::optional<dpmi::irq_mask> no_irq;
+                    if (cfg.use_irq) no_irq.emplace(cfg.irq);
+
                     auto timeout = thread::yield_while_for([this]
                     {
                         while (not status_port.read().no_data_available) data_port.read();
