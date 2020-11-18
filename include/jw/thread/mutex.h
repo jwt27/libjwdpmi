@@ -33,7 +33,7 @@ namespace jw
                     if (try_lock()) return;
                     else throw deadlock { };
                 }
-                yield_while([this]() { return !try_lock(); });
+                yield_while([this]() { return not try_lock(); });
             }
             void unlock() noexcept
             {
@@ -41,7 +41,7 @@ namespace jw
             }
             bool try_lock() noexcept
             {
-                return !locked.test_and_set();
+                return not locked.test_and_set();
             }
         };
 
@@ -49,7 +49,7 @@ namespace jw
         {
             using thread_ptr = std::weak_ptr<const detail::thread>;
             using irq_ptr = std::weak_ptr<const dpmi::detail::interrupt_id::id_t>;
-            std::variant<thread_ptr, irq_ptr, std::nullptr_t> owner { nullptr };
+            std::variant<std::nullptr_t, thread_ptr, irq_ptr> owner { nullptr };
             std::atomic<std::uint32_t> lock_count { 0 };
 
             struct is_owner
@@ -78,18 +78,17 @@ namespace jw
                     if (try_lock()) return;
                     else throw deadlock { };
                 }
-                yield_while([this]() { return !try_lock(); });
+                yield_while([this]() { return not try_lock(); });
             }
 
             void unlock() noexcept
             {
-                if (std::visit(is_owner { }, owner)) --lock_count;
-                if (lock_count == 0) owner = nullptr;
+                if (--lock_count == 0) owner = nullptr;
             }
 
             bool try_lock() noexcept
             {
-                if (owner.valueless_by_exception() or not std::visit(has_owner { }, owner))
+                if (not std::visit(has_owner { }, owner))
                 {
                     if (dpmi::in_irq_context()) owner = dpmi::detail::interrupt_id::get_current_interrupt();
                     else owner = detail::scheduler::get_current_thread();
