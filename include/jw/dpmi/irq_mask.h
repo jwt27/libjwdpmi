@@ -119,7 +119,6 @@ namespace jw
         private:
             void cli() noexcept
             {
-                asm("irq_mask_cli%=:":::);
                 auto [mask, port] = mp(irq);
                 byte current = port.read();
                 port.write(current | mask);
