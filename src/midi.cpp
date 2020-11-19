@@ -299,7 +299,6 @@ namespace jw::audio
                 if (not b) return { };
                 rx.pending_msg_time = clock::now();
                 if (is_realtime(*b)) return realtime_msg(*b, rx.pending_msg_time);
-                if (is_status(*b)) status = *b;
             }
 
             // Check for new status byte
