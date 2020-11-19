@@ -292,6 +292,8 @@ namespace jw::audio
         const opl_config& config() const noexcept { return cfg; }
         void config(const opl_config& c) { cfg = c; update_config(); };
 
+        const opl_type& type { base::type };
+
     private:
         opl(const opl&) = delete;
         opl(opl&&) = delete;
