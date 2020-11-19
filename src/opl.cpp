@@ -390,6 +390,17 @@ namespace jw::audio
     {
         if (ch == nullptr) return;
         if (ch->owner != this) return;
+        auto pri = N == 4 ? lookup_4to2_pri(ch->channel_num) : ch->channel_num;
+        auto c = read_channel(pri);
+        c.key_on = false;
+        base::write(c, pri);
+        for (unsigned i = 0; i < N; ++i)
+        {
+            auto o = read_oscillator(pri, i);
+            o.sustain = 0x0;
+            o.release = 0xf;
+            base::write(o, pri, i);
+        }
         if constexpr (N == 2) channels_2op[ch->channel_num] = nullptr;
         if constexpr (N == 4) channels_4op[ch->channel_num] = nullptr;
         ch->owner = nullptr;
