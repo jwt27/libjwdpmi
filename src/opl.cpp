@@ -427,7 +427,7 @@ namespace jw::audio
         if constexpr (N == 4) channels_4op[ch->channel_num] = ch;
     };
 
-    template<unsigned N> opl::clock::time_point opl::off_time(const channel<N>* ch, const clock::time_point& key_off) const noexcept
+    template<unsigned N> opl::clock::time_point opl::off_time(const channel<N>* ch, clock::time_point key_off) const noexcept
     {
         auto saturate_add = [](clock::time_point a, clock::duration b)
         {
