@@ -563,19 +563,13 @@ namespace jw::audio
 
     template void opl::update(channel<2>* ch);
     template void opl::stop(channel<2>* ch);
-    template bool opl::insert_at(std::uint8_t n, channel<2>* ch);
     template bool opl::insert(channel<2>*);
     template void opl::remove(channel<2>*) noexcept;
-    template void opl::write(channel<2>*);
-    template void opl::move(channel<2>*) noexcept;
 
     template void opl::update(channel<4>* ch);
     template void opl::stop(channel<4>* ch);
-    template bool opl::insert_at(std::uint8_t n, channel<4>* ch);
     template bool opl::insert(channel<4>*);
     template void opl::remove(channel<4>*) noexcept;
-    template void opl::write(channel<4>*);
-    template void opl::move(channel<4>*) noexcept;
 
     template struct opl::channel<2>;
     template struct opl::channel<4>;
