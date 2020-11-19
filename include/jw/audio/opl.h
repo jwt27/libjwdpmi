@@ -259,13 +259,14 @@ namespace jw::audio
             channel(channel&& c) noexcept;
             channel& operator=(channel&& c) noexcept;
 
-            void freq(const opl& o, float f) noexcept { base::freq(o, f); }
-            void note(const opl& o, std::uint8_t n) noexcept { base::note(o, n); }
-            bool play(opl& o) { return o.insert(this); }
-            bool playing() const noexcept { return owner != nullptr and not key_on() and off_time < clock::now(); }
-            void update() { if (owner != nullptr) owner->update(this); }
-            void stop() { if (owner != nullptr) owner->stop(this); }
-            bool retrigger(opl& o) { return o.retrigger(this); }
+            void freq(const opl& o, float f) noexcept           { base::freq(o, f); }
+            void note(const opl& o, std::uint8_t n) noexcept    { base::note(o, n); }
+            bool key_on(opl& o)                                 { return o.insert(this); }
+            void key_off()                                      { if (allocated()) owner->stop(this); }
+            void update()                                       { if (allocated()) owner->update(this); }
+            bool silent() const noexcept                        { return silent_at(clock::now()); }
+            bool silent_at(clock::time_point t) const noexcept  { return not allocated() or (not key_on() and off_time < t); }
+            bool allocated() const noexcept                     { return owner != nullptr; }
 
             static channel from_bytes(std::span<std::byte, sizeof(base)>) noexcept;
             std::array<std::byte, sizeof(base)> to_bytes() const noexcept;
@@ -301,8 +302,8 @@ namespace jw::audio
 
         void update_config();
         template<unsigned N> void update(channel<N>* ch);
+        template<unsigned N> void start(channel<N>* ch);
         template<unsigned N> void stop(channel<N>* ch);
-        template<unsigned N> bool retrigger(channel<N>* ch);
         template<unsigned N> bool insert_at(std::uint8_t n, channel<N>* ch);
         template<unsigned N> bool insert(channel<N>*);
         template<unsigned N> void remove(channel<N>*) noexcept;
