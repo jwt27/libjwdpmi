@@ -114,19 +114,7 @@ namespace jw
             using time_point = std::chrono::time_point<pit>;
 
             static constexpr bool is_steady { false };
-            static time_point now() noexcept
-            {
-                if (not setup::pit_irq.is_enabled()) [[unlikely]]
-                {
-                    auto t = std::chrono::duration_cast<duration>(std::chrono::_V2::steady_clock::now().time_since_epoch());
-                    return time_point { t };
-                }
-                dpmi::interrupt_mask no_irqs { };
-                setup::pit_cmd.write(0x00);        // latch counter 0
-                split_uint16_t counter { setup::pit0_data.read(), setup::pit0_data.read() };
-                double ns { setup::ns_per_pit_count * (setup::pit_counter_max - counter) + setup::ns_per_pit_tick * setup::pit_ticks };
-                return time_point { duration { static_cast<std::int64_t>(jw::round(ns)) } };
-            }
+            static time_point now() noexcept;
         };
 
         struct tsc  // Time Stamp Counter
@@ -137,6 +125,7 @@ namespace jw
             using time_point = std::chrono::time_point<tsc>;
 
             static constexpr bool is_steady { false };
+            static time_point now() noexcept;
 
             static duration to_duration(tsc_count count)
             {
@@ -149,20 +138,6 @@ namespace jw
             static time_point to_time_point(tsc_count count)
             {
                 return time_point { to_duration(count) };
-            }
-
-            static time_point now() noexcept
-            {
-                if (not setup::rtc_irq.is_enabled() and not setup::pit_irq.is_enabled()) [[unlikely]]
-                {
-                    auto t = std::chrono::duration_cast<duration>(std::chrono::_V2::high_resolution_clock::now().time_since_epoch());
-                    return time_point { t };
-                }
-                if (not setup::have_rdtsc) [[unlikely]]
-                {
-                    return time_point { std::chrono::duration_cast<duration>(pit::now().time_since_epoch()) };
-                }
-                return to_time_point(rdtsc());
             }
         };
     }
