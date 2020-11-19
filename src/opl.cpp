@@ -352,7 +352,7 @@ namespace jw::audio
                         auto* c = channels_4op[i];
                         check(pri, c->key_on(), c->priority, c->on_time, c->off_time);
                     }
-                    else search_2op(pri, sec);
+                    else if (search_2op(pri, sec)) return true;
                 }
             }
             return false;
