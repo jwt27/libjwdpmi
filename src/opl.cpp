@@ -211,29 +211,26 @@ namespace jw::audio
 
     template<unsigned N> bool opl::insert_at(std::uint8_t n, channel<N>* ch)
     {
-        if (ch->owner != nullptr)
-        {
-            ch->key_off();
-            ch->owner->remove(ch);
-        }
+        if (ch->owner != nullptr) ch->owner->remove(ch);
+
         if constexpr (N == 2)
         {
-            if (channels_2op[n] != nullptr) channels_2op[n]->key_off();
-            channels_2op[n] = ch;
+            remove(channels_2op[n]);
             auto ch_4op = lookup_2to4(n);
             if (type != opl_type::opl2 and ch_4op != 0xff)
             {
                 remove(channels_4op[ch_4op]);
                 set_4op(ch_4op, false);
             }
+            channels_2op[n] = ch;
         }
         if constexpr (N == 4)
         {
-            if (channels_4op[n] != nullptr) channels_4op[n]->key_off();
-            channels_4op[n] = ch;
+            remove(channels_4op[n]);
             remove(channels_2op[lookup_4to2_pri(n)]);
             remove(channels_2op[lookup_4to2_sec(n)]);
             set_4op(n, true);
+            channels_4op[n] = ch;
         }
         ch->channel_num = n;
         ch->owner = this;
