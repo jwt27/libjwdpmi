@@ -327,8 +327,8 @@ namespace jw::audio
                         {
                             auto* a = channels_2op[pri];
                             auto* b = channels_2op[sec];
-                            if (a == nullptr) return std::make_tuple(base::read_channel(sec).key_on, b->priority, b->on_time, b->off_time);
-                            if (b == nullptr) return std::make_tuple(base::read_channel(pri).key_on, a->priority, a->on_time, a->off_time);
+                            if (a == nullptr) return std::make_tuple(b->key_on(), b->priority, b->on_time, b->off_time);
+                            if (b == nullptr) return std::make_tuple(a->key_on(), a->priority, a->on_time, a->off_time);
                             auto a_on = a->key_on();
                             auto b_on = b->key_on();
                             auto max = [a_on, b_on](auto va, auto vb) { return a_on == b_on ? std::max(va, vb) : a_on ? va : vb; };
