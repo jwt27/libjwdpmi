@@ -137,23 +137,19 @@ namespace jw::audio
         constexpr bool opl3 = t == opl_type::opl3;
         constexpr bool opl3_l = t == opl_type::opl3_l;
 
-        const bool hi = reg > 0xff;
-        reg &= 0xff;
+        const bool hi = (reg & 0x100) != 0;
         if constexpr (opl2) if (hi) return;
+        reg &= 0xff;
 
         if constexpr (opl3_l) thread::yield_while([this] { return status().busy; });
-        else thread::yield_while([this] { return clock::now() < last_access + (opl3 ? 2235ns : 23us); });
+        else thread::yield_until(last_access + (opl3 ? 2235ns : 23us));
 
-        if (current_index[hi] != reg) [[likely]]
-        {
-            index[hi].write(reg);
-            if constexpr (opl2) last_access = clock::now();
-            current_index[hi] = reg;
-            if constexpr (opl2) thread::yield_while([this] { return clock::now() < last_access + 3300ns; });
-        }
+        index[hi].write(reg);
+
+        if constexpr (opl2) thread::yield_for<clock>(3300ns);
 
         data[hi].write(value);
-        if constexpr (opl2 or opl3) last_access = clock::now();
+        if constexpr (not opl3_l) last_access = clock::now();
     }
 
     void basic_opl::set_4op(std::uint8_t n, bool v)

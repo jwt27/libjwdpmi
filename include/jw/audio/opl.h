@@ -201,10 +201,9 @@ namespace jw::audio
         cached_reg<common_registers> common { };
         std::array<cached_reg<oscillator>, 36> oscillators { };
         std::array<cached_reg<channel>, 18> channels { };
-        clock::time_point last_access { };
+        clock::time_point last_access { clock::time_point::min() };
         io::in_port<status_t> status_register;
         std::array<io::out_port<std::uint8_t>, 2> index;
-        std::array<std::uint8_t, 2> current_index;
         std::array<io::io_port<std::byte>, 2> data;
 
     public:
