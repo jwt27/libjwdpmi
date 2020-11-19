@@ -234,6 +234,7 @@ namespace jw::audio
     struct opl final : private basic_opl
     {
         using base = basic_opl;
+        using clock = base::clock;
 
         template<unsigned N>
         struct channel_base : basic_opl::channel
