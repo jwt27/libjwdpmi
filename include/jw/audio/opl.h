@@ -7,7 +7,7 @@
 #include <bitset>
 #include <array>
 #include <jw/io/ioport.h>
-#include <jw/chrono/chrono.h>
+#include <jw/chrono.h>
 #include <jw/math.h>
 #include <../jwdpmi_config.h>
 

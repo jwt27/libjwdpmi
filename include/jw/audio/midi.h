@@ -10,7 +10,7 @@
 #include <optional>
 #include <jw/common.h>
 #include <jw/split_stdint.h>
-#include <jw/chrono/chrono.h>
+#include <jw/chrono.h>
 #include <../jwdpmi_config.h>
 
 namespace jw

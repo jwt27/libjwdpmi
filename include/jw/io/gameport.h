@@ -5,7 +5,7 @@
 
 #pragma once
 #include <jw/io/ioport.h>
-#include <jw/chrono/chrono.h>
+#include <jw/chrono.h>
 #include <jw/dpmi/irq.h>
 #include <jw/thread/task.h>
 #include <jw/dpmi/lock.h>

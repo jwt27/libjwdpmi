@@ -15,7 +15,7 @@
 #include <jw/io/ioport.h>
 #include <jw/thread/task.h>
 #include <jw/thread/mutex.h>
-#include <jw/chrono/chrono.h>
+#include <jw/chrono.h>
 
 // TODO: clean this up
 // TODO: keyboard commands enum, instead of using raw hex values
@@ -100,10 +100,11 @@ namespace jw
 
             byte read_from_controller()
             {
-                bool timeout = thread::yield_while_for([this]
+                using namespace std::chrono_literals;
+                const bool timeout = thread::yield_while_for([this]
                 {
                     return not get_status().data_available;
-                }, std::chrono::milliseconds { 100 });
+                }, 100ms);
                 if (timeout) throw timeout_error { "Keyboard timeout" };
                 return data_port.read();
             }

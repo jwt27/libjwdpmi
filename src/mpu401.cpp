@@ -5,7 +5,7 @@
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #include <jw/io/mpu401.h>
-#include <jw/chrono/chrono.h>
+#include <jw/chrono.h>
 
 namespace jw
 {

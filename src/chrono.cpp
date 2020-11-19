@@ -5,7 +5,7 @@
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #include <bit>
-#include <jw/chrono/chrono.h>
+#include <jw/chrono.h>
 #include <jw/io/ioport.h>
 #include <jw/dpmi/irq_mask.h>
 #include <jw/dpmi/cpu_exception.h>
