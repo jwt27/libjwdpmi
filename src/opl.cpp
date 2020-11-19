@@ -115,6 +115,7 @@ namespace jw::audio
             if (value.raw[i] == cache.raw[i] and cache.written[i]) continue;
             write(regnum[i] + offset, value.raw[i]);
             cache.raw[i] = value.raw[i];
+            cache.written[i] = true;
         }
     }
 
