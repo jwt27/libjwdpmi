@@ -42,12 +42,12 @@ namespace jw::audio
         using clock = jw::config::midi_clock;
 
         // Channel message sub-types
-        struct note_event           { unsigned key        : 7, : 0, velocity : 7, : 0; bool on; };
-        struct key_pressure         { unsigned key        : 7, : 0, value    : 7; };
-        struct channel_pressure     { unsigned value      : 7; };
-        struct control_change       { unsigned controller : 7, : 0, value    : 7; };
-        struct long_control_change  { unsigned controller : 7, : 0; split_uint14_t value; }; // never received
-        struct program_change       { unsigned value      : 7; };
+        struct note_event           { unsigned note    : 7, : 0, velocity : 7, : 0; bool on; };
+        struct key_pressure         { unsigned note    : 7, : 0, value    : 7; };
+        struct channel_pressure     { unsigned value   : 7; };
+        struct control_change       { unsigned control : 7, : 0, value    : 7; };
+        struct long_control_change  { unsigned control : 7, : 0; split_uint14_t value; }; // never received
+        struct program_change       { unsigned value   : 7; };
         struct pitch_change         { split_uint14_t value; };
         struct rpn_change           { split_uint14_t parameter, value; };    // never received
         struct nrpn_change          { split_uint14_t parameter, value; };    // never received

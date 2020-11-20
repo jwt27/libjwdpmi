@@ -97,26 +97,26 @@ namespace jw::audio
         {
             if (not msg.on and tx.last_status == (0x90 | ch))
             {
-                put(msg.key);
+                put(msg.note);
                 put(0x00);
             }
             else
             {
                 put_status((msg.on ? 0x90 : 0x80) | ch);
-                put(msg.key);
+                put(msg.note);
                 put(msg.velocity);
             }
         }
-        void operator()(byte ch, const midi::key_pressure& msg)     { put_status(0xa0 | ch); put(msg.key); put(msg.value); }
-        void operator()(byte ch, const midi::control_change& msg)   { put_status(0xb0 | ch); put(msg.controller); put(msg.value); }
+        void operator()(byte ch, const midi::key_pressure& msg)     { put_status(0xa0 | ch); put(msg.note); put(msg.value); }
+        void operator()(byte ch, const midi::control_change& msg)   { put_status(0xb0 | ch); put(msg.control); put(msg.value); }
         void operator()(byte ch, const midi::program_change& msg)   { put_status(0xc0 | ch); put(msg.value); }
         void operator()(byte ch, const midi::channel_pressure& msg) { put_status(0xd0 | ch); put(msg.value); }
         void operator()(byte ch, const midi::pitch_change& msg)     { put_status(0xe0 | ch); put(msg.value.lo); put(msg.value.hi); }
 
         void operator()(byte ch, const midi::long_control_change& msg)
         {
-            (*this)(ch, midi::control_change      { msg.controller, msg.value.hi });
-            (*this)(ch, midi::control_change      { msg.controller + 0x20u, msg.value.lo });
+            (*this)(ch, midi::control_change      { msg.control, msg.value.hi });
+            (*this)(ch, midi::control_change      { msg.control + 0x20u, msg.value.lo });
         }
 
         void operator()(byte ch, const midi::rpn_change& msg)
