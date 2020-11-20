@@ -388,7 +388,6 @@ namespace jw::audio
     template <unsigned N> void opl::remove(channel<N>* ch) noexcept
     {
         if (ch == nullptr) return;
-        if (ch->owner != this) return;
         auto pri = N == 4 ? lookup_4to2_pri(ch->channel_num) : ch->channel_num;
         auto c = read_channel(pri);
         c.key_on = false;
