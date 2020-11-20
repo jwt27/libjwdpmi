@@ -7,7 +7,7 @@
 #include <jw/audio/midi.h>
 #include <jw/thread/thread.h>
 #include <jw/thread/mutex.h>
-#include <jw/io/mpu401.h>
+#include <jw/io/realtime_streambuf.h>
 
 namespace jw::audio
 {
@@ -142,7 +142,7 @@ namespace jw::audio
     private:
         void put_realtime(byte a)
         {
-            if (auto* mpu = dynamic_cast<jw::io::detail::mpu401_streambuf*>(buf))
+            if (auto* mpu = dynamic_cast<jw::io::realtime_streambuf*>(buf))
                 mpu->put_realtime(a);
             else
                 put(a);

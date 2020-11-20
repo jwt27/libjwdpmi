@@ -13,6 +13,7 @@
 #include <jw/common.h>
 #include <jw/io/io_error.h>
 #include <jw/thread/mutex.h>
+#include <jw/io/realtime_streambuf.h>
 
 namespace jw
 {
@@ -34,7 +35,7 @@ namespace jw
                 bool no_data_available : 1;
             };
 
-            struct mpu401_streambuf : std::streambuf
+            struct mpu401_streambuf : realtime_streambuf
             {
                 mpu401_streambuf(const mpu401_config& c);
                 virtual ~mpu401_streambuf();
@@ -44,7 +45,7 @@ namespace jw
                 mpu401_streambuf& operator=(const mpu401_streambuf&) = delete;
                 mpu401_streambuf& operator=(mpu401_streambuf&&) = delete;
 
-                void put_realtime(char_type out);
+                virtual void put_realtime(char_type out) override;
 
             protected:
                 virtual int sync() override;
