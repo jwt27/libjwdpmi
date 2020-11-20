@@ -81,27 +81,26 @@ namespace jw::audio
 
     void basic_opl::write(const oscillator& value, std::uint8_t slot)
     {
-        constexpr auto offset = [](std::uint8_t n) { return n + 2 * (n / 6); };
-        if (slot >= 18) write<0x120, 0x140, 0x160, 0x180, 0x1e0>(value, oscillators[slot], offset(slot - 18));
-        else write<0x20, 0x40, 0x60, 0x80, 0xe0>(value, oscillators[slot], offset(slot));
+        const bool hi = slot >= 18;
+        const unsigned n = slot - (hi ? 18 : 0);
+        const unsigned offset = n + 2 * (n / 6) + (hi ? 0x100 : 0);
+        write<0x20, 0x40, 0x60, 0x80, 0xe0>(value, oscillators[slot], offset);
     }
 
     void basic_opl::write(const channel& value, std::uint8_t ch)
     {
+        const unsigned offset = ch + (ch >= 9 ? 0x100 - 9 : 0);
         if (type != opl_type::opl2)
         {
-            auto enable_4op = read().enable_4op.bitset();
             auto ch_4op = lookup_2to4(ch);
-            if (ch_4op != 0xff and ch == lookup_4to2_sec(ch_4op) and enable_4op[ch_4op])
+            if (ch_4op != 0xff and ch == lookup_4to2_sec(ch_4op) and is_4op(ch_4op))
             {
-                if (ch >= 9) write<0x1c0>(value, channels[ch], ch - 9);
-                else write<0xc0>(value, channels[ch], ch);
+                write<0xc0>(value, channels[ch], offset);
                 return;
             }
         }
 
-        if (ch >= 9) write<0x1c0, 0x1a0, 0x1b0>(value, channels[ch], ch - 9);
-        else write<0xc0, 0xa0, 0xb0>(value, channels[ch], ch);
+        write<0xc0, 0xa0, 0xb0>(value, channels[ch], offset);
     }
 
     template<unsigned... R, typename T>
