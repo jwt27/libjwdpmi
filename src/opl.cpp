@@ -13,13 +13,7 @@ namespace jw::audio
         , data { port + 1, port + 3 }
         , type { detect() }
     {
-        common_registers c { };
-        c.mask_timer0 = true;
-        c.mask_timer1 = true;
-        c.enable_waveform_select = type == opl_type::opl2;
-        c.enable_opl3 = type != opl_type::opl2;
-        c.enable_opl3_l = type == opl_type::opl3_l;
-        write(c);
+        reset();
     }
 
     void basic_opl::reset()
