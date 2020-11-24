@@ -56,7 +56,7 @@ namespace jw::audio
         if (status().timer0) throw io::device_not_found { "OPL not detected" };
         w(0x02, 0xff);          // set timer 0 count 0xff
         w(0x04, 0x21);          // start timer 0
-        thread::yield_for(80us);
+        thread::yield_for(100us);
         auto s = status();
         if (not s.timer0) throw io::device_not_found { "OPL not detected" };
         w(0x04, 0x60);          // mask both timers
