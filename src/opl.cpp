@@ -24,6 +24,13 @@ namespace jw::audio
 
     void basic_opl::reset()
     {
+        for (unsigned i = 0; i < 36; ++i)
+        {
+            oscillator o { oscillators[i].value };
+            o.sustain = 0;
+            o.release = 0xf;
+            write(o, i);
+        }
         for (unsigned i = 0; i < 18; ++i)
         {
             channel c { channels[i].value };
@@ -35,9 +42,9 @@ namespace jw::audio
         common_registers c { };
         c.mask_timer0 = true;
         c.mask_timer1 = true;
-        c.enable_waveform_select = common.value.enable_waveform_select;
-        c.enable_opl3 = common.value.enable_opl3;
-        c.enable_opl3_l = common.value.enable_opl3_l;
+        c.enable_waveform_select = type == opl_type::opl2;
+        c.enable_opl3 = type != opl_type::opl2;
+        c.enable_opl3_l = type == opl_type::opl3_l;
         write(c);
         c.reset_irq = true;
         write(c);
