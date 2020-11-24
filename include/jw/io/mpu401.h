@@ -35,7 +35,7 @@ namespace jw
                 bool no_data_available : 1;
             };
 
-            struct mpu401_streambuf : realtime_streambuf
+            struct mpu401_streambuf final : realtime_streambuf
             {
                 mpu401_streambuf(const mpu401_config& c);
                 virtual ~mpu401_streambuf();
