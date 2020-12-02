@@ -73,11 +73,6 @@ namespace jw::audio
     {
         write<0x01, 0x02, 0x03, 0x04, 0x08, 0xbd, 0x101, 0x104, 0x105>(value, common, 0);
         common.value.reset_irq = false;
-        common.value.hihat = false;
-        common.value.top_cymbal = false;
-        common.value.tomtom = false;
-        common.value.snare_drum = false;
-        common.value.bass_drum = false;
     }
 
     void basic_opl::write(const oscillator& value, std::uint8_t slot)
