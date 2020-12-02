@@ -101,25 +101,25 @@ namespace jw::audio
         };
 
         std::variant<no_message, channel_message, system_message, realtime> type;
-        clock::time_point time;
+        std::variant<clock::time_point, clock::duration> time;
 
-        template<typename T, std::enable_if_t<channel_message::contains<T>(), int> = 0>
-        constexpr midi(unsigned ch, T&& m, clock::time_point t) : type { channel_message { ch, std::forward<T>(m) } }, time { t } { }
+        template<typename M, typename T, std::enable_if_t<channel_message::contains<M>(), int> = 0>
+        constexpr midi(unsigned ch, M&& m, T&& t) noexcept : type { channel_message { ch, std::forward<M>(m) } }, time { std::forward<T>(t) } { }
 
-        template<typename T, std::enable_if_t<channel_message::contains<T>(), int> = 0>
-        constexpr midi(unsigned ch, T&& m) : midi { ch, std::forward<T>(m) } { }
+        template<typename M, std::enable_if_t<channel_message::contains<M>(), int> = 0>
+        constexpr midi(unsigned ch, M&& m) noexcept : midi { ch, std::forward<M>(m), clock::time_point { } } { }
 
-        template<typename T, std::enable_if_t<system_message::contains<T>(), int> = 0>
-        constexpr midi(T&& m, clock::time_point t) : type { system_message { std::forward<T>(m) } }, time { t } { }
+        template<typename M, typename T, std::enable_if_t<system_message::contains<M>(), int> = 0>
+        constexpr midi(M&& m, T&& t) noexcept : type { system_message { std::forward<M>(m) } }, time { std::forward<T>(t) } { }
 
-        template<typename T, std::enable_if_t<std::is_same_v<realtime, T>, int> = 0>
-        constexpr midi(T&& m, clock::time_point t) : type { realtime { std::forward<T>(m) } }, time { t } { }
+        template<typename M, typename T, std::enable_if_t<std::is_same_v<realtime, M>, int> = 0>
+        constexpr midi(M&& m, T&& t) noexcept : type { realtime { std::forward<M>(m) } }, time { std::forward<T>(t) } { }
 
-        template<typename T, std::enable_if_t<not std::is_base_of_v<std::istream, T>, int> = 0>
-        constexpr midi(T&& m) : midi { std::forward<T>(m), clock::time_point::min() } { }
+        template<typename M, std::enable_if_t<not std::is_base_of_v<std::istream, M>, int> = 0>
+        constexpr midi(M&& m) noexcept : midi { std::forward<M>(m), clock::time_point { } } { }
 
-        template<typename T, std::enable_if_t<std::is_base_of_v<std::istream, T>, int> = 0>
-        constexpr midi(T& in) : midi { extract(in) } { }
+        template<typename M, std::enable_if_t<std::is_base_of_v<std::istream, M>, int> = 0>
+        constexpr midi(M& in) : midi { extract(in) } { }
 
         constexpr midi() noexcept = default;
         midi(const midi&) noexcept = default;
