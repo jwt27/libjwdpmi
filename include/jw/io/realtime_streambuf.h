@@ -11,6 +11,7 @@ namespace jw::io
     {
         using std::basic_streambuf<CharT, Traits>::basic_streambuf;
         using std::basic_streambuf<CharT, Traits>::operator=;
+        virtual ~basic_realtime_streambuf() = default;
 
         virtual void put_realtime(CharT) = 0;
     };
