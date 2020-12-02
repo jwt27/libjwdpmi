@@ -292,7 +292,7 @@ namespace jw::audio
                 {
                     const auto b = peek();
                     if (not b) return { };
-                    if (is_status(*b)) break;
+                    if (is_status(*b) and *b != 0xf7) break;
                     buf->sbumpc();
                 }
                 const auto b = get();
@@ -333,9 +333,9 @@ namespace jw::audio
                 const auto b = get();
                 if (not b) return { };
                 if (is_realtime(*b)) return realtime_msg(*b);
-                if (is_sysex and *b == 0xf7) break;
-                if (is_status(*b)) [[unlikely]]
+                if (is_status(*b))
                 {
+                    if (is_sysex and *b == 0xf7) break;
                     rx.pending_msg_time = clock::now();
                     rx.pending_msg.clear();
                     rx.pending_msg.push_back(*b);
