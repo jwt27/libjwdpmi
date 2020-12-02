@@ -41,7 +41,11 @@ namespace jw
     // statements are always addressed through it.  Without a frame pointer,
     // such operands are addressed via esp which is invalidated by push/pop
     // operations.
-    [[gnu::always_inline]] inline void force_frame_pointer() noexcept { asm(""::"r"(__builtin_frame_address(0))); }
+    [[gnu::always_inline]]
+    inline void force_frame_pointer() noexcept { asm(""::"r"(__builtin_frame_address(0))); }
+
+    [[gnu::always_inline, gnu::optimize("O3")]]
+    constexpr inline void assume(bool condition) noexcept { if (not condition) __builtin_unreachable(); }
 
 #   ifdef HAVE__MMX__
     inline constexpr bool mmx = true;

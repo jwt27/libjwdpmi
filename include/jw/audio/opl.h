@@ -148,7 +148,7 @@ namespace jw::audio
 
         // Returns absolute oscillator slot number for given operator in given channel.
         static constexpr std::uint8_t oscillator_slot(std::uint8_t ch, std::uint8_t osc) noexcept
-        { return ch + 3 * (ch / 3) + 3 * osc; }
+        { assume(ch < 18 and osc < 4); return ch + 3 * (ch / 3) + 3 * osc; }
 
         // Returns primary 2op channel number for given 4op channel number.
         static constexpr std::uint8_t lookup_4to2_pri(std::uint8_t ch_4op) noexcept { return table_4to2[ch_4op]; }
@@ -335,6 +335,7 @@ namespace jw::audio
     template<unsigned sample_rate, unsigned A4>
     inline void basic_opl::channel::note(std::uint8_t midi_note) noexcept
     {
+        assume(midi_note < 128);
         static constexpr std::uint8_t block0_max_note = jw::log2(fnum_to_freq<sample_rate>(0, 1023) / static_cast<long double>(A4)) * 12 + 69;
         static constexpr std::uint8_t offset = block0_max_note - 11;
         static constexpr auto scale = []

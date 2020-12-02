@@ -82,6 +82,7 @@ namespace jw::audio
 
     void basic_opl::write(const oscillator& value, std::uint8_t slot)
     {
+        assume(slot < 36);
         const bool hi = slot >= 18;
         const unsigned n = slot - (hi ? 18 : 0);
         const unsigned offset = n + 2 * (n / 6) + (hi ? 0x100 : 0);
@@ -90,6 +91,7 @@ namespace jw::audio
 
     void basic_opl::write(const channel& value, std::uint8_t ch)
     {
+        assume(ch < 18);
         const unsigned offset = ch + (ch >= 9 ? 0x100 - 9 : 0);
         if (type != opl_type::opl2)
         {
