@@ -66,7 +66,7 @@ namespace jw::audio
             catch (...) { out.setstate(std::ios::badbit); }
         }
 
-        void operator()(const midi::no_message&) noexcept { };
+        void operator()(const std::monostate&) noexcept { };
 
         void operator()(const midi::channel_message& t)
         {

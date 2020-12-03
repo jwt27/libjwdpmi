@@ -59,9 +59,6 @@ namespace jw::audio
         struct song_select          { unsigned value : 7; };
         struct tune_request         { };
 
-        // Placeholder type for default-constructed message
-        struct no_message { };
-
         // Channel message type
         struct channel_message
         {
@@ -100,7 +97,7 @@ namespace jw::audio
             reset
         };
 
-        std::variant<no_message, channel_message, system_message, realtime> type;
+        std::variant<std::monostate, channel_message, system_message, realtime> type;
         std::variant<clock::time_point, clock::duration> time;
 
         template<typename M, typename T, std::enable_if_t<channel_message::contains<M>(), int> = 0>
@@ -127,7 +124,7 @@ namespace jw::audio
         midi& operator=(const midi&) noexcept = default;
         midi& operator=(midi&&) noexcept = default;
 
-        bool valid() const noexcept { return type.index() != index_of<no_message>() and type.index() != std::variant_npos; }
+        bool valid() const noexcept { return type.index() != index_of<std::monostate>() and type.index() != std::variant_npos; }
         explicit operator bool() const noexcept { return valid(); };
 
         bool is_channel_message() const noexcept { return type.index() == index_of<channel_message>(); }
