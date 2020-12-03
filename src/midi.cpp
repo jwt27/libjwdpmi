@@ -133,7 +133,7 @@ namespace jw::audio
             (*this)(ch, midi::long_control_change { 0x06u, msg.value });
         }
 
-        void operator()(const midi::sysex& msg)             { put(0xf0); buf->sputn(reinterpret_cast<const char*>(msg.data.data()), msg.data.size()); put(0xf7); }
+        void operator()(const midi::sysex& msg)             { buf->sputn(reinterpret_cast<const char*>(msg.data.data()), msg.data.size()); }
         void operator()(const midi::mtc_quarter_frame& msg) { put(0xf1); put(msg.data); }
         void operator()(const midi::song_position& msg)     { put(0xf2); put(msg.value.lo); put(msg.value.hi); }
         void operator()(const midi::song_select& msg)       { put(0xf3); put(msg.value); }
@@ -342,12 +342,10 @@ namespace jw::audio
                     throw unexpected_status { };
                 }
             }
-            if (is_sysex and rx.pending_msg.size() - new_status == 1) throw failure { };
 
             // Construct the message
             const unsigned ch = status & 0x0f;
             const auto i = rx.pending_msg.cbegin() + new_status;
-            auto at = [i](auto index) { return byte { *(i + index) }; };
             auto make_msg = [&rx]<typename... T>(T&&... args)
             {
                 rx.pending_msg.clear();
@@ -361,20 +359,20 @@ namespace jw::audio
                 {
                 case channel_message::index_of<note_event>():
                 {
-                    byte vel = at(1);
+                    byte vel = i[1];
                     bool on = (status & 0x10) != 0;
                     if (on and vel == 0)
                     {
                         on = false;
                         vel = 0x40;
                     }
-                    return make_msg(ch, note_event { at(0), vel, on });
+                    return make_msg(ch, note_event { i[0], vel, on });
                 }
-                case channel_message::index_of<key_pressure>():     return make_msg(ch, key_pressure     { at(0), at(1) });
-                case channel_message::index_of<channel_pressure>(): return make_msg(ch, channel_pressure { at(0) });
-                case channel_message::index_of<control_change>():   return make_msg(ch, control_change   { at(0), at(1) });
-                case channel_message::index_of<program_change>():   return make_msg(ch, program_change   { at(0) });
-                case channel_message::index_of<pitch_change>():     return make_msg(ch, pitch_change     { split_uint14_t { at(0), at(1) } });
+                case channel_message::index_of<key_pressure>():     return make_msg(ch, key_pressure     { i[0], i[1] });
+                case channel_message::index_of<channel_pressure>(): return make_msg(ch, channel_pressure { i[0] });
+                case channel_message::index_of<control_change>():   return make_msg(ch, control_change   { i[0], i[1] });
+                case channel_message::index_of<program_change>():   return make_msg(ch, program_change   { i[0] });
+                case channel_message::index_of<pitch_change>():     return make_msg(ch, pitch_change     { split_uint14_t { i[0], i[1] } });
                 }
                 break;
 
@@ -382,10 +380,10 @@ namespace jw::audio
                 rx.last_status = 0;
                 switch(index)
                 {
-                case system_message::index_of<sysex>():             return make_msg(sysex { std::vector<byte> { i, rx.pending_msg.cend() - 1 } });
-                case system_message::index_of<mtc_quarter_frame>(): return make_msg(mtc_quarter_frame { at(0) });
-                case system_message::index_of<song_position>():     return make_msg(song_position { split_uint14_t { at(0), at(1) } });
-                case system_message::index_of<song_select>():       return make_msg(song_select { at(0) });
+                case system_message::index_of<sysex>():             return make_msg(sysex { std::vector<byte> { rx.pending_msg.cbegin(), rx.pending_msg.cend() } });
+                case system_message::index_of<mtc_quarter_frame>(): return make_msg(mtc_quarter_frame { i[0] });
+                case system_message::index_of<song_position>():     return make_msg(song_position { split_uint14_t { i[0], i[1] } });
+                case system_message::index_of<song_select>():       return make_msg(song_select { i[0] });
                 case system_message::index_of<tune_request>():      return make_msg(tune_request { });
                 }
             }
