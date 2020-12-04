@@ -109,6 +109,7 @@ namespace jw::audio
         const reg<T> value { v };
         for (unsigned i = 0; i < sizeof...(R); ++i)
         {
+            std::unique_lock lock { mutex };
             if (value.raw[i] == cache.raw[i] and cache.written[i]) continue;
             write(regnum[i] + offset, value.raw[i]);
             cache.raw[i] = value.raw[i];

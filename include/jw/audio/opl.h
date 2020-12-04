@@ -6,6 +6,7 @@
 #include <bit>
 #include <bitset>
 #include <array>
+#include <jw/thread/mutex.h>
 #include <jw/io/ioport.h>
 #include <jw/chrono.h>
 #include <jw/math.h>
@@ -198,6 +199,7 @@ namespace jw::audio
         static inline constexpr std::uint8_t table_2to4[] { 0, 1, 2, 0, 1, 2, 0xff, 0xff, 0xff,
                                                             3, 4, 5, 3, 4, 5, 0xff, 0xff, 0xff };
 
+        thread::mutex mutex { };
         cached_reg<common_registers> common { };
         std::array<cached_reg<oscillator>, 36> oscillators { };
         std::array<cached_reg<channel>, 18> channels { };
