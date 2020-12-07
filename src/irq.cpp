@@ -28,9 +28,6 @@ namespace jw
                     data->increase_stack_size->start();
                 }
 
-                auto exception_msg = [] { std::cerr << "EXCEPTION AT INTERRUPT ENTRY POINT" << std::endl; };
-                auto hang = [] { do { } while (true); };
-
                 auto i = vec_to_irq(vec);
                 if ((i == 7 or i == 15) and not in_service()[i]) goto spurious;
 
@@ -45,8 +42,13 @@ namespace jw
 
                     entry->call();
                 }
-                catch (const std::exception& e) { exception_msg(); print_exception(e); hang(); }
-                catch (...) { exception_msg(); hang(); }
+                catch (...)
+                {
+                    std::cerr << "Exception in interrupt handler " << std::hex << vec << std::endl;
+                    try { throw; }
+                    catch (const std::exception& e) { print_exception(e); }
+                    do { asm ("cli; hlt"); } while (true);
+                }
 
                 asm("cli");
             spurious:
@@ -58,18 +60,11 @@ namespace jw
 
             void irq_controller::call()
             {
-                auto exception_msg = [this] { std::cerr << "EXCEPTION IN INTERRUPT HANDLER " << std::hex << vec << std::endl; };
-                auto hang = [] { do { } while (true); };
                 for (auto f : handler_chain)
                 {
-                    try
-                    {
-                        if (f->flags & always_call || !is_acknowledged()) f->handler_ptr();
-                    }
-                    catch (const std::exception& e) { exception_msg(); print_exception(e); hang(); }
-                    catch (...) { exception_msg(); hang(); }
+                    if (f->flags & always_call or not is_acknowledged()) f->handler_ptr();
                 }
-                if (flags & always_chain || !is_acknowledged())
+                if (flags & always_chain or not is_acknowledged())
                 {
                     interrupt_mask no_ints_here { };
                     call_far_iret(old_handler);

@@ -91,7 +91,7 @@ namespace jw
                     try { throw; }
                     catch (const std::exception& e) { print_exception(e); }
                     catch (...) { }
-                    detail::simulate_call(f, detail::kill);
+                    do { asm ("cli; hlt"); } while (true);
                 }
             }
 #           ifdef NDEBUG
