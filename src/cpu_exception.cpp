@@ -186,7 +186,7 @@ namespace jw
 
                 // Chain to previous handler
                 "Lchain:"
-                "mov eax, cs:[ebx-0x12];"   // copy chain_to ptr above stack (is this dangerous?)
+                "mov eax, cs:[ebx-0x12];"   // copy chain_to ptr above stack
                 "mov ss:[esp-0x08], eax;"
                 "mov ax, cs:[ebx-0x0e];"
                 "mov ss:[esp-0x04], ax;"
@@ -202,8 +202,7 @@ namespace jw
                 ::"cc");
             assert(size <= code.size());
 
-            auto* ptr = linear_memory(get_cs(), start, size).get_ptr<byte>();
-            std::copy_n(ptr, size, code.data());
+            std::copy_n(start, size, code.data());
             auto cs_limit = reinterpret_cast<std::size_t>(code.data() + size);
             if (descriptor::get_limit(get_cs()) < cs_limit)
                 descriptor::set_limit(get_cs(), cs_limit);
