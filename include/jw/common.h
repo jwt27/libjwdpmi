@@ -29,10 +29,14 @@ namespace jw
 
     struct terminate_exception final
     {
+        ~terminate_exception() { if (not defused) std::terminate(); }
         const char* what() const noexcept { return "Terminating."; }
+        void defuse() const noexcept { defused = true; }
+    private:
+        mutable bool defused { false };
     };
 
-    [[noreturn]] void terminate();
+    [[noreturn]] inline void terminate() { throw terminate_exception { }; };
 
     [[nodiscard]] void* realloc(void* pointer, std::size_t new_size, std::size_t alignment);
 

@@ -45,19 +45,14 @@ namespace jw
 
     void print_exception(const std::exception& e, int level) noexcept
     {
-        std::fprintf(stderr, "Exception %d: %s\n", level, e.what());
+        std::fprintf(stderr, "Exception %u: %s\n", level, e.what());
         if (auto* cpu_ex = dynamic_cast<const dpmi::cpu_exception*>(&e)) cpu_ex->print();
         try { std::rethrow_if_nested(e); }
         catch (const std::exception& e) { print_exception(e, level + 1); }
-        catch (...) { std::fprintf(stderr, "Exception %u: Unknown exception.\n", level + 1); }
+        catch (...) { std::fprintf(stderr, "Exception %u: unknown exception\n", level + 1); }
     }
 
-    [[noreturn]] void terminate()
-    {
-        throw terminate_exception { };
-    }
-
-    [[noreturn]] void terminate_handler() noexcept
+    [[noreturn]] static void terminate_handler() noexcept
     {
         static unsigned terminated = 0;
         ++terminated;
@@ -78,8 +73,12 @@ namespace jw
             std::fprintf(stderr, "std::terminate called after throwing an exception:\n");
             try { std::rethrow_exception(exc); }
             catch (const std::exception& e) { print_exception(e); }
-            catch (const terminate_exception& e) { std::fprintf(stderr, "terminate_exception.\n"); }
-            catch (...) { std::fprintf(stderr, "unknown exception.\n"); }
+            catch (const terminate_exception& e)
+            {
+                e.defuse();
+                std::fprintf(stderr, "terminate_exception\n");
+            }
+            catch (...) { std::fprintf(stderr, "unknown exception\n"); }
         }
         else std::fprintf(stderr, "Terminating.\n");
         debug::print_backtrace();
@@ -127,7 +126,7 @@ int main(int argc, const char** argv)
         jw::exit_code = jwdpmi_main(args);
     }
     catch (const std::exception& e) { std::cerr << "Caught exception in main()!\n"; jw::print_exception(e); }
-    catch (const jw::terminate_exception& e) { std::cerr << e.what() << '\n'; }
+    catch (const jw::terminate_exception& e) { e.defuse(); std::cerr << e.what() << '\n'; }
     catch (...) { std::cerr << "Caught unknown exception in main()!\n"; }
 
     for (auto& t : thread::detail::scheduler::threads) t->abort();
@@ -141,7 +140,7 @@ int main(int argc, const char** argv)
                 static_cast<thread::detail::task_base*>(t.get())->abort(true);
             }
             catch (const std::exception& e) { std::cerr << "Caught exception from thread!\n"; jw::print_exception(e); }
-            catch (const jw::terminate_exception& e) { }
+            catch (const jw::terminate_exception& e) { e.defuse(); }
             catch (...) { std::cerr << "Caught unknown exception from thread!\n"; }
         }
     }
