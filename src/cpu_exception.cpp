@@ -87,8 +87,8 @@ namespace jw
                 }
                 else
                 {
-                    std::cerr << "CAUGHT EXCEPTION IN CPU EXCEPTION HANDLER 0x" << std::hex << self->exc << std::endl;
-                    try { std::rethrow_exception(std::current_exception()); }
+                    std::fprintf(stderr, "Caught exception while handling CPU exception 0x%x\n", self->exc.value);
+                    try { throw; }
                     catch (const std::exception& e) { print_exception(e); }
                     catch (...) { }
                     detail::simulate_call(f, detail::kill);
