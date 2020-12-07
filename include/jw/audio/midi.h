@@ -8,6 +8,7 @@
 #include <vector>
 #include <iostream>
 #include <optional>
+#include <string>
 #include <jw/common.h>
 #include <jw/split_stdint.h>
 #include <jw/chrono.h>
@@ -83,9 +84,6 @@ namespace jw::audio
             static consteval std::size_t index_of() { return variant_index<decltype(message), T>(); }
         };
 
-        template <typename T>
-        static consteval std::size_t index_of() { return variant_index<decltype(type), T>(); }
-
         // System Realtime message type
         enum class realtime
         {
@@ -97,8 +95,68 @@ namespace jw::audio
             reset
         };
 
-        std::variant<std::monostate, channel_message, system_message, realtime> type;
-        std::variant<clock::time_point, clock::duration> time;
+        // Meta message type used in MIDI files
+        struct meta
+        {
+            struct sequence_number { unsigned num : 16; };
+            struct channel_prefix { unsigned channel : 4; };
+            struct tempo_change { std::chrono::microseconds quarter_note; };
+            struct smpte_offset
+            {
+                unsigned hour : 8;
+                unsigned minute : 8;
+                unsigned second : 8;
+                unsigned frame : 8;
+                unsigned fractional_frame : 8;  // 100ths of a frame
+            };
+            struct time_signature
+            {
+                unsigned numerator : 8;
+                unsigned denominator : 8;   // 2 = 1/4 note, 3 = 1/8 note, etc.
+                unsigned clocks_per_metronome_click : 8;
+                unsigned notated_32nd_notes_per_24_clocks : 8;
+            };
+            struct key_signature
+            {
+                signed num_sharps : 4, : 0;
+                bool major_key;
+            };
+            struct text
+            {
+                enum
+                {
+                    any,
+                    copyright,
+                    track_name,
+                    instrument_name,
+                    lyric,
+                    marker,
+                    cue_point
+                } type;
+                std::string text;
+            };
+            struct unknown
+            {
+                unsigned type : 8, : 0;
+                std::vector<byte> data;
+            };
+
+            std::variant<unknown, sequence_number, text, channel_prefix,
+                tempo_change, smpte_offset, time_signature, key_signature> message;
+
+            template <typename T>
+            static consteval bool contains() { return variant_contains<decltype(message), T>(); }
+            template <typename T>
+            static consteval std::size_t index_of() { return variant_index<decltype(message), T>(); }
+        };
+
+        template <typename T>
+        static consteval std::size_t index_of() { return variant_index<decltype(type), T>(); }
+
+        // MIDI Message
+        std::variant<std::monostate, channel_message, system_message, realtime, meta> type;
+        // Time - either a clock tick count, relative offset duration, or absolute time_point.
+        std::variant<unsigned, clock::duration, clock::time_point> time;
 
         template<typename M, typename T, std::enable_if_t<channel_message::contains<M>(), int> = 0>
         constexpr midi(unsigned ch, M&& m, T&& t) noexcept : type { channel_message { ch, std::forward<M>(m) } }, time { std::forward<T>(t) } { }
@@ -112,11 +170,14 @@ namespace jw::audio
         template<typename M, typename T, std::enable_if_t<std::is_same_v<realtime, M>, int> = 0>
         constexpr midi(M&& m, T&& t) noexcept : type { realtime { std::forward<M>(m) } }, time { std::forward<T>(t) } { }
 
+        template<typename M, typename T, std::enable_if_t<meta::contains<M>(), int> = 0>
+        constexpr midi(M&& m, T&& t) noexcept : type { meta { std::forward<M>(m) } }, time { std::forward<T>(t) } { }
+
         template<typename M, std::enable_if_t<not std::is_base_of_v<std::istream, M>, int> = 0>
         constexpr midi(M&& m) noexcept : midi { std::forward<M>(m), clock::time_point { } } { }
 
-        template<typename M, std::enable_if_t<std::is_base_of_v<std::istream, M>, int> = 0>
-        constexpr midi(M& in) : midi { extract(in) } { }
+        template<typename S, std::enable_if_t<std::is_base_of_v<std::istream, S>, int> = 0>
+        explicit constexpr midi(S& in) : midi { extract(in) } { }
 
         constexpr midi() noexcept = default;
         midi(const midi&) noexcept = default;
@@ -130,6 +191,7 @@ namespace jw::audio
         bool is_channel_message() const noexcept { return type.index() == index_of<channel_message>(); }
         bool is_system_message() const noexcept { return type.index() == index_of<system_message>(); }
         bool is_realtime_message() const noexcept { return type.index() == index_of<realtime>(); }
+        bool is_meta_message() const noexcept { return type.index() == index_of<meta>(); }
 
         std::optional<unsigned> channel() const
         {

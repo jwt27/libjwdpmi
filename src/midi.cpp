@@ -5,6 +5,7 @@
 #include <mutex>
 #include <cxxabi.h>
 #include <jw/audio/midi.h>
+#include <jw/audio/midi_file.h>
 #include <jw/thread/thread.h>
 #include <jw/thread/mutex.h>
 #include <jw/io/realtime_streambuf.h>
@@ -27,7 +28,7 @@ namespace jw::audio
     std::list<ostream_info> ostream_list { };
 
     template <typename S, typename T>
-    void* get_pword(int i, S& stream, std::list<T>& list)
+    static void* get_pword(int i, S& stream, std::list<T>& list)
     {
         void*& p = stream.pword(i);
         if (p == nullptr) [[unlikely]]
@@ -35,13 +36,13 @@ namespace jw::audio
         return p;
     }
 
-    istream_info& rx_state(std::istream& stream)
+    static istream_info& rx_state(std::istream& stream)
     {
         static const int i = std::ios_base::xalloc();
         return *static_cast<istream_info*>(get_pword(i, stream, istream_list));
     }
 
-    ostream_info& tx_state(std::ostream& stream)
+    static ostream_info& tx_state(std::ostream& stream)
     {
         static const int i = std::ios_base::xalloc();
         return *static_cast<ostream_info*>(get_pword(i, stream, ostream_list));
@@ -67,6 +68,7 @@ namespace jw::audio
         }
 
         void operator()(const std::monostate&) noexcept { };
+        void operator()(const midi::meta&) noexcept { };
 
         void operator()(const midi::channel_message& t)
         {
@@ -168,91 +170,108 @@ namespace jw::audio
         midi_out { out }.emit(*this);
     }
 
-    midi midi::do_extract(std::istream& in, bool dont_block)
+    struct unexpected_status { };
+    struct failure { };
+    struct end_of_file { };
+
+    static constexpr bool is_status(byte b) { return (b & 0x80) != 0; };
+    static constexpr bool is_realtime(byte b) { return b >= 0xf8; };
+    static constexpr bool is_system(byte b) { return b >= 0xf0; };
+
+    static constexpr std::size_t msg_size(byte status)
     {
-        struct unexpected_status { };
-        struct failure { };
-        struct end_of_file { };
-
-        constexpr auto is_status = [](byte b) { return (b & 0x80) != 0; };
-        constexpr auto is_realtime = [](byte b) { return b > 0xf7; };
-
-        constexpr auto realtime_msg = [](byte b, clock::time_point now = clock::now())
+        switch(status & 0xf0)
         {
-            switch (b)
+        case 0x80:
+        case 0x90: return 2;
+        case 0xa0: return 2;
+        case 0xb0: return 2;
+        case 0xc0: return 1;
+        case 0xd0: return 1;
+        case 0xe0: return 2;
+        case 0xf0:
+            switch (status)
             {
-            case 0xf8: return midi { realtime::clock_tick, now };
-            case 0xfa: return midi { realtime::clock_start, now };
-            case 0xfb: return midi { realtime::clock_continue, now };
-            case 0xfc: return midi { realtime::clock_stop, now };
-            case 0xfe: return midi { realtime::active_sense, now };
-            case 0xff: return midi { realtime::reset, now };
+            case 0xf0: return -2;
+            case 0xf1: return 1;
+            case 0xf2: return 2;
+            case 0xf3: return 1;
+            case 0xf6: return 0;
+            case 0xf4:
+            case 0xf5:
+            case 0xf7:
+            case 0xf9:
             case 0xfd: throw failure { };
-            default: __builtin_unreachable();
+            default: return 0;
             }
-        };
+        default: __builtin_unreachable();
+        }
+    };
 
-        constexpr auto channel_msg_index = [](byte status)
+    template<typename T>
+    static midi realtime_msg(byte status, T now)
+    {
+        switch (status)
         {
+        case 0xf8: return midi { midi::realtime::clock_tick, now };
+        case 0xfa: return midi { midi::realtime::clock_start, now };
+        case 0xfb: return midi { midi::realtime::clock_continue, now };
+        case 0xfc: return midi { midi::realtime::clock_stop, now };
+        case 0xfe: return midi { midi::realtime::active_sense, now };
+        case 0xff: return midi { midi::realtime::reset, now };
+        case 0xf9:
+        case 0xfd: throw failure { };
+        default: __builtin_unreachable();
+        }
+    };
+
+    template<typename I, typename T>
+    static auto make_msg(byte status, I i, T now)
+    {
+        const unsigned ch = status & 0x0f;
+        switch(status & 0xf0)
+        {
+        case 0x80:
+        case 0x90:
+        {
+            byte vel = i[1];
+            bool on = (status & 0x10) != 0;
+            if (on and vel == 0)
+            {
+                on = false;
+                vel = 0x40;
+            }
+            return midi { ch, midi::note_event { i[0], vel, on } };
+        }
+        case 0xa0: return midi { ch, midi::key_pressure     { i[0], i[1] }, now };
+        case 0xb0: return midi { ch, midi::control_change   { i[0], i[1] }, now };
+        case 0xc0: return midi { ch, midi::program_change   { i[0] }, now };
+        case 0xd0: return midi { ch, midi::channel_pressure { i[0] }, now };
+        case 0xe0: return midi { ch, midi::pitch_change     { { i[0], i[1] } }, now };
+        case 0xf0:
             switch (status)
             {
-            case 0x80:
-            case 0x90: return channel_message::index_of<note_event>();
-            case 0xa0: return channel_message::index_of<key_pressure>();
-            case 0xb0: return channel_message::index_of<control_change>();
-            case 0xc0: return channel_message::index_of<program_change>();
-            case 0xd0: return channel_message::index_of<channel_pressure>();
-            case 0xe0: return channel_message::index_of<pitch_change>();
-            default: __builtin_unreachable();
-            }
-        };
-
-        constexpr auto system_msg_index = [](byte status)
-        {
-            switch (status)
-            {
-            case 0xf0: return system_message::index_of<sysex>();
-            case 0xf1: return system_message::index_of<mtc_quarter_frame>();
-            case 0xf2: return system_message::index_of<song_position>();
-            case 0xf3: return system_message::index_of<song_select>();
-            case 0xf6: return system_message::index_of<tune_request>();
+            case 0xf0: __builtin_unreachable();
+            case 0xf1: return midi { midi::mtc_quarter_frame { i[0] }, now };
+            case 0xf2: return midi { midi::song_position     { { i[0], i[1] } }, now };
+            case 0xf3: return midi { midi::song_select       { i[0] }, now };
+            case 0xf6: return midi { midi::tune_request      { }, now };
             case 0xf4:
             case 0xf5:
             case 0xf7: throw failure { };
-            default: __builtin_unreachable();
+            default: return realtime_msg(status, now);
             }
-        };
+        default: __builtin_unreachable();
+        }
+    }
 
-        constexpr auto channel_msg_size = [](std::size_t i) -> std::size_t
-        {
-            switch (i)
-            {
-            case channel_message::index_of<note_event>():       return 2;
-            case channel_message::index_of<key_pressure>():     return 2;
-            case channel_message::index_of<channel_pressure>(): return 1;
-            case channel_message::index_of<control_change>():   return 2;
-            case channel_message::index_of<program_change>():   return 1;
-            case channel_message::index_of<pitch_change>():     return 2;
-            default: __builtin_unreachable();
-            }
-        };
-
-        constexpr auto system_msg_size = [](std::size_t i) -> std::size_t
-        {
-            switch (i)
-            {
-            case system_message::index_of<sysex>():             return -2;
-            case system_message::index_of<mtc_quarter_frame>(): return 1;
-            case system_message::index_of<song_position>():     return 2;
-            case system_message::index_of<song_select>():       return 1;
-            case system_message::index_of<tune_request>():      return 0;
-            default: __builtin_unreachable();
-            }
-        };
-
+    midi midi::do_extract(std::istream& in, bool dont_block)
+    {
         auto& rx { rx_state(in) };
         std::unique_lock lock { rx.mutex };
         auto* const buf { in.rdbuf() };
+        std::istream::sentry sentry { in, true };
+        if (not sentry) return { };
 
         auto peek = [&]() -> std::optional<byte>
         {
@@ -277,11 +296,8 @@ namespace jw::audio
             return b;
         };
 
-        std::istream::sentry sentry { in, true };
         try
         {
-            if (not sentry) throw failure { };
-
             byte status = rx.last_status;
 
             // Wait for data to arrive
@@ -309,30 +325,13 @@ namespace jw::audio
                 new_status = true;
             }
 
-            // Determine message type and size
-            enum { system, channel } type;
-            std::size_t index;
-            std::size_t size;
-            if ((status & 0xf0) != 0xf0)
-            {
-                type = channel;
-                index = channel_msg_index(status & 0xf0);
-                size = channel_msg_size(index);
-            }
-            else
-            {
-                type = system;
-                index = system_msg_index(status);
-                size = system_msg_size(index);
-            }
-
             // Read bytes from streambuf
-            const bool is_sysex = type == system and index == system_message::index_of<sysex>();
-            while (rx.pending_msg.size() < size + new_status)
+            const bool is_sysex = status == 0xf0;
+            while (rx.pending_msg.size() < msg_size(status) + new_status)
             {
                 const auto b = get();
                 if (not b) return { };
-                if (is_realtime(*b)) return realtime_msg(*b);
+                if (is_realtime(*b)) return realtime_msg(*b, clock::now());
                 if (is_status(*b))
                 {
                     if (is_sysex and *b == 0xf7) break;
@@ -343,50 +342,19 @@ namespace jw::audio
                 }
             }
 
-            // Construct the message
-            const unsigned ch = status & 0x0f;
-            const auto i = rx.pending_msg.cbegin() + new_status;
-            auto make_msg = [&rx]<typename... T>(T&&... args)
-            {
-                rx.pending_msg.clear();
-                return midi { std::forward<T>(args)..., rx.pending_msg_time };
-            };
-            switch (type)
-            {
-            case channel:
-                rx.last_status = status;
-                switch (index)
-                {
-                case channel_message::index_of<note_event>():
-                {
-                    byte vel = i[1];
-                    bool on = (status & 0x10) != 0;
-                    if (on and vel == 0)
-                    {
-                        on = false;
-                        vel = 0x40;
-                    }
-                    return make_msg(ch, note_event { i[0], vel, on });
-                }
-                case channel_message::index_of<key_pressure>():     return make_msg(ch, key_pressure     { i[0], i[1] });
-                case channel_message::index_of<channel_pressure>(): return make_msg(ch, channel_pressure { i[0] });
-                case channel_message::index_of<control_change>():   return make_msg(ch, control_change   { i[0], i[1] });
-                case channel_message::index_of<program_change>():   return make_msg(ch, program_change   { i[0] });
-                case channel_message::index_of<pitch_change>():     return make_msg(ch, pitch_change     { split_uint14_t { i[0], i[1] } });
-                }
-                break;
+            // Store running status
+            if (is_system(status)) rx.last_status = 0;
+            else rx.last_status = status;
 
-            case system:
-                rx.last_status = 0;
-                switch(index)
-                {
-                case system_message::index_of<sysex>():             return make_msg(sysex { std::vector<byte> { rx.pending_msg.cbegin(), rx.pending_msg.cend() } });
-                case system_message::index_of<mtc_quarter_frame>(): return make_msg(mtc_quarter_frame { i[0] });
-                case system_message::index_of<song_position>():     return make_msg(song_position { split_uint14_t { i[0], i[1] } });
-                case system_message::index_of<song_select>():       return make_msg(song_select { i[0] });
-                case system_message::index_of<tune_request>():      return make_msg(tune_request { });
-                }
-            }
+            struct guard
+            {
+                ~guard() { rx.pending_msg.clear(); }
+                istream_info& rx;
+            } clear_pending_on_return { rx };
+
+            // Construct the message
+            if (is_sysex) return midi { midi::sysex { { rx.pending_msg.cbegin(), rx.pending_msg.cend() } } };
+            else return make_msg(status, rx.pending_msg.cbegin() + new_status, rx.pending_msg_time);
         }
         catch (const failure&)
         {
@@ -401,5 +369,361 @@ namespace jw::audio
         catch (const abi::__forced_unwind&) { throw; }
         catch (...)                         { in.setstate(std::ios::badbit); }
         return { };
+    }
+
+    struct file_buffer
+    {
+        file_buffer(std::streambuf* buf, std::size_t s)
+            : size { s }, data { new byte[size] }, i { begin() }
+        {
+            const std::size_t bytes_read = buf->sgetn(reinterpret_cast<char*>(data.get()), size);
+            if (bytes_read < size) throw end_of_file { };
+        }
+
+        template<typename T>
+        void read(T* dst, std::size_t n)
+        {
+            if (i + n > end()) throw failure { };
+            for (unsigned j = 0; j < n; ++j)
+                reinterpret_cast<byte*>(dst)[j] = i[j];
+            i += n;
+            return;
+        }
+
+        std::uint32_t read_32()
+        {
+            union
+            {
+                std::array<byte, 4> raw;
+                std::uint32_t value;
+            };
+            read(raw.data(), 4);
+            return __builtin_bswap32(value);
+        }
+
+        std::uint32_t read_24()
+        {
+            union
+            {
+                std::array<byte, 4> raw;
+                std::uint32_t value;
+            };
+            raw[0] = 0;
+            read(raw.data() + 1, 3);
+            return __builtin_bswap32(value);
+        }
+
+        std::uint16_t read_16()
+        {
+            union
+            {
+                std::array<byte, 2> raw;
+                std::uint16_t value;
+            };
+            read(raw.data(), 2);
+            return __builtin_bswap16(value);
+        }
+
+        std::uint8_t read_8()
+        {
+            if (i == end()) throw failure { };
+            return *i++;
+        }
+
+        std::uint32_t read_vlq()
+        {
+            std::uint32_t value { };
+            byte b;
+            do
+            {
+                b = read_8();
+                value <<= 7;
+                value |= b & 0x7f;
+            } while ((b & 0x80) != 0);
+            return value;
+        }
+
+        const byte* begin() const noexcept { return data.get(); }
+        const byte* end() const noexcept { return data.get() + size; }
+
+    private:
+        const std::size_t size;
+        std::unique_ptr<byte[]> data;
+        const byte* i;
+    };
+
+    static std::size_t find_chunk(std::streambuf* buf, std::string_view want)
+    {
+        auto read = [buf](char* data, std::size_t size)
+        {
+            if (size == 0) return;
+            const std::size_t bytes_read = buf->sgetn(data, size);
+            if (bytes_read < size) throw end_of_file { };
+        };
+
+        auto read_32 = [read]()
+        {
+            union
+            {
+                std::array<char, 4> raw;
+                std::uint32_t value;
+            };
+            read(raw.data(), 4);
+            return __builtin_bswap32(value);
+        };
+
+        std::array<char, 4> raw;
+        do
+        {
+            read(raw.data(), 4);
+            const std::size_t size = read_32();
+            const std::string_view have { raw.data(), 4 };
+            if (have == want) return size;
+            buf->pubseekoff(size, std::ios::cur, std::ios::in);
+        } while (true);
+    }
+
+    static auto text_type(byte type) noexcept
+    {
+        switch (type)
+        {
+        case 0x01: return midi::meta::text::any;
+        case 0x02: return midi::meta::text::copyright;
+        case 0x03: return midi::meta::text::track_name;
+        case 0x04: return midi::meta::text::instrument_name;
+        case 0x05: return midi::meta::text::lyric;
+        case 0x06: return midi::meta::text::marker;
+        case 0x07: return midi::meta::text::cue_point;
+        default: __builtin_unreachable();
+        }
+    }
+
+    static void read_track(midi_file::track& trk, file_buffer& buf)
+    {
+        std::array<byte, 8> v;
+        bool in_sysex = false;
+        byte last_status = 0;
+        while (true)
+        {
+            const unsigned delta = buf.read_vlq();
+            const byte b = buf.read_8();
+            switch (b)
+            {
+            case 0xff:  // Meta message
+                {
+                    last_status = 0;
+                    const byte type = buf.read_8();
+                    const std::size_t size = buf.read_vlq();
+                    switch (type)
+                    {
+                    case 0x00:
+                        if (size != 2) throw failure { };
+                        trk.emplace_back(midi::meta::channel_prefix { buf.read_16() });
+                        break;
+
+                    case 0x01: case 0x02: case 0x03: case 0x04:
+                    case 0x05: case 0x06: case 0x07:
+                        {
+                            midi::meta::text msg { text_type(type), { } };
+                            msg.text.resize(size);
+                            buf.read(msg.text.data(), size);
+                            trk.emplace_back(std::move(msg), delta);
+                            break;
+                        }
+
+                    case 0x20:
+                        if (size != 1) throw failure { };
+                        trk.emplace_back(midi::meta::channel_prefix { buf.read_8() }, delta);
+                        break;
+
+                    case 0x2f:
+                        return;
+
+                    case 0x51:
+                        if (size != 3) throw failure { };
+                        trk.emplace_back(midi::meta::tempo_change { std::chrono::microseconds { buf.read_24() } }, delta);
+                        break;
+
+                    case 0x54:
+                        {
+                            if (size != 5) throw failure { };
+                            buf.read(v.data(), 5);
+                            trk.emplace_back(midi::meta::smpte_offset { v[0], v[1], v[2], v[3], v[4] }, delta);
+                            break;
+                        }
+
+                    case 0x58:
+                        {
+                            if (size != 4) throw failure { };
+                            buf.read(v.data(), 4);
+                            trk.emplace_back(midi::meta::time_signature { v[0], v[1], v[2], v[3] }, delta);
+                            break;
+                        }
+
+                    case 0x59:
+                        {
+                            if (size != 2) throw failure { };
+                            buf.read(v.data(), 2);
+                            trk.emplace_back(midi::meta::key_signature { v[0], v[1] != 0 }, delta);
+                            break;
+                        }
+
+                    default:
+                        {
+                            midi::meta::unknown msg { type, { } };
+                            msg.data.resize(size);
+                            buf.read(msg.data.data(), size);
+                            trk.emplace_back(std::move(msg), delta);
+                            break;
+                        }
+                    }
+                    break;
+                }
+
+            case 0xf7:  // Either a sysex, part of a sysex, or escape sequence (may be any message, or multiple)
+                {
+                    last_status = 0;
+                    std::vector<byte> data { };
+                    const std::size_t size = buf.read_vlq();
+                    data.reserve(size);
+                    for (unsigned i = 0; i < size; ++i)
+                    {
+                        const byte b = buf.read_8();
+                        data.push_back(b);
+
+                        switch (b)
+                        {
+                        case 0xf0:
+                            last_status = 0;
+                            in_sysex = true;
+                            for (; i < size; ++i)
+                            {
+                                const byte b = buf.read_8();
+                                data.push_back(b);
+                                if (b == 0xf7) break;
+                            }
+                            if (i == size) break;
+                            [[fallthrough]];
+                        case 0xf7:
+                            trk.emplace_back(midi::sysex { std::move(data) }, delta);
+                            if (i < size)
+                            {
+                                data = { };
+                                data.reserve(size - i);
+                            }
+                            last_status = 0;
+                            in_sysex = false;
+                            break;
+
+                        default:
+                            if (not in_sysex)
+                            {
+                                byte status = last_status;
+                                if (is_status(b)) status = b;
+                                if (status == 0) throw failure { };
+
+                                for (unsigned j = not is_status(b); j < msg_size(status); ++i, ++j)
+                                {
+                                    if (i == size) throw failure { };
+                                    const byte b = buf.read_8();
+                                    data.push_back(b);
+                                }
+
+                                if (not is_realtime(status))
+                                {
+                                    if (is_system(status)) last_status = 0;
+                                    else last_status = status;
+                                }
+
+                                trk.emplace_back(make_msg(status, data.data() + is_status(b), delta));
+                                data.clear();
+                            }
+                        }
+                    }
+                    if (data.size() > 0) trk.emplace_back(midi::sysex { std::move(data) }, delta);
+                    last_status = 0;
+                    break;
+                }
+
+            case 0xf0:  // Complete sysex or first part of a timed sysex
+                {
+                    last_status = 0;
+                    const std::size_t size = buf.read_vlq();
+                    midi::sysex msg { };
+                    msg.data.push_back(0xf0);
+                    msg.data.resize(size + 1);
+                    buf.read(msg.data.data(), size);
+                    in_sysex = true;
+                    if (msg.data.back() == 0xf7) in_sysex = false;
+                    trk.emplace_back(std::move(msg), delta);
+                    break;
+                }
+
+            default:    // Channel message
+                {
+                    in_sysex = false;
+                    auto* i = v.data();
+                    byte status = last_status;
+                    if (is_status(b)) status = b;
+                    else *i++ = b;
+                    switch (status)
+                    {
+                    case 0x00: case 0xf0: case 0xf7:
+                        throw failure { };
+                    }
+
+                    const std::size_t size = msg_size(status);
+                    if (size > 0) buf.read(i, size - is_status(b));
+
+                    // Also accept realtime and system messages here (non-standard)
+                    if (not is_realtime(status))
+                    {
+                        if (is_system(status)) last_status = 0;
+                        else last_status = status;
+                    }
+
+                    trk.emplace_back(make_msg(status, i, delta));
+                    break;
+                }
+            }
+        }
+    }
+
+    midi_file midi_file::read(std::istream& in)
+    {
+        midi_file output { };
+        auto* const rdbuf { in.rdbuf() };
+        std::istream::sentry sentry { in, true };
+        if (not sentry) return output;
+
+        try
+        {
+            file_buffer buf { rdbuf, find_chunk(rdbuf, "MThd") };
+            const std::uint16_t format = buf.read_16();
+            const std::size_t num_tracks = buf.read_16();
+            const split_uint16_t division = buf.read_16();
+
+            if (format == 0 and num_tracks != 1) throw failure { };
+            if (format > 2) throw failure { };
+            output.asynchronous_tracks = format == 2;
+            output.tracks.resize(num_tracks);
+
+            if ((division & 0x8000) == 0) output.time_division.emplace<unsigned>(division);
+            else output.time_division.emplace<smpte_format>(-static_cast<int8_t>(division.hi), division.lo);
+
+            for (auto& trk : output.tracks)
+            {
+                file_buffer buf { rdbuf, find_chunk(rdbuf, "MTrk") };
+                read_track(trk, buf);
+            }
+        }
+        catch (const failure&)              { in.setstate(std::ios::failbit); }
+        catch (const unexpected_status&)    { in.setstate(std::ios::failbit); }
+        catch (const end_of_file&)          { in.setstate(std::ios::eofbit); }
+        catch (const terminate_exception&)  { throw; }
+        catch (const thread::abort_thread&) { throw; }
+        catch (const abi::__forced_unwind&) { throw; }
+        catch (...)                         { in.setstate(std::ios::badbit); }
+        return output;
     }
 }
