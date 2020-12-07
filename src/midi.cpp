@@ -23,6 +23,7 @@ namespace jw::audio
     {
         thread::mutex mutex { };
         byte last_status { 0 };
+        bool realtime { false };
     };
     std::list<istream_info> istream_list { };
     std::list<ostream_info> ostream_list { };
@@ -32,7 +33,12 @@ namespace jw::audio
     {
         void*& p = stream.pword(i);
         if (p == nullptr) [[unlikely]]
+        {
             p = &list.emplace_back();
+            if constexpr (std::is_same_v<T, ostream_info>)
+                if (dynamic_cast<io::realtime_streambuf*>(stream.rdbuf()) != nullptr)
+                    static_cast<ostream_info*>(p)->realtime = true;
+        }
         return p;
     }
 
@@ -144,10 +150,8 @@ namespace jw::audio
     private:
         void put_realtime(byte a)
         {
-            if (auto* mpu = dynamic_cast<jw::io::realtime_streambuf*>(buf))
-                mpu->put_realtime(a);
-            else
-                put(a);
+            if (tx.realtime) static_cast<jw::io::realtime_streambuf*>(buf)->put_realtime(a);
+            else put(a);
         }
 
         void put_status(byte a)
