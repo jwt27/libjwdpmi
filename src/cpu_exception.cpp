@@ -17,55 +17,53 @@ namespace jw
     {
         namespace detail
         {
-            std::vector<std::exception_ptr> pending_exceptions { };
+            static std::vector<std::exception_ptr> pending_exceptions { };
 
-            [[noreturn, gnu::no_caller_saved_registers, gnu::force_align_arg_pointer]]
             void kill()
             {
                 jw::terminate();
             }
 
             [[noreturn, gnu::no_caller_saved_registers, gnu::force_align_arg_pointer]]
-            void rethrow_cpu_exception()
+            static void rethrow_cpu_exception()
             {
-                auto e = pending_exceptions.back();
+                auto e = std::move(pending_exceptions.back());
                 pending_exceptions.pop_back();
                 std::rethrow_exception(e);
             }
 
             [[gnu::naked, gnu::stdcall]]
-            void call_from_exception(void(*)())
+            static void call_from_exception(void(*)())
             {
                 asm (".cfi_signal_frame");
                 asm ("call [esp+4]; ret 4");
             }
 
-            bool enter_exception_context(exception_num exc) noexcept
+            void simulate_call(exception_frame* frame, void(*func)()) noexcept
             {
-                ++detail::exception_count;
-                auto fpu_context_switch_handled = detail::fpu_context_switcher->enter(exc);
-                detail::interrupt_id::push_back(exc, detail::interrupt_id::id_t::exception);
-                return fpu_context_switch_handled;
-            }
-
-            void leave_exception_context() noexcept
-            {
-                detail::interrupt_id::pop_back();
-                detail::fpu_context_switcher->leave();
-                --detail::exception_count;
+                frame->stack.offset -= 4;
+                *reinterpret_cast<std::uintptr_t*>(frame->stack.offset) = reinterpret_cast<std::uintptr_t>(func);
+                frame->stack.offset -= 4;
+                *reinterpret_cast<std::uintptr_t*>(frame->stack.offset) = frame->fault_address.offset;
+                frame->fault_address.offset = reinterpret_cast<std::uintptr_t>(call_from_exception);
+                frame->info_bits.redirect_elsewhere = true;
             }
         }
 
         bool exception_handler::call_handler(exception_handler* self, raw_exception_frame* frame) noexcept
         {
-            if (detail::enter_exception_context(self->exc))
-            {   // fpu context switch
-                detail::leave_exception_context();
-                return true;
-            }
-            *reinterpret_cast<volatile std::uint32_t*>(stack.begin()) = 0xDEADBEEF;
+            ++detail::exception_count;
             bool success = false;
             auto* f = self->new_type ? &frame->frame_10 : &frame->frame_09;
+            if (detail::fpu_context_switcher->enter(self->exc))
+            {
+                success = true;
+                goto fpu_context_switched;
+            }
+            detail::interrupt_id::push_back(self->exc, detail::interrupt_id::id_t::exception);
+#           ifdef NDEBUG
+            *reinterpret_cast<volatile std::uint32_t*>(stack.begin()) = 0xDEADBEEF;
+#           endif
             try
             {
                 success = self->handler(&frame->reg, f, self->new_type);
@@ -96,8 +94,14 @@ namespace jw
                     detail::simulate_call(f, detail::kill);
                 }
             }
-            if (*reinterpret_cast<volatile std::uint32_t*>(stack.begin()) != 0xDEADBEEF) std::cerr << "STACK OVERFLOW\n"; // another HACK
-            detail::leave_exception_context();
+#           ifdef NDEBUG
+            if (*reinterpret_cast<volatile std::uint32_t*>(stack.begin()) != 0xDEADBEEF)
+                std::fprintf(stderr, "Stack overflow handling exception 0x%x\n", self->exc.value);
+#           endif
+            detail::interrupt_id::pop_back();
+        fpu_context_switched:
+            detail::fpu_context_switcher->leave();
+            --detail::exception_count;
             return success;
         }
 
@@ -265,10 +269,10 @@ namespace jw
 
         namespace detail
         {
-            constinit std::array<std::optional<exception_handler>, 0x20> exception_throwers { };
+            constinit static std::array<std::optional<exception_handler>, 0x20> exception_throwers { };
 
             template <exception_num N, exception_num... Next>
-            void make_throwers()
+            static void make_throwers()
             {
                 exception_throwers[N].emplace(N, [](cpu_registers* r, exception_frame* f, bool t) -> bool
                 {
@@ -277,7 +281,7 @@ namespace jw
                 if constexpr (sizeof...(Next) > 0) make_throwers<Next...>();
             };
 
-            bool exception_throwers_setup { false };
+            constinit static bool exception_throwers_setup { false };
             void setup_exception_throwers()
             {
                 if constexpr (not config::enable_throwing_from_cpu_exceptions) return;
