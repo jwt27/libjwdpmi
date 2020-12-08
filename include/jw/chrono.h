@@ -109,7 +109,7 @@ namespace jw
 
         struct pit  // Programmable Interval Timer
         {
-            using duration = std::chrono::nanoseconds;
+            using duration = std::chrono::duration<std::uint64_t, std::nano>;
             using rep = duration::rep;
             using period = duration::period;
             using time_point = std::chrono::time_point<pit>;
@@ -120,7 +120,7 @@ namespace jw
 
         struct tsc  // Time Stamp Counter
         {
-            using duration = std::chrono::nanoseconds;
+            using duration = std::chrono::duration<std::uint64_t, std::nano>;
             using rep = duration::rep;
             using period = duration::period;
             using time_point = std::chrono::time_point<tsc>;
@@ -138,7 +138,7 @@ namespace jw
                 }();
                 ns *= count;
                 ns /= setup::tsc_ticks_per_irq;
-                return duration { static_cast<std::int64_t>(round(ns)) };
+                return duration { static_cast<std::uint64_t>(round(ns)) };
             }
 
             static time_point to_time_point(tsc_count count)

@@ -271,7 +271,7 @@ namespace jw
             }
             auto nsec = setup::ns_per_pit_tick * ticks;
             nsec += setup::ns_per_pit_count * (setup::pit_counter_max - counter);
-            return time_point { duration { static_cast<std::int64_t>(round(nsec)) } };
+            return time_point { duration { round(nsec) } };
         }
 
         tsc::time_point tsc::now() noexcept
