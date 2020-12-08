@@ -4,6 +4,7 @@
 
 #pragma once
 #include <type_traits>
+#include <concepts>
 #include <cmath>
 #include <jw/common.h>
 
@@ -28,6 +29,9 @@ namespace jw
     constexpr inline auto log2(long double a) { return __builtin_log2l(a); }
     constexpr inline auto log2(double a) { return __builtin_log2(a); }
     constexpr inline auto log2(float a) { return __builtin_log2f(a); }
+
+    template<std::integral T> constexpr inline T shr(T v, int c) noexcept { return (c < 0) ? v << -c : v >> c; }
+    template<std::integral T> constexpr inline T shl(T v, int c) noexcept { return (c < 0) ? v >> -c : v << c; }
 
     template<typename T> inline auto checksum8(const T& value)
     {
