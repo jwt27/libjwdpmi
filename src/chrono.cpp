@@ -250,7 +250,7 @@ namespace jw
             unix_time += from_bcd(sec);
 
             std::uint64_t usec = unix_time * static_cast<std::uint64_t>(1e6);
-            usec += jw::round(setup::rtc_ticks * setup::ns_per_rtc_tick / 1e3);
+            usec += round(setup::rtc_ticks * setup::ns_per_rtc_tick / 1e3);
             return time_point { duration { usec } };
         }
 
@@ -258,21 +258,27 @@ namespace jw
         {
             if (not setup::pit_irq.is_enabled()) [[unlikely]]
             {
-                auto t = std::chrono::duration_cast<duration>(std::chrono::_V2::steady_clock::now().time_since_epoch());
+                auto t = std::chrono::duration_cast<duration>(std::chrono::steady_clock::now().time_since_epoch());
                 return time_point { t };
             }
-            dpmi::interrupt_mask no_irqs { };
-            setup::pit_cmd.write(0x00);        // latch counter 0
-            split_uint16_t counter { setup::pit0_data.read(), setup::pit0_data.read() };
-            double ns { setup::ns_per_pit_count * (setup::pit_counter_max - counter) + setup::ns_per_pit_tick * setup::pit_ticks };
-            return time_point { duration { static_cast<std::int64_t>(jw::round(ns)) } };
+            std::uint64_t ticks;
+            std::uint16_t counter;
+            {
+                dpmi::interrupt_mask no_irqs { };
+                setup::pit_cmd.write(0x00); // latch counter 0
+                ticks = setup::pit_ticks;
+                counter = split_uint16_t { setup::pit0_data.read(), setup::pit0_data.read() };
+            }
+            auto nsec = setup::ns_per_pit_tick * ticks;
+            nsec += setup::ns_per_pit_count * (setup::pit_counter_max - counter);
+            return time_point { duration { static_cast<std::int64_t>(round(nsec)) } };
         }
 
         tsc::time_point tsc::now() noexcept
         {
             if (not setup::rtc_irq.is_enabled() and not setup::pit_irq.is_enabled()) [[unlikely]]
             {
-                auto t = std::chrono::duration_cast<duration>(std::chrono::_V2::high_resolution_clock::now().time_since_epoch());
+                auto t = std::chrono::duration_cast<duration>(std::chrono::high_resolution_clock::now().time_since_epoch());
                 return time_point { t };
             }
             if (not setup::have_rdtsc) [[unlikely]]

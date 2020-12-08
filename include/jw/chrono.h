@@ -10,6 +10,7 @@
 #include <chrono>
 #include <jw/dpmi/irq.h>
 #include <jw/math.h>
+#include <jw/fixed.h>
 
 namespace jw
 {
@@ -51,8 +52,8 @@ namespace jw
 
         private:
             static inline std::atomic<std::uint32_t> tsc_ticks_per_irq { 0 };
-            static constexpr double ns_per_pit_count { 1e9 / max_pit_frequency };
-            static inline double ns_per_pit_tick;
+            static constexpr fixed<std::uint32_t, 6> ns_per_pit_count { 1e9 / max_pit_frequency };
+            static inline fixed<std::uint32_t, 6> ns_per_pit_tick;
             static inline double ns_per_rtc_tick;
 
             static inline std::uint32_t pit_counter_max;
@@ -71,7 +72,7 @@ namespace jw
             static inline tsc_reference preferred_tsc_ref { tsc_reference::pit };
             static tsc_reference current_tsc_ref()
             {
-                if (preferred_tsc_ref == tsc_reference::pit && setup::pit_irq.is_enabled()) return preferred_tsc_ref;
+                if (preferred_tsc_ref == tsc_reference::pit and setup::pit_irq.is_enabled()) return preferred_tsc_ref;
                 else if (setup::rtc_irq.is_enabled()) return tsc_reference::rtc;
                 else if (setup::pit_irq.is_enabled()) return tsc_reference::pit;
                 else return tsc_reference::none;
@@ -129,10 +130,15 @@ namespace jw
 
             static duration to_duration(tsc_count count)
             {
-                double ns = (setup::current_tsc_ref() == tsc_reference::rtc) ? setup::ns_per_rtc_tick : setup::ns_per_pit_tick;
+                auto ns = []() -> double
+                {
+                    if (setup::current_tsc_ref() == tsc_reference::rtc)
+                        return setup::ns_per_rtc_tick;
+                    else return setup::ns_per_pit_tick;
+                }();
                 ns *= count;
                 ns /= setup::tsc_ticks_per_irq;
-                return duration { static_cast<std::int64_t>(jw::round(ns)) };
+                return duration { static_cast<std::int64_t>(round(ns)) };
             }
 
             static time_point to_time_point(tsc_count count)
