@@ -106,37 +106,30 @@ namespace jw
 
         void setup::setup_rtc(bool enable, std::uint8_t freq_shift)
         {
-            {
-                dpmi::interrupt_mask no_irq { };
-                reset_rtc();
-                if (not enable) return;
+            dpmi::interrupt_mask no_irq { };
+            reset_rtc();
+            if (not enable) return;
 
-                if (freq_shift < 1 or freq_shift > 15)
-                    throw std::out_of_range { "RTC frequency shift must be a value between 1 and 15, inclusive." };
+            if (freq_shift < 1 or freq_shift > 15)
+                throw std::out_of_range { "RTC frequency shift must be a value between 1 and 15, inclusive." };
 
-                ns_per_rtc_tick = 1e9 / (max_rtc_frequency >> (freq_shift - 1));
-                rtc_irq.set_irq(8);
-                rtc_irq.enable();
+            ns_per_rtc_tick = 1e9 / (max_rtc_frequency >> (freq_shift - 1));
+            rtc_irq.set_irq(8);
+            rtc_irq.enable();
 
-                rtc_index.write(0x8B);                  // disable NMI, select register 0x0B
-                auto b = rtc_data.read();               // read register
-                rtc_index.write(0x8B);
-                rtc_data.write(b | 0x40);               // set interrupt enable bit
+            rtc_index.write(0x8B);                  // disable NMI, select register 0x0B
+            auto b = rtc_data.read();               // read register
+            rtc_index.write(0x8B);
+            rtc_data.write(b | 0x40);               // set interrupt enable bit
 
-                freq_shift &= 0x0F;
-                rtc_index.write(0x8A);                  // disable NMI, select register 0x0A
-                auto a = rtc_data.read() & 0xF0;        // read register, clear lower 4 bits
-                rtc_index.write(0x8A);
-                rtc_data.write(a | freq_shift);         // set freq shift bits
+            freq_shift &= 0x0F;
+            rtc_index.write(0x8A);                  // disable NMI, select register 0x0A
+            auto a = rtc_data.read() & 0xF0;        // read register, clear lower 4 bits
+            rtc_index.write(0x8A);
+            rtc_data.write(a | freq_shift);         // set freq shift bits
 
-                rtc_index.write(0x0C);                  // enable NMI, select register 0x0C
-                rtc_data.read();                        // read and discard data
-            }
-            if (dpmi::interrupt_mask::enabled())
-            {
-                const auto ticks = pit_ticks;
-                do { } while (ticks == pit_ticks);
-            }
+            rtc_index.write(0x0C);                  // enable NMI, select register 0x0C
+            rtc_data.read();                        // read and discard data
         }
 
         void setup::setup_tsc(std::size_t sample_size, tsc_reference r)
