@@ -16,7 +16,7 @@
 #include <jw/dpmi/irq.h>
 #include <jw/alloc.h>
 #include <jw/common.h>
-#include <jw/split_stdint.h>
+#include <jw/split_int.h>
 #include <jw/dpmi/ring0.h>
 #include <../jwdpmi_config.h>
 

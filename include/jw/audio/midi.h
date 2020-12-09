@@ -10,7 +10,7 @@
 #include <optional>
 #include <string>
 #include <jw/common.h>
-#include <jw/split_stdint.h>
+#include <jw/split_int.h>
 #include <jw/chrono.h>
 #include <../jwdpmi_config.h>
 

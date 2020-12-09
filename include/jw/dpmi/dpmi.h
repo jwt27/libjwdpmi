@@ -14,7 +14,7 @@
 
 #include <jw/dpmi/dpmi_error.h>
 #include <jw/dpmi/irq_check.h>
-#include <jw/split_stdint.h>
+#include <jw/split_int.h>
 #include <jw/common.h>
 
 namespace jw
