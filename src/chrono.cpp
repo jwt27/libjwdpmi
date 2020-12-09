@@ -23,7 +23,6 @@ namespace jw
 
         void setup::update_tsc()
         {
-            if (not have_rdtsc) [[unlikely]] return;
             static std::uint64_t last_tsc;
             auto tsc = rdtsc();
             std::uint32_t diff = tsc - last_tsc;
@@ -58,7 +57,7 @@ namespace jw
             rtc_index.write(0x0C);
             rtc_data.read();
 
-            if (current_tsc_ref() == tsc_reference::rtc) update_tsc();
+            if (tsc_ref == tsc_reference::rtc) update_tsc();
 
             dpmi::irq_handler::acknowledge();
         }, dpmi::always_call | dpmi::no_interrupts };
@@ -73,7 +72,7 @@ namespace jw
                 :: "cc"
             );
 
-            if (current_tsc_ref() == tsc_reference::pit) update_tsc();
+            if (tsc_ref == tsc_reference::pit) update_tsc();
 
             dpmi::irq_handler::acknowledge();
         }, dpmi::always_call | dpmi::no_auto_eoi };
@@ -142,26 +141,48 @@ namespace jw
 
         void setup::setup_tsc(std::size_t sample_size, tsc_reference r)
         {
-            have_rdtsc = dpmi::cpuid::feature_flags().time_stamp_counter;
-            if (sample_size != 0)
+            if (not dpmi::cpuid::feature_flags().time_stamp_counter) return;
+
+            auto tsc_ref_enabled = [](auto r)
             {
-                if (not std::has_single_bit(sample_size)) throw std::runtime_error { "Number of TSC samples must be a power of two." };
-                tsc_max_sample_size = sample_size;
-                tsc_max_sample_bits = std::bit_width(sample_size - 1);
-            }
-            if (r != tsc_reference::none and (r != current_tsc_ref() or current_tsc_ref() == tsc_reference::none))
+                switch (r)
+                {
+                case tsc_reference::pit: return pit_irq.is_enabled();
+                case tsc_reference::rtc: return rtc_irq.is_enabled();
+                default: return false;
+                }
+            };
+
             {
-                preferred_tsc_ref = r;
-                reset_tsc();
+                dpmi::interrupt_mask no_irq { };
+                if (sample_size != 0)
+                {
+                    if (not std::has_single_bit(sample_size))
+                        throw std::runtime_error { "TSC sample size must be a power of two." };
+                    tsc_max_sample_size = sample_size;
+                    tsc_max_sample_bits = std::bit_width(sample_size - 1);
+                }
+
+                if (tsc_ref_enabled(r))
+                {
+                    tsc_ref = r;
+                    reset_tsc();
+                }
             }
+
             const unsigned ticks = tsc_ticks_per_irq;
-            if (have_rdtsc) thread::yield_while([ticks] { return tsc_ticks_per_irq == ticks; });
+            if (dpmi::interrupt_mask::enabled() and tsc_ref_enabled(tsc_ref))
+                thread::yield_while([ticks] { return tsc_ticks_per_irq == ticks; });
         }
 
         void setup::reset_pit()
         {
             dpmi::interrupt_mask no_irq { };
-            if (current_tsc_ref() == tsc_reference::pit) reset_tsc();
+            if (tsc_ref == tsc_reference::pit)
+            {
+                reset_tsc();
+                tsc_ref = tsc_reference::none;
+            }
             pit_irq.disable();
             pit_ticks = 0;
             pit_cmd.write(0x34);
@@ -173,7 +194,11 @@ namespace jw
         void setup::reset_rtc()
         {
             dpmi::interrupt_mask no_irq { };
-            if (current_tsc_ref() == tsc_reference::rtc) reset_tsc();
+            if (tsc_ref == tsc_reference::rtc)
+            {
+                reset_tsc();
+                tsc_ref = tsc_reference::none;
+            }
             rtc_irq.disable();
             rtc_ticks = 0;
             rtc_index.write(0x8B);                  // disable NMI, select register 0x0B
@@ -276,12 +301,7 @@ namespace jw
 
         tsc::time_point tsc::now() noexcept
         {
-            if (not setup::rtc_irq.is_enabled() and not setup::pit_irq.is_enabled()) [[unlikely]]
-            {
-                auto t = std::chrono::duration_cast<duration>(std::chrono::high_resolution_clock::now().time_since_epoch());
-                return time_point { t };
-            }
-            if (not setup::have_rdtsc) [[unlikely]]
+            if (setup::tsc_ref == tsc_reference::none) [[unlikely]]
             {
                 return time_point { std::chrono::duration_cast<duration>(pit::now().time_since_epoch()) };
             }

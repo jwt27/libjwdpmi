@@ -44,7 +44,7 @@ namespace jw
             friend class tsc;
 
             static constexpr long double max_pit_frequency { 1194375.0L / 1.001L };     // freq = max_pit_frequency / divisor
-            static constexpr std::uint32_t max_rtc_frequency { 0x8000 };                // freq = max_rtc_frequency >> (shift - 1)
+            static constexpr unsigned max_rtc_frequency { 0x8000 };                     // freq = max_rtc_frequency >> (shift - 1)
 
             static void setup_pit(bool enable, std::uint32_t freq_divisor = 0x10000);   // default: 18.2Hz
             static void setup_rtc(bool enable, std::uint8_t freq_shift = 10);           // default: 64Hz
@@ -63,20 +63,12 @@ namespace jw
             static dpmi::irq_handler pit_irq;
             static dpmi::irq_handler rtc_irq;
 
-            INTERRUPT static void update_tsc();
+            static void update_tsc();
             static void reset_pit();
             static void reset_rtc();
             static void reset_tsc();
 
-            static inline bool have_rdtsc { false };
-            static inline tsc_reference preferred_tsc_ref { tsc_reference::pit };
-            static tsc_reference current_tsc_ref()
-            {
-                if (preferred_tsc_ref == tsc_reference::pit and setup::pit_irq.is_enabled()) return preferred_tsc_ref;
-                else if (setup::rtc_irq.is_enabled()) return tsc_reference::rtc;
-                else if (setup::pit_irq.is_enabled()) return tsc_reference::pit;
-                else return tsc_reference::none;
-            }
+            static inline tsc_reference tsc_ref { tsc_reference::none };
 
             static inline constexpr io::out_port<byte> rtc_index { 0x70 };
             static inline constexpr io::io_port<byte> rtc_data { 0x71 };
@@ -130,12 +122,13 @@ namespace jw
 
             static duration to_duration(tsc_count count)
             {
-                auto ns = []() -> double
+                double ns;
+                switch (setup::tsc_ref)
                 {
-                    if (setup::current_tsc_ref() == tsc_reference::rtc)
-                        return setup::ns_per_rtc_tick;
-                    else return setup::ns_per_pit_tick;
-                }();
+                case tsc_reference::pit: ns = setup::ns_per_pit_tick; break;
+                case tsc_reference::rtc: ns = setup::ns_per_rtc_tick; break;
+                default: [[unlikely]] return duration::min();
+                }
                 ns *= count;
                 ns /= setup::tsc_ticks_per_irq;
                 return duration { static_cast<std::uint64_t>(round(ns)) };
