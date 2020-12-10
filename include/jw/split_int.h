@@ -70,15 +70,15 @@ namespace jw
         };
     }
 
-    template<typename T, std::size_t N>
-    using split_int = detail::split_int<T, N>;
+    template<std::size_t N> using split_uint = detail::split_int<unsigned, N>;
+    template<std::size_t N> using split_int = detail::split_int<signed, N>;
 
-    using split_uint16_t = split_int<unsigned, 16>;
-    using split_uint32_t = split_int<unsigned, 32>;
-    using split_uint64_t = split_int<unsigned, 64>;
-    using split_int16_t = split_int<signed, 16>;
-    using split_int32_t = split_int<signed, 32>;
-    using split_int64_t = split_int<signed, 64>;
+    using split_uint16_t = split_uint<16>;
+    using split_uint32_t = split_uint<32>;
+    using split_uint64_t = split_uint<64>;
+    using split_int16_t = split_int<16>;
+    using split_int32_t = split_int<32>;
+    using split_int64_t = split_int<64>;
 
     static_assert(sizeof(split_uint64_t) == 8);
     static_assert(sizeof(split_uint32_t) == 4);

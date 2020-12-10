@@ -16,7 +16,7 @@
 
 namespace jw
 {
-    using split_uint14_t = split_int<unsigned, 14>;
+    using split_uint14_t = split_uint<14>;
 
     template <typename V, typename T, std::size_t I = 0>
     consteval bool variant_contains()
