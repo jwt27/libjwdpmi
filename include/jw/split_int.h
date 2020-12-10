@@ -24,10 +24,16 @@ namespace jw
                 split_int<T, (size / 2)> hi;
             };
             std::conditional_t<std::is_signed_v<T>, std::int64_t, std::uint64_t> value : size;
+
             constexpr split_int() noexcept = default;
-            constexpr split_int(auto v) noexcept : value { v } { };
+            constexpr split_int(const split_int&) noexcept = default;
+            constexpr split_int(split_int&&) noexcept = default;
+            constexpr split_int& operator=(const split_int&) noexcept = default;
+            constexpr split_int& operator=(split_int&&) noexcept = default;
+
             template<typename L, typename H>
             constexpr split_int(L&& l, H&& h) noexcept : lo { std::forward<L>(l) }, hi { std::forward<H>(h) } { };
+            constexpr split_int(const auto& v) noexcept : value { static_cast<decltype(value)>(v) } { };
             constexpr operator auto() const noexcept { return value; }
         };
 
@@ -40,9 +46,15 @@ namespace jw
                  T hi : size / 2;
             };
             std::conditional_t<std::is_signed_v<T>, std::int64_t, std::uint64_t> value : size;
+
             constexpr split_int() noexcept = default;
-            constexpr split_int(auto v) noexcept : value(v) { };
-            constexpr split_int(auto l, auto h) noexcept : lo { l }, hi { h } { };
+            constexpr split_int(const split_int&) noexcept = default;
+            constexpr split_int(split_int&&) noexcept = default;
+            constexpr split_int& operator=(const split_int&) noexcept = default;
+            constexpr split_int& operator=(split_int&&) noexcept = default;
+
+            constexpr split_int(const auto& l, const auto& h) noexcept : lo { static_cast<unsigned>(l) }, hi { static_cast<T>(h) } { };
+            constexpr split_int(const auto& v) noexcept : value { static_cast<decltype(value)>(v) } { };
             constexpr operator auto() const noexcept { return value; }
         };
     }
