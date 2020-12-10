@@ -24,16 +24,20 @@ namespace jw
 {
     namespace dpmi
     {
-        union alignas(0x08) long_fpu_register
+#       pragma GCC diagnostic push
+#       pragma GCC diagnostic error "-Wpadded"
+#       pragma GCC diagnostic ignored "-Wpacked-not-aligned"
+
+        union alignas(8) long_fpu_register
         {
-            byte value[0x10];
+            byte value[16];
             long double value_ld;
             double value_d;
             float value_f;
             split_int64_t mmx;
             __m64 m64;
         };
-        static_assert(sizeof(long_fpu_register) == 0x10);
+        static_assert(sizeof(long_fpu_register) == 16);
 
         union [[gnu::packed]] short_fpu_register
         {
@@ -45,14 +49,14 @@ namespace jw
         };
         static_assert(sizeof(short_fpu_register) == 10);
 
-        union alignas(0x10) sse_register
+        union alignas(16) sse_register
         {
             std::array<float, 4> value;
             __m128 m128;
         };
-        static_assert(sizeof(sse_register) == 0x10);
+        static_assert(sizeof(sse_register) == 16);
 
-        struct alignas(8) fsave_data
+        struct alignas(4) fsave_data
         {
             std::uint16_t fctrl;
             unsigned : 16;
@@ -71,7 +75,7 @@ namespace jw
             void save() noexcept { asm("fsave %0;"::"m" (*this)); }
             void restore() noexcept { asm("frstor %0;"::"m" (*this)); }
         };
-        static_assert(sizeof(fsave_data) >= 108); // it's 112 for some reason
+        static_assert(sizeof(fsave_data) == 108);
 
         struct alignas(0x10) fxsave_data
         {
@@ -97,6 +101,8 @@ namespace jw
             void restore() noexcept { asm("fxrstor %0;"::"m" (*this)); }
         };
         static_assert(sizeof(fxsave_data) == 512);
+
+#       pragma GCC diagnostic pop
 
 #       ifdef HAVE__SSE__
         using fpu_context = fxsave_data;

@@ -6,17 +6,27 @@
 
 #pragma once
 #include <cstdint>
+#include <algorithm>
+#include <bit>
+#pragma GCC diagnostic push
 #pragma GCC diagnostic error "-Wpadded"
+#pragma GCC diagnostic ignored "-Wpacked-not-aligned"
 
 namespace jw
 {
     namespace detail
     {
-        template<typename T, std::size_t size, typename condition = bool>
+        consteval inline std::size_t alignment_for_bits(std::size_t nbits, std::size_t max) noexcept
+        {
+            return std::min(static_cast<std::size_t>(std::bit_ceil((nbits - 1) / 8 + 1)), max);
+        }
+
+        template<typename, std::size_t, typename = bool>
         union split_int;
 
         template<typename T, std::size_t size>
-        union [[gnu::packed]] split_int<T, size, std::enable_if_t<(size > 16) and (size / 2) % 2 == 0, bool>>
+        union [[gnu::packed]] alignas(alignment_for_bits(size, 4))
+            split_int<T, size, std::enable_if_t<(size > 16) and (size / 2) % 2 == 0, bool>>
         {
             struct [[gnu::packed]]
             {
@@ -38,7 +48,8 @@ namespace jw
         };
 
         template<typename T, std::size_t size>
-        union [[gnu::packed]] split_int<T, size, std::enable_if_t<((size <= 16) or (size / 2) % 2 != 0) and (size % 2) == 0, bool>>
+        union [[gnu::packed]] alignas(alignment_for_bits(size, 4))
+            split_int<T, size, std::enable_if_t<((size <= 16) or (size / 2) % 2 != 0) and (size % 2) == 0, bool>>
         {
             struct [[gnu::packed]]
             {
@@ -59,7 +70,8 @@ namespace jw
         };
     }
 
-    template<typename T, std::size_t N> using split_int [[gnu::aligned(N / 8 < 4 ? N / 8 : 4)]] = detail::split_int<T, N>;
+    template<typename T, std::size_t N>
+    using split_int = detail::split_int<T, N>;
 
     using split_uint16_t = split_int<unsigned, 16>;
     using split_uint32_t = split_int<unsigned, 32>;
