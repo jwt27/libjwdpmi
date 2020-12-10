@@ -558,13 +558,13 @@ namespace jw::audio
         return array;
     }
 
-    template void opl::update(channel<2>* ch);
-    template void opl::stop(channel<2>* ch);
+    template void opl::update(channel<2>*);
+    template void opl::stop(channel<2>*);
     template bool opl::insert(channel<2>*);
     template void opl::remove(channel<2>*) noexcept;
 
-    template void opl::update(channel<4>* ch);
-    template void opl::stop(channel<4>* ch);
+    template void opl::update(channel<4>*);
+    template void opl::stop(channel<4>*);
     template bool opl::insert(channel<4>*);
     template void opl::remove(channel<4>*) noexcept;
 
