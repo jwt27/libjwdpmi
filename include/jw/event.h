@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
@@ -43,7 +44,7 @@ namespace jw
 
     // General event. All handlers are called, in order of subscription.
     template<typename sig> class event;
-    template <typename R, typename ... A>
+    template <typename R, typename... A>
     struct event<R(A...)>
     {
         using callback_t = callback<R(A...)>;
@@ -88,11 +89,10 @@ namespace jw
     // Chaining event. Last subscribed handler is called first.
     // Each event handler returns a boolean value. The chain ends when a callback returns true.
     template<typename sig> class chain_event;
-    template <typename R, typename ... A>
-    struct chain_event<R(A...)>
+    template <typename... A>
+    struct chain_event<bool(A...)>
     {
-        static_assert(std::is_same_v<R, bool>);
-        using callback_t = callback<R(A...)>;
+        using callback_t = callback<bool(A...)>;
         using event_handler = typename callback_t::handler_t;
 
         chain_event& operator+=(callback_t& f)
