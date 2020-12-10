@@ -74,7 +74,7 @@ namespace jw
                 {
                     auto call = [&] { return (*f)(std::forward<Args>(args)...); };
                     if constexpr (std::is_void_v<R>) call();
-                    else result.push_back(call());
+                    else result.emplace_back(call());
                     ++i;
                 }
                 else i = v.erase(i);
