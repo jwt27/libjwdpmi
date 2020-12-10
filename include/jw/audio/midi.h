@@ -158,31 +158,28 @@ namespace jw::audio
         // Time - either a clock tick count, relative offset duration, or absolute time_point.
         std::variant<unsigned, clock::duration, clock::time_point> time;
 
-        template<typename M, typename T, std::enable_if_t<channel_message::contains<M>(), int> = 0>
-        constexpr midi(unsigned ch, M&& m, T&& t) noexcept : type { channel_message { ch, std::forward<M>(m) } }, time { std::forward<T>(t) } { }
+        template<typename C, typename M, typename T> requires (channel_message::contains<M>())
+        constexpr midi(C&& ch, M&& m, T&& t) noexcept : type { channel_message { std::forward<C>(ch), std::forward<M>(m) } }, time { std::forward<T>(t) } { }
 
-        template<typename M, typename T, std::enable_if_t<meta::contains<M>(), int> = 0>
-        constexpr midi(const std::optional<unsigned>& ch, M&& m, T&& t) noexcept : type { meta { ch, std::forward<M>(m) } }, time { std::forward<T>(t) } { }
+        template<typename C, typename M, typename T> requires (meta::contains<M>())
+        constexpr midi(C&& ch, M&& m, T&& t) noexcept : type { meta { std::forward<C>(ch), std::forward<M>(m) } }, time { std::forward<T>(t) } { }
 
-        template<typename M, typename T, std::enable_if_t<meta::contains<M>(), int> = 0>
+        template<typename M, typename T> requires (meta::contains<M>())
         constexpr midi(M&& m, T&& t) noexcept : midi { std::optional<unsigned> { }, std::forward<M>(m), std::forward<T>(t) } { }
 
-        template<typename M, typename T, std::enable_if_t<system_message::contains<M>(), int> = 0>
+        template<typename M, typename T> requires (system_message::contains<M>())
         constexpr midi(M&& m, T&& t) noexcept : type { system_message { std::forward<M>(m) } }, time { std::forward<T>(t) } { }
 
-        template<typename M, typename T, std::enable_if_t<std::is_same_v<realtime, M>, int> = 0>
-        constexpr midi(M&& m, T&& t) noexcept : type { realtime { std::forward<M>(m) } }, time { std::forward<T>(t) } { }
+        template<typename M, typename T> requires std::same_as<realtime, M>
+        constexpr midi(M&& m, T&& t) noexcept : type { std::forward<M>(m) }, time { std::forward<T>(t) } { }
 
-        template<typename M, std::enable_if_t<channel_message::contains<M>(), int> = 0>
-        constexpr midi(unsigned ch, M&& m) noexcept : midi { ch, std::forward<M>(m), clock::time_point { } } { }
+        template<typename C, typename M>
+        constexpr midi(C&& ch, M&& m) noexcept : midi { std::forward<C>(ch), std::forward<M>(m), clock::time_point { } } { }
 
-        template<typename M, std::enable_if_t<meta::contains<M>(), int> = 0>
-        constexpr midi(const std::optional<unsigned>& ch, M&& m) noexcept : midi { ch, std::forward<M>(m), clock::time_point { } } { }
-
-        template<typename M, std::enable_if_t<not std::is_base_of_v<std::istream, M>, int> = 0>
+        template<typename M>
         constexpr midi(M&& m) noexcept : midi { std::forward<M>(m), clock::time_point { } } { }
 
-        template<typename S, std::enable_if_t<std::is_base_of_v<std::istream, S>, int> = 0>
+        template<typename S> requires std::derived_from<S, std::istream>
         explicit constexpr midi(S& in) : midi { extract(in) } { }
 
         constexpr midi() noexcept = default;
