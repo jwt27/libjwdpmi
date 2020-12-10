@@ -256,7 +256,15 @@ extern "C"
         catch (const std::bad_alloc&) { return p; }
     }
 
-    void* __wrap_calloc(std::size_t n, std::size_t size) noexcept { return __wrap_malloc(n * size); }
+    void* __wrap_calloc(std::size_t n, std::size_t size) noexcept
+    {
+        auto num_bytes = static_cast<std::uint64_t>(n) * size;
+        if (num_bytes > 0xffffffff) [[unlikely]] return nullptr;
+        n = static_cast<std::size_t>(num_bytes);
+        void* p = __wrap_malloc(n);
+        if (p != nullptr) [[likely]] std::memset(p, 0, n);
+        return p;
+    }
 
     void __wrap_free(void* p) noexcept { ::operator delete(p); }
 }
