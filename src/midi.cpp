@@ -507,6 +507,7 @@ namespace jw::audio
         std::array<byte, 8> v;
         bool in_sysex = false;
         byte last_status = 0;
+        std::optional<unsigned> meta_ch = 0;
         while (true)
         {
             const unsigned delta = buf.read_vlq();
@@ -522,7 +523,7 @@ namespace jw::audio
                     {
                     case 0x00:
                         if (size != 2) throw failure { };
-                        trk.emplace_back(midi::meta::channel_prefix { buf.read_16() });
+                        trk.emplace_back(meta_ch, midi::meta::sequence_number { buf.read_16() });
                         break;
 
                     case 0x01: case 0x02: case 0x03: case 0x04:
@@ -531,13 +532,13 @@ namespace jw::audio
                             midi::meta::text msg { text_type(type), { } };
                             msg.text.resize(size);
                             buf.read(msg.text.data(), size);
-                            trk.emplace_back(std::move(msg), delta);
+                            trk.emplace_back(meta_ch, std::move(msg), delta);
                             break;
                         }
 
                     case 0x20:
                         if (size != 1) throw failure { };
-                        trk.emplace_back(midi::meta::channel_prefix { buf.read_8() }, delta);
+                        meta_ch = buf.read_8();
                         break;
 
                     case 0x2f:
@@ -545,14 +546,14 @@ namespace jw::audio
 
                     case 0x51:
                         if (size != 3) throw failure { };
-                        trk.emplace_back(midi::meta::tempo_change { std::chrono::microseconds { buf.read_24() } }, delta);
+                        trk.emplace_back(meta_ch, midi::meta::tempo_change { std::chrono::microseconds { buf.read_24() } }, delta);
                         break;
 
                     case 0x54:
                         {
                             if (size != 5) throw failure { };
                             buf.read(v.data(), 5);
-                            trk.emplace_back(midi::meta::smpte_offset { v[0], v[1], v[2], v[3], v[4] }, delta);
+                            trk.emplace_back(meta_ch, midi::meta::smpte_offset { v[0], v[1], v[2], v[3], v[4] }, delta);
                             break;
                         }
 
@@ -560,7 +561,7 @@ namespace jw::audio
                         {
                             if (size != 4) throw failure { };
                             buf.read(v.data(), 4);
-                            trk.emplace_back(midi::meta::time_signature { v[0], v[1], v[2], v[3] }, delta);
+                            trk.emplace_back(meta_ch, midi::meta::time_signature { v[0], v[1], v[2], v[3] }, delta);
                             break;
                         }
 
@@ -568,7 +569,7 @@ namespace jw::audio
                         {
                             if (size != 2) throw failure { };
                             buf.read(v.data(), 2);
-                            trk.emplace_back(midi::meta::key_signature { v[0], v[1] != 0 }, delta);
+                            trk.emplace_back(meta_ch, midi::meta::key_signature { v[0], v[1] != 0 }, delta);
                             break;
                         }
 
@@ -577,7 +578,7 @@ namespace jw::audio
                             midi::meta::unknown msg { type, { } };
                             msg.data.resize(size);
                             buf.read(msg.data.data(), size);
-                            trk.emplace_back(std::move(msg), delta);
+                            trk.emplace_back(meta_ch, std::move(msg), delta);
                             break;
                         }
                     }
@@ -587,6 +588,7 @@ namespace jw::audio
             case 0xf7:  // Either a sysex, part of a sysex, or escape sequence (may be any message, or multiple)
                 {
                     last_status = 0;
+                    meta_ch.reset();
                     std::vector<byte> data { };
                     const std::size_t size = buf.read_vlq();
                     data.reserve(size);
@@ -652,6 +654,7 @@ namespace jw::audio
             case 0xf0:  // Complete sysex or first part of a timed sysex
                 {
                     last_status = 0;
+                    meta_ch.reset();
                     const std::size_t size = buf.read_vlq();
                     midi::sysex msg { };
                     msg.data.push_back(0xf0);
@@ -666,6 +669,7 @@ namespace jw::audio
             default:    // Channel message
                 {
                     in_sysex = false;
+                    meta_ch.reset();
                     auto* i = v.data();
                     byte status = last_status;
                     if (is_status(b)) status = b;

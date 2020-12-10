@@ -99,7 +99,6 @@ namespace jw::audio
         struct meta
         {
             struct sequence_number { unsigned num : 16; };
-            struct channel_prefix { unsigned channel : 4; };
             struct tempo_change { std::chrono::microseconds quarter_note; };
             struct smpte_offset
             {
@@ -141,8 +140,9 @@ namespace jw::audio
                 std::vector<byte> data;
             };
 
-            std::variant<unknown, sequence_number, text, channel_prefix,
-                tempo_change, smpte_offset, time_signature, key_signature> message;
+            std::optional<unsigned> channel;
+            std::variant<unknown, sequence_number, text, tempo_change,
+                smpte_offset, time_signature, key_signature> message;
 
             template <typename T>
             static consteval bool contains() { return variant_contains<decltype(message), T>(); }
@@ -161,8 +161,11 @@ namespace jw::audio
         template<typename M, typename T, std::enable_if_t<channel_message::contains<M>(), int> = 0>
         constexpr midi(unsigned ch, M&& m, T&& t) noexcept : type { channel_message { ch, std::forward<M>(m) } }, time { std::forward<T>(t) } { }
 
-        template<typename M, std::enable_if_t<channel_message::contains<M>(), int> = 0>
-        constexpr midi(unsigned ch, M&& m) noexcept : midi { ch, std::forward<M>(m), clock::time_point { } } { }
+        template<typename M, typename T, std::enable_if_t<meta::contains<M>(), int> = 0>
+        constexpr midi(const std::optional<unsigned>& ch, M&& m, T&& t) noexcept : type { meta { ch, std::forward<M>(m) } }, time { std::forward<T>(t) } { }
+
+        template<typename M, typename T, std::enable_if_t<meta::contains<M>(), int> = 0>
+        constexpr midi(M&& m, T&& t) noexcept : midi { std::optional<unsigned> { }, std::forward<M>(m), std::forward<T>(t) } { }
 
         template<typename M, typename T, std::enable_if_t<system_message::contains<M>(), int> = 0>
         constexpr midi(M&& m, T&& t) noexcept : type { system_message { std::forward<M>(m) } }, time { std::forward<T>(t) } { }
@@ -170,8 +173,11 @@ namespace jw::audio
         template<typename M, typename T, std::enable_if_t<std::is_same_v<realtime, M>, int> = 0>
         constexpr midi(M&& m, T&& t) noexcept : type { realtime { std::forward<M>(m) } }, time { std::forward<T>(t) } { }
 
-        template<typename M, typename T, std::enable_if_t<meta::contains<M>(), int> = 0>
-        constexpr midi(M&& m, T&& t) noexcept : type { meta { std::forward<M>(m) } }, time { std::forward<T>(t) } { }
+        template<typename M, std::enable_if_t<channel_message::contains<M>(), int> = 0>
+        constexpr midi(unsigned ch, M&& m) noexcept : midi { ch, std::forward<M>(m), clock::time_point { } } { }
+
+        template<typename M, std::enable_if_t<meta::contains<M>(), int> = 0>
+        constexpr midi(const std::optional<unsigned>& ch, M&& m) noexcept : midi { ch, std::forward<M>(m), clock::time_point { } } { }
 
         template<typename M, std::enable_if_t<not std::is_base_of_v<std::istream, M>, int> = 0>
         constexpr midi(M&& m) noexcept : midi { std::forward<M>(m), clock::time_point { } } { }
