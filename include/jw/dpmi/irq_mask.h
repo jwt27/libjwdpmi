@@ -48,7 +48,7 @@ namespace jw
             static void cli() noexcept
             {
                 auto state = get_and_set_interrupt_state(false);
-                if (count++ == 0) initially_enabled = state;
+                if (count++ == 0) [[likely]] initially_enabled = state;
             }
 
             static inline std::uint32_t count { 0 };
