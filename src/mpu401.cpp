@@ -168,7 +168,24 @@ namespace jw
 
             mpu401_streambuf::int_type mpu401_streambuf::overflow(int_type c)
             {
-                sync();
+                if (pptr() == epptr())
+                {
+                    std::optional<dpmi::interrupt_mask> no_irq;
+                loop:
+                    check_irq_exception();
+                    if (cfg.use_irq) no_irq.emplace();
+                    do_sync();
+                    if (tx_ptr == pbase())
+                    {
+                        no_irq.reset();
+                        thread::yield();
+                        goto loop;
+                    }
+                    std::copy(tx_ptr, pptr(), pbase());
+                    pbump(pbase() - tx_ptr);
+                    tx_ptr = pbase();
+                }
+
                 if (traits_type::not_eof(c)) sputc(c);
                 return ~traits_type::eof();
             }
