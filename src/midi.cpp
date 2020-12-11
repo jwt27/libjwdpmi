@@ -507,7 +507,7 @@ namespace jw::audio
         std::array<byte, 8> v;
         bool in_sysex = false;
         byte last_status = 0;
-        std::optional<unsigned> meta_ch = 0;
+        decltype(midi::meta::channel) meta_ch { };
         while (true)
         {
             const unsigned delta = buf.read_vlq();
@@ -537,9 +537,13 @@ namespace jw::audio
                         }
 
                     case 0x20:
-                        if (size != 1) throw failure { };
-                        meta_ch = buf.read_8();
-                        break;
+                        {
+                            if (size != 1) throw failure { };
+                            auto ch = buf.read_8();
+                            if (ch > 15) throw failure { };
+                            meta_ch = ch;
+                            break;
+                        }
 
                     case 0x2f:
                         return;

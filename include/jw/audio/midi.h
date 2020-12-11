@@ -11,6 +11,7 @@
 #include <string>
 #include <jw/common.h>
 #include <jw/split_int.h>
+#include <jw/specific_int.h>
 #include <jw/chrono.h>
 #include <../jwdpmi_config.h>
 
@@ -140,7 +141,7 @@ namespace jw::audio
                 std::vector<byte> data;
             };
 
-            std::optional<unsigned> channel;
+            std::optional<specific_uint<4>> channel;
             std::variant<unknown, sequence_number, text, tempo_change,
                 smpte_offset, time_signature, key_signature> message;
 
@@ -165,7 +166,7 @@ namespace jw::audio
         constexpr midi(C&& ch, M&& m, T&& t) noexcept : type { meta { std::forward<C>(ch), std::forward<M>(m) } }, time { std::forward<T>(t) } { }
 
         template<typename M, typename T> requires (meta::contains<M>())
-        constexpr midi(M&& m, T&& t) noexcept : midi { std::optional<unsigned> { }, std::forward<M>(m), std::forward<T>(t) } { }
+        constexpr midi(M&& m, T&& t) noexcept : midi { std::nullopt, std::forward<M>(m), std::forward<T>(t) } { }
 
         template<typename M, typename T> requires (system_message::contains<M>())
         constexpr midi(M&& m, T&& t) noexcept : type { system_message { std::forward<M>(m) } }, time { std::forward<T>(t) } { }
