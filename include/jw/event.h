@@ -58,8 +58,7 @@ namespace jw
 
         event& operator-=(callback_t& f)
         {
-            auto& v = subscribers;
-            subscribers.erase(std::remove_if(v.begin(), v.end(), [&f](auto& i) { return i.expired() or i.lock() == f.get_ptr().lock(); }), v.end());
+            subscribers.remove_if([&f](const auto& i) { return i.expired() or i.lock() == f.get_ptr().lock(); });
             return *this;
         }
 
@@ -103,8 +102,7 @@ namespace jw
 
         chain_event& operator-=(callback_t& f)
         {
-            auto& v = subscribers;
-            subscribers.erase(std::remove_if(v.begin(), v.end(), [&f](auto& i) { return i.expired() or i.lock() == f.get_ptr().lock(); }), v.end());
+            subscribers.remove_if([&f](const auto& i) { return i.expired() or i.lock() == f.get_ptr().lock(); });
             return *this;
         }
 
