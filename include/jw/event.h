@@ -15,7 +15,7 @@
 namespace jw
 {
     template <typename sig> class callback;
-    template <typename R, typename ... A>
+    template <typename R, typename... A>
     struct callback<R(A...)>
     {
         using handler_t = std::function<R(A...)>;
@@ -29,11 +29,10 @@ namespace jw
         template<typename... Args>
         R operator()(Args&&... args) { return (*handler_ptr)(std::forward<Args>(args)...); }
 
-        std::weak_ptr<handler_t> get_ptr() const { return handler_ptr; }
-        operator std::weak_ptr<handler_t>() const { return get_ptr(); }
+        std::weak_ptr<handler_t> ptr() const noexcept { return handler_ptr; }
 
     protected:
-        std::shared_ptr<handler_t> handler_ptr;
+        const std::shared_ptr<handler_t> handler_ptr;
     };
 
     template<typename R, typename... A>
@@ -52,13 +51,13 @@ namespace jw
 
         event& operator+=(callback_t& f)
         {
-            subscribers.push_back(f.get_ptr());
+            subscribers.push_back(f.ptr());
             return *this;
         }
 
         event& operator-=(callback_t& f)
         {
-            subscribers.remove_if([&f](const auto& i) { return i.expired() or i.lock() == f.get_ptr().lock(); });
+            subscribers.remove_if([p = f.ptr().lock()](const auto& i) { return i.expired() or i.lock() == p; });
             return *this;
         }
 
@@ -96,13 +95,13 @@ namespace jw
 
         chain_event& operator+=(callback_t& f)
         {
-            subscribers.push_front(f.get_ptr());
+            subscribers.push_front(f.ptr());
             return *this;
         }
 
         chain_event& operator-=(callback_t& f)
         {
-            subscribers.remove_if([&f](const auto& i) { return i.expired() or i.lock() == f.get_ptr().lock(); });
+            subscribers.remove_if([p = f.ptr().lock()](const auto& i) { return i.expired() or i.lock() == p; });
             return *this;
         }
 
