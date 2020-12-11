@@ -6,8 +6,8 @@
 
 #pragma once
 #include <cstdint>
-#include <algorithm>
-#include <bit>
+#include <jw/common.h>
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic error "-Wpadded"
 #pragma GCC diagnostic ignored "-Wpacked-not-aligned"
@@ -16,11 +16,6 @@ namespace jw
 {
     namespace detail
     {
-        consteval inline std::size_t alignment_for_bits(std::size_t nbits, std::size_t max) noexcept
-        {
-            return std::min(static_cast<std::size_t>(std::bit_ceil((nbits - 1) / 8 + 1)), max);
-        }
-
         template<typename, std::size_t, typename = bool>
         union split_int;
 

@@ -8,6 +8,8 @@
 #pragma once
 #include <cstdint>
 #include <stdexcept>
+#include <algorithm>
+#include <bit>
 
 using byte = std::uint8_t;
 constexpr std::uint64_t operator""  _B(std::uint64_t n) { return n << 00; }
@@ -50,6 +52,12 @@ namespace jw
 
     [[gnu::always_inline, gnu::optimize("O3")]]
     constexpr inline void assume(bool condition) noexcept { if (not condition) __builtin_unreachable(); }
+
+    consteval inline std::size_t alignment_for_bits(std::size_t nbits, std::size_t max) noexcept
+    {
+        if (nbits / 8 == 0) return 1;
+        return std::min(static_cast<std::size_t>(1 << std::countr_zero(nbits / 8)), max);
+    }
 
 #   ifdef HAVE__MMX__
     inline constexpr bool mmx = true;
