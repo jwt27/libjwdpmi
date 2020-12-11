@@ -121,18 +121,19 @@ namespace jw
                 return 0;
             }
 
-            std::streamsize mpu401_streambuf::xsgetn(char_type * s, std::streamsize n)
+            std::streamsize mpu401_streambuf::xsgetn(char_type* s, std::streamsize max)
             {
-                std::streamsize max_n;
-                thread::yield_while([&]
+                std::streamsize size = 0;
+                while (size < max)
                 {
-                    max_n = std::min(egptr() - gptr(), n);
-                    return max_n < n and underflow() != traits_type::eof();
-                });
-
-                std::copy_n(gptr(), max_n, s);
-                gbump(max_n);
-                return max_n;
+                    auto n = std::min(egptr() - gptr(), max - size);
+                    std::copy_n(gptr(), n, s);
+                    gbump(n);
+                    s += n;
+                    size += n;
+                    if (size < max) underflow();
+                }
+                return size;
             }
 
             mpu401_streambuf::int_type mpu401_streambuf::underflow()
@@ -150,13 +151,19 @@ namespace jw
                 return *gptr();
             }
 
-            std::streamsize mpu401_streambuf::xsputn(const char_type * s, std::streamsize n)
+            std::streamsize mpu401_streambuf::xsputn(const char_type* s, std::streamsize max)
             {
-                while (tx_buf.end() - pptr() < n) overflow();
-
-                std::copy_n(s, n, pptr());
-                setp(pptr() + n, tx_buf.end());
-                return n;
+                std::streamsize size = 0;
+                while (size < max)
+                {
+                    auto n = std::min(epptr() - pptr(), max - size);
+                    std::copy_n(s, n, pptr());
+                    pbump(n);
+                    s += n;
+                    size += n;
+                    if (size < max) overflow();
+                }
+                return size;
             }
 
             mpu401_streambuf::int_type mpu401_streambuf::overflow(int_type c)
