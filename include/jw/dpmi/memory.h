@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
@@ -63,7 +64,8 @@ namespace jw
             }
 
             std::size_t size;
-        } inline const [[gnu::init_priority(101)]] page_size { std::integral_constant<bool, config::assume_4k_pages> { } };
+        };
+        [[gnu::init_priority(101)]] inline const page_size_t page_size { std::integral_constant<bool, config::assume_4k_pages> { } };
 
         inline std::size_t round_down_to_page_size(std::size_t num_bytes)
         {

@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
@@ -212,7 +213,8 @@ namespace jw
                 asm ("mov cr4, %0" :: "r" (cr | 0x600));  // enable SSE and SSE exceptions
             }
         }
-    } [[gnu::init_priority(102)]] initializer;
+    };
+    [[gnu::init_priority(102)]] init initializer;
 
     [[nodiscard]] void* realloc(void* p, std::size_t new_size, std::size_t align)
     {
