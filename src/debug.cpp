@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
@@ -1225,7 +1226,12 @@ namespace jw
                         f->flags.trap = false;
                         return true;
                     }
-                    if (debugmsg) std::clog << "debugger re-entry! " << *static_cast<new_exception_frame*>(f) << *r;
+                    if (debugmsg)
+                    {
+                        std::clog << "debugger re-entry!\n";
+                        static_cast<new_exception_frame*>(f)->print();
+                        r->print();
+                    }
                     throw cpu_exception { exc, r, f, new_frame_type };
                 }
 
@@ -1267,7 +1273,11 @@ namespace jw
                         }
                     }
 
-                    if (debugmsg) std::clog << *static_cast<new_exception_frame*>(f) << *r;
+                    if (debugmsg)
+                    {
+                        static_cast<new_exception_frame*>(f)->print();
+                        r->print();
+                    }
                     if (new_frame_type) current_thread->frame = *static_cast<new_exception_frame*>(f);
                     else static_cast<old_exception_frame&>(current_thread->frame) = *f;
                     current_thread->reg = *r;
@@ -1433,7 +1443,7 @@ namespace jw
 
         trap_mask::~trap_mask() noexcept
         {
-            FORCE_FRAME_POINTER;
+            force_frame_pointer();
             if (failed) return;
             auto& t = detail::threads[jw::thread::detail::scheduler::get_current_thread_id()];
             t.trap_mask = std::max(t.trap_mask - 1, 0l);
