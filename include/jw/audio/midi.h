@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
@@ -34,6 +35,17 @@ namespace jw
         if constexpr (not variant_contains<V, T>()) return std::variant_npos;
         else if constexpr (std::is_same_v<T, std::variant_alternative_t<I, V>>) return I;
         else return variant_index<V, T, I + 1>();
+    }
+
+    template<std::size_t I = 0, typename F, typename V>
+    constexpr decltype(auto) visit(F&& visitor, V&& variant)
+    {
+        constexpr auto size = std::variant_size_v<std::remove_cvref_t<V>>;
+        if (auto* p = std::get_if<I>(&std::forward<V>(variant)))
+            return std::forward<F>(visitor)(*p);
+        else if constexpr (I + 1 < size)
+            return visit<I + 1>(std::forward<F>(visitor), std::forward<V>(variant));
+        throw std::bad_variant_access { };
     }
 }
 
@@ -86,14 +98,14 @@ namespace jw::audio
         };
 
         // System Realtime message type
-        enum class realtime
+        enum class realtime : byte
         {
-            clock_tick,
-            clock_start,
-            clock_continue,
-            clock_stop,
-            active_sense,
-            reset
+            clock_tick      = 0,
+            clock_start     = 2,
+            clock_continue  = 3,
+            clock_stop      = 4,
+            active_sense    = 6,
+            reset           = 7
         };
 
         // Meta message type used in MIDI files

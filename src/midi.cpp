@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 
 #include <list>
@@ -56,16 +57,38 @@ namespace jw::audio
 
     struct midi_out
     {
-        midi_out(std::ostream& o) : out { o }, buf { o.rdbuf() }, tx { tx_state(o) } { }
+        static constexpr std::size_t buffer_size = 10;
+
+        midi_out(std::ostream& o) : out { o }, rdbuf { o.rdbuf() }, tx { tx_state(o) } { }
 
         void emit(const midi& in)
         {
+            if (not in.valid() or in.is_meta_message()) [[unlikely]] return;
             std::unique_lock lock { tx.mutex, std::defer_lock };
             if (not in.is_realtime_message()) lock.lock();
             std::ostream::sentry sentry { out };
+            if (not sentry) [[unlikely]] return;
             try
             {
-                if (sentry) std::visit(*this, in.type);
+                if (auto* t = std::get_if<midi::realtime>(&in.type))
+                {
+                    put_realtime(static_cast<byte>(*t) + 0xf8);
+                }
+                else if (auto* t = std::get_if<midi::channel_message>(&in.type))
+                {
+                    visit([this, t](auto&& msg) { (*this)(t->channel, msg); }, t->message);
+                    running_status = tx.last_status == data[0];
+                    tx.last_status = data[0];
+                }
+                else if (auto* t = std::get_if<midi::system_message>(&in.type))
+                {
+                    tx.last_status = 0;
+                    visit(*this, t->message);
+                }
+
+                size -= running_status;
+                if (size > 0) [[likely]]
+                    rdbuf->sputn(reinterpret_cast<const char*>(data.data()) + running_status, size);
             }
             catch (const terminate_exception&)  { throw; }
             catch (const thread::abort_thread&) { throw; }
@@ -73,100 +96,107 @@ namespace jw::audio
             catch (...) { out.setstate(std::ios::badbit); }
         }
 
-        void operator()(const std::monostate&) noexcept { };
-        void operator()(const midi::meta&) noexcept { };
-
-        void operator()(const midi::channel_message& t)
-        {
-            std::visit([this, &t](auto&& msg) { (*this)(t.channel, msg); }, t.message);
-        };
-
-        void operator()(const midi::system_message& t)
-        {
-            clear_status();
-            std::visit([this](auto&& msg) { (*this)(msg); }, t.message);
-        };
-
-        void operator()(const midi::realtime& t)
-        {
-            switch (t)
-            {
-            case midi::realtime::clock_tick:        return put_realtime(0xf8);
-            case midi::realtime::clock_start:       return put_realtime(0xfa);
-            case midi::realtime::clock_continue:    return put_realtime(0xfb);
-            case midi::realtime::clock_stop:        return put_realtime(0xfc);
-            case midi::realtime::active_sense:      return put_realtime(0xfe);
-            case midi::realtime::reset:             return put_realtime(0xff);
-            default: __builtin_unreachable();
-            }
-        };
-
         void operator()(byte ch, const midi::note_event& msg)
         {
-            if (not msg.on and tx.last_status == (0x90 | ch))
-            {
-                put(msg.note);
-                put(0x00);
-            }
+            const byte on = 0x90 | ch;
+            const byte off = 0x80 | ch;
+            if (not msg.on and tx.last_status == on)
+                put(on, msg.note, 0x00);
             else
-            {
-                put_status((msg.on ? 0x90 : 0x80) | ch);
-                put(msg.note);
-                put(msg.velocity);
-            }
+                put(msg.on ? on : off, msg.note, msg.velocity);
         }
-        void operator()(byte ch, const midi::key_pressure& msg)     { put_status(0xa0 | ch); put(msg.note); put(msg.value); }
-        void operator()(byte ch, const midi::control_change& msg)   { put_status(0xb0 | ch); put(msg.control); put(msg.value); }
-        void operator()(byte ch, const midi::program_change& msg)   { put_status(0xc0 | ch); put(msg.value); }
-        void operator()(byte ch, const midi::channel_pressure& msg) { put_status(0xd0 | ch); put(msg.value); }
-        void operator()(byte ch, const midi::pitch_change& msg)     { put_status(0xe0 | ch); put(msg.value.lo); put(msg.value.hi); }
+        void operator()(byte ch, const midi::key_pressure& msg)
+        {
+            put(0xa0 | ch, msg.note, msg.value);
+        }
+
+        void operator()(byte ch, const midi::control_change& msg)
+        {
+            put(0xb0 | ch, msg.control, msg.value);
+        }
+
+        void operator()(byte ch, const midi::program_change& msg)
+        {
+            put(0xc0 | ch, msg.value);
+        }
+
+        void operator()(byte ch, const midi::channel_pressure& msg)
+        {
+            put(0xd0 | ch, msg.value);
+        }
+
+        void operator()(byte ch, const midi::pitch_change& msg)
+        {
+            put(0xe0 | ch, msg.value.lo, msg.value.hi);
+        }
 
         void operator()(byte ch, const midi::long_control_change& msg)
         {
-            (*this)(ch, midi::control_change      { msg.control, msg.value.hi });
-            (*this)(ch, midi::control_change      { msg.control + 0x20u, msg.value.lo });
+            put(0xb0 | ch, msg.control, msg.value.hi, msg.control + 0x20, msg.value.lo);
         }
 
         void operator()(byte ch, const midi::rpn_change& msg)
         {
-            (*this)(ch, midi::control_change      { 0x65u, msg.parameter.hi });
-            (*this)(ch, midi::control_change      { 0x64u, msg.parameter.lo });
-            (*this)(ch, midi::long_control_change { 0x06u, msg.value });
+            put(0xb0 | ch, 0x65, msg.parameter.hi, 0x64, msg.parameter.lo, 0x06, msg.value.hi, 0x26, msg.value.lo);
         }
 
         void operator()(byte ch, const midi::nrpn_change& msg)
         {
-            (*this)(ch, midi::control_change      { 0x63u, msg.parameter.hi });
-            (*this)(ch, midi::control_change      { 0x62u, msg.parameter.lo });
-            (*this)(ch, midi::long_control_change { 0x06u, msg.value });
+            put(0xb0 | ch, 0x63, msg.parameter.hi, 0x62, msg.parameter.lo, 0x06, msg.value.hi, 0x26, msg.value.lo);
         }
 
-        void operator()(const midi::sysex& msg)             { buf->sputn(reinterpret_cast<const char*>(msg.data.data()), msg.data.size()); }
-        void operator()(const midi::mtc_quarter_frame& msg) { put(0xf1); put(msg.data); }
-        void operator()(const midi::song_position& msg)     { put(0xf2); put(msg.value.lo); put(msg.value.hi); }
-        void operator()(const midi::song_select& msg)       { put(0xf3); put(msg.value); }
-        void operator()(const midi::tune_request&)          { put(0xf6); }
+        void operator()(const midi::sysex& msg)
+        {
+            size = 0;
+            rdbuf->sputn(reinterpret_cast<const char*>(msg.data.data()), msg.data.size());
+        }
+
+        void operator()(const midi::mtc_quarter_frame& msg)
+        {
+            put(0xf1, msg.data);
+        }
+
+        void operator()(const midi::song_position& msg)
+        {
+            put(0xf2, msg.value.lo, msg.value.hi);
+        }
+
+        void operator()(const midi::song_select& msg)
+        {
+            put(0xf3, msg.value);
+        }
+
+        void operator()(const midi::tune_request&)
+        {
+            put(0xf6);
+        }
 
     private:
         void put_realtime(byte a)
         {
-            if (tx.realtime) static_cast<jw::io::realtime_streambuf*>(buf)->put_realtime(a);
+            if (tx.realtime) static_cast<jw::io::realtime_streambuf*>(rdbuf)->put_realtime(a);
             else put(a);
         }
 
-        void put_status(byte a)
+        template<unsigned I = 0, typename... T>
+        void put(std::uint8_t v, T... list)
         {
-            if (tx.last_status != a) put(a);
-            tx.last_status = a;
+            data[I] = v;
+            put<I + 1>(list...);
         }
 
-        void put(byte a) { buf->sputc(a); }
-
-        void clear_status() { tx.last_status = 0; }
+        template<unsigned I> void put()
+        {
+            static_assert(I <= buffer_size);
+            size = I;
+        }
 
         std::ostream& out;
-        std::streambuf* const buf;
+        std::streambuf* const rdbuf;
         ostream_info& tx;
+        bool running_status { false };
+        std::size_t size;
+        std::array<byte, buffer_size> data;
     };
 
     void midi::emit(std::ostream& out) const
@@ -217,12 +247,12 @@ namespace jw::audio
     {
         switch (status)
         {
-        case 0xf8: return midi { midi::realtime::clock_tick, now };
-        case 0xfa: return midi { midi::realtime::clock_start, now };
-        case 0xfb: return midi { midi::realtime::clock_continue, now };
-        case 0xfc: return midi { midi::realtime::clock_stop, now };
-        case 0xfe: return midi { midi::realtime::active_sense, now };
-        case 0xff: return midi { midi::realtime::reset, now };
+        case 0xf8:
+        case 0xfa:
+        case 0xfb:
+        case 0xfc:
+        case 0xfe:
+        case 0xff: return midi { static_cast<midi::realtime>(status - 0xf8), now };
         case 0xf9:
         case 0xfd: throw failure { };
         default: __builtin_unreachable();
