@@ -1,4 +1,5 @@
 ﻿/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
@@ -26,7 +27,7 @@ namespace jw::audio
         struct [[gnu::packed]] common_registers
         {
             unsigned test0 : 5;
-            bool enable_waveform_select : 1;    // OPL2 only
+            bool enable_waveform_select : 1;        // OPL2 only
             unsigned test1 : 2;
             unsigned timer0 : 8;
             unsigned timer1 : 8;
@@ -38,7 +39,7 @@ namespace jw::audio
             bool reset_irq : 1;
             unsigned : 6;
             bool note_sel : 1;
-            bool enable_composite_sine_mode : 1;
+            bool enable_composite_sine_mode : 1;    // OPL2 only
             bool hihat : 1;
             bool top_cymbal : 1;
             bool tomtom : 1;
@@ -149,16 +150,24 @@ namespace jw::audio
 
         // Returns absolute oscillator slot number for given operator in given channel.
         static constexpr std::uint8_t oscillator_slot(std::uint8_t ch, std::uint8_t osc) noexcept
-        { assume(ch < 18 and osc < 4); return ch + 3 * (ch / 3) + 3 * osc; }
+        {
+            assume(ch < 18 and osc < 4);
+            return ch + 3 * (ch / 3) + 3 * osc;
+        }
 
         // Returns primary 2op channel number for given 4op channel number.
-        static constexpr std::uint8_t lookup_4to2_pri(std::uint8_t ch_4op) noexcept { return table_4to2[ch_4op]; }
+        static constexpr std::uint8_t lookup_4to2_pri(std::uint8_t ch_4op) noexcept { return (0xba9210u >> (ch_4op << 2)) & 0xf; }
 
         // Returns secondary 2op channel number for given 4op channel number.
-        static constexpr std::uint8_t lookup_4to2_sec(std::uint8_t ch_4op) noexcept { return table_4to2[ch_4op] + 3; }
+        static constexpr std::uint8_t lookup_4to2_sec(std::uint8_t ch_4op) noexcept { return lookup_4to2_pri(ch_4op) + 3; }
 
         // Returns 4op channel number that the given 2op channel is part of, or 0xff if none.
-        static constexpr std::uint8_t lookup_2to4(std::uint8_t ch_2op) noexcept { return table_2to4[ch_2op]; }
+        static constexpr std::uint8_t lookup_2to4(std::uint8_t ch_2op) noexcept
+        {
+            constexpr std::uint8_t table[] { 0, 1, 2, 0, 1, 2, 0xff, 0xff, 0xff,
+                                             3, 4, 5, 3, 4, 5, 0xff, 0xff, 0xff };
+            return table[ch_2op];
+        }
 
     protected:
         const channel& read_channel(std::uint8_t ch) const noexcept { return channels[ch].value; }
@@ -194,10 +203,6 @@ namespace jw::audio
         template<opl_type t> void do_write(std::uint16_t reg, std::byte value);
         void write(std::uint16_t reg, std::byte value);
         opl_type detect();
-
-        static inline constexpr std::uint8_t table_4to2[] { 0, 1, 2, 9, 10, 11 };
-        static inline constexpr std::uint8_t table_2to4[] { 0, 1, 2, 0, 1, 2, 0xff, 0xff, 0xff,
-                                                            3, 4, 5, 3, 4, 5, 0xff, 0xff, 0xff };
 
         thread::mutex mutex { };
         cached_reg<common_registers> common { };

@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 
 #include <jw/audio/opl.h>
@@ -439,16 +440,8 @@ namespace jw::audio
         const std::bitset<N> carriers = [ch]
         {
             const std::uint8_t connection = ch->connection.to_ulong();
-            if constexpr (N == 2)
-            {
-                static constexpr std::uint8_t table[] { 0b10, 0b11 };
-                return table[connection];
-            }
-            else if constexpr (N == 4)
-            {
-                static constexpr std::uint8_t table[] { 0b1000, 0b1010, 0b1001, 0b1011 };
-                return table[connection];
-            }
+            if constexpr (N == 2) return 0b10 | connection;
+            else if constexpr (N == 4) return 0b1000 | ((0b11'01'10'00 >> (connection * 2)) & 0b11);
         }();
 
         clock::time_point off_time { clock::time_point::min() };
