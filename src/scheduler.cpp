@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
@@ -66,18 +67,11 @@ namespace jw
                 );
             }
 
-            // Switches to the specified task, or the next task in queue if argument is nullptr.
-            void scheduler::thread_switch(thread_ptr t)
+            void scheduler::thread_switch()
             {
-                debug::trap_mask dont_trace_here { };
-                if (t != nullptr) [[unlikely]]
-                {
-                    dpmi::interrupt_mask no_interrupts_please { };
-                    threads.erase(remove_if(threads.begin(), threads.end(), [t](const auto& i) { return i == t; }), threads.end());
-                    threads.push_front(t);
-                }
+                debug::trap_mask dont_trace_here{ };
 
-                if (dpmi::in_irq_context() or std::uncaught_exceptions() > 0) return;
+                if (dpmi::in_irq_context() or std::uncaught_exceptions() > 0) [[unlikely]] return;
 
                 debug::break_with_signal(debug::detail::thread_switched);
                 context_switch(&current_thread->context);   // switch to a new task context
@@ -88,11 +82,21 @@ namespace jw
                     decltype(thread::invoke_list)::value_type f;
                     {
                         dpmi::interrupt_mask no_interrupts_please { };
-                        f = current_thread->invoke_list.front();
+                        f = std::move(current_thread->invoke_list.front());
                         current_thread->invoke_list.pop_front();
                     }
                     f();
                 }
+            }
+
+            void scheduler::start_thread(thread_ptr t)
+            {
+                debug::trap_mask dont_trace_here { };
+                dpmi::interrupt_mask no_interrupts_please { };
+
+                threads.erase(remove_if(threads.begin(), threads.end(), [t](const auto& i) { return i == t; }), threads.end());
+                threads.push_front(t);
+                thread_switch();
             }
 
             // The actual thread.

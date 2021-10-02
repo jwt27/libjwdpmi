@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
@@ -28,7 +29,7 @@ namespace jw
                     this->state = starting;
                     if (dpmi::in_irq_context()) this->parent = scheduler::main_thread;
                     else this->parent = scheduler::current_thread;
-                    scheduler::thread_switch(this->shared_from_this());
+                    scheduler::start_thread(this->shared_from_this());
                 }
 
                 void try_await_while(auto f)
