@@ -715,7 +715,7 @@ namespace jw::audio
                     }
 
                     const std::size_t size = msg_size(status);
-                    if (size > 0) buf.read(i, size - is_status(b));
+                    if (size > 0) buf.read(i, size - (not is_status(b)));
 
                     // Also accept realtime and system messages here (non-standard)
                     if (not is_realtime(status))
