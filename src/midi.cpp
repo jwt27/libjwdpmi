@@ -205,8 +205,6 @@ namespace jw::audio
     }
 
     struct unexpected_status { };
-    struct failure { };
-    struct end_of_file { };
 
     static constexpr bool is_status(byte b) { return (b & 0x80) != 0; };
     static constexpr bool is_realtime(byte b) { return b >= 0xf8; };
@@ -235,7 +233,7 @@ namespace jw::audio
             case 0xf5:
             case 0xf7:
             case 0xf9:
-            case 0xfd: throw failure { };
+            case 0xfd: throw io::failure { "invalid status byte" };
             default: return 0;
             }
         default: __builtin_unreachable();
@@ -254,7 +252,7 @@ namespace jw::audio
         case 0xfe:
         case 0xff: return midi { static_cast<midi::realtime>(status - 0xf8), now };
         case 0xf9:
-        case 0xfd: throw failure { };
+        case 0xfd: throw io::failure { "invalid status byte" };
         default: __builtin_unreachable();
         }
     };
@@ -292,7 +290,7 @@ namespace jw::audio
             case 0xf6: return midi { midi::tune_request      { }, now };
             case 0xf4:
             case 0xf5:
-            case 0xf7: throw failure { };
+            case 0xf7: throw io::failure { "invalid status byte" };
             default: return realtime_msg(status, now);
             }
         default: __builtin_unreachable();
@@ -315,7 +313,7 @@ namespace jw::audio
                 if (buf->in_avail() == 0) return { };
             }
             auto b = buf->sgetc();
-            if (b == std::char_traits<char>::eof()) throw end_of_file { };
+            if (b == std::char_traits<char>::eof()) throw io::end_of_file { };
             return { static_cast<byte>(b) };
         };
 
@@ -390,18 +388,23 @@ namespace jw::audio
             if (is_sysex) return midi { midi::sysex { { rx.pending_msg.cbegin(), rx.pending_msg.cend() } } };
             else return make_msg(status, rx.pending_msg.cbegin() + new_status, rx.pending_msg_time);
         }
-        catch (const failure&)
+        catch (const io::failure&)
         {
             rx.pending_msg.clear();
             rx.last_status = 0;
-            in.setstate(std::ios::failbit);
+            in._M_setstate(std::ios::failbit);
         }
-        catch (const unexpected_status&)    { in.setstate(std::ios::failbit); }
-        catch (const end_of_file&)          { in.setstate(std::ios::eofbit); }
+        catch (const unexpected_status&)
+        {
+            try { in._M_setstate(std::ios::failbit); }
+            catch (const unexpected_status&) { }
+            throw io::failure { "unexpected status byte" };
+        }
+        catch (const io::end_of_file&)      { in._M_setstate(std::ios::eofbit); }
         catch (const terminate_exception&)  { throw; }
         catch (const thread::abort_thread&) { throw; }
         catch (const abi::__forced_unwind&) { throw; }
-        catch (...)                         { in.setstate(std::ios::badbit); }
+        catch (...)                         { in._M_setstate(std::ios::badbit); }
         return { };
     }
 
@@ -411,13 +414,13 @@ namespace jw::audio
             : size { s }, data { new byte[size] }, i { begin() }
         {
             const std::size_t bytes_read = buf->sgetn(reinterpret_cast<char*>(data.get()), size);
-            if (bytes_read < size) throw end_of_file { };
+            if (bytes_read < size) throw io::end_of_file { };
         }
 
         template<typename T>
         void read(T* dst, std::size_t n)
         {
-            if (i + n > end()) throw failure { };
+            if (i + n > end()) throw io::failure { "read past end of chunk" };
             for (unsigned j = 0; j < n; ++j)
                 reinterpret_cast<byte*>(dst)[j] = i[j];
             i += n;
@@ -460,7 +463,7 @@ namespace jw::audio
 
         std::uint8_t read_8()
         {
-            if (i == end()) throw failure { };
+            if (i == end()) throw io::failure { "read past end of chunk" };
             return *i++;
         }
 
@@ -492,7 +495,7 @@ namespace jw::audio
         {
             if (size == 0) return;
             const std::size_t bytes_read = buf->sgetn(data, size);
-            if (bytes_read < size) throw end_of_file { };
+            if (bytes_read < size) throw io::end_of_file { };
         };
 
         auto read_32 = [read]()
@@ -552,7 +555,7 @@ namespace jw::audio
                     switch (type)
                     {
                     case 0x00:
-                        if (size != 2) throw failure { };
+                        if (size != 2) throw io::failure { "incorrect message size" };
                         trk.emplace_back(meta_ch, midi::meta::sequence_number { buf.read_16() });
                         break;
 
@@ -568,9 +571,9 @@ namespace jw::audio
 
                     case 0x20:
                         {
-                            if (size != 1) throw failure { };
+                            if (size != 1) throw io::failure { "incorrect message size" };
                             auto ch = buf.read_8();
-                            if (ch > 15) throw failure { };
+                            if (ch > 15) throw io::failure { "invalid channel number" };
                             meta_ch = ch;
                             break;
                         }
@@ -579,13 +582,13 @@ namespace jw::audio
                         return;
 
                     case 0x51:
-                        if (size != 3) throw failure { };
+                        if (size != 3) throw io::failure { "incorrect message size" };
                         trk.emplace_back(meta_ch, midi::meta::tempo_change { std::chrono::microseconds { buf.read_24() } }, delta);
                         break;
 
                     case 0x54:
                         {
-                            if (size != 5) throw failure { };
+                            if (size != 5) throw io::failure { "incorrect message size" };
                             buf.read(v.data(), 5);
                             trk.emplace_back(meta_ch, midi::meta::smpte_offset { v[0], v[1], v[2], v[3], v[4] }, delta);
                             break;
@@ -593,7 +596,7 @@ namespace jw::audio
 
                     case 0x58:
                         {
-                            if (size != 4) throw failure { };
+                            if (size != 4) throw io::failure { "incorrect message size" };
                             buf.read(v.data(), 4);
                             trk.emplace_back(meta_ch, midi::meta::time_signature { v[0], v[1], v[2], v[3] }, delta);
                             break;
@@ -601,7 +604,7 @@ namespace jw::audio
 
                     case 0x59:
                         {
-                            if (size != 2) throw failure { };
+                            if (size != 2) throw io::failure { "incorrect message size" };
                             buf.read(v.data(), 2);
                             trk.emplace_back(meta_ch, midi::meta::key_signature { v[0], v[1] != 0 }, delta);
                             break;
@@ -660,11 +663,11 @@ namespace jw::audio
                             {
                                 byte status = last_status;
                                 if (is_status(b)) status = b;
-                                if (status == 0) throw failure { };
+                                if (status == 0) throw io::failure { "no status byte" };
 
                                 for (unsigned j = not is_status(b); j < msg_size(status); ++i, ++j)
                                 {
-                                    if (i == size) throw failure { };
+                                    if (i == size) throw io::failure { "message extends past end of escape" };
                                     const byte b = buf.read_8();
                                     data.push_back(b);
                                 }
@@ -711,7 +714,7 @@ namespace jw::audio
                     switch (status)
                     {
                     case 0x00: case 0xf0: case 0xf7:
-                        throw failure { };
+                        throw io::failure { "invalid status byte" };
                     }
 
                     const std::size_t size = msg_size(status);
@@ -745,8 +748,8 @@ namespace jw::audio
             const std::size_t num_tracks = buf.read_16();
             const split_uint16_t division = buf.read_16();
 
-            if (format == 0 and num_tracks != 1) throw failure { };
-            if (format > 2) throw failure { };
+            if (format == 0 and num_tracks != 1) throw io::failure { "incorrect number of tracks" };
+            if (format > 2) throw io::failure { "invalid format" };
             output.asynchronous_tracks = format == 2;
             output.tracks.resize(num_tracks);
 
@@ -759,13 +762,12 @@ namespace jw::audio
                 read_track(trk, buf);
             }
         }
-        catch (const failure&)              { in.setstate(std::ios::failbit); }
-        catch (const unexpected_status&)    { in.setstate(std::ios::failbit); }
-        catch (const end_of_file&)          { in.setstate(std::ios::eofbit); }
+        catch (const io::failure&)          { in._M_setstate(std::ios::failbit); }
+        catch (const io::end_of_file&)      { in._M_setstate(std::ios::eofbit); }
         catch (const terminate_exception&)  { throw; }
         catch (const thread::abort_thread&) { throw; }
         catch (const abi::__forced_unwind&) { throw; }
-        catch (...)                         { in.setstate(std::ios::badbit); }
+        catch (...)                         { in._M_setstate(std::ios::badbit); }
         return output;
     }
 }

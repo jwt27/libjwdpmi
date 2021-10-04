@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
@@ -33,7 +34,7 @@ namespace jw::audio
         static midi_file read(const std::filesystem::path& file)
         {
             std::ifstream stream { file, std::ios::in | std::ios::binary };
-            stream.exceptions(std::ios::badbit | std::ios::eofbit);
+            stream.exceptions(std::ios::badbit | std::ios::failbit | std::ios::eofbit);
             return read(stream);
         }
 
