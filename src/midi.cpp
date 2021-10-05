@@ -55,6 +55,10 @@ namespace jw::audio
         return *static_cast<ostream_info*>(get_pword(i, stream, ostream_list));
     }
 
+    static constexpr bool is_status(byte b) { return (b & 0x80) != 0; };
+    static constexpr bool is_realtime(byte b) { return b >= 0xf8; };
+    static constexpr bool is_system(byte b) { return b >= 0xf0; };
+
     struct midi_out
     {
         static constexpr std::size_t buffer_size = 4;
@@ -70,30 +74,33 @@ namespace jw::audio
             if (not sentry) [[unlikely]] return;
             try
             {
+                const auto* begin = data.cbegin();
                 if (auto* t = std::get_if<midi::realtime>(&in.type))
                 {
                     put_realtime(static_cast<byte>(*t) + 0xf8);
+                    return;
                 }
                 else if (auto* t = std::get_if<midi::channel_message>(&in.type))
                 {
                     visit([this, t](auto&& msg) { (*this)(t->channel, msg); }, t->message);
-                    running_status = tx.last_status == data[0];
+                    bool running_status = tx.last_status == data[0];
+                    begin += running_status;
+                    size -= running_status;
                     tx.last_status = data[0];
                 }
                 else if (auto* t = std::get_if<midi::system_message>(&in.type))
                 {
-                    tx.last_status = 0;
                     visit(*this, t->message);
+                    if (size > 0) tx.last_status = 0;
                 }
 
-                size -= running_status;
                 if (size > 0) [[likely]]
-                    rdbuf->sputn(reinterpret_cast<const char*>(data.data()) + running_status, size);
+                    rdbuf->sputn(reinterpret_cast<const char*>(begin), size);
             }
             catch (const terminate_exception&)  { throw; }
             catch (const thread::abort_thread&) { throw; }
             catch (const abi::__forced_unwind&) { throw; }
-            catch (...) { out.setstate(std::ios::badbit); }
+            catch (...) { out._M_setstate(std::ios::badbit); }
         }
 
         void operator()(byte ch, const midi::note_event& msg)
@@ -132,8 +139,28 @@ namespace jw::audio
 
         void operator()(const midi::sysex& msg)
         {
-            size = 0;
+            bool in_sysex = false;
+            auto i = msg.data.cbegin();
+            const auto end = msg.data.cend();
+            while (true)
+            {
+                if (not in_sysex)
+                {
+                    for (; i != end; ++i)
+                    {
+                        if (not is_status(*i)) continue;
+                        if (is_realtime(*i)) continue;
+                        if (*i == 0xf0) break;
+                        if (is_system(*i)) tx.last_status = 0;
+                        else tx.last_status = *i;
+                    }
+                }
+                else i = std::find(i, end, 0xf7);
+                if (i == end) break;
+                in_sysex ^= true;
+            }
             rdbuf->sputn(reinterpret_cast<const char*>(msg.data.data()), msg.data.size());
+            size = 0;
         }
 
         void operator()(const midi::mtc_quarter_frame& msg)
@@ -160,7 +187,7 @@ namespace jw::audio
         void put_realtime(byte a)
         {
             if (tx.realtime) static_cast<jw::io::realtime_streambuf*>(rdbuf)->put_realtime(a);
-            else put(a);
+            else rdbuf->sputc(a);
         }
 
         template<unsigned I = 0, typename... T>
@@ -179,7 +206,6 @@ namespace jw::audio
         std::ostream& out;
         std::streambuf* const rdbuf;
         ostream_info& tx;
-        bool running_status { false };
         std::size_t size;
         std::array<byte, buffer_size> data;
     };
@@ -190,10 +216,6 @@ namespace jw::audio
     }
 
     struct unexpected_status { };
-
-    static constexpr bool is_status(byte b) { return (b & 0x80) != 0; };
-    static constexpr bool is_realtime(byte b) { return b >= 0xf8; };
-    static constexpr bool is_system(byte b) { return b >= 0xf0; };
 
     static constexpr std::size_t msg_size(byte status)
     {
