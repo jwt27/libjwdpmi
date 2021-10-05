@@ -30,10 +30,10 @@ namespace jw::audio
         using clock = jw::config::midi_clock;
 
         // Channel message sub-types
-        struct note_event           { unsigned note    : 7, : 0, velocity : 7, : 0; bool on; };
-        struct key_pressure         { unsigned note    : 7, : 0, value    : 7; };
+        struct note_event           { unsigned note    : 7, : 1, velocity : 7, : 1; bool on; };
+        struct key_pressure         { unsigned note    : 7, : 1, value    : 7; };
         struct channel_pressure     { unsigned value   : 7; };
-        struct control_change       { unsigned control : 7, : 0, value    : 7; };
+        struct control_change       { unsigned control : 7, : 1, value    : 7; };
         struct program_change       { unsigned value   : 7; };
         struct pitch_change         { split_uint14_t value; };
 
