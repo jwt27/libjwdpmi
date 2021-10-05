@@ -153,7 +153,8 @@ namespace jw::audio
             meta* get() const noexcept { return &*ptr; }
             meta& operator*() const { return *ptr; }
             meta* operator->() const noexcept { return get(); }
-            explicit operator bool() const noexcept { return static_cast<bool>(ptr); }
+            bool valid() const noexcept { return static_cast<bool>(ptr);; }
+            explicit operator bool() const noexcept { return valid(); }
 
         private:
             static std::unique_ptr<meta> copy_from(const meta_message& m);
@@ -172,7 +173,7 @@ namespace jw::audio
         constexpr midi(C&& ch, M&& m, T&& t) noexcept : type { channel_message { std::forward<C>(ch), std::forward<M>(m) } }, time { std::forward<T>(t) } { }
 
         template<typename C, typename M, typename T> requires (meta::contains<M>())
-        constexpr midi(C&& ch, M&& m, T&& t) : type { meta { std::forward<C>(ch), std::forward<M>(m) } }, time { std::forward<T>(t) } { }
+        constexpr midi(C&& ch, M&& m, T&& t) : type { meta_message { std::forward<C>(ch), std::forward<M>(m) } }, time { std::forward<T>(t) } { }
 
         template<typename M, typename T> requires (meta::contains<M>())
         constexpr midi(M&& m, T&& t) : midi { std::nullopt, std::forward<M>(m), std::forward<T>(t) } { }
@@ -198,7 +199,7 @@ namespace jw::audio
         midi& operator=(const midi&) noexcept = default;
         midi& operator=(midi&&) noexcept = default;
 
-        bool valid() const noexcept { return type.index() != index_of<std::monostate>() and type.index() != std::variant_npos; }
+        bool valid() const noexcept;
         explicit operator bool() const noexcept { return valid(); };
 
         bool is_channel_message() const noexcept { return type.index() == index_of<channel_message>(); }
@@ -232,6 +233,23 @@ namespace jw::audio
     private:
         static midi do_extract(std::istream&, bool);
     };
+
+    inline bool midi::valid() const noexcept
+    {
+        switch (type.index())
+        {
+        case index_of<channel_message>():
+        case index_of<system_message>():
+        case index_of<realtime_message>():
+            return true;
+
+        case index_of<meta_message>():
+            return std::get_if<meta_message>(&type)->valid();
+
+        default:
+            return false;
+        }
+    }
 
     inline std::ostream& operator<<(std::ostream& out, const midi& in) { in.emit(out); return out; }
     inline std::istream& operator>>(std::istream& in, midi& out) { out = midi::extract(in); return in; }
