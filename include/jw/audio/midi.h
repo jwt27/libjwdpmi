@@ -207,12 +207,7 @@ namespace jw::audio
         bool is_realtime_message() const noexcept { return type.index() == index_of<realtime_message>(); }
         bool is_meta_message() const noexcept { return type.index() == index_of<meta_message>(); }
 
-        std::optional<unsigned> channel() const
-        {
-            if (auto* t = std::get_if<channel_message>(&type))
-                return { t->channel };
-            return { };
-        }
+        std::optional<specific_uint<4>> channel() const noexcept;
 
         template<typename T>
         static std::array<midi, 2> long_control_change(specific_uint<4> ch, specific_uint<7> control, split_uint14_t value, T&& time);
@@ -249,6 +244,15 @@ namespace jw::audio
         default:
             return false;
         }
+    }
+
+    inline std::optional<specific_uint<4>> midi::channel() const noexcept
+    {
+        if (auto* t = std::get_if<channel_message>(&type))
+            return { t->channel };
+        if (auto* t = std::get_if<meta_message>(&type))
+            if (*t) return (*t)->channel;
+        return { };
     }
 
     inline std::ostream& operator<<(std::ostream& out, const midi& in) { in.emit(out); return out; }
