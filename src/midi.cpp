@@ -57,7 +57,7 @@ namespace jw::audio
 
     struct midi_out
     {
-        static constexpr std::size_t buffer_size = 10;
+        static constexpr std::size_t buffer_size = 4;
 
         midi_out(std::ostream& o) : out { o }, rdbuf { o.rdbuf() }, tx { tx_state(o) } { }
 
@@ -128,21 +128,6 @@ namespace jw::audio
         void operator()(byte ch, const midi::pitch_change& msg)
         {
             put(0xe0 | ch, msg.value.lo, msg.value.hi);
-        }
-
-        void operator()(byte ch, const midi::long_control_change& msg)
-        {
-            put(0xb0 | ch, msg.control, msg.value.hi, msg.control + 0x20, msg.value.lo);
-        }
-
-        void operator()(byte ch, const midi::rpn_change& msg)
-        {
-            put(0xb0 | ch, 0x65, msg.parameter.hi, 0x64, msg.parameter.lo, 0x06, msg.value.hi, 0x26, msg.value.lo);
-        }
-
-        void operator()(byte ch, const midi::nrpn_change& msg)
-        {
-            put(0xb0 | ch, 0x63, msg.parameter.hi, 0x62, msg.parameter.lo, 0x06, msg.value.hi, 0x26, msg.value.lo);
         }
 
         void operator()(const midi::sysex& msg)

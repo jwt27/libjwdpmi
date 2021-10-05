@@ -34,15 +34,12 @@ namespace jw::audio
         struct key_pressure         { unsigned note    : 7, : 0, value    : 7; };
         struct channel_pressure     { unsigned value   : 7; };
         struct control_change       { unsigned control : 7, : 0, value    : 7; };
-        struct long_control_change  { unsigned control : 7, : 0; split_uint14_t value; }; // never received
         struct program_change       { unsigned value   : 7; };
         struct pitch_change         { split_uint14_t value; };
-        struct rpn_change           { split_uint14_t parameter, value; };    // never received
-        struct nrpn_change          { split_uint14_t parameter, value; };    // never received
 
         // System Common message sub-types
         struct sysex                { std::vector<byte> data; };
-        struct mtc_quarter_frame    { unsigned data : 7; };     // TODO
+        struct mtc_quarter_frame    { unsigned data : 7; };
         struct song_position        { split_uint14_t value; };
         struct song_select          { unsigned value : 7; };
         struct tune_request         { };
@@ -51,8 +48,8 @@ namespace jw::audio
         struct channel_message
         {
             unsigned channel : 4, : 0;
-            std::variant<note_event, key_pressure, channel_pressure, control_change,
-                long_control_change, program_change, pitch_change, rpn_change, nrpn_change> message;
+            std::variant<note_event, key_pressure, channel_pressure,
+                         control_change, program_change, pitch_change> message;
 
             template <typename T>
             static consteval bool contains() { return variant_contains<decltype(message), T>(); }
@@ -130,7 +127,7 @@ namespace jw::audio
 
             std::optional<specific_uint<4>> channel;
             std::variant<unknown, sequence_number, text, tempo_change,
-                smpte_offset, time_signature, key_signature> message;
+                         smpte_offset, time_signature, key_signature> message;
 
             template <typename T>
             static consteval bool contains() { return variant_contains<decltype(message), T>(); }
@@ -192,6 +189,18 @@ namespace jw::audio
             return { };
         }
 
+        template<typename T>
+        static std::array<midi, 2> long_control_change(specific_uint<4> ch, specific_uint<7> control, split_uint14_t value, T&& time);
+        static std::array<midi, 2> long_control_change(specific_uint<4> ch, specific_uint<7> control, split_uint14_t value);
+
+        template<typename T>
+        static std::array<midi, 4> rpn_change(specific_uint<4> ch, split_uint14_t param, split_uint14_t value, T&& time);
+        static std::array<midi, 4> rpn_change(specific_uint<4> ch, split_uint14_t param, split_uint14_t value);
+
+        template<typename T>
+        static std::array<midi, 4> nrpn_change(specific_uint<4> ch, split_uint14_t param, split_uint14_t value, T&& time);
+        static std::array<midi, 4> nrpn_change(specific_uint<4> ch, split_uint14_t param, split_uint14_t value);
+
         void emit(std::ostream& out) const;
         static midi extract(std::istream& in) { return do_extract(in, false); }
         static midi try_extract(std::istream& in) { return do_extract(in, true); }
@@ -202,4 +211,44 @@ namespace jw::audio
 
     inline std::ostream& operator<<(std::ostream& out, const midi& in) { in.emit(out); return out; }
     inline std::istream& operator>>(std::istream& in, midi& out) { out = midi::extract(in); return in; }
+
+    template<typename T>
+    inline std::array<midi, 2> midi::long_control_change(specific_uint<4> ch, specific_uint<7> control, split_uint14_t value, T&& time)
+    {
+        return { midi { static_cast<unsigned>(ch), control_change { static_cast<unsigned>(control + 0x00), value.hi }, std::forward<T>(time) },
+                 midi { static_cast<unsigned>(ch), control_change { static_cast<unsigned>(control + 0x20), value.lo }, std::forward<T>(time) }, };
+    }
+
+    template<typename T>
+    inline std::array<midi, 4> midi::rpn_change(specific_uint<4> ch, split_uint14_t param, split_uint14_t value, T&& time)
+    {
+        return { midi { static_cast<unsigned>(ch), control_change { 0x65, param.hi }, std::forward<T>(time) },
+                 midi { static_cast<unsigned>(ch), control_change { 0x64, param.lo }, std::forward<T>(time) },
+                 midi { static_cast<unsigned>(ch), control_change { 0x06, value.hi }, std::forward<T>(time) },
+                 midi { static_cast<unsigned>(ch), control_change { 0x26, value.lo }, std::forward<T>(time) }, };
+    }
+
+    template<typename T>
+    inline std::array<midi, 4> midi::nrpn_change(specific_uint<4> ch, split_uint14_t param, split_uint14_t value, T&& time)
+    {
+        return { midi { static_cast<unsigned>(ch), control_change { 0x63, param.hi }, std::forward<T>(time) },
+                 midi { static_cast<unsigned>(ch), control_change { 0x62, param.lo }, std::forward<T>(time) },
+                 midi { static_cast<unsigned>(ch), control_change { 0x06, value.hi }, std::forward<T>(time) },
+                 midi { static_cast<unsigned>(ch), control_change { 0x26, value.lo }, std::forward<T>(time) }, };
+    }
+
+    inline std::array<midi, 2> midi::long_control_change(specific_uint<4> ch, specific_uint<7> control, split_uint14_t value)
+    {
+        return long_control_change(ch, control, value, clock::now());
+    }
+
+    inline std::array<midi, 4> midi::rpn_change(specific_uint<4> ch, split_uint14_t param, split_uint14_t value)
+    {
+        return rpn_change(ch, param, value, clock::now());
+    }
+
+    inline std::array<midi, 4> midi::nrpn_change(specific_uint<4> ch, split_uint14_t param, split_uint14_t value)
+    {
+        return nrpn_change(ch, param, value, clock::now());
+    }
 }
