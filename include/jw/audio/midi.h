@@ -134,7 +134,31 @@ namespace jw::audio
             template <typename T>
             static consteval std::size_t index_of() { return variant_index<decltype(message), T>(); }
         };
-        using meta_message = meta;
+
+        // Copyable wrapper class for std::unique_ptr<meta>.  Meta messages
+        // are large and relatively rare, so to keep sizeof(midi) reasonable,
+        // they are stored on the heap.
+        struct meta_message
+        {
+            template<typename... Args>
+            meta_message(Args&&... args) : ptr { std::make_unique<meta>(std::forward<Args>(args)...) } { }
+
+            meta_message() = delete;
+            ~meta_message() = default;
+            meta_message(meta_message&&) noexcept = default;
+            meta_message& operator=(meta_message&&) noexcept = default;
+            meta_message(const meta_message& m) : ptr { copy_from(m) } { }
+            meta_message& operator=(const meta_message& m);
+
+            meta* get() const noexcept { return &*ptr; }
+            meta& operator*() const { return *ptr; }
+            meta* operator->() const noexcept { return get(); }
+            explicit operator bool() const noexcept { return static_cast<bool>(ptr); }
+
+        private:
+            static std::unique_ptr<meta> copy_from(const meta_message& m);
+            std::unique_ptr<meta> ptr;
+        };
 
         template <typename T>
         static consteval std::size_t index_of() { return variant_index<decltype(type), T>(); }
@@ -250,5 +274,19 @@ namespace jw::audio
     inline std::array<midi, 4> midi::nrpn_change(specific_uint<4> ch, split_uint14_t param, split_uint14_t value)
     {
         return nrpn_change(ch, param, value, clock::now());
+    }
+
+    inline midi::meta_message& midi::meta_message::operator=(const meta_message& m)
+    {
+        if (ptr and m.ptr) *ptr = *m.ptr;
+        else if (not ptr and m.ptr) ptr = std::make_unique<meta>(*m.ptr);
+        else if (ptr and not m.ptr) *ptr = meta { };
+        return *this;
+    }
+
+    inline std::unique_ptr<midi::meta> midi::meta_message::copy_from(const meta_message& m)
+    {
+        if (m.ptr) return std::make_unique<meta>(*m.ptr);
+        else return std::make_unique<meta>();
     }
 }
