@@ -108,6 +108,7 @@ namespace jw::audio
             active_sense    = 6,
             reset           = 7
         };
+        using realtime_message = realtime;
 
         // Meta message type used in MIDI files
         struct meta
@@ -163,12 +164,13 @@ namespace jw::audio
             template <typename T>
             static consteval std::size_t index_of() { return variant_index<decltype(message), T>(); }
         };
+        using meta_message = meta;
 
         template <typename T>
         static consteval std::size_t index_of() { return variant_index<decltype(type), T>(); }
 
         // MIDI Message
-        std::variant<std::monostate, channel_message, system_message, realtime, meta> type;
+        std::variant<std::monostate, channel_message, system_message, realtime_message, meta_message> type;
         // Time - either a clock tick count, relative offset duration, or absolute time_point.
         std::variant<unsigned, clock::duration, clock::time_point> time;
 
@@ -176,19 +178,19 @@ namespace jw::audio
         constexpr midi(C&& ch, M&& m, T&& t) noexcept : type { channel_message { std::forward<C>(ch), std::forward<M>(m) } }, time { std::forward<T>(t) } { }
 
         template<typename C, typename M, typename T> requires (meta::contains<M>())
-        constexpr midi(C&& ch, M&& m, T&& t) noexcept : type { meta { std::forward<C>(ch), std::forward<M>(m) } }, time { std::forward<T>(t) } { }
+        constexpr midi(C&& ch, M&& m, T&& t) : type { meta { std::forward<C>(ch), std::forward<M>(m) } }, time { std::forward<T>(t) } { }
 
         template<typename M, typename T> requires (meta::contains<M>())
-        constexpr midi(M&& m, T&& t) noexcept : midi { std::nullopt, std::forward<M>(m), std::forward<T>(t) } { }
+        constexpr midi(M&& m, T&& t) : midi { std::nullopt, std::forward<M>(m), std::forward<T>(t) } { }
 
         template<typename M, typename T> requires (system_message::contains<M>())
-        constexpr midi(M&& m, T&& t) noexcept : type { system_message { std::forward<M>(m) } }, time { std::forward<T>(t) } { }
+        constexpr midi(M&& m, T&& t) : type { system_message { std::forward<M>(m) } }, time { std::forward<T>(t) } { }
 
         template<typename M, typename T> requires std::same_as<realtime, M>
         constexpr midi(M&& m, T&& t) noexcept : type { std::forward<M>(m) }, time { std::forward<T>(t) } { }
 
         template<typename C, typename M>
-        constexpr midi(C&& ch, M&& m) noexcept : midi { std::forward<C>(ch), std::forward<M>(m), clock::time_point { } } { }
+        constexpr midi(C&& ch, M&& m) : midi { std::forward<C>(ch), std::forward<M>(m), clock::time_point { } } { }
 
         template<typename M>
         constexpr midi(M&& m) noexcept : midi { std::forward<M>(m), clock::time_point { } } { }
@@ -207,8 +209,8 @@ namespace jw::audio
 
         bool is_channel_message() const noexcept { return type.index() == index_of<channel_message>(); }
         bool is_system_message() const noexcept { return type.index() == index_of<system_message>(); }
-        bool is_realtime_message() const noexcept { return type.index() == index_of<realtime>(); }
-        bool is_meta_message() const noexcept { return type.index() == index_of<meta>(); }
+        bool is_realtime_message() const noexcept { return type.index() == index_of<realtime_message>(); }
+        bool is_meta_message() const noexcept { return type.index() == index_of<meta_message>(); }
 
         std::optional<unsigned> channel() const
         {
