@@ -26,8 +26,9 @@ An easy to use build script is available here: https://github.com/jwt27/build-gc
 ```sh
 $ export PATH=/usr/local/cross/bin:$PATH
 ```
-* Add this repository as a submodule in your own project  
+* Add this repository and [jwutil](https://github.com/jwt27/libjwutil) as submodules in your own project  
 ```sh
+$ git submodule add https://github.com/jwt27/libjwutil.git ./lib/libjwutil
 $ git submodule add https://github.com/jwt27/libjwdpmi.git ./lib/libjwdpmi
 $ git submodule update --init
 ```
