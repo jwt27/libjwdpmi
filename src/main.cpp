@@ -10,6 +10,7 @@
 #include <vector>
 #include <crt0.h>
 #include <csignal>
+#include <jw/main.h>
 #include <jw/alloc.h>
 #include <jw/debug/debug.h>
 #include <jw/dpmi/cpu_exception.h>

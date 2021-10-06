@@ -5,6 +5,7 @@
 #include <list>
 #include <mutex>
 #include <cxxabi.h>
+#include <jw/main.h>
 #include <jw/audio/midi.h>
 #include <jw/audio/midi_file.h>
 #include <jw/thread/thread.h>

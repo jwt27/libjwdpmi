@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
@@ -6,6 +7,7 @@
 
 #include <algorithm>
 #include <optional>
+#include <jw/main.h>
 #include <jw/dpmi/irq.h>
 #include <jw/dpmi/fpu.h>
 #include <jw/alloc.h>

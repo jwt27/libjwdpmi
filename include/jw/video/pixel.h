@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
@@ -8,7 +9,7 @@
 #include <vector>
 #include <mmintrin.h>
 #include <xmmintrin.h>
-#include <jw/common.h>
+#include <jw/main.h>
 #include <jw/math.h>
 
 namespace jw

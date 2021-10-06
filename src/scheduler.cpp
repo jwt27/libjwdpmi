@@ -7,6 +7,7 @@
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
 #include <algorithm>
+#include <jw/main.h>
 #include <jw/dpmi/irq_mask.h>
 #include <jw/thread/detail/scheduler.h>
 #include <jw/thread/thread.h>

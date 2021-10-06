@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
@@ -8,6 +9,7 @@
 #pragma once
 #include <atomic>
 #include <mutex>
+#include <jw/main.h>
 #include <jw/io/detail/scancode.h>
 #include <jw/io/io_error.h>
 #include <jw/dpmi/irq.h>

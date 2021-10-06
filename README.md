@@ -36,6 +36,7 @@ $ git submodule update --init
 AR := i386-pc-msdosdjgpp-ar
 CXX := i386-pc-msdosdjgpp-g++
 CXXFLAGS := -std=gnu++20 -masm=intel
+CXXFLAGS += -I$(CURDIR)/lib/libjwutil/include
 CXXFLAGS += -I$(CURDIR)/lib/libjwdpmi/include
 
 export AR CXX CXXFLAGS
