@@ -33,21 +33,26 @@ $ git submodule update --init
 ```
 * In your makefile, export your `AR`, `CXX` and `CXXFLAGS`, and add a rule to build `libjwdpmi`:  
 ```make
-AR:=i386-pc-msdosdjgpp-ar
-CXX:=i386-pc-msdosdjgpp-g++
-CXXFLAGS:=-std=gnu++2a -masm=intel
+AR := i386-pc-msdosdjgpp-ar
+CXX := i386-pc-msdosdjgpp-g++
+CXXFLAGS := -std=gnu++20 -masm=intel
+CXXFLAGS += -I$(CURDIR)/lib/libjwdpmi/include
 
 export AR CXX CXXFLAGS
 libjwdpmi:
     $(MAKE) -C lib/libjwdpmi/
 ```
-* Add the `include/` directory to your global include path (`-I`) and link your program with `libjwdpmi.a`, found in the `bin/` directory.
+* Link your program with `libjwdpmi.a`, found in the `bin/` directory:  
 ```make
+LDFLAGS += -Llib/libjwdpmi/bin -ljwdpmi
+LDFLAGS += -Wl,--script=lib/libjwdpmi/tools/i386go32.x
+LDFLAGS += -Wl,@lib/libjwdpmi/tools/ldflags
+
 obj/%.o: src/%.cpp
-    $(CXX) $(CXXFLAGS) -o $@ -Ilib/libjwdpmi/include -c $<
+    $(CXX) $(CXXFLAGS) -o $@ -c $<
 
 bin/program.exe: $(OBJ) libjwdpmi
-    $(CXX) $(CXXFLAGS) -o $@ $(OBJ) -Llib/libjwdpmi/bin -ljwdpmi -Wl,@lib/libjwdpmi/tools/ldflags
+    $(CXX) $(CXXFLAGS) -o $@ $(OBJ) $(LDFLAGS)
 ```
 
 ## Using

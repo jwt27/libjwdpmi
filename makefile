@@ -3,9 +3,6 @@ CXXFLAGS += -Wno-address-of-packed-member
 
 CXXFLAGS_NOFPU := -mgeneral-regs-only $(shell tools/missing-macros.sh $(CXX) $(CXXFLAGS))
 
-INCLUDE := -Iinclude
-LIBS :=
-
 SRC := $(wildcard src/*.cpp)
 OBJ := $(SRC:src/%.cpp=obj/%.o)
 DEP := $(OBJ:%.o=%.d)
@@ -31,7 +28,7 @@ obj:
 	mkdir -p obj
 
 bin/libjwdpmi.a: $(OBJ) | bin
-	$(AR) scru $@ $(OBJ) $(LIBS)
+	$(AR) scru $@ $(OBJ)
 
 obj/cpu_exception.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
 obj/fpu.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
@@ -42,13 +39,13 @@ obj/main.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
 obj/debug.% : override CXXFLAGS += -O3
 
 obj/%.asm: src/%.cpp jwdpmi_config.h | obj
-	$(CXX) $(CXXFLAGS) -S -o $@ $(INCLUDE) -c $< $(PIPECMD)
+	$(CXX) $(CXXFLAGS) -S -o $@ -c $< $(PIPECMD)
 
 obj/%.o: src/%.cpp jwdpmi_config.h | obj
-	$(CXX) $(CXXFLAGS) -o $@ $(INCLUDE) -MP -MD -c $< $(PIPECMD)
+	$(CXX) $(CXXFLAGS) -o $@ -MP -MD -c $< $(PIPECMD)
 
 obj/%.ii: src/%.cpp | obj
-	$(CXX) $(CXXFLAGS) -E -o $@ $(INCLUDE) -c $<
+	$(CXX) $(CXXFLAGS) -E -o $@ -c $<
 
 jwdpmi_config.h:
 	cp -n jwdpmi_config_default.h jwdpmi_config.h
