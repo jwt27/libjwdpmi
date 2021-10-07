@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
@@ -22,7 +23,7 @@
 #include <jw/dpmi/alloc.h>
 #include <jw/dpmi/irq_check.h>
 #include <jw/dpmi/fpu.h>
-#include <../jwdpmi_config.h>
+#include "jwdpmi_config.h"
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpacked-not-aligned"

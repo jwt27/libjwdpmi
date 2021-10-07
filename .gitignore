@@ -1,4 +1,6 @@
-bin/
-obj/
-jwdpmi_config.h
-doxygen_sqlite3.db
+build/
+Makefile
+config.status
+cxxflags
+ldflags
+*.a

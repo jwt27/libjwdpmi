@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
@@ -13,7 +14,7 @@
 #include <jw/dpmi/alloc.h>
 #include <jw/dpmi/irq_check.h>
 #include <jw/common.h>
-#include <../jwdpmi_config.h>
+#include "jwdpmi_config.h"
 
 // --- --- --- Some notes on DPMI host behaviour: --- --- --- //
 // Default RM handlers for INT 0x1C, 0x23, 0x24, and all IRQs reflect to PM, if a PM handler is installed.

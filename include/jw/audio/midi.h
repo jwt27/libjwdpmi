@@ -16,7 +16,7 @@
 #include <jw/chrono.h>
 #include <jw/io/io_error.h>
 #include <jw/variant.h>
-#include <../jwdpmi_config.h>
+#include "jwdpmi_config.h"
 
 namespace jw
 {

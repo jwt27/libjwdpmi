@@ -9,13 +9,6 @@
 #pragma once
 #include <exception>
 
-#ifdef __MMX__
-#   define HAVE__MMX__
-#endif
-#ifdef __SSE__
-#   define HAVE__SSE__
-#endif
-
 namespace jw
 {
     void print_exception(const std::exception& e, int level = 0) noexcept;

@@ -8,7 +8,7 @@
 #include <jw/thread/detail/thread.h>
 #include <jw/thread/detail/scheduler.h>
 #include <jw/thread/thread.h>
-#include <../jwdpmi_config.h>
+#include "jwdpmi_config.h"
 
 namespace jw
 {

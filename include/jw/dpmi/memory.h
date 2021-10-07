@@ -9,7 +9,7 @@
 #include <limits>
 #include <memory_resource>
 #include <jw/dpmi/dpmi.h>
-#include <../jwdpmi_config.h>
+#include "jwdpmi_config.h"
 
 namespace jw
 {

@@ -21,7 +21,7 @@
 #include <jw/video/ansi.h>
 #include <cxxabi.h>
 #include <unwind.h>
-#include <../jwdpmi_config.h>
+#include "jwdpmi_config.h"
 
 using namespace jw;
 

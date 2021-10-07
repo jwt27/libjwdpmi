@@ -19,43 +19,29 @@ Current features include:
 * Serial port driver with `std::iostream` interface.
 
 ## Installing
-* Build and install gcc with `--target=i386-pc-msdosdjgpp`, and install the djgpp standard library.  
-An easy to use build script is available here: https://github.com/jwt27/build-gcc
+First, you need a toolchain compiled with `--target=i386-pc-msdosdjgpp`, and
+djgpp's `libc`.  An easy to use build script is available here:  
+https://github.com/jwt27/build-gcc
 
-* Set your `PATH` accordingly:  
-```sh
-$ export PATH=/usr/local/cross/bin:$PATH
-```
-* Add this repository and [jwutil](https://github.com/jwt27/libjwutil) as submodules in your own project  
+This library is meant to be integrated in your project, not installed system-
+wide.  The only dependency is [jwutil](https://github.com/jwt27/libjwutil), and
+the most convenient way to install both is as submodules in your own project:  
 ```sh
 $ git submodule add https://github.com/jwt27/libjwutil.git ./lib/libjwutil
 $ git submodule add https://github.com/jwt27/libjwdpmi.git ./lib/libjwdpmi
-$ git submodule update --init
+$ git submodule update --init --recursive
 ```
-* In your makefile, export your `AR`, `CXX` and `CXXFLAGS`, and add a rule to build `libjwdpmi`:  
-```make
-AR := i386-pc-msdosdjgpp-ar
-CXX := i386-pc-msdosdjgpp-g++
-CXXFLAGS := -std=gnu++20 -masm=intel
-CXXFLAGS += -I$(CURDIR)/lib/libjwutil/include
-CXXFLAGS += -I$(CURDIR)/lib/libjwdpmi/include
 
-export AR CXX CXXFLAGS
-libjwdpmi:
-    $(MAKE) -C lib/libjwdpmi/
+If you use [jwbuild](https://github.com/jwt27/jwbuild), simply add the
+following to your `configure` script, and you're all set:  
+```sh
+add_library lib/libjwutil
+add_library lib/libjwdpmi --host=i386-pc-msdosdjgpp --with-jwutil=$(pwd)/lib/libjwutil
 ```
-* Link your program with `libjwdpmi.a`, found in the `bin/` directory:  
-```make
-LDFLAGS += -Llib/libjwdpmi/bin -ljwdpmi
-LDFLAGS += -Wl,--script=lib/libjwdpmi/tools/i386go32.x
-LDFLAGS += -Wl,@lib/libjwdpmi/tools/ldflags
 
-obj/%.o: src/%.cpp
-    $(CXX) $(CXXFLAGS) -o $@ -c $<
-
-bin/program.exe: $(OBJ) libjwdpmi
-    $(CXX) $(CXXFLAGS) -o $@ $(OBJ) $(LDFLAGS)
-```
+For other build systems, you need some way to call the `configure` script, and
+then the `cxxflags` and `ldflags` files in the build directory contain all
+flags you need to compile and link.
 
 ## Using
 See the [wiki page](https://github.com/jwt27/libjwdpmi/wiki), where I'm slowly adding documentation.  

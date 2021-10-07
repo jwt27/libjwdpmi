@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
@@ -18,7 +19,7 @@
 #include <jw/common.h>
 #include <jw/split_int.h>
 #include <jw/dpmi/ring0.h>
-#include <../jwdpmi_config.h>
+#include "jwdpmi_config.h"
 
 namespace jw
 {

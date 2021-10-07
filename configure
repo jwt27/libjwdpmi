@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+
+set -e
+
+src=$(cd $(dirname "$0") && pwd)
+vars='CXX AR CXXFLAGS'
+
+source $src/tools/jwbuild/jwbuild.sh
+
+# Parse options
+
+help_msg()
+{
+	cat <<- EOF
+	Recognized options:
+	  --host=<...>           toolchain program prefix, eg. "i386-pc-msdosdjgpp"
+	  --with-config=<...>    location of configuration header
+	  --with-jwutil=<...>    location of libjwutil "build" dir (where you
+	                           invoked 'configure')
+	  --debug=no             disable debug mode
+
+	Important variables:
+	  CXXFLAGS               compiler flags
+	  CXX                    compiler command      (if --host not specified)
+	  AR                     'ar' archiver command (if --host not specified)
+	EOF
+}
+
+for opt in "${!options[@]}"; do
+	case "$opt" in
+	help)
+		help_msg
+		exit 1
+		;;
+	host) ;;
+	with-config) ;;
+	with-jwutil) ;;
+	debug) ;;
+	*)
+		fail "invalid option: $opt"
+		;;
+	esac
+done
+
+# Check debug flag
+
+debug="${options[debug]}"
+if [[ ! -z "$debug" ]] && ! test_bool "$debug"; then
+	debug_flags+=' -DNDEBUG'
+else
+	debug_flags+=' -D_DEBUG'
+fi
+
+# Set CXX/AR
+
+host="${options[host]}"
+if [[ ! -z "$host" ]]; then
+	CXX="$host-g++"
+	AR="$host-ar"
+fi
+CXX=${CXX-g++}
+AR=${AR-ar}
+
+check_programs $CXX $AR
+check_compiler -std=gnu++20 -masm=intel
+
+# Find jwutil
+
+if [[ -e "${options[with-jwutil]}/cxxflags" ]]; then
+	CXXFLAGS+="$(read_flags ${options[with-jwutil]}/cxxflags)"
+fi
+cat <<- EOF | compile || fail "jwutil not found"
+#include <jw/common.h>
+EOF
+
+# Find config header
+
+config_file="${options[with-config]}"
+if [[ -z "$config_file" ]]; then
+	warn "no configuration header specified, using default."
+	config_file="$src/jwdpmi_config.h"
+fi
+config_file="$(abspath "$config_file")"
+config_file="$(winpath $config_file)"
+cat <<- EOF | compile || fail "configuration header not found"
+#include "$config_file"
+EOF
+
+# Generate config.status
+
+cleanup
+save_config
+
+# Create directories
+
+mkdir -p src/
+mkdir -p include/
+
+# Generate name
+
+echo "jwdpmi" > name
+
+# Generate config file wrapper
+
+cat <<- EOF > include/jwdpmi_config.h
+#pragma once
+#include "$config_file"
+EOF
+
+# Generate cxxflags
+
+write_cxxflags
+
+cat <<- EOF >> cxxflags
+-I$src/include
+-iquote $(pwd)/include
+-std=gnu++20
+-masm=intel
+$debug_flags
+EOF
+
+$src/tools/missing-macros.sh $CXX $CXXFLAGS $(read_flags cxxflags) >> cxxflags
+
+# Generate ldflags
+
+cat <<- EOF >> ldflags
+-Wno-attributes
+-Wl,--script=$src/tools/i386go32.x
+-Wl,--wrap=malloc
+-Wl,--wrap=calloc
+-Wl,--wrap=realloc
+-Wl,--wrap=free
+-L$(pwd)
+-ljwdpmi
+EOF
+
+write_ldflags
+
+# Generate Makefile
+
+write_makefile
+
+cat <<- EOF > targets
+all
+preprocessed
+asm
+clean
+libjwdpmi.a
+EOF

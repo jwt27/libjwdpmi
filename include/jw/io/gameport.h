@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
@@ -12,7 +13,7 @@
 #include <jw/dpmi/alloc.h>
 #include <jw/event.h>
 #include <jw/vector.h>
-#include <../jwdpmi_config.h>
+#include "jwdpmi_config.h"
 #include <limits>
 #include <optional>
 #include <bitset>

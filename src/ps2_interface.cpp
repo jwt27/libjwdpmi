@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
@@ -7,7 +8,7 @@
 #include <jw/io/ps2_interface.h>
 #include <jw/dpmi/irq_mask.h>
 #include <jw/thread/thread.h>
-#include <../jwdpmi_config.h>
+#include "jwdpmi_config.h"
 
 // references:
 // IBM keyboard datasheet   --> http://www.mcamafia.de/pdf/ibm_hitrc11.pdf
