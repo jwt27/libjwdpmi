@@ -2,19 +2,20 @@
 
 set -e
 
-src=$(cd $(dirname "$0") && pwd)
-vars='CXX AR CXXFLAGS'
+readonly src=$(cd $(dirname "$0") && pwd)
+readonly vars='CXX AR CXXFLAGS'
 
 source $src/tools/jwbuild/jwbuild.sh
 
+save_vars
+
 # Parse options
 
-help_msg()
-{
+if test_option help; then
 	cat <<- EOF
 	Recognized options:
 	  --host=<...>           toolchain program prefix, eg. "i386-pc-msdosdjgpp"
-	  --with-config=<...>    location of configuration header
+	  --jwdpmi-config=<...>  location of configuration header
 	  --with-jwutil=<...>    location of libjwutil "build" dir (where you
 	                           invoked 'configure')
 	  --debug=no             disable debug mode
@@ -24,36 +25,21 @@ help_msg()
 	  CXX                    compiler command      (if --host not specified)
 	  AR                     'ar' archiver command (if --host not specified)
 	EOF
-}
-
-for opt in "${!options[@]}"; do
-	case "$opt" in
-	help)
-		help_msg
-		exit 1
-		;;
-	host) ;;
-	with-config) ;;
-	with-jwutil) ;;
-	debug) ;;
-	*)
-		fail "invalid option: $opt"
-		;;
-	esac
-done
+	exit 1
+fi
 
 # Check debug flag
 
-debug="${options[debug]}"
-if [[ ! -z "$debug" ]] && ! test_bool "$debug"; then
-	debug_flags+=' -DNDEBUG'
+if test_option debug yes; then
+	debug_flag='-D_DEBUG'
 else
-	debug_flags+=' -D_DEBUG'
+	debug_flag='-DNDEBUG'
 fi
+CXXFLAGS+=" $debug_flag"
 
 # Set CXX/AR
 
-host="${options[host]}"
+host=${options[host]}
 if [[ ! -z "$host" ]]; then
 	CXX="$host-g++"
 	AR="$host-ar"
@@ -64,24 +50,35 @@ AR=${AR-ar}
 check_programs $CXX $AR
 check_compiler -std=gnu++20 -masm=intel
 
+# Set CXXFLAGS
+
+unset more_cxxflags
+more_cxxflags+=" -I$src/include"
+more_cxxflags+=" -iquote $(pwd)/include"
+more_cxxflags+=" -std=gnu++20"
+more_cxxflags+=" -masm=intel"
+more_cxxflags+=" $debug_flag"
+more_cxxflags+=" $($src/tools/missing-macros.sh $CXX $CXXFLAGS $more_cxxflags | tr '\n' ' ')"
+CXXFLAGS+="$more_cxxflags"
+
+check_compiler
+
 # Find jwutil
 
-if [[ -e "${options[with-jwutil]}/cxxflags" ]]; then
-	CXXFLAGS+="$(read_flags ${options[with-jwutil]}/cxxflags)"
-fi
+CXXFLAGS+=" $(read_flags "${options[with-jwutil]}/cxxflags")"
 cat <<- EOF | compile || fail "jwutil not found"
 #include <jw/common.h>
 EOF
 
 # Find config header
 
-config_file="${options[with-config]}"
+config_file="${options[jwdpmi-config]}"
 if [[ -z "$config_file" ]]; then
 	warn "no configuration header specified, using default."
 	config_file="$src/jwdpmi_config.h"
 fi
 config_file="$(abspath "$config_file")"
-config_file="$(winpath $config_file)"
+config_file="$(winpath "$config_file")"
 cat <<- EOF | compile || fail "configuration header not found"
 #include "$config_file"
 EOF
@@ -96,10 +93,6 @@ save_config
 mkdir -p src/
 mkdir -p include/
 
-# Generate name
-
-echo "jwdpmi" > name
-
 # Generate config file wrapper
 
 cat <<- EOF > include/jwdpmi_config.h
@@ -110,16 +103,7 @@ EOF
 # Generate cxxflags
 
 write_cxxflags
-
-cat <<- EOF >> cxxflags
--I$src/include
--iquote $(pwd)/include
--std=gnu++20
--masm=intel
-$debug_flags
-EOF
-
-$src/tools/missing-macros.sh $CXX $CXXFLAGS $(read_flags cxxflags) >> cxxflags
+echo $more_cxxflags >> cxxflags
 
 # Generate ldflags
 
@@ -133,17 +117,23 @@ cat <<- EOF >> ldflags
 -L$(pwd)
 -ljwdpmi
 EOF
-
 write_ldflags
+
+
+# Generate dependency lists
+
+write_cxxdeps
+
+echo 'libjwdpmi.a' >> lddeps
+write_lddeps
+
+write_targets
+cat <<- EOF >> targets
+jwdpmi
+preprocessed
+asm
+EOF
 
 # Generate Makefile
 
 write_makefile
-
-cat <<- EOF > targets
-all
-preprocessed
-asm
-clean
-libjwdpmi.a
-EOF

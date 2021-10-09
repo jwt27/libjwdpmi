@@ -11,8 +11,8 @@ cd $(dirname $cpp)
 
 echo "void main(){}" > $cpp
 
-"$@" -dM -E $cpp > $normal
-"$@" -mgeneral-regs-only -dM -E $cpp > $nofpu
+"$@" -x c++ -dM -E $cpp > $normal
+"$@" -x c++ -mgeneral-regs-only -dM -E $cpp > $nofpu
 
 diff -e $nofpu $normal > $diff || :
 
@@ -21,7 +21,7 @@ while read line; do
     *a) while read line && [ "$line" != "." ]; do
             line=${line#\#define }
             line=${line%% *}
-            echo "-DHAVE${line}"
+            echo -n " -DHAVE${line}"
         done
         ;;
     esac
@@ -29,5 +29,4 @@ done < $diff
 
 rm $cpp $normal $nofpu $diff
 
-echo $out
 exit 0

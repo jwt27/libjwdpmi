@@ -15,9 +15,11 @@ ASM := $(OBJ:%.o=%.asm)
 DWO := $(OBJ:%.o=%.dwo)
 PREPROCESSED := $(OBJ:%.o=%.ii)
 
-.PHONY: all clean preprocessed asm
+.PHONY: all jwdpmi clean preprocessed asm
 
-all: libjwdpmi.a
+all: jwdpmi
+
+jwdpmi: libjwdpmi.a
 
 preprocessed: $(PREPROCESSED)
 
