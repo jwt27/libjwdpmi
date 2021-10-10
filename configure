@@ -77,7 +77,7 @@ if [[ -z "$config_file" ]]; then
 	warn "no configuration header specified, using default."
 	config_file="$src/jwdpmi_config.h"
 fi
-config_file="$(abspath "$config_file")"
+config_file="$(realpath "$config_file")"
 config_file="$(winpath "$config_file")"
 cat <<- EOF | compile || fail "configuration header not found"
 #include "$config_file"
