@@ -1,4 +1,3 @@
 [submodule "tools/jwbuild"]
 	path = tools/jwbuild
 	url = https://github.com/jwt27/jwbuild
-	branch = master

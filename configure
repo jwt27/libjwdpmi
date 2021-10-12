@@ -3,11 +3,10 @@
 set -e
 
 readonly src=$(cd $(dirname "$0") && pwd)
-readonly vars='CXX AR CXXFLAGS'
 
 source $src/tools/jwbuild/jwbuild.sh
 
-save_vars
+save_vars CXX AR CXXFLAGS
 
 # Parse options
 
@@ -55,11 +54,10 @@ check_compiler -std=gnu++20 -masm=intel
 unset more_cxxflags
 more_cxxflags+=" -I$src/include"
 more_cxxflags+=" -iquote $(pwd)/include"
-more_cxxflags+=" -std=gnu++20"
 more_cxxflags+=" -masm=intel"
 more_cxxflags+=" $debug_flag"
 more_cxxflags+=" $($src/tools/missing-macros.sh $CXX $CXXFLAGS $more_cxxflags | tr '\n' ' ')"
-CXXFLAGS+="$more_cxxflags"
+prepend CXXFLAGS "$more_cxxflags"
 
 check_compiler
 
@@ -85,7 +83,6 @@ EOF
 
 # Generate config.status
 
-cleanup
 save_config
 
 # Create directories
