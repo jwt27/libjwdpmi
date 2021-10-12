@@ -1,32 +1,17 @@
 #!/bin/bash
 
 set -e
-
-cpp=$(mktemp -t tmp.XXXXXXXX.cpp)
-normal=$(mktemp)
-nofpu=$(mktemp)
-diff=$(mktemp)
-
-cd $(dirname $cpp)
-
-echo "void main(){}" > $cpp
-
-"$@" -x c++ -dM -E $cpp > $normal
-"$@" -x c++ -mgeneral-regs-only -dM -E $cpp > $nofpu
-
-diff -e $nofpu $normal > $diff || :
+declare -A map
 
 while read line; do
-    case "$line" in
-    *a) while read line && [ "$line" != "." ]; do
-            line=${line#\#define }
-            line=${line%% *}
-            echo -n " -DHAVE${line}"
-        done
-        ;;
-    esac
-done < $diff
+	name=${line#\#define }
+	name=${name%% *}
+	map[$name]=1
+done < <( echo | "$@" -x c++ -dM -E -mgeneral-regs-only - )
 
-rm $cpp $normal $nofpu $diff
-
-exit 0
+while read line; do
+	name=${line#\#define }
+	name=${name%% *}
+	value=${line##* }
+	[[ -v map[$name] ]] || echo -n "-DHAVE$name=$value" | tr '\r\n' ' '
+done < <( echo | "$@" -x c++ -dM -E - )

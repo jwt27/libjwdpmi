@@ -56,7 +56,7 @@ more_cxxflags+=" -I$src/include"
 more_cxxflags+=" -iquote $(pwd)/include"
 more_cxxflags+=" -masm=intel"
 more_cxxflags+=" $debug_flag"
-more_cxxflags+=" $($src/tools/missing-macros.sh $CXX $CXXFLAGS $more_cxxflags | tr '\n' ' ')"
+more_cxxflags+=" $($src/tools/missing-macros.sh $CXX $CXXFLAGS $more_cxxflags)"
 prepend CXXFLAGS "$more_cxxflags"
 
 check_compiler
