@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <sstream>
 #include <jw/thread/detail/scheduler.h>
+#include <jw/main.h>
 #include "jwdpmi_config.h"
 
 namespace jw
@@ -18,7 +19,12 @@ namespace jw
         // Thrown when task->abort() is called.
         struct abort_thread
         {
-            virtual const char* what() const noexcept { return "Task aborted"; }
+            ~abort_thread() noexcept(false) { if (not defused) throw terminate_exception { }; }
+            virtual const char* what() const noexcept { return "Thread aborted."; }
+        private:
+            friend struct detail::scheduler;
+            void defuse() const noexcept { defused = true; }
+            mutable bool defused { false };
         };
 
         // Thrown when a task is still running, but no longer referenced anywhere.

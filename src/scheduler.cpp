@@ -109,7 +109,7 @@ namespace jw
                     current_thread->call();
                     current_thread->state = finished;
                 }
-                catch (const abort_thread&) { }
+                catch (const abort_thread& e) { e.defuse(); }
                 catch (const terminate_exception&)
                 {
                     for (auto& t : threads) t->exceptions.push_back(std::current_exception());
@@ -123,7 +123,7 @@ namespace jw
                 debug::detail::notify_gdb_thread_event(debug::detail::thread_finished);
 
                 while (true) try { yield(); }
-                catch (const abort_thread&) { }
+                catch (const abort_thread& e) { e.defuse(); }
                 catch (...)
                 {
                     current_thread->exceptions.push_back(std::current_exception());
