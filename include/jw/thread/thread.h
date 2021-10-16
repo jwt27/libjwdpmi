@@ -6,8 +6,7 @@
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
-#include <stdexcept>
-#include <sstream>
+#include <exception>
 #include <jw/thread/detail/scheduler.h>
 #include <jw/main.h>
 #include "jwdpmi_config.h"
@@ -94,5 +93,73 @@ namespace jw
 
         // Call a function on the main thread.
         template<typename F> void invoke_main(F&& function) { detail::scheduler::invoke_main(std::forward<F>(function)); }
+
+        // Call a function on the next active thread.
+        template<typename F> void invoke_next(F&& function) { detail::scheduler::invoke_next(std::forward<F>(function)); }
+
+        struct thread
+        {
+            using id = std::uint32_t;
+            using native_handle_type = std::weak_ptr<detail::thread>;
+
+            thread() noexcept = default;
+            template<typename F, typename... A>
+            explicit thread(F&& f, A&&... args)
+                : ptr { create(std::forward<F>(f), std::forward<A>(args)...) }
+            { detail::scheduler::start_thread(ptr); }
+
+            ~thread() noexcept(false) { if (ptr) terminate(); }
+
+            thread(const thread&) = delete;
+            thread& operator=(const thread&) = delete;
+            thread(thread&&) noexcept = default;
+            thread& operator=(thread&& other)
+            {
+                if (ptr) terminate();
+                ptr = std::move(other.ptr);
+            }
+
+            void swap(thread& other) noexcept { using std::swap; swap(ptr, other.ptr); };
+            bool joinable() const noexcept { return static_cast<bool>(ptr); }
+            void join();
+            void detach() { ptr.reset(); }
+            id get_id() const noexcept { return ptr ? ptr->id : 0; };
+            native_handle_type native_handle() { return ptr; };
+
+            void abort() { ptr->abort(); };
+            bool active() const noexcept { return ptr and ptr->active(); }
+
+            static unsigned int hardware_concurrency() noexcept { return 1; }
+
+        private:
+            template<typename F, typename... A>
+            auto create(F&& func, A&&... args);
+
+            std::shared_ptr<detail::thread> ptr;
+        };
+
+        inline void thread::join()
+        {
+            if (not ptr)
+                throw std::system_error { std::make_error_code(std::errc::no_such_process) };
+
+            if (get_id() == detail::scheduler::get_current_thread_id())
+                throw std::system_error { std::make_error_code(std::errc::resource_deadlock_would_occur) };
+
+            yield_while([p = ptr.get()] { return p->active(); });
+            ptr.reset();
+        }
+
+        template<typename F, typename... A>
+        inline auto thread::create(F&& func, A&&... args)
+        {
+            auto lambda =
+                [ func = std::tuple<F> { std::forward<F>(func) },
+                args = std::tuple<A...> { std::forward<A>(args)... } ]
+                {
+                    std::apply(std::get<0>(func), args);
+                };
+                return std::make_shared<detail::thread>(lambda, config::thread_default_stack_size);
+        }
     }
 }

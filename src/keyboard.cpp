@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
@@ -98,8 +99,8 @@ namespace jw
 
         void keyboard::auto_update(bool enable)
         {
-            if (enable) ps2->set_keyboard_update_thread({ [this]() { do_update(true); } });
-            else ps2->set_keyboard_update_thread({ });
+            if (enable) ps2->set_callback([this]() { do_update(true); });
+            else ps2->set_callback(nullptr);
         }
 
         keyboard::keyboard()

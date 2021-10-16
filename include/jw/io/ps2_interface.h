@@ -15,7 +15,7 @@
 #include <jw/dpmi/irq.h>
 #include <jw/dpmi/lock.h>
 #include <jw/io/ioport.h>
-#include <jw/thread/task.h>
+#include <jw/thread/thread.h>
 #include <jw/thread/mutex.h>
 #include <jw/chrono.h>
 
@@ -67,10 +67,10 @@ namespace jw
                 current_led_state = state;
             }
 
-            void set_keyboard_update_thread(thread::task<void()> t)
+            template<typename F>
+            void set_callback(F&& func)
             {
-                keyboard_update_thread = t;
-                keyboard_update_thread->name = "Keyboard auto-update thread";
+                callback = std::forward<F>(func);
             }
 
             void init_keyboard();
@@ -263,10 +263,10 @@ namespace jw
             void read_config() { config.data = command<send_cmd, recv_ctrl_data>({ 0x20 }); }
             void write_config() { command<send_cmd, send_data>({ 0x60, config.data }); read_config(); }
 
-            thread::task<void()> keyboard_update_thread;
+            std::function<void()> callback;
 
-            dpmi::locked_pool_allocator<> alloc { 1_KB };
-            std::deque<detail::raw_scancode, dpmi::locked_pool_allocator<false, detail::raw_scancode>> scancode_queue { alloc };
+            dpmi::locked_pool_resource<false> memres { 1_KB };
+            std::pmr::deque<detail::raw_scancode> scancode_queue { &memres };
 
             dpmi::irq_handler irq_handler { [this]()
             {
@@ -278,19 +278,9 @@ namespace jw
                         if (config.translate_scancodes) *detail::scancode::undo_translation_inserter(scancode_queue) = c;
                         else scancode_queue.push_back(c);
                     } while (get_status().data_available);
-                    if (keyboard_update_thread)
-                    {
-                        if (keyboard_update_thread->is_running())
-                        {
-                            thread::invoke_main([this]
-                            {
-                                if (scancode_queue.size() == 0) return;
-                                keyboard_update_thread->try_await();
-                                keyboard_update_thread->start();
-                            });
-                        }
-                        else keyboard_update_thread->start();
-                    }
+
+                    if (callback) thread::invoke_next(callback);
+
                     dpmi::irq_handler::acknowledge();
                 }
             }, dpmi::no_auto_eoi };

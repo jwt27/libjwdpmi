@@ -30,10 +30,9 @@ namespace jw
                 pool_alloc = &alloc;
                 using rebind = typename std::allocator_traits<decltype(alloc)>::rebind_alloc<thread>;
                 auto* p = rebind { alloc }.allocate(1);
-                new(p) thread { 1 };
+                new(p) thread { nullptr, 0 };
                 main_thread = std::shared_ptr<thread> { p };
                 main_thread->state = running;
-                main_thread->parent = main_thread;
                 main_thread->name = "Main thread";
                 current_thread = main_thread;
             }
@@ -90,7 +89,7 @@ namespace jw
                 }
             }
 
-            void scheduler::start_thread(thread_ptr t)
+            void scheduler::start_thread(const thread_ptr& t)
             {
                 debug::trap_mask dont_trace_here { };
                 dpmi::interrupt_mask no_interrupts_please { };
@@ -103,100 +102,64 @@ namespace jw
             // The actual thread.
             void scheduler::run_thread() noexcept
             {
+                auto* const t = current_thread.get();
                 try
                 {
-                    current_thread->state = running;
-                    current_thread->call();
-                    current_thread->state = finished;
+                    t->state = running;
+                    t->function();
+                    t->state = finished;
                 }
                 catch (const abort_thread& e) { e.defuse(); }
-                catch (const terminate_exception&)
-                {
-                    for (auto& t : threads) t->exceptions.push_back(std::current_exception());
-                }
+                catch (const terminate_exception&) { terminating = true; }
                 catch (...)
                 {
-                    current_thread->exceptions.push_back(std::current_exception());
+                    std::cerr << "caught exception from thread " << t->id;
+                    std::cerr << " (" << t->name << ")\n";
+                    try { throw; }
+                    catch (std::exception& e) { print_exception(e); }
+                    terminating = true;
                 }
 
-                if (current_thread->state != finished) current_thread->state = initialized;
+                if (t->state != finished) t->state = aborted;
                 debug::detail::notify_gdb_thread_event(debug::detail::thread_finished);
 
-                while (true) try { yield(); }
-                catch (const abort_thread& e) { e.defuse(); }
-                catch (...)
-                {
-                    current_thread->exceptions.push_back(std::current_exception());
-                }
+                while (true) yield();
             }
 
-            // Rethrows exceptions that occured on child threads.
-            // Throws abort_thread if task->abort() is called, or orphaned_thread if task is orphaned.
             void scheduler::check_exception()
             {
-                if (current_thread->awaiting and current_thread->awaiting->pending_exceptions() > 0) [[unlikely]]
-                {
-                    auto exc = current_thread->awaiting->exceptions.front();
-                    current_thread->awaiting->exceptions.pop_front();
-                    try { std::rethrow_exception(exc); }
-                    catch (...) { std::throw_with_nested(thread_exception { current_thread }); }
-                }
-
-                if (current_thread->pending_exceptions() > 0) [[unlikely]]
-                {
-                    auto& exceptions = current_thread->exceptions;
-                    for (auto i = exceptions.begin(); i != exceptions.end(); ++i)
-                    {
-                        try { std::rethrow_exception(*i); }
-                        catch (const thread_exception& e)
-                        {
-                            if (e.thread.use_count() > 1) continue; // Only rethrow if exception came from deleted/orphaned threads.
-                            exceptions.erase(i);
-                            throw;
-                        }
-                        catch (terminate_exception& e)
-                        {
-                            auto& exceptions = current_thread->exceptions;
-                            exceptions.erase(i);
-                            throw;
-                        }
-                        catch (...) { }
-                    }
-                }
-
-                if (current_thread != main_thread and *reinterpret_cast<std::uint32_t*>(current_thread->stack.get()) != 0xDEADBEEF) [[unlikely]]
+#           ifndef NDEBUG
+                if (current_thread != main_thread and *reinterpret_cast<std::uint32_t*>(current_thread->stack.data()) != 0xDEADBEEF) [[unlikely]]
                     throw std::runtime_error("Stack overflow!");
+#           endif
 
-                if (current_thread->state == terminating) [[unlikely]] throw abort_thread();
-                if (current_thread.unique() and not current_thread->allow_orphan and current_thread->is_running()) [[unlikely]] throw orphaned_thread();
+                if (terminating) [[unlikely]] terminate();
+                if (current_thread->state == aborting) [[unlikely]] throw abort_thread();
             }
 
-            // Selects a new current_thread.
-            // May only be called from context_switch()!
+            // Select a new current_thread.
             thread_context* scheduler::set_next_thread()
             {
                 for(std::size_t i = 0; ; ++i)
                 {
                     {
                         dpmi::interrupt_mask no_interrupts_please { };
-                        if (current_thread->is_running()) [[likely]] threads.push_back(current_thread);
-                        current_thread = threads.front();
+                        if (current_thread->active()) [[likely]] threads.emplace_back(std::move(current_thread));
+                        current_thread = std::move(threads.front());
                         threads.pop_front();
                     }
 
                     if (current_thread->state == starting) [[unlikely]]     // new thread, initialize new context on stack
                     {
-                        byte* esp = (current_thread->stack.get() + current_thread->stack_size - 4) - sizeof(thread_context);
-                        *reinterpret_cast<std::uint32_t*>(current_thread->stack.get()) = 0xDEADBEEF;    // stack overflow protection
-
+#                   ifndef NDEBUG
+                        *reinterpret_cast<std::uint32_t*>(current_thread->stack.data()) = 0xDEADBEEF;   // stack overflow protection
+#                   endif
+                        byte* const esp = (current_thread->stack.data() + current_thread->stack.size_bytes() - 4) - sizeof(thread_context);
                         current_thread->context = reinterpret_cast<thread_context*>(esp);               // *context points to top of stack
-                        if (current_thread->parent == nullptr) current_thread->parent = main_thread;
-                        *current_thread->context = *current_thread->parent->context;                    // clone parent's context to new stack
+                        *current_thread->context = *threads.back()->context;
                         current_thread->context->return_address = reinterpret_cast<std::uintptr_t>(run_thread);
                     }
 
-                    if (current_thread->pending_exceptions() != 0) [[unlikely]] break;
-                    if (current_thread->awaiting and current_thread->awaiting->pending_exceptions() != 0) [[unlikely]] break;
                     if (current_thread->state != suspended) [[likely]] break;
                     if (i > threads.size())
                     {

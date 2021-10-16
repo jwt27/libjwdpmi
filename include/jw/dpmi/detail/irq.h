@@ -6,7 +6,7 @@
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
-#include <jw/thread/task.h>
+#include <jw/thread/thread.h>
 #include <jw/dpmi/detail/interrupt_id.h>
 #include <jw/function.h>
 
@@ -113,12 +113,10 @@ namespace jw
                     irq_controller_data()
                     {
                         stack.resize(config::interrupt_initial_stack_size);
-                        increase_stack_size->name = "Increasing stack size for IRQ handlers";
                         pic0_cmd.write(0x68);   // TODO: restore to defaults
                         pic1_cmd.write(0x68);
                     }
 
-                    thread::task<void()> increase_stack_size { [this]() { stack.resize(stack.size() * 2); } };
                     std::map<int_vector, std::unique_ptr<irq_controller>, std::less<int_vector>, locking_allocator<std::pair<const int_vector, std::unique_ptr<irq_controller>>>> entries { };
                     std::vector<byte, locking_allocator<byte>> stack { };
                     std::uint32_t stack_use_count { 0 };
@@ -143,7 +141,7 @@ namespace jw
             private:
                 static int_vector irq_to_vec(irq_level i) noexcept
                 {
-                    assert(i < 16);
+                    assume(i < 16);
                     dpmi::version ver { };
                     return i < 8 ? i + ver.pic_master_base : i - 8 + ver.pic_slave_base;
                 }

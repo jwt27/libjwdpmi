@@ -9,6 +9,8 @@
 #pragma once
 #include <exception>
 
+int main(int, const char**);
+
 namespace jw
 {
     void print_exception(const std::exception& e, int level = 0) noexcept;

@@ -184,7 +184,7 @@ namespace jw
                 }
                 for (auto&& t : jw::thread::detail::scheduler::get_threads())
                 {
-                    threads[t->id()].thread = t;
+                    threads[t->id].thread = t;
                 }
                 current_thread_id = jw::thread::detail::scheduler::get_current_thread_id();
                 threads[current_thread_id].thread = jw::thread::detail::scheduler::get_current_thread();
@@ -648,7 +648,7 @@ namespace jw
                         encode_null(out, regsize[r]);
                         return;
                     }
-                    auto* reg = thread::detail::thread_details::get_context(t_ptr);
+                    auto* reg = t_ptr->context;
                     auto r_esp = reinterpret_cast<std::uintptr_t>(reg) - sizeof(thread::detail::thread_context);
                     auto r_eip = reg->return_address;
                     switch (r)
@@ -736,7 +736,7 @@ namespace jw
                     for (auto i = t.signals.begin(); i != t.signals.end();)
                     {
                         auto signal = *i;
-                        if (temp_debugmsg) std::clog << "stop reply for thread 0x" << std::hex << t_ptr->id() << " signal 0x" << signal << ": ";
+                        if (temp_debugmsg) std::clog << "stop reply for thread 0x" << std::hex << t_ptr->id << " signal 0x" << signal << ": ";
                         if (not is_stop_signal(signal)
                             or (is_trap_signal(signal) and t.trap_mask > 0))
                         {
@@ -765,7 +765,7 @@ namespace jw
                             s << 'w';
                             if (t_ptr->get_state() == thread::detail::finished) s << "00";
                             else s << "ff";
-                            s << ';' << t_ptr->id();
+                            s << ';' << t_ptr->id;
                             send_packet(s.str());
                         }
                         else
@@ -773,11 +773,11 @@ namespace jw
                             s << "T" << std::setw(2) << posix_signal(signal);
                             if (t_ptr->get_state() != thread::detail::starting)
                             {
-                                s << eip << ':'; reg(s, eip, t_ptr->id()); s << ';';
-                                s << esp << ':'; reg(s, esp, t_ptr->id()); s << ';';
-                                s << ebp << ':'; reg(s, ebp, t_ptr->id()); s << ';';
+                                s << eip << ':'; reg(s, eip, t_ptr->id); s << ';';
+                                s << esp << ':'; reg(s, esp, t_ptr->id); s << ';';
+                                s << ebp << ':'; reg(s, ebp, t_ptr->id); s << ';';
                             }
-                            s << "thread:" << t_ptr->id() << ';';
+                            s << "thread:" << t_ptr->id << ';';
                             if (signal == thread_started)
                             {
                                 s << "create:;";
@@ -800,7 +800,7 @@ namespace jw
                             }
                             if (async) send_notification(s.str());
                             else send_packet(s.str());
-                            query_thread_id = t_ptr->id();
+                            query_thread_id = t_ptr->id;
                         }
 
                         if (signal == all_threads_suspended and supported["no-resumed"] == "+")
@@ -898,14 +898,13 @@ namespace jw
                             msg << ": ";
                             switch (t->get_state())
                             {
-                            case initialized: msg << "Initialized"; break;
                             case starting:    msg << "Starting";    break;
                             case running:     msg << "Running";     break;
                             case suspended:   msg << "Suspended";   break;
-                            case terminating: msg << "Terminating"; break;
+                            case aborting:    msg << "Aborting";    break;
+                            case aborted:     msg << "Aborted";     break;
                             case finished:    msg << "Finished";    break;
                             }
-                            if (t->pending_exceptions()) msg << ", " << t->pending_exceptions() << " pending exception(s)!";
                         }
                         else msg << "invalid thread";
                         auto str = msg.str();
@@ -1325,7 +1324,7 @@ namespace jw
                     auto cant_continue = []
                     {
                         for (auto&& t : threads)
-                            if (t.second.thread.lock()->is_running() and
+                            if (t.second.thread.lock()->active() and
                                 t.second.action == thread_info::none) return true;
                         return false;
                     };

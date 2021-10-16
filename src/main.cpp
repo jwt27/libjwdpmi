@@ -131,19 +131,18 @@ int main(int argc, const char** argv)
     catch (const jw::terminate_exception& e) { e.defuse(); std::cerr << e.what() << '\n'; }
     catch (...) { std::cerr << "Caught unknown exception in main()!\n"; }
 
-    for (auto& t : thread::detail::scheduler::threads) t->abort();
-    auto thread_queue_copy = thread::detail::scheduler::threads;
-    for (auto& t : thread_queue_copy)
+    if (thread::detail::scheduler::threads.size() > 0) [[unlikely]]
     {
-        while (t->is_running() || t->pending_exceptions() > 0)
+        std::cerr << "Warning: exiting with active threads.\n";
+        for (auto& t : thread::detail::scheduler::threads) t->abort();
+        auto thread_queue_copy = thread::detail::scheduler::threads;
+        for (auto& t : thread_queue_copy)
         {
-            try
+            while (t->active())
             {
-                static_cast<thread::detail::task_base*>(t.get())->abort(true);
+                try { thread::yield(); }
+                catch (const jw::terminate_exception& e) { e.defuse(); }
             }
-            catch (const std::exception& e) { std::cerr << "Caught exception from thread!\n"; jw::print_exception(e); }
-            catch (const jw::terminate_exception& e) { e.defuse(); }
-            catch (...) { std::cerr << "Caught unknown exception from thread!\n"; }
         }
     }
 
