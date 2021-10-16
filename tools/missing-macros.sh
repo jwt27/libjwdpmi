@@ -13,5 +13,5 @@ while read line; do
 	name=${line#\#define }
 	name=${name%% *}
 	value=${line##* }
-	[[ -v map[$name] ]] || echo -n "-DHAVE$name=$value" | tr '\r\n' ' '
+	[[ -v map[$name] ]] || echo "-DHAVE$name=$value" | tr '\r\n' ' ' | tr -s ' '
 done < <( echo | "$@" -x c++ -dM -E - )
