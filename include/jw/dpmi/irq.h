@@ -3,7 +3,6 @@
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
-#include <function.h>
 #include <vector>
 #include <array>
 #include <unordered_map>

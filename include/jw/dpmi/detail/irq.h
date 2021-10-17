@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
@@ -7,6 +8,7 @@
 #pragma once
 #include <jw/thread/task.h>
 #include <jw/dpmi/detail/interrupt_id.h>
+#include <jw/function.h>
 
 namespace jw
 {
@@ -40,10 +42,10 @@ namespace jw
             struct irq_handler_base
             {
                 template<typename F>
-                irq_handler_base(F&& func, irq_config_flags f = { }) : handler_ptr(std::allocator_arg, locking_allocator<> { }, std::forward<F>(func)), flags(f) { }
+                irq_handler_base(F&& func, irq_config_flags f = { }) : handler_ptr { std::forward<F>(func) }, flags { f } { }
                 irq_handler_base() = delete;
 
-                const func::function<void()> handler_ptr; // TODO: figure out if the locking allocator is really necessary here.
+                const function<void()> handler_ptr;
                 const irq_config_flags flags;
             };
 

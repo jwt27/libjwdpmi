@@ -16,13 +16,13 @@
 #include <stdexcept>
 #include <bitset>
 #include <string>
-#include <function.h>
 #include <jw/enum_struct.h>
 #include <jw/dpmi/dpmi.h>
 #include <jw/dpmi/lock.h>
 #include <jw/dpmi/alloc.h>
 #include <jw/dpmi/irq_check.h>
 #include <jw/dpmi/fpu.h>
+#include <jw/function.h>
 #include "jwdpmi_config.h"
 
 #pragma GCC diagnostic push
@@ -157,7 +157,7 @@ namespace jw
         class exception_handler : class_lock<exception_handler>
         {
             void init_code();
-            func::function<exception_handler_sig> handler;
+            function<exception_handler_sig> handler;
             exception_num exc;
             exception_handler* next { nullptr };
             exception_handler* prev { nullptr };
@@ -181,7 +181,7 @@ namespace jw
         public:
             template<typename F>    // TODO: real-mode (requires a separate wrapper list)
             exception_handler(exception_num e, F&& f, bool = false)
-                : handler(std::allocator_arg, locking_allocator<> { }, std::forward<F>(f))
+                : handler(std::forward<F>(f))
                 , exc(e), stack_ptr(stack.data() + stack.size() - 4)
                 , chain_to { detail::cpu_exception_handlers::get_pm_handler(e) }
             {

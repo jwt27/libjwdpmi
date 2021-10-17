@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
@@ -6,7 +7,7 @@
 #pragma once
 #include <jw/dpmi/memory.h>
 #include <jw/dpmi/irq.h>
-#include <function.h>
+#include <jw/function.h>
 
 namespace jw
 {
@@ -162,7 +163,7 @@ namespace jw
             static void entry_point(realmode_callback* self, std::uint32_t rm_stack_selector, std::uint32_t rm_stack_offset) noexcept;
             void init_code() noexcept;
 
-            func::function<void(realmode_registers*)> function_ptr;
+            function<void(realmode_registers*)> function_ptr;
             std::array<byte, 16_KB> stack;  // TODO: adjustable size
             locked_pool_allocator<true> alloc;
             std::vector<realmode_registers, locked_pool_allocator<true, realmode_registers>> reg_pool;
