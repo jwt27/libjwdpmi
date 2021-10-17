@@ -63,7 +63,7 @@ namespace jw
                 goto fpu_context_switched;
             }
             detail::interrupt_id::push_back(self->exc, detail::interrupt_id::id_t::exception);
-#           ifdef NDEBUG
+#           ifndef NDEBUG
             *reinterpret_cast<volatile std::uint32_t*>(stack.begin()) = 0xDEADBEEF;
 #           endif
             try
@@ -96,7 +96,7 @@ namespace jw
                     do { asm ("cli; hlt"); } while (true);
                 }
             }
-#           ifdef NDEBUG
+#           ifndef NDEBUG
             if (*reinterpret_cast<volatile std::uint32_t*>(stack.begin()) != 0xDEADBEEF)
                 std::fprintf(stderr, "Stack overflow handling exception 0x%lx\n", self->exc.value);
 #           endif
