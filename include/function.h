@@ -188,16 +188,24 @@ namespace func
             template<typename Allocator>
             Allocator & get_allocator() FUNC_NOEXCEPT
             {
-                return reinterpret_cast<Allocator &>(manager);
+                if constexpr (sizeof(Allocator) > 2 * sizeof(void *))
+                    return *reinterpret_cast<Allocator *>(allocator);
+                else
+                    return reinterpret_cast<Allocator &>(allocator);
             }
             template<typename Allocator>
             const Allocator & get_allocator() const FUNC_NOEXCEPT
             {
-                return reinterpret_cast<const Allocator &>(manager);
+                if constexpr (sizeof(Allocator) > 2 * sizeof(void *))
+                    return *reinterpret_cast<const Allocator *>(allocator);
+                else
+                    return reinterpret_cast<const Allocator &>(allocator);
             }
 
             functor_padding functor;
             manager_type manager;
+            void* allocator;
+            void* padding;
         };
 
         template<typename T, typename Allocator, typename Enable = void>
@@ -280,7 +288,14 @@ namespace func
         template<typename T, typename Allocator>
         static void create_manager(manager_storage_type & storage, Allocator && allocator)
         {
-            new (&storage.get_allocator<Allocator>()) Allocator(FUNC_MOVE(allocator));
+            if constexpr (sizeof(Allocator) > 2 * sizeof(void*))
+            {
+                using rebind_alloc = typename std::allocator_traits<Allocator>::rebind_alloc<Allocator>;
+                rebind_alloc self_alloc { allocator };
+                storage.allocator = std::allocator_traits<rebind_alloc>::allocate(self_alloc, 1);
+                std::allocator_traits<rebind_alloc>::construct(self_alloc, storage.allocator, FUNC_MOVE(allocator));
+            }
+            else new (&storage.get_allocator<Allocator>()) Allocator(FUNC_MOVE(allocator));
             storage.manager = &get_default_manager<T, Allocator>();
         }
 
@@ -324,10 +339,17 @@ namespace func
             static void templated_call_move_and_destroy(manager_storage_type & lhs, manager_storage_type && rhs)
             {
                 typedef function_manager_inplace_specialization<T, Allocator> specialization;
+                using rebind_alloc = typename std::allocator_traits<Allocator>::rebind_alloc<Allocator>;
+                rebind_alloc self_alloc { rhs.get_allocator<Allocator>() };
                 specialization::move_functor(lhs, FUNC_MOVE(rhs));
                 specialization::destroy_functor(rhs.get_allocator<Allocator>(), rhs);
                 create_manager<T, Allocator>(lhs, FUNC_MOVE(rhs.get_allocator<Allocator>()));
-                rhs.get_allocator<Allocator>().~Allocator();
+                if constexpr (sizeof(Allocator) > 2 * sizeof(void*))
+                {
+                    std::allocator_traits<rebind_alloc>::destroy(self_alloc, rhs.get_allocator<Allocator>());
+                    std::allocator_traits<rebind_alloc>::deallocate(self_alloc, rhs.get_allocator<Allocator>(), 1);
+                }
+                else rhs.get_allocator<Allocator>().~Allocator();
             }
             template<typename T, typename Allocator>
             static void templated_call_copy(manager_storage_type & lhs, const manager_storage_type & rhs)
@@ -341,7 +363,14 @@ namespace func
             {
                 typedef function_manager_inplace_specialization<T, Allocator> specialization;
                 specialization::destroy_functor(self.get_allocator<Allocator>(), self);
-                self.get_allocator<Allocator>().~Allocator();
+                if constexpr (sizeof(Allocator) > 2 * sizeof(void*))
+                {
+                    using rebind_alloc = typename std::allocator_traits<Allocator>::rebind_alloc<Allocator>;
+                    rebind_alloc self_alloc { self.get_allocator<Allocator>() };
+                    std::allocator_traits<rebind_alloc>::destroy(self_alloc, self.get_allocator<Allocator>());
+                    std::allocator_traits<rebind_alloc>::deallocate(self_alloc, self.get_allocator<Allocator>(), 1);
+                }
+                else self.get_allocator<Allocator>().~Allocator();
             }
             template<typename T, typename Allocator>
             static void templated_call_copy_functor_only(manager_storage_type & lhs, const manager_storage_type & rhs)
