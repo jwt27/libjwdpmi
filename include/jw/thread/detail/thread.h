@@ -12,7 +12,7 @@
 #include <iostream>
 #include <jw/dpmi/alloc.h>
 #include <jw/common.h>
-#include <function.h>
+#include <jw/function.h>
 
 namespace jw
 {
@@ -20,7 +20,7 @@ namespace jw
     {
         namespace detail
         {
-            inline dpmi::locked_pool_allocator<>* pool_alloc;
+            inline dpmi::locked_pool_resource<true>* scheduler_memres;
 
             struct [[gnu::packed]] thread_context
             {
@@ -66,11 +66,11 @@ namespace jw
 
                 const std::uint32_t id { id_count++ };
                 const std::function<void()> function;
-                const std::span<byte> stack;
+                const std::span<std::byte> stack;
                 thread_context* context; // points to esp during context switch
                 thread_state state { starting };
 
-                std::deque<func::function<void()>, dpmi::locked_pool_allocator<true, func::function<void()>>> invoke_list { *pool_alloc };
+                std::pmr::deque<jw::function<void()>> invoke_list { };
 
                 void abort() noexcept
                 {

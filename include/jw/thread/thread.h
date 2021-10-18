@@ -128,13 +128,15 @@ namespace jw
         template<typename F, typename... A>
         inline auto thread::create(F&& func, A&&... args)
         {
-            auto lambda =
-                [ func = std::tuple<F> { std::forward<F>(func) },
-                args = std::tuple<A...> { std::forward<A>(args)... } ]
-                {
-                    std::apply(std::get<0>(func), args);
-                };
-                return std::make_shared<detail::thread>(lambda, config::thread_default_stack_size);
+            static_assert(std::is_constructible_v<std::decay_t<F>, F>);
+            static_assert(std::is_invocable_v<std::decay_t<F>, std::decay_t<A>...>);
+
+            auto wrapper = [ func = std::tuple<F> { std::forward<F>(func) },
+                             args = std::tuple<A...> { std::forward<A>(args)... } ]
+                { std::apply(std::get<0>(func), args); };
+
+            return std::allocate_shared<detail::thread>(std::pmr::polymorphic_allocator<> { detail::scheduler_memres },
+                                                        wrapper, config::thread_default_stack_size);
         }
     }
 }

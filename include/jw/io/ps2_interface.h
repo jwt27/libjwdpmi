@@ -263,7 +263,7 @@ namespace jw
             void read_config() { config.data = command<send_cmd, recv_ctrl_data>({ 0x20 }); }
             void write_config() { command<send_cmd, send_data>({ 0x60, config.data }); read_config(); }
 
-            std::function<void()> callback;
+            jw::function<void()> callback { };
 
             dpmi::locked_pool_resource<false> memres { 1_KB };
             std::pmr::deque<detail::raw_scancode> scancode_queue { &memres };

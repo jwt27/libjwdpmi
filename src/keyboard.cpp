@@ -68,8 +68,12 @@ namespace jw
             catch (...)
             {
                 if (not async) throw;
-                auto e = std::current_exception();
-                thread::invoke_main([e] { std::rethrow_exception(e); });
+                thread::invoke_main([e_ptr = new std::exception_ptr { std::current_exception() }]
+                    {
+                        auto e { std::move(*e_ptr) };
+                        delete e_ptr;
+                        std::rethrow_exception(e);
+                    });
             }
         }
 

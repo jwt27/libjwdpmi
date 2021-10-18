@@ -34,8 +34,8 @@ namespace jw
                 friend void ::jw::thread::yield();
                 friend struct ::jw::thread::thread;
 
-                static inline dpmi::locked_pool_allocator<> alloc { 128_KB };
-                static inline std::deque<thread_ptr, dpmi::locked_pool_allocator<true, thread_ptr>> threads { alloc };
+                static inline dpmi::locked_pool_resource<true> memres { 128_KB };
+                static inline std::pmr::deque<thread_ptr> threads { &memres };
                 static inline thread_ptr current_thread;
                 static inline thread_ptr main_thread;
                 static inline constinit bool terminating { false };
@@ -49,7 +49,7 @@ namespace jw
                 template<typename F>
                 static void invoke_main(F&& function)
                 {
-                    if (is_current_thread(main_thread.get()) and not dpmi::in_irq_context()) function();
+                    if (is_current_thread(main_thread.get()) and not dpmi::in_irq_context()) std::forward<F>(function)();
                     else main_thread->invoke(std::forward<F>(function));
                 }
 
@@ -57,8 +57,8 @@ namespace jw
                 static void invoke_next(F&& function)
                 {
                     if (not threads.empty()) threads.front()->invoke(std::forward<F>(function));
-                    else if (not dpmi::in_irq_context()) std::forward<F>(function)();
-                    else current_thread->invoke(std::forward<F>(function));
+                    else if (dpmi::in_irq_context()) current_thread->invoke(std::forward<F>(function));
+                    else std::forward<F>(function)();
                 }
 
             private:

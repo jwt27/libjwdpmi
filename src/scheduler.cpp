@@ -7,6 +7,7 @@
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
 #include <algorithm>
+#include <memory_resource>
 #include <jw/main.h>
 #include <jw/dpmi/irq_mask.h>
 #include <jw/thread/detail/scheduler.h>
@@ -27,9 +28,9 @@ namespace jw
         {
             scheduler::init_main::init_main()
             {
-                pool_alloc = &alloc;
-                using rebind = typename std::allocator_traits<decltype(alloc)>::rebind_alloc<thread>;
-                auto* p = rebind { alloc }.allocate(1);
+                scheduler_memres = &memres;
+                std::pmr::polymorphic_allocator<> alloc { &memres };
+                auto* const p = alloc.allocate_object<thread>();
                 new(p) thread { nullptr, 0 };
                 main_thread = std::shared_ptr<thread> { p };
                 main_thread->state = running;
@@ -154,7 +155,7 @@ namespace jw
 #                   ifndef NDEBUG
                         *reinterpret_cast<std::uint32_t*>(current_thread->stack.data()) = 0xDEADBEEF;   // stack overflow protection
 #                   endif
-                        byte* const esp = (current_thread->stack.data() + current_thread->stack.size_bytes() - 4) - sizeof(thread_context);
+                        std::byte* const esp = (current_thread->stack.data() + current_thread->stack.size_bytes() - 4) - sizeof(thread_context);
                         current_thread->context = reinterpret_cast<thread_context*>(esp);               // *context points to top of stack
                         *current_thread->context = *threads.back()->context;
                         current_thread->context->return_address = reinterpret_cast<std::uintptr_t>(run_thread);
