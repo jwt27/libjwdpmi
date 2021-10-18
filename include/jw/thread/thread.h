@@ -26,31 +26,6 @@ namespace jw
             mutable bool defused { false };
         };
 
-        // Thrown when a task is still running, but no longer referenced anywhere.
-        // By default, threads may not be orphaned. This behaviour can be changed with task->allow_orphan.
-        struct orphaned_thread : public abort_thread
-        {
-            virtual const char* what() const noexcept override { return "Task orphaned, aborting"; }
-        };
-
-        // Thrown when task->await() is called while no result will ever be available.
-        struct illegal_await : public std::exception
-        {
-            virtual const char* what() const noexcept override { return "Illegal call to await()"; }
-            illegal_await(const detail::thread_ptr& t) noexcept : thread { t } { }
-
-            const detail::thread_ptr thread;
-        };
-
-        // Thrown on parent thread in a nested_exception when an unhandled exception occurs on a child thread.
-        struct thread_exception : public std::exception
-        {
-            virtual const char* what() const noexcept override { return "Exception thrown from thread"; }
-            thread_exception(const detail::thread_ptr& t) noexcept : thread { t } { }
-
-            const std::weak_ptr<detail::thread> thread;
-        };
-
         // Yields execution to the next thread in the queue.
         inline void yield()
         {
