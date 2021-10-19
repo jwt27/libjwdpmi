@@ -62,7 +62,11 @@ namespace jw::this_thread
 
 namespace jw
 {
-    // Thrown when task->abort() is called.
+    struct deadlock : std::system_error
+    {
+        deadlock() : system_error { std::make_error_code(std::errc::resource_deadlock_would_occur) } { }
+    };
+
     struct abort_thread
     {
         ~abort_thread() noexcept(false) { if (not defused) throw terminate_exception { }; }
@@ -128,12 +132,8 @@ namespace jw
 
     inline void thread::join()
     {
-        if (not ptr)
-            throw std::system_error { std::make_error_code(std::errc::no_such_process) };
-
-        if (get_id() == detail::scheduler::get_current_thread_id())
-            throw std::system_error { std::make_error_code(std::errc::resource_deadlock_would_occur) };
-
+        if (not ptr) throw std::system_error { std::make_error_code(std::errc::no_such_process) };
+        if (get_id() == detail::scheduler::get_current_thread_id()) throw deadlock { };
         this_thread::yield_while([p = ptr.get()] { return p->active(); });
         ptr.reset();
     }

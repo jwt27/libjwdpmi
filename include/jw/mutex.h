@@ -15,8 +15,6 @@
 
 namespace jw
 {
-    struct deadlock : public std::runtime_error { deadlock() : runtime_error("deadlock") { } };
-
     class mutex
     {
         std::atomic_flag locked { false };
