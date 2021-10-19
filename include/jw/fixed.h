@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
@@ -39,9 +40,14 @@ namespace jw
     template<typename T, std::size_t F> requires std::integral<T>
     struct fixed
     {
-        static_assert(F <= std::numeric_limits<T>::digits);
+        static constexpr std::size_t bits = std::numeric_limits<T>::digits;
+        static constexpr std::size_t int_bits = bits - F;
+        static constexpr std::size_t frac_bits = F;
+        static_assert(frac_bits <= bits);
 
         T value;
+
+        static fixed make(T value) noexcept { return fixed { noshift, value }; }
 
         template<std::floating_point U>
         constexpr fixed(U v) noexcept : value { static_cast<T>(round(v * (1 << F))) } { }
