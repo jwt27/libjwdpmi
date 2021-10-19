@@ -151,7 +151,7 @@ namespace jw::thread::detail
 #       else
         template<typename T>
         void set_name(T&& string) { name = std::forward<T>(string); }
-        std::string name { "anonymous thread" };
+        std::pmr::string name { "anonymous thread", scheduler::memory_resource() };
 #       endif
     };
 
