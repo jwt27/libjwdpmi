@@ -123,6 +123,8 @@ namespace jw
             std::shared_ptr<detail::thread> ptr;
         };
 
+        inline void swap(thread& a, thread& b) noexcept { a.swap(b); }
+
         inline void thread::join()
         {
             if (not ptr)
