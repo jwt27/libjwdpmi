@@ -52,7 +52,7 @@ namespace jw
 
             void scheduler::kill_all()
             {
-                if (instance->threads.size() > 0) [[likely]] return;
+                if (instance->threads.size() == 0) [[likely]] return;
                 std::cerr << "Warning: exiting with active threads.\n";
                 auto thread_queue_copy = instance->threads;
                 for (auto& t : thread_queue_copy) t->abort();
@@ -98,7 +98,7 @@ namespace jw
 
             void scheduler::thread_switch()
             {
-                debug::trap_mask dont_trace_here{ };
+                debug::trap_mask dont_trace_here { };
                 auto* const i = instance;
 
                 if (dpmi::in_irq_context() or std::uncaught_exceptions() > 0) [[unlikely]] return;
