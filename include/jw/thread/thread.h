@@ -110,6 +110,10 @@ namespace jw
             void abort() { ptr->abort(); };
             bool active() const noexcept { return ptr and ptr->active(); }
 
+            template<typename T>
+            void name(T&& string) { ptr->set_name(std::forward<T>(string)); }
+            std::string_view name() { return ptr->get_name(); }
+
             static unsigned int hardware_concurrency() noexcept { return 1; }
 
         private:

@@ -146,9 +146,11 @@ namespace jw::thread::detail
 
 #       ifdef NDEBUG
         void set_name(...) const noexcept { }
+        std::string_view get_name() const noexcept { return { }; }
 #       else
         template<typename T>
         void set_name(T&& string) { name = std::forward<T>(string); }
+        std::string_view get_name() const noexcept { return name; }
         std::pmr::string name { "anonymous thread", scheduler::memory_resource() };
 #       endif
     };
