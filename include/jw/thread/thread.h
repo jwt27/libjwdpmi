@@ -135,8 +135,7 @@ namespace jw
                              args = std::tuple<A...> { std::forward<A>(args)... } ]
                 { std::apply(std::get<0>(func), args); };
 
-            return std::allocate_shared<detail::thread>(std::pmr::polymorphic_allocator<> { detail::scheduler_memres },
-                                                        wrapper, config::thread_default_stack_size);
+            return std::allocate_shared<detail::thread>(detail::scheduler::alloc(), wrapper, config::thread_default_stack_size);
         }
     }
 }

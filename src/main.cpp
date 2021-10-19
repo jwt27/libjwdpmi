@@ -131,20 +131,7 @@ int main(int argc, const char** argv)
     catch (const jw::terminate_exception& e) { e.defuse(); std::cerr << e.what() << '\n'; }
     catch (...) { std::cerr << "Caught unknown exception in main()!\n"; }
 
-    if (thread::detail::scheduler::threads.size() > 0) [[unlikely]]
-    {
-        std::cerr << "Warning: exiting with active threads.\n";
-        for (auto& t : thread::detail::scheduler::threads) t->abort();
-        auto thread_queue_copy = thread::detail::scheduler::threads;
-        for (auto& t : thread_queue_copy)
-        {
-            while (t->active())
-            {
-                try { thread::yield(); }
-                catch (const jw::terminate_exception& e) { e.defuse(); }
-            }
-        }
-    }
+    thread::detail::scheduler::kill_all();
 
     return jw::exit_code;
 }
@@ -192,6 +179,8 @@ namespace jw
                 // For now, assume that the dpmi server already enabled these bits (HDPMI does this).
                 // If not, then we'll soon crash with an invalid opcode on the first SSE instruction.
             }
+
+            thread::detail::scheduler::setup();
         }
 
         ~init() noexcept

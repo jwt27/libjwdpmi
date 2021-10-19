@@ -20,7 +20,7 @@ namespace jw
     {
         namespace detail
         {
-            inline dpmi::locked_pool_resource<true>* scheduler_memres;
+            dpmi::locked_pool_resource<true>* scheduler_memres();
 
             struct [[gnu::packed]] thread_context
             {
@@ -69,7 +69,7 @@ namespace jw
                 thread_context* context; // points to esp during context switch
                 thread_state state { starting };
 
-                std::pmr::deque<jw::function<void()>> invoke_list { };
+                std::pmr::deque<jw::function<void()>> invoke_list { scheduler_memres() };
 
                 void abort() noexcept
                 {

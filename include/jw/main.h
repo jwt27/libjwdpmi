@@ -13,6 +13,8 @@ int main(int, const char**);
 
 namespace jw
 {
+    struct init;
+
     void print_exception(const std::exception& e, int level = 0) noexcept;
 
     struct terminate_exception final

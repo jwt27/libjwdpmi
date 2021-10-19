@@ -28,38 +28,40 @@ namespace jw
 
         namespace detail
         {
-            class scheduler
+            struct scheduler
             {
                 friend int ::main(int, const char**);
                 friend void ::jw::thread::yield();
                 friend struct ::jw::thread::thread;
+                friend struct ::jw::init;
 
-                static inline dpmi::locked_pool_resource<true> memres { 128_KB };
-                static inline std::pmr::deque<thread_ptr> threads { &memres };
-                static inline thread_ptr current_thread;
-                static inline thread_ptr main_thread;
-                static inline constinit bool terminating { false };
+                template <typename T = std::byte>
+                using allocator = monomorphic_allocator<dpmi::locked_pool_resource<true>, T>;
 
-            public:
-                static bool is_current_thread(const thread* t) noexcept { return current_thread.get() == t; }
-                static std::weak_ptr<thread> get_current_thread() noexcept { return current_thread; }
-                static auto get_current_thread_id() noexcept { return current_thread->id; }
-                static const auto& get_threads() { return threads; }
+                static bool is_current_thread(const thread* t) noexcept { return instance->current_thread.get() == t; }
+                static std::weak_ptr<thread> get_current_thread() noexcept { return instance->current_thread; }
+                static auto get_current_thread_id() noexcept { return instance->current_thread->id; }
+                static const auto& get_threads() { return instance->threads; }
 
                 template<typename F>
                 static void invoke_main(F&& function)
                 {
-                    if (is_current_thread(main_thread.get()) and not dpmi::in_irq_context()) std::forward<F>(function)();
-                    else main_thread->invoke(std::forward<F>(function));
+                    if (is_current_thread(instance->main_thread.get()) and not dpmi::in_irq_context()) std::forward<F>(function)();
+                    else instance->main_thread->invoke(std::forward<F>(function));
                 }
 
                 template<typename F>
                 static void invoke_next(F&& function)
                 {
-                    if (not threads.empty()) threads.front()->invoke(std::forward<F>(function));
-                    else if (dpmi::in_irq_context()) current_thread->invoke(std::forward<F>(function));
+                    if (not instance->threads.empty()) instance->threads.front()->invoke(std::forward<F>(function));
+                    else if (dpmi::in_irq_context()) instance->current_thread->invoke(std::forward<F>(function));
                     else std::forward<F>(function)();
                 }
+
+                static auto* memory_resource() noexcept { return memres; }
+
+                template<typename T = std::byte>
+                static auto alloc() noexcept { return allocator<T> { memres }; }
 
             private:
                 [[gnu::noinline, gnu::noclone, gnu::no_stack_limit, gnu::naked]] static void context_switch(thread_context**);
@@ -67,11 +69,24 @@ namespace jw
                 static void start_thread(const thread_ptr&);
                 [[gnu::noinline, gnu::cdecl]] static thread_context* set_next_thread();
                 static void check_exception();
-
                 [[gnu::force_align_arg_pointer, noreturn]] static void run_thread() noexcept;
 
-                struct init_main { init_main(); } static inline initializer;
+                std::deque<thread_ptr, allocator<thread_ptr>> threads;
+                thread_ptr current_thread;
+                thread_ptr main_thread;
+                bool terminating { false };
+
+                static void setup();
+                static void kill_all();
+                scheduler();
+
+                inline static constinit dpmi::locked_pool_resource<true>* memres { nullptr };
+                inline static constinit scheduler* instance { nullptr };
+
+                struct dtor { ~dtor(); } static inline destructor;
             };
+
+            inline dpmi::locked_pool_resource<true>* scheduler_memres() { return scheduler::memory_resource(); }
         }
     }
 }
