@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
@@ -165,7 +166,7 @@ namespace jw
 
             const unsigned ticks = tsc_ticks_per_irq;
             if (dpmi::interrupt_mask::enabled() and tsc_ref_enabled(tsc_ref))
-                thread::yield_while([ticks] { return tsc_ticks_per_irq == ticks; });
+                this_thread::yield_while([ticks] { return tsc_ticks_per_irq == ticks; });
         }
 
         void setup::reset_pit()

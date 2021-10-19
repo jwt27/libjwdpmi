@@ -1,12 +1,13 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 
 #include <atomic>
-#include <jw/thread/thread.h>
-#include <jw/thread/detail/mutex.h>
-#include <jw/thread/mutex.h>
+#include <jw/thread.h>
+#include <jw/detail/mutex.h>
+#include <jw/mutex.h>
 
-namespace jw::thread
+namespace jw
 {
     class shared_mutex
     {

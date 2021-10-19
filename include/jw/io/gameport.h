@@ -8,7 +8,7 @@
 #include <jw/io/ioport.h>
 #include <jw/chrono.h>
 #include <jw/dpmi/irq.h>
-#include <jw/thread/task.h>
+#include <jw/thread.h>
 #include <jw/dpmi/lock.h>
 #include <jw/dpmi/alloc.h>
 #include <jw/event.h>
@@ -96,13 +96,26 @@ namespace jw::io
                 lock = std::make_optional<dpmi::data_lock>(this);
                 poll_irq.enable();
             }
-            poll_task->start();
+            poll_thread = thread { [this]
+            {
+                while (true)
+                {
+                    if (cfg.strategy != poll_strategy::busy_loop) poll();
+                    for (auto i = button_events.begin(); i != button_events.end(); i = button_events.erase(i))
+                        button_changed(i->first, i->second);
+                    this_thread::yield();
+                }
+            } };
         }
 
         ~gameport()
         {
             poll_irq.disable();
-            if (poll_task->is_running()) poll_task->abort();
+            if (poll_thread.joinable())
+            {
+                poll_thread.abort();
+                poll_thread.join();
+            }
         }
 
         auto get_raw()
@@ -202,16 +215,7 @@ namespace jw::io
             while (samples.size() == 0) poll();
         }
 
-        thread::task<void()> poll_task { [this]
-        {
-            while (true)
-            {
-                if (cfg.strategy != poll_strategy::busy_loop) poll();
-                for (auto i = button_events.begin(); i != button_events.end(); i = button_events.erase(i))
-                    button_changed(i->first, i->second);
-                thread::yield();
-            }
-        } };
+        thread poll_thread;
 
         dpmi::irq_handler poll_irq { [this]
         {

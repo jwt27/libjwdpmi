@@ -4,7 +4,7 @@
 
 #include <jw/audio/opl.h>
 #include <jw/io/io_error.h>
-#include <jw/thread/thread.h>
+#include <jw/thread.h>
 
 namespace jw::audio
 {
@@ -57,7 +57,7 @@ namespace jw::audio
         if (status().timer0) throw io::device_not_found { "OPL not detected" };
         w(0x02, 0xff);          // set timer 0 count 0xff
         w(0x04, 0x21);          // start timer 0
-        thread::yield_for(100us);
+        this_thread::yield_for(100us);
         auto s = status();
         if (not s.timer0) throw io::device_not_found { "OPL not detected" };
         w(0x04, 0x60);          // mask both timers
@@ -65,7 +65,7 @@ namespace jw::audio
         if (s.opl2) return opl_type::opl2;
 
         w_opl3(0x02, 0xa5);     // write a distinctive value to timer 0
-        thread::yield_for(2235ns);
+        this_thread::yield_for(2235ns);
         if (data[0].read() == std::byte { 0xa5 }) return opl_type::opl3_l;
         else return opl_type::opl3;
     }
@@ -140,12 +140,12 @@ namespace jw::audio
         if constexpr (opl2) if (hi) return;
         reg &= 0xff;
 
-        if constexpr (opl3_l) thread::yield_while([this] { return status().busy; });
-        else thread::yield_until(last_access + (opl3 ? 2235ns : 23us));
+        if constexpr (opl3_l) this_thread::yield_while([this] { return status().busy; });
+        else this_thread::yield_until(last_access + (opl3 ? 2235ns : 23us));
 
         index[hi].write(reg);
 
-        if constexpr (opl2) thread::yield_for<clock>(3300ns);
+        if constexpr (opl2) this_thread::yield_for<clock>(3300ns);
 
         data[hi].write(value);
         if constexpr (not opl3_l) last_access = clock::now();

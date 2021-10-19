@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
@@ -27,7 +28,7 @@ namespace jw
                     std::optional<dpmi::irq_mask> no_irq;
                     if (cfg.use_irq) no_irq.emplace(cfg.irq);
 
-                    auto timeout = thread::yield_while_for([this]
+                    auto timeout = this_thread::yield_while_for([this]
                     {
                         while (not status_port.read().no_data_available) data_port.read();
                         return status_port.read().dont_send_data;
@@ -36,7 +37,7 @@ namespace jw
 
                     cmd_port.write(0xff);   // Reset (this won't ACK if the MPU is in uart mode already)
 
-                    timeout = thread::yield_while_for([this, fail]
+                    timeout = this_thread::yield_while_for([this, fail]
                     {
                         const auto s = status_port.read();
                         if (not s.no_data_available and data_port.read() != 0xfe) fail();
@@ -46,7 +47,7 @@ namespace jw
 
                     cmd_port.write(0x3f);   // Set UART mode (should ACK, maybe some cheap cards won't)
 
-                    timeout = thread::yield_while_for([this] { return status_port.read().no_data_available; }, 250ms);
+                    timeout = this_thread::yield_while_for([this] { return status_port.read().no_data_available; }, 250ms);
                     if (not timeout)
                     {
                         do
@@ -71,7 +72,7 @@ namespace jw
             mpu401_streambuf::~mpu401_streambuf()
             {
                 irq_handler.disable();
-                thread::yield_while([this]
+                this_thread::yield_while([this]
                 {
                     auto status = status_port.read();
                     while (not status.no_data_available)
@@ -99,7 +100,7 @@ namespace jw
                             return;
                         }
                     }
-                    thread::yield();
+                    this_thread::yield();
                 }
             }
 
@@ -113,7 +114,7 @@ namespace jw
                 if (tx_ptr < pptr())
                 {
                     no_irq.reset();
-                    thread::yield();
+                    this_thread::yield();
                     goto loop;
                 }
                 setp(tx_buf.begin(), tx_buf.end());
@@ -138,7 +139,7 @@ namespace jw
 
             mpu401_streambuf::int_type mpu401_streambuf::underflow()
             {
-                thread::yield_while([this]
+                this_thread::yield_while([this]
                 {
                     check_irq_exception();
                     {
@@ -178,7 +179,7 @@ namespace jw
                     if (tx_ptr == pbase())
                     {
                         no_irq.reset();
-                        thread::yield();
+                        this_thread::yield();
                         goto loop;
                     }
                     std::copy(tx_ptr, pptr(), pbase());

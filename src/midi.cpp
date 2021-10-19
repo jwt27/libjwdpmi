@@ -8,22 +8,22 @@
 #include <jw/main.h>
 #include <jw/audio/midi.h>
 #include <jw/audio/midi_file.h>
-#include <jw/thread/thread.h>
-#include <jw/thread/mutex.h>
+#include <jw/thread.h>
+#include <jw/mutex.h>
 #include <jw/io/realtime_streambuf.h>
 
 namespace jw::audio
 {
     struct istream_info
     {
-        thread::mutex mutex { };
+        jw::mutex mutex { };
         std::vector<byte> pending_msg { };
         midi::clock::time_point pending_msg_time;
         byte last_status { 0 };
     };
     struct ostream_info
     {
-        thread::mutex mutex { };
+        jw::mutex mutex { };
         byte last_status { 0 };
         bool realtime { false };
     };
@@ -99,7 +99,7 @@ namespace jw::audio
                     rdbuf->sputn(reinterpret_cast<const char*>(begin), size);
             }
             catch (const terminate_exception&)  { throw; }
-            catch (const thread::abort_thread&) { throw; }
+            catch (const abort_thread&)         { throw; }
             catch (const abi::__forced_unwind&) { throw; }
             catch (...) { out._M_setstate(std::ios::badbit); }
         }
@@ -410,7 +410,7 @@ namespace jw::audio
         }
         catch (const io::end_of_file&)      { in._M_setstate(std::ios::eofbit); }
         catch (const terminate_exception&)  { throw; }
-        catch (const thread::abort_thread&) { throw; }
+        catch (const abort_thread&)         { throw; }
         catch (const abi::__forced_unwind&) { throw; }
         catch (...)                         { in._M_setstate(std::ios::badbit); }
         return { };
@@ -773,7 +773,7 @@ namespace jw::audio
         catch (const io::failure&)          { in._M_setstate(std::ios::failbit); }
         catch (const io::end_of_file&)      { in._M_setstate(std::ios::eofbit); }
         catch (const terminate_exception&)  { throw; }
-        catch (const thread::abort_thread&) { throw; }
+        catch (const abort_thread&)         { throw; }
         catch (const abi::__forced_unwind&) { throw; }
         catch (...)                         { in._M_setstate(std::ios::badbit); }
         return output;

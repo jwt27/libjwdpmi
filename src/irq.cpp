@@ -53,7 +53,7 @@ namespace jw
                 byte* esp; asm("mov %0, esp;":"=rm"(esp));
                 if (static_cast<std::size_t>(esp - data->stack.data()) <= config::interrupt_minimum_stack_size) [[unlikely]]
                 {
-                    thread::invoke_next([&stack = data->stack]() { stack.resize(stack.size() * 2); });
+                    this_thread::invoke_next([&stack = data->stack]() { stack.resize(stack.size() * 2); });
                 }
 
                 asm("cli");

@@ -1,10 +1,11 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
 #include <chrono>
 
-namespace jw::thread::detail
+namespace jw::detail
 {
     template <typename M>
     struct timed_mutex_adapter : public M

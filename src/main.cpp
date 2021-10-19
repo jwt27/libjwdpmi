@@ -131,7 +131,7 @@ int main(int argc, const char** argv)
     catch (const jw::terminate_exception& e) { e.defuse(); std::cerr << e.what() << '\n'; }
     catch (...) { std::cerr << "Caught unknown exception in main()!\n"; }
 
-    thread::detail::scheduler::kill_all();
+    jw::detail::scheduler::kill_all();
 
     return jw::exit_code;
 }
@@ -180,7 +180,7 @@ namespace jw
                 // If not, then we'll soon crash with an invalid opcode on the first SSE instruction.
             }
 
-            thread::detail::scheduler::setup();
+            jw::detail::scheduler::setup();
         }
 
         ~init() noexcept

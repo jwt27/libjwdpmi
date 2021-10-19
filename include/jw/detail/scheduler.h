@@ -17,13 +17,17 @@
 #include <jw/main.h>
 
 
-namespace jw::thread
+namespace jw
 {
-    void yield();
     struct thread;
 }
 
-namespace jw::thread::detail
+namespace jw::this_thread
+{
+    void yield();
+}
+
+namespace jw::detail
 {
     struct thread;
     using thread_ptr = std::shared_ptr<thread>;
@@ -46,8 +50,8 @@ namespace jw::thread::detail
     struct scheduler
     {
         friend int ::main(int, const char**);
-        friend void ::jw::thread::yield();
-        friend struct ::jw::thread::thread;
+        friend void ::jw::this_thread::yield();
+        friend struct ::jw::thread;
         friend struct ::jw::init;
 
         template <typename T = std::byte>

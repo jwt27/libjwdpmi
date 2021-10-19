@@ -7,7 +7,7 @@
 #include <iostream>
 #include <jw/io/ps2_interface.h>
 #include <jw/dpmi/irq_mask.h>
-#include <jw/thread/thread.h>
+#include <jw/thread.h>
 #include "jwdpmi_config.h"
 
 // references:

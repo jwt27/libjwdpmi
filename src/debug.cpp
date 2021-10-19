@@ -27,8 +27,6 @@
 #include <jw/dpmi/ring0.h>
 #include "jwdpmi_config.h"
 
-// TODO: optimize
-
 using namespace std::string_literals;
 using namespace jw::dpmi;
 using namespace jw::dpmi::detail;
@@ -93,7 +91,7 @@ namespace jw
 
             struct thread_info
             {
-                std::weak_ptr<thread::detail::thread> thread;
+                std::weak_ptr<jw::detail::thread> thread;
                 new_exception_frame frame;
                 cpu_registers reg;
                 std::pmr::set<std::int32_t> signals { &memres };
@@ -182,12 +180,12 @@ namespace jw
                     if (i->second.thread.expired()) i = threads.erase(i);
                     else ++i;
                 }
-                for (auto&& t : jw::thread::detail::scheduler::get_threads())
+                for (auto&& t : jw::detail::scheduler::get_threads())
                 {
                     threads[t->id].thread = t;
                 }
-                current_thread_id = jw::thread::detail::scheduler::get_current_thread_id();
-                threads[current_thread_id].thread = jw::thread::detail::scheduler::get_current_thread();
+                current_thread_id = jw::detail::scheduler::get_current_thread_id();
+                threads[current_thread_id].thread = jw::detail::scheduler::get_current_thread();
                 current_thread = &threads[current_thread_id];
             }
 
@@ -643,13 +641,13 @@ namespace jw
                 else
                 {
                     auto t_ptr = t.thread.lock();
-                    if (not t_ptr or t_ptr->state == thread::detail::starting)
+                    if (not t_ptr or t_ptr->state == jw::detail::starting)
                     {
                         encode_null(out, regsize[r]);
                         return;
                     }
                     auto* reg = t_ptr->context;
-                    auto r_esp = reinterpret_cast<std::uintptr_t>(reg) - sizeof(thread::detail::thread_context);
+                    auto r_esp = reinterpret_cast<std::uintptr_t>(reg) - sizeof(jw::detail::thread_context);
                     auto r_eip = reg->return_address;
                     switch (r)
                     {
@@ -763,7 +761,7 @@ namespace jw
                         if (signal == thread_finished)
                         {
                             s << 'w';
-                            if (t_ptr->state == thread::detail::finished) s << "00";
+                            if (t_ptr->state == jw::detail::finished) s << "00";
                             else s << "ff";
                             s << ';' << t_ptr->id;
                             send_packet(s.str());
@@ -771,7 +769,7 @@ namespace jw
                         else
                         {
                             s << "T" << std::setw(2) << posix_signal(signal);
-                            if (t_ptr->state != thread::detail::starting)
+                            if (t_ptr->state != jw::detail::starting)
                             {
                                 s << eip << ':'; reg(s, eip, t_ptr->id); s << ';';
                                 s << esp << ':'; reg(s, esp, t_ptr->id); s << ';';
@@ -884,7 +882,7 @@ namespace jw
                     else if (q == "sThreadInfo") send_packet("l");
                     else if (q == "ThreadExtraInfo")
                     {
-                        using namespace thread::detail;
+                        using namespace jw::detail;
                         static pmr_stringstream msg { std::pmr::string { &memres } };
                         msg.str({ });
                         msg.clear();
@@ -1289,7 +1287,7 @@ namespace jw
                             if (thread_events_enabled) t.second.set_action('t');
                             else t.second.set_action('c');
 
-                            if (t.second.thread.lock()->state == thread::detail::starting)
+                            if (t.second.thread.lock()->state == jw::detail::starting)
                                 t.second.signals.insert(thread_started);
                         }
 
@@ -1438,14 +1436,14 @@ namespace jw
         {
             if (not debug()) { failed = true; return; }
             if (detail::debugger_reentry) { failed = true; return; }
-            ++detail::threads[jw::thread::detail::scheduler::get_current_thread_id()].trap_mask;
+            ++detail::threads[jw::detail::scheduler::get_current_thread_id()].trap_mask;
         }
 
         trap_mask::~trap_mask() noexcept
         {
             force_frame_pointer();
             if (failed) return;
-            auto& t = detail::threads[jw::thread::detail::scheduler::get_current_thread_id()];
+            auto& t = detail::threads[jw::detail::scheduler::get_current_thread_id()];
             t.trap_mask = std::max(t.trap_mask - 1, 0l);
             if (t.trap_mask == 0 and [&t]
             {

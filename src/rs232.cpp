@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
@@ -80,10 +81,10 @@ namespace jw
 
             int rs232_streambuf::sync()
             {
-                thread::yield_while([this]
+                this_thread::yield_while([this]
                 {
                     {
-                        std::unique_lock<thread::recursive_mutex> lock { getting };
+                        std::unique_lock lock { getting };
                         if (read_status().data_available) underflow();
                     }
                     overflow();
@@ -94,9 +95,9 @@ namespace jw
 
             std::streamsize rs232_streambuf::xsgetn(char_type* s, std::streamsize n)
             {
-                std::unique_lock<thread::recursive_mutex> lock { getting };
+                std::unique_lock lock { getting };
                 std::streamsize max_n;
-                thread::yield_while([&]
+                this_thread::yield_while([&]
                 {
                     max_n = std::min(egptr() - gptr(), n);
                     return max_n < n and underflow() != traits_type::eof();
@@ -118,7 +119,7 @@ namespace jw
 
             rs232_streambuf::int_type rs232_streambuf::underflow()
             {
-                std::unique_lock<thread::recursive_mutex> lock { getting };
+                std::unique_lock lock { getting };
                 auto qsize = rx_buf.size() / 4;
                 if (rx_ptr > rx_buf.begin() + qsize * 3)
                 {
@@ -136,14 +137,14 @@ namespace jw
                          or not irq_enable.read().data_available
                          or not dpmi::irq_mask::enabled(config.irq))
                         and read_status().data_available) get();
-                    else thread::yield();
+                    else this_thread::yield();
                 } while (gptr() == rx_ptr);
                 return *gptr();
             }
 
             std::streamsize rs232_streambuf::xsputn(const char_type* s, std::streamsize n)
             {
-                std::unique_lock<thread::recursive_mutex> lock { putting };
+                std::unique_lock lock { putting };
                 std::streamsize max_n;
                 while ((max_n = std::min(tx_buf.end() - pptr(), n)) < n)
                     overflow();
@@ -164,8 +165,8 @@ namespace jw
 
             rs232_streambuf::int_type rs232_streambuf::overflow(int_type c)
             {
-                std::unique_lock<thread::recursive_mutex> lock { putting };
-                thread::yield_while([this]
+                std::unique_lock lock { putting };
+                this_thread::yield_while([this]
                 {
                     check_irq_exception();
                     {

@@ -6,7 +6,7 @@
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
-#include <jw/thread/thread.h>
+#include <jw/thread.h>
 #include <jw/dpmi/detail/interrupt_id.h>
 #include <jw/function.h>
 

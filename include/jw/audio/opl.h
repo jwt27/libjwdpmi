@@ -7,7 +7,7 @@
 #include <bit>
 #include <bitset>
 #include <array>
-#include <jw/thread/mutex.h>
+#include <jw/mutex.h>
 #include <jw/io/ioport.h>
 #include <jw/chrono.h>
 #include <jw/math.h>
@@ -204,7 +204,7 @@ namespace jw::audio
         void write(std::uint16_t reg, std::byte value);
         opl_type detect();
 
-        thread::mutex mutex { };
+        jw::mutex mutex { };
         cached_reg<common_registers> common { };
         std::array<cached_reg<oscillator>, 36> oscillators { };
         std::array<cached_reg<channel>, 18> channels { };

@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
@@ -16,7 +17,7 @@ namespace jw
                 std::copy(gptr(), ptr, buffer.begin());
                 ptr = buffer.begin() + (ptr - gptr());
                 setg(buffer.begin(), buffer.begin(), ptr);
-                thread::yield();
+                this_thread::yield();
                 return 0;
             }
 
@@ -31,7 +32,7 @@ namespace jw
 
             keyboard_streambuf::int_type keyboard_streambuf::underflow()
             {
-                thread::yield_while([this] { return gptr() == egptr(); });
+                this_thread::yield_while([this] { return gptr() == egptr(); });
                 return *gptr();
             }
 

@@ -15,8 +15,8 @@
 #include <jw/dpmi/irq.h>
 #include <jw/dpmi/lock.h>
 #include <jw/io/ioport.h>
-#include <jw/thread/thread.h>
-#include <jw/thread/mutex.h>
+#include <jw/thread.h>
+#include <jw/mutex.h>
 #include <jw/chrono.h>
 
 // TODO: clean this up
@@ -90,20 +90,20 @@ namespace jw
 
             void write_to_controller(byte b)
             {
-                thread::yield_while([this]() { return get_status().busy; });
+                this_thread::yield_while([this]() { return get_status().busy; });
                 command_port.write(b);
             }
 
             void write_to_keyboard(byte b)
             {
-                thread::yield_while([this]() { return get_status().busy; });
+                this_thread::yield_while([this]() { return get_status().busy; });
                 data_port.write(b);
             }
 
             byte read_from_controller()
             {
                 using namespace std::chrono_literals;
-                const bool timeout = thread::yield_while_for([this]
+                const bool timeout = this_thread::yield_while_for([this]
                 {
                     return not get_status().data_available;
                 }, 100ms);
@@ -191,7 +191,7 @@ namespace jw
                 retry:
                 try
                 {
-                    std::unique_lock<thread::mutex> lock { mutex };
+                    std::unique_lock lock { mutex };
                     dpmi::irq_mask no_irq { 1 };
                     byte result { keyboard_response::ERROR };
                     do_ps2_command<seq...>(data.begin(), result);
@@ -229,7 +229,7 @@ namespace jw
             const in_port<controller_status> status_port { 0x64 };
             const out_port<byte> command_port { 0x64 };
             const io_port<byte> data_port { 0x60 };
-            thread::mutex mutex;
+            jw::mutex mutex;
             inline static bool keyboard_initialized { false };
             scancode_set initial_scancode_set;
 
@@ -279,7 +279,7 @@ namespace jw
                         else scancode_queue.push_back(c);
                     } while (get_status().data_available);
 
-                    if (callback) thread::invoke_next(callback);
+                    if (callback) this_thread::invoke_next(callback);
 
                     dpmi::irq_handler::acknowledge();
                 }

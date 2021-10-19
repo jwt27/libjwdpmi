@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
@@ -12,7 +13,7 @@
 #include <jw/dpmi/irq.h>
 #include <jw/common.h>
 #include <jw/io/io_error.h>
-#include <jw/thread/mutex.h>
+#include <jw/mutex.h>
 #include <jw/io/realtime_streambuf.h>
 
 namespace jw
