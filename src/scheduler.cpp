@@ -32,7 +32,7 @@ namespace jw
                 auto* const p = alloc.new_object<thread>(nullptr, 0);
                 main_thread = std::shared_ptr<thread> { p, allocator_delete<allocator<thread>> { alloc } };
                 p->state = running;
-                p->name = "Main thread";
+                p->set_name("Main thread");
                 current_thread = main_thread;
             }
 
@@ -146,7 +146,9 @@ namespace jw
                 catch (...)
                 {
                     std::cerr << "caught exception from thread " << t->id;
+#                   ifndef NDEBUG
                     std::cerr << " (" << t->name << ")\n";
+#                   endif
                     try { throw; }
                     catch (std::exception& e) { print_exception(e); }
                     i->terminating = true;

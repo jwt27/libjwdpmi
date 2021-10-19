@@ -144,7 +144,13 @@ namespace jw::thread::detail
 
         template<typename F> void invoke(F&& function) { invoke_list.emplace_back(std::forward<F>(function)); }
 
+#       ifdef NDEBUG
+        void set_name(...) const noexcept { }
+#       else
+        template<typename T>
+        void set_name(T&& string) { name = std::forward<T>(string); }
         std::string name { "anonymous thread" };
+#       endif
     };
 
     inline bool scheduler::is_current_thread(const thread* t) noexcept { return instance->current_thread.get() == t; }
