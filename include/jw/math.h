@@ -43,10 +43,17 @@ namespace jw
         return r;
     }
 
-    template<> inline auto checksum8(const std::string_view& value)
+    template<typename CharT, typename Traits>
+    inline auto checksum8(const std::basic_string_view<CharT, Traits>& value)
     {
         std::uint8_t r { 0 };
         for (auto c : value) r += c;
         return r;
+    }
+
+    template<typename CharT, typename Traits, typename Alloc>
+    inline auto checksum8(const std::basic_string<CharT, Traits, Alloc>& str)
+    {
+        return checksum8(static_cast<std::basic_string_view<CharT, Traits>>(str));
     }
 }
