@@ -60,7 +60,7 @@ namespace jw
                 {
                     while (t->active())
                     {
-                        try { thread_switch(); }
+                        try { jw::thread::yield(); }
                         catch (const jw::terminate_exception& e) { e.defuse(); }
                     }
                 }
@@ -91,12 +91,12 @@ namespace jw
                     "pop edi;           .cfi_restore edi; .cfi_adjust_cfa_offset -4;"
                     "pop ebp;           .cfi_restore ebp; .cfi_adjust_cfa_offset -4;"
                     "ret;               .cfi_restore eip; .cfi_adjust_cfa_offset -4;"
-                    :: "i" (set_next_thread)
+                    :: "i" (switch_thread)
                     : "cc", "memory"
                 );
             }
 
-            void scheduler::thread_switch()
+            void scheduler::yield()
             {
                 debug::trap_mask dont_trace_here { };
                 auto* const i = instance;
@@ -170,7 +170,7 @@ namespace jw
             }
 
             // Select a new current_thread.
-            thread_context* scheduler::set_next_thread()
+            thread_context* scheduler::switch_thread()
             {
                 auto* const i = instance;
                 for(std::size_t n = 0; ; ++n)

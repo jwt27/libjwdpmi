@@ -31,7 +31,7 @@ namespace jw
         {
             if (dpmi::in_irq_context()) return;
             debug::trap_mask dont_trace_here { };
-            detail::scheduler::thread_switch();
+            detail::scheduler::yield();
         }
 
         // Yields execution while the given condition evaluates to true.

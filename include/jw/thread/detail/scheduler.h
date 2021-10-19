@@ -65,19 +65,18 @@ namespace jw::thread::detail
 
         static auto* memory_resource() noexcept { return memres; }
 
+    private:
         template<typename F>
         static thread_ptr create_thread(F&& func, std::size_t stack_size = config::thread_default_stack_size);
-
-    private:
         static void start_thread(const thread_ptr&);
-        static void thread_switch();
+        static void yield();
         static void check_exception();
 
         [[gnu::noinline, gnu::noclone, gnu::naked]]
         static void context_switch(thread_context**);
 
         [[gnu::noinline, gnu::cdecl]]
-        static thread_context* set_next_thread();
+        static thread_context* switch_thread();
 
         [[gnu::force_align_arg_pointer, noreturn]]
         static void run_thread() noexcept;
