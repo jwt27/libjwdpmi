@@ -135,7 +135,7 @@ namespace jw
                              args = std::tuple<A...> { std::forward<A>(args)... } ]
                 { std::apply(std::get<0>(func), args); };
 
-            return std::allocate_shared<detail::thread>(detail::scheduler::alloc(), wrapper, config::thread_default_stack_size);
+            return detail::scheduler::create_thread(std::move(wrapper));
         }
     }
 }

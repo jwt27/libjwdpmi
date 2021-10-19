@@ -643,7 +643,7 @@ namespace jw
                 else
                 {
                     auto t_ptr = t.thread.lock();
-                    if (not t_ptr or t_ptr->get_state() == thread::detail::starting)
+                    if (not t_ptr or t_ptr->state == thread::detail::starting)
                     {
                         encode_null(out, regsize[r]);
                         return;
@@ -763,7 +763,7 @@ namespace jw
                         if (signal == thread_finished)
                         {
                             s << 'w';
-                            if (t_ptr->get_state() == thread::detail::finished) s << "00";
+                            if (t_ptr->state == thread::detail::finished) s << "00";
                             else s << "ff";
                             s << ';' << t_ptr->id;
                             send_packet(s.str());
@@ -771,7 +771,7 @@ namespace jw
                         else
                         {
                             s << "T" << std::setw(2) << posix_signal(signal);
-                            if (t_ptr->get_state() != thread::detail::starting)
+                            if (t_ptr->state != thread::detail::starting)
                             {
                                 s << eip << ':'; reg(s, eip, t_ptr->id); s << ';';
                                 s << esp << ':'; reg(s, esp, t_ptr->id); s << ';';
@@ -896,7 +896,7 @@ namespace jw
                             msg << t->name;
                             if (id == current_thread_id) msg << " (*)";
                             msg << ": ";
-                            switch (t->get_state())
+                            switch (t->state)
                             {
                             case starting:    msg << "Starting";    break;
                             case running:     msg << "Running";     break;
@@ -1289,7 +1289,7 @@ namespace jw
                             if (thread_events_enabled) t.second.set_action('t');
                             else t.second.set_action('c');
 
-                            if (t.second.thread.lock()->get_state() == thread::detail::starting)
+                            if (t.second.thread.lock()->state == thread::detail::starting)
                                 t.second.signals.insert(thread_started);
                         }
 

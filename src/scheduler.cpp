@@ -26,7 +26,7 @@ namespace jw
     {
         namespace detail
         {
-            scheduler::scheduler() : threads { memory_resource() }
+            scheduler::scheduler()
             {
                 allocator<thread> alloc { memres };
                 auto* const p = alloc.new_object<thread>(nullptr, 0);
@@ -52,18 +52,16 @@ namespace jw
 
             void scheduler::kill_all()
             {
-                if (instance->threads.size() > 0) [[unlikely]]
+                if (instance->threads.size() > 0) [[likely]] return;
+                std::cerr << "Warning: exiting with active threads.\n";
+                auto thread_queue_copy = instance->threads;
+                for (auto& t : thread_queue_copy) t->abort();
+                for (auto& t : thread_queue_copy)
                 {
-                    std::cerr << "Warning: exiting with active threads.\n";
-                    auto thread_queue_copy = instance->threads;
-                    for (auto& t : thread_queue_copy) t->abort();
-                    for (auto& t : thread_queue_copy)
+                    while (t->active())
                     {
-                        while (t->active())
-                        {
-                            try { thread_switch(); }
-                            catch (const jw::terminate_exception& e) { e.defuse(); }
-                        }
+                        try { thread_switch(); }
+                        catch (const jw::terminate_exception& e) { e.defuse(); }
                     }
                 }
             }
