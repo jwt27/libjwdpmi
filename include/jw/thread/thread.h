@@ -80,7 +80,12 @@ namespace jw
             thread() noexcept = default;
             template<typename F, typename... A>
             explicit thread(F&& f, A&&... args)
-                : ptr { create(std::forward<F>(f), std::forward<A>(args)...) }
+                : ptr { create(config::thread_default_stack_size, std::forward<F>(f), std::forward<A>(args)...) }
+            { detail::scheduler::start_thread(ptr); }
+
+            template<typename F, typename... A>
+            explicit thread(std::size_t stack_size, F&& f, A&&... args)
+                : ptr { create(stack_size, std::forward<F>(f), std::forward<A>(args)...) }
             { detail::scheduler::start_thread(ptr); }
 
             ~thread() noexcept(false) { if (ptr) terminate(); }
@@ -92,6 +97,7 @@ namespace jw
             {
                 if (ptr) terminate();
                 ptr = std::move(other.ptr);
+                return *this;
             }
 
             void swap(thread& other) noexcept { using std::swap; swap(ptr, other.ptr); };
@@ -108,7 +114,7 @@ namespace jw
 
         private:
             template<typename F, typename... A>
-            auto create(F&& func, A&&... args);
+            auto create(std::size_t stack_size, F&& func, A&&... args);
 
             std::shared_ptr<detail::thread> ptr;
         };
@@ -126,7 +132,7 @@ namespace jw
         }
 
         template<typename F, typename... A>
-        inline auto thread::create(F&& func, A&&... args)
+        inline auto thread::create(std::size_t stack_size, F&& func, A&&... args)
         {
             static_assert(std::is_constructible_v<std::decay_t<F>, F>);
             static_assert(std::is_invocable_v<std::decay_t<F>, std::decay_t<A>...>);
@@ -135,7 +141,7 @@ namespace jw
                              args = std::tuple<A...> { std::forward<A>(args)... } ]
                 { std::apply(std::get<0>(func), args); };
 
-            return detail::scheduler::create_thread(std::move(wrapper));
+            return detail::scheduler::create_thread(std::move(wrapper), stack_size);
         }
     }
 }
