@@ -121,12 +121,12 @@ namespace jw
 
             void scheduler::start_thread(const thread_ptr& t)
             {
+                if (t->state != starting) return;
                 debug::trap_mask dont_trace_here { };
-                dpmi::interrupt_mask no_interrupts_please { };
-                auto* const i = instance;
-
-                i->threads.erase(std::remove_if(i->threads.begin(), i->threads.end(), [t](const auto& i) { return i == t; }), i->threads.end());
-                i->threads.push_front(t);
+                {
+                    dpmi::interrupt_mask no_interrupts_please { };
+                    instance->threads.push_front(t);
+                }
                 thread_switch();
             }
 
