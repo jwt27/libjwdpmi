@@ -98,14 +98,18 @@ namespace jw
 
             void scheduler::yield()
             {
-                debug::trap_mask dont_trace_here { };
+                if (dpmi::in_irq_context() or std::uncaught_exceptions() > 0) [[unlikely]] return;
                 auto* const i = instance;
 
-                if (dpmi::in_irq_context() or std::uncaught_exceptions() > 0) [[unlikely]] return;
-
                 debug::break_with_signal(debug::detail::thread_switched);
-                context_switch(&i->current_thread->context);   // switch to a new task context
-                check_exception();  // rethrow pending exception
+                context_switch(&i->current_thread->context);
+
+#               ifndef NDEBUG
+                if (i->current_thread != i->main_thread and *reinterpret_cast<std::uint32_t*>(i->current_thread->stack.data()) != 0xDEADBEEF) [[unlikely]]
+                    throw std::runtime_error { "Stack overflow!" };
+#               endif
+
+                if (i->terminating) [[unlikely]] terminate();
 
                 while (i->current_thread->invoke_list.size() > 0) [[unlikely]]
                 {
@@ -117,6 +121,8 @@ namespace jw
                     }
                     f();
                 }
+
+                if (i->current_thread->state == aborting) [[unlikely]] throw abort_thread();
             }
 
             void scheduler::start_thread(const thread_ptr& t)
@@ -155,18 +161,6 @@ namespace jw
                 debug::detail::notify_gdb_thread_event(debug::detail::thread_finished);
 
                 while (true) yield();
-            }
-
-            void scheduler::check_exception()
-            {
-                auto* const i = instance;
-#           ifndef NDEBUG
-                if (i->current_thread != i->main_thread and *reinterpret_cast<std::uint32_t*>(i->current_thread->stack.data()) != 0xDEADBEEF) [[unlikely]]
-                    throw std::runtime_error("Stack overflow!");
-#           endif
-
-                if (i->terminating) [[unlikely]] terminate();
-                if (i->current_thread->state == aborting) [[unlikely]] throw abort_thread();
             }
 
             // Select a new current_thread.

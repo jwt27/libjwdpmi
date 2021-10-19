@@ -70,7 +70,6 @@ namespace jw::thread::detail
         static thread_ptr create_thread(F&& func, std::size_t stack_size = config::thread_default_stack_size);
         static void start_thread(const thread_ptr&);
         static void yield();
-        static void check_exception();
 
         [[gnu::noinline, gnu::noclone, gnu::naked]]
         static void context_switch(thread_context**);
