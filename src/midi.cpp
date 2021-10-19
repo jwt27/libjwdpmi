@@ -99,7 +99,7 @@ namespace jw::audio
                     rdbuf->sputn(reinterpret_cast<const char*>(begin), size);
             }
             catch (const terminate_exception&)  { throw; }
-            catch (const abort_thread&)         { throw; }
+            catch (const detail::abort_thread&) { throw; }
             catch (const abi::__forced_unwind&) { throw; }
             catch (...) { out._M_setstate(std::ios::badbit); }
         }
@@ -410,7 +410,7 @@ namespace jw::audio
         }
         catch (const io::end_of_file&)      { in._M_setstate(std::ios::eofbit); }
         catch (const terminate_exception&)  { throw; }
-        catch (const abort_thread&)         { throw; }
+        catch (const detail::abort_thread&) { throw; }
         catch (const abi::__forced_unwind&) { throw; }
         catch (...)                         { in._M_setstate(std::ios::badbit); }
         return { };
@@ -773,7 +773,7 @@ namespace jw::audio
         catch (const io::failure&)          { in._M_setstate(std::ios::failbit); }
         catch (const io::end_of_file&)      { in._M_setstate(std::ios::eofbit); }
         catch (const terminate_exception&)  { throw; }
-        catch (const abort_thread&)         { throw; }
+        catch (const detail::abort_thread&) { throw; }
         catch (const abi::__forced_unwind&) { throw; }
         catch (...)                         { in._M_setstate(std::ios::badbit); }
         return output;

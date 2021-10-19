@@ -67,16 +67,6 @@ namespace jw
         deadlock() : system_error { std::make_error_code(std::errc::resource_deadlock_would_occur) } { }
     };
 
-    struct abort_thread
-    {
-        ~abort_thread() noexcept(false) { if (not defused) throw terminate_exception { }; }
-        virtual const char* what() const noexcept { return "Thread aborted."; }
-    private:
-        friend struct detail::scheduler;
-        void defuse() const noexcept { defused = true; }
-        mutable bool defused { false };
-    };
-
     struct thread
     {
         using id = std::uint32_t;

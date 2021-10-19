@@ -159,6 +159,16 @@ namespace jw::detail
 #       endif
     };
 
+    struct abort_thread
+    {
+        ~abort_thread() noexcept(false) { if (not defused) throw terminate_exception { }; }
+        virtual const char* what() const noexcept { return "Thread aborted."; }
+    private:
+        friend struct scheduler;
+        void defuse() const noexcept { defused = true; }
+        mutable bool defused { false };
+    };
+
     inline bool scheduler::is_current_thread(const thread* t) noexcept { return instance->current_thread.get() == t; }
     inline std::weak_ptr<thread> scheduler::get_current_thread() noexcept { return instance->current_thread; }
     inline auto scheduler::get_current_thread_id() noexcept { return instance->current_thread->id; }
