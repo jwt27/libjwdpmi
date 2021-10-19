@@ -1,8 +1,10 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
+#include <string_view>
 #include <type_traits>
 #include <concepts>
 #include <cmath>
@@ -41,7 +43,7 @@ namespace jw
         return r;
     }
 
-    template<> inline auto checksum8(const std::string& value)
+    template<> inline auto checksum8(const std::string_view& value)
     {
         std::uint8_t r { 0 };
         for (auto c : value) r += c;
