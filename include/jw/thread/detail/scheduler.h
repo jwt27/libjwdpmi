@@ -112,10 +112,12 @@ namespace jw::thread::detail
         static inline std::uint32_t id_count { 1 };
         static inline pool_resource stack_resource { 4 * config::thread_default_stack_size };
 
+        thread() = default;
+
         template <typename F>
         thread(F&& func, std::size_t bytes)
             : function { std::forward<F>(func) }
-            , stack { bytes > 0 ? static_cast<std::byte*>(stack_resource.allocate(bytes)) : nullptr, bytes } { }
+            , stack { static_cast<std::byte*>(stack_resource.allocate(bytes)), bytes } { }
         ~thread() { if (stack.data() != nullptr) stack_resource.deallocate(stack.data(), stack.size_bytes()); }
 
         thread& operator=(const thread&) = delete;

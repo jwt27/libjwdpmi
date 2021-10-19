@@ -29,7 +29,7 @@ namespace jw
             scheduler::scheduler()
             {
                 allocator<thread> alloc { memres };
-                auto* const p = alloc.new_object<thread>(nullptr, 0);
+                auto* const p = alloc.new_object<thread>();
                 main_thread = std::shared_ptr<thread> { p, allocator_delete<allocator<thread>> { alloc } };
                 p->state = running;
                 p->set_name("Main thread");
