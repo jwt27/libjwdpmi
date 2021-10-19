@@ -123,11 +123,8 @@ namespace jw
             {
                 if (t->state != starting) return;
                 debug::trap_mask dont_trace_here { };
-                {
-                    dpmi::interrupt_mask no_interrupts_please { };
-                    instance->threads.push_front(t);
-                }
-                thread_switch();
+                dpmi::interrupt_mask no_interrupts_please { };
+                instance->threads.push_front(t);
             }
 
             // The actual thread.
