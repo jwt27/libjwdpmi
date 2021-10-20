@@ -97,12 +97,16 @@ namespace jw::detail
         auto* const i = instance;
 
         debug::break_with_signal(debug::detail::thread_switched);
-        context_switch(&i->current_thread->context);
 
-#               ifndef NDEBUG
+        {
+            debug::trap_mask dont_trace_here { };
+            context_switch(&i->current_thread->context);
+        }
+
+#       ifndef NDEBUG
         if (i->current_thread != i->main_thread and *reinterpret_cast<std::uint32_t*>(i->current_thread->stack.data()) != 0xDEADBEEF) [[unlikely]]
             throw std::runtime_error { "Stack overflow!" };
-#               endif
+#       endif
 
         if (i->terminating) [[unlikely]] terminate();
 
@@ -144,9 +148,9 @@ namespace jw::detail
         catch (...)
         {
             std::cerr << "caught exception from thread " << t->id;
-#                   ifndef NDEBUG
+#           ifndef NDEBUG
             std::cerr << " (" << t->name << ")\n";
-#                   endif
+#           endif
             try { throw; }
             catch (std::exception& e) { print_exception(e); }
             i->terminating = true;
@@ -173,9 +177,9 @@ namespace jw::detail
 
             if (i->current_thread->state == thread::starting) [[unlikely]]     // new thread, initialize new context on stack
             {
-#                   ifndef NDEBUG
+#               ifndef NDEBUG
                 *reinterpret_cast<std::uint32_t*>(i->current_thread->stack.data()) = 0xDEADBEEF;   // stack overflow protection
-#                   endif
+#               endif
                 std::byte* const esp = (i->current_thread->stack.data() + i->current_thread->stack.size_bytes() - 4) - sizeof(thread_context);
                 i->current_thread->context = reinterpret_cast<thread_context*>(esp);               // *context points to top of stack
                 *i->current_thread->context = *i->threads.back()->context;

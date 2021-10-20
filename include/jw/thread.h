@@ -16,8 +16,6 @@ namespace jw::this_thread
     // Yields execution to the next thread in the queue.
     inline void yield()
     {
-        if (dpmi::in_irq_context()) return;
-        debug::trap_mask dont_trace_here { };
         detail::scheduler::yield();
     }
 
