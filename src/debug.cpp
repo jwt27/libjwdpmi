@@ -641,7 +641,7 @@ namespace jw
                 else
                 {
                     auto t_ptr = t.thread.lock();
-                    if (not t_ptr or t_ptr->state == jw::detail::starting)
+                    if (not t_ptr or t_ptr->state == jw::detail::thread::starting)
                     {
                         encode_null(out, regsize[r]);
                         return;
@@ -761,7 +761,7 @@ namespace jw
                         if (signal == thread_finished)
                         {
                             s << 'w';
-                            if (t_ptr->state == jw::detail::finished) s << "00";
+                            if (t_ptr->state == jw::detail::thread::finished) s << "00";
                             else s << "ff";
                             s << ';' << t_ptr->id;
                             send_packet(s.str());
@@ -769,7 +769,7 @@ namespace jw
                         else
                         {
                             s << "T" << std::setw(2) << posix_signal(signal);
-                            if (t_ptr->state != jw::detail::starting)
+                            if (t_ptr->state != jw::detail::thread::starting)
                             {
                                 s << eip << ':'; reg(s, eip, t_ptr->id); s << ';';
                                 s << esp << ':'; reg(s, esp, t_ptr->id); s << ';';
@@ -896,12 +896,12 @@ namespace jw
                             msg << ": ";
                             switch (t->state)
                             {
-                            case starting:    msg << "Starting";    break;
-                            case running:     msg << "Running";     break;
-                            case suspended:   msg << "Suspended";   break;
-                            case aborting:    msg << "Aborting";    break;
-                            case aborted:     msg << "Aborted";     break;
-                            case finished:    msg << "Finished";    break;
+                            case jw::detail::thread::starting:    msg << "Starting";    break;
+                            case jw::detail::thread::running:     msg << "Running";     break;
+                            case jw::detail::thread::suspended:   msg << "Suspended";   break;
+                            case jw::detail::thread::aborting:    msg << "Aborting";    break;
+                            case jw::detail::thread::aborted:     msg << "Aborted";     break;
+                            case jw::detail::thread::finished:    msg << "Finished";    break;
                             }
                         }
                         else msg << "invalid thread";
@@ -1287,7 +1287,7 @@ namespace jw
                             if (thread_events_enabled) t.second.set_action('t');
                             else t.second.set_action('c');
 
-                            if (t.second.thread.lock()->state == jw::detail::starting)
+                            if (t.second.thread.lock()->state == jw::detail::thread::starting)
                                 t.second.signals.insert(thread_started);
                         }
 

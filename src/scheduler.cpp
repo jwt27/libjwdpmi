@@ -26,7 +26,7 @@ namespace jw::detail
         allocator<thread> alloc { memres };
         auto* const p = alloc.new_object<thread>();
         main_thread = std::shared_ptr<thread> { p, allocator_delete<allocator<thread>> { alloc } };
-        p->state = running;
+        p->state = thread::running;
         p->set_name("Main thread");
         current_thread = main_thread;
     }
@@ -117,12 +117,12 @@ namespace jw::detail
             f();
         }
 
-        if (i->current_thread->state == aborting) [[unlikely]] throw abort_thread();
+        if (i->current_thread->state == thread::aborting) [[unlikely]] throw abort_thread();
     }
 
     void scheduler::start_thread(const thread_ptr& t)
     {
-        if (t->state != starting) return;
+        if (t->state != thread::starting) return;
         debug::trap_mask dont_trace_here { };
         dpmi::interrupt_mask no_interrupts_please { };
         instance->threads.push_front(t);
@@ -135,9 +135,9 @@ namespace jw::detail
         auto* const t = i->current_thread.get();
         try
         {
-            t->state = running;
+            t->state = thread::running;
             t->function();
-            t->state = finished;
+            t->state = thread::finished;
         }
         catch (const abort_thread& e) { e.defuse(); }
         catch (const terminate_exception&) { i->terminating = true; }
@@ -152,7 +152,7 @@ namespace jw::detail
             i->terminating = true;
         }
 
-        if (t->state != finished) t->state = aborted;
+        if (t->state != thread::finished) t->state = thread::aborted;
         debug::detail::notify_gdb_thread_event(debug::detail::thread_finished);
 
         while (true) yield();
@@ -171,7 +171,7 @@ namespace jw::detail
                 i->threads.pop_front();
             }
 
-            if (i->current_thread->state == starting) [[unlikely]]     // new thread, initialize new context on stack
+            if (i->current_thread->state == thread::starting) [[unlikely]]     // new thread, initialize new context on stack
             {
 #                   ifndef NDEBUG
                 *reinterpret_cast<std::uint32_t*>(i->current_thread->stack.data()) = 0xDEADBEEF;   // stack overflow protection
@@ -182,7 +182,7 @@ namespace jw::detail
                 i->current_thread->context->return_address = reinterpret_cast<std::uintptr_t>(run_thread);
             }
 
-            if (i->current_thread->state != suspended) [[likely]] break;
+            if (i->current_thread->state != thread::suspended) [[likely]] break;
             if (n > i->threads.size())
             {
                 debug::break_with_signal(debug::detail::all_threads_suspended);

@@ -99,16 +99,6 @@ namespace jw::detail
         struct dtor { ~dtor(); } static inline destructor;
     };
 
-    enum thread_state
-    {
-        starting,
-        running,
-        suspended,
-        aborting,
-        aborted,
-        finished
-    };
-
     struct thread
     {
         static inline std::uint32_t id_count { 1 };
@@ -131,7 +121,16 @@ namespace jw::detail
         const std::function<void()> function;
         const std::span<std::byte> stack;
         thread_context* context; // points to esp during context switch
-        thread_state state { starting };
+
+        enum
+        {
+            starting,
+            running,
+            suspended,
+            aborting,
+            aborted,
+            finished
+        } state { starting };
 
         std::deque<jw::function<void()>, scheduler::allocator<jw::function<void()>>> invoke_list { scheduler::memory_resource() };
 
