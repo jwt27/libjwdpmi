@@ -90,7 +90,6 @@ namespace jw
                         irq_mask::unmask(i);
                         if (i > 7) irq_mask::unmask(2);
                     }
-                    ++detail::interrupt_id::get()->use_count;
                 }
 
                 void remove(irq_handler_base* p)
@@ -104,8 +103,6 @@ namespace jw
                         delete data;
                         data = nullptr;
                     }
-                    --detail::interrupt_id::get()->use_count;
-                    detail::interrupt_id::delete_if_possible();
                 }
 
                 struct irq_controller_data : class_lock<irq_controller_data>
@@ -156,8 +153,7 @@ namespace jw
                 static bool is_irq(int_vector v) { return vec_to_irq(v) != 0xff; }
                 static bool is_acknowledged()
                 {
-                    if (auto id = interrupt_id::get_current_interrupt().lock()) return id->acknowledged;
-                    return true;
+                    return interrupt_id::get()->acknowledged;
                 }
 
                 INTERRUPT static auto in_service() noexcept
@@ -172,7 +168,7 @@ namespace jw
 
                 INTERRUPT static void send_eoi() noexcept
                 {
-                    auto v = interrupt_id::get_current_interrupt().lock()->vector;
+                    auto v = interrupt_id::get()->num;
                     if (data->entries.at(v)->flags & always_chain) return;
                     auto i = vec_to_irq(v);
                     auto s = in_service();

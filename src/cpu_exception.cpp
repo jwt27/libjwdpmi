@@ -55,14 +55,15 @@ namespace jw
         bool exception_handler::call_handler(exception_handler* self, raw_exception_frame* frame) noexcept
         {
             ++detail::exception_count;
-            bool success = false;
             auto* f = self->new_type ? &frame->frame_10 : &frame->frame_09;
             if (detail::fpu_context_switcher->enter(self->exc))
             {
-                success = true;
-                goto fpu_context_switched;
+                detail::fpu_context_switcher->leave();
+                --detail::exception_count;
+                return true;
             }
-            detail::interrupt_id::push_back(self->exc, detail::interrupt_id::id_t::exception);
+            bool success = false;
+            detail::interrupt_id id { self->exc, detail::interrupt_type::exception };
 #           ifndef NDEBUG
             *reinterpret_cast<volatile std::uint32_t*>(stack.begin()) = 0xDEADBEEF;
 #           endif
@@ -100,8 +101,7 @@ namespace jw
             if (*reinterpret_cast<volatile std::uint32_t*>(stack.begin()) != 0xDEADBEEF)
                 std::fprintf(stderr, "Stack overflow handling exception 0x%lx\n", self->exc.value);
 #           endif
-            detail::interrupt_id::pop_back();
-        fpu_context_switched:
+
             detail::fpu_context_switcher->leave();
             --detail::exception_count;
             return success;
@@ -218,8 +218,6 @@ namespace jw
                 , "=m" (es)
                 , "=m" (fs)
                 , "=m" (gs));
-
-            ++detail::interrupt_id::get()->use_count;
         }
 
         exception_handler::~exception_handler()
@@ -234,8 +232,6 @@ namespace jw
                 last[exc] = prev;
                 detail::cpu_exception_handlers::set_pm_handler(exc, chain_to);
             }
-            --detail::interrupt_id::get()->use_count;
-            detail::interrupt_id::delete_if_possible();
         }
 
         std::string cpu_category::message(int ev) const

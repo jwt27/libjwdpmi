@@ -12,6 +12,7 @@
 #include <jw/detail/mutex.h>
 #include <jw/dpmi/irq.h>
 #include <jw/dpmi/detail/interrupt_id.h>
+#include <jw/variant.h>
 
 namespace jw
 {
@@ -45,14 +46,14 @@ namespace jw
     class recursive_mutex
     {
         using thread_id = detail::scheduler::thread_id;
-        using irq_ptr = std::weak_ptr<const dpmi::detail::interrupt_id::id_t>;
-        std::variant<std::nullptr_t, thread_id, irq_ptr> owner { nullptr };
+        using irq_id = std::uint64_t;
+        std::variant<std::nullptr_t, thread_id, irq_id> owner { nullptr };
         std::atomic<std::uint32_t> lock_count { 0 };
 
         struct is_owner
         {
-            bool operator()(const thread_id& id) const noexcept { return detail::scheduler::is_current_thread(id); }
-            bool operator()(const irq_ptr& p) const noexcept { return dpmi::detail::interrupt_id::is_current_interrupt(p.lock().get()); }
+            bool operator()(const thread_id& id) const noexcept { return detail::scheduler::current_thread_id() == id; }
+            bool operator()(const irq_id& id) const noexcept { return dpmi::detail::interrupt_id::get_id() == id; }
             bool operator()(const std::nullptr_t&) const noexcept { return false; }
         };
 
@@ -80,12 +81,12 @@ namespace jw
         {
             if (owner.index() == 0)
             {
-                if (dpmi::in_irq_context()) owner = dpmi::detail::interrupt_id::get_current_interrupt();
+                if (dpmi::in_irq_context()) owner = dpmi::detail::interrupt_id::get_id();
                 else owner = detail::scheduler::current_thread_id();
                 lock_count = 1;
                 return true;
             }
-            else if (std::visit(is_owner { }, owner))
+            else if (visit(is_owner { }, owner))
             {
                 ++lock_count;
                 return true;

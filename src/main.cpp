@@ -155,6 +155,7 @@ namespace jw
             min_chunk_size = irq_alloc_size;
             irq_alloc = new dpmi::locked_pool_resource<true> { irq_alloc_size };
 
+            interrupt_id::setup();
             fpu_context_switcher.emplace();
             setup_exception_throwers();
 

@@ -1,8 +1,10 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #include <jw/dpmi/realmode.h>
+#include <jw/dpmi/detail/interrupt_id.h>
 
 namespace jw
 {
@@ -46,13 +48,15 @@ namespace jw
 
         void realmode_callback::entry_point(realmode_callback* self, std::uint32_t, std::uint32_t) noexcept
         {
-            auto* reg = self->reg_ptr;
-            self->reg_pool.push_back({ });
-            self->reg_ptr = &self->reg_pool.back();
-            *reg = self->reg;
-            bool is_irq = !reg->flags.interrupt;
+            bool is_irq = not self->reg.flags.interrupt;
+            detail::interrupt_id id { 0, is_irq ? detail::interrupt_type::realmode_irq : detail::interrupt_type::realmode };
             if (is_irq) ++detail::interrupt_count;
-            else interrupt_mask::sti();
+
+            allocator alloc { &self->memres };
+            auto* const reg = self->reg_ptr;
+            self->reg_ptr = alloc.allocate(1);
+            new (reg) realmode_registers { self->reg };
+            if (not is_irq) interrupt_mask::sti();
 
             auto fail = [reg, self]
             {
@@ -70,9 +74,9 @@ namespace jw
             catch (...) { fail(); std::cerr << "Unknown exception.\n"; }
 
             asm("cli");
+            alloc.deallocate(self->reg_ptr, 1);
+            self->reg_ptr = reg;
             if (is_irq) --detail::interrupt_count;
-            self->reg_pool.pop_back();
-            self->reg_ptr = &self->reg_pool.back();
         }
 
         void realmode_callback::init_code() noexcept
@@ -97,17 +101,17 @@ namespace jw
                 "pop eax;"
                 "mov dx, ds;"
                 "movzx edx, dx;"
-                "push es; pop ds;"
+                "mov cx, es;"
+                "mov ds, cx;"
                 "mov fs, word ptr cs:[eax-0x19];"
                 "mov gs, word ptr cs:[eax-0x17];"
                 "mov ebp, esp;"
                 "mov bx, ss;"
-                "mov cx, ds;"
                 "cmp bx, cx;"
-                "je keep_stack%=;"
-                "push ds; pop ss;"
+                "je Lkeep_stack%=;"
+                "mov ss, cx;"
                 "mov esp, cs:[eax-0x11];"
-                "keep_stack%=:"
+                "Lkeep_stack%=:"
                 "mov edi, cs:[eax-0x0D];"       // Pointer to temporary register struct
                 "and esp, -0x10;"               // Align stack
                 "push esi;"                     // Real-mode stack offset
@@ -134,8 +138,7 @@ namespace jw
             if (descriptor::get_limit(get_cs()) < cs_limit)
                 descriptor::set_limit(get_cs(), cs_limit);
 
-            reg_pool.push_back({ });
-            reg_ptr = &reg_pool.back();
+            reg_ptr = allocator { &memres }.allocate(1);
 
             asm volatile (
                 "mov %w0, fs;"

@@ -155,8 +155,9 @@ namespace jw
             template<typename F>
             realmode_callback(F&& function, std::size_t pool_size = 1_KB)
                 : realmode_callback_base(code.data())
-                , function_ptr(std::allocator_arg, locking_allocator<> { }, std::forward<F>(function))
-                , alloc(pool_size), reg_pool(alloc) { init_code(); }
+                , function_ptr { std::forward<F>(function) }
+                , memres { pool_size }
+            { init_code(); }
 
         private:
             [[gnu::cdecl]]
@@ -165,8 +166,8 @@ namespace jw
 
             trivial_function<void(realmode_registers*)> function_ptr;
             std::array<byte, 16_KB> stack;  // TODO: adjustable size
-            locked_pool_allocator<true> alloc;
-            std::vector<realmode_registers, locked_pool_allocator<true, realmode_registers>> reg_pool;
+            locked_pool_resource<false> memres;
+            using allocator = monomorphic_allocator<locked_pool_resource<false>, realmode_registers>;
 
             [[gnu::packed]] selector fs;                                            // [eax-0x19]
             [[gnu::packed]] selector gs;                                            // [eax-0x17]

@@ -22,7 +22,7 @@ namespace jw
             {
                 ++interrupt_count;
                 fpu_context_switcher->enter(0);
-                interrupt_id::push_back(vec, interrupt_id::id_t::interrupt);
+                interrupt_id id { vec, interrupt_type::irq };
 
                 auto i = vec_to_irq(vec);
                 if ((i == 7 or i == 15) and not in_service()[i]) goto spurious;
@@ -57,7 +57,6 @@ namespace jw
                 }
 
                 asm("cli");
-                interrupt_id::pop_back();
                 fpu_context_switcher->leave();
                 --interrupt_count;
             }
