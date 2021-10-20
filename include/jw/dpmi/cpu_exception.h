@@ -157,7 +157,7 @@ namespace jw
         class exception_handler : class_lock<exception_handler>
         {
             void init_code();
-            function<exception_handler_sig> handler;
+            trivial_function<exception_handler_sig> handler;
             exception_num exc;
             exception_handler* next { nullptr };
             exception_handler* prev { nullptr };

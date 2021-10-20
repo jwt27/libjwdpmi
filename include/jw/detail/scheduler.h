@@ -132,7 +132,7 @@ namespace jw::detail
             finished
         } state { starting };
 
-        std::deque<jw::function<void()>, scheduler::allocator<jw::function<void()>>> invoke_list { scheduler::memory_resource() };
+        std::deque<jw::function<void(), 4>, scheduler::allocator<jw::function<void(), 4>>> invoke_list { scheduler::memory_resource() };
 
         void abort() noexcept
         {

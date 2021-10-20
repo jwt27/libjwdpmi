@@ -163,7 +163,7 @@ namespace jw
             static void entry_point(realmode_callback* self, std::uint32_t rm_stack_selector, std::uint32_t rm_stack_offset) noexcept;
             void init_code() noexcept;
 
-            function<void(realmode_registers*)> function_ptr;
+            trivial_function<void(realmode_registers*)> function_ptr;
             std::array<byte, 16_KB> stack;  // TODO: adjustable size
             locked_pool_allocator<true> alloc;
             std::vector<realmode_registers, locked_pool_allocator<true, realmode_registers>> reg_pool;

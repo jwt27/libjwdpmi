@@ -45,7 +45,7 @@ namespace jw
                 irq_handler_base(F&& func, irq_config_flags f = { }) : handler_ptr { std::forward<F>(func) }, flags { f } { }
                 irq_handler_base() = delete;
 
-                const function<void()> handler_ptr;
+                const trivial_function<void()> handler_ptr;
                 const irq_config_flags flags;
             };
 
