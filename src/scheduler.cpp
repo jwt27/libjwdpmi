@@ -166,6 +166,7 @@ namespace jw::detail
     thread_context* scheduler::switch_thread()
     {
         auto* const i = instance;
+        thread* ct;
         for(std::size_t n = 0; ; ++n)
         {
             {
@@ -174,25 +175,26 @@ namespace jw::detail
                 i->current_thread = std::move(i->threads.front());
                 i->threads.pop_front();
             }
+            ct = i->current_thread.get();
 
-            if (i->current_thread->state == thread::starting) [[unlikely]]     // new thread, initialize new context on stack
+            if (ct->state == thread::starting) [[unlikely]]     // new thread, initialize new context on stack
             {
 #               ifndef NDEBUG
-                *reinterpret_cast<std::uint32_t*>(i->current_thread->stack.data()) = 0xDEADBEEF;   // stack overflow protection
+                *reinterpret_cast<std::uint32_t*>(ct->stack.data()) = 0xDEADBEEF;   // stack overflow protection
 #               endif
-                std::byte* const esp = (i->current_thread->stack.data() + i->current_thread->stack.size_bytes() - 4) - sizeof(thread_context);
-                i->current_thread->context = reinterpret_cast<thread_context*>(esp);               // *context points to top of stack
-                *i->current_thread->context = *i->threads.back()->context;
-                i->current_thread->context->return_address = reinterpret_cast<std::uintptr_t>(run_thread);
+                std::byte* const esp = (ct->stack.data() + ct->stack.size_bytes() - 4) - sizeof(thread_context);
+                ct->context = reinterpret_cast<thread_context*>(esp);               // *context points to top of stack
+                *ct->context = *i->threads.back()->context;
+                ct->context->return_address = reinterpret_cast<std::uintptr_t>(run_thread);
             }
 
-            if (i->current_thread->state != thread::suspended) [[likely]] break;
+            if (ct->state != thread::suspended) [[likely]] break;
             if (n > i->threads.size())
             {
                 debug::break_with_signal(debug::detail::all_threads_suspended);
                 n = 0;
             }
         }
-        return i->current_thread->context;
+        return ct->context;
     }
 }
