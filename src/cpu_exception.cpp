@@ -54,12 +54,10 @@ namespace jw
 
         bool exception_handler::call_handler(exception_handler* self, raw_exception_frame* frame) noexcept
         {
-            ++detail::exception_count;
             auto* f = self->new_type ? &frame->frame_10 : &frame->frame_09;
             if (detail::fpu_context_switcher->enter(self->exc))
             {
                 detail::fpu_context_switcher->leave();
-                --detail::exception_count;
                 return true;
             }
             bool success = false;
@@ -103,7 +101,6 @@ namespace jw
 #           endif
 
             detail::fpu_context_switcher->leave();
-            --detail::exception_count;
             return success;
         }
 

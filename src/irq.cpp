@@ -20,9 +20,8 @@ namespace jw
         {
             void irq_controller::interrupt_entry_point(int_vector vec) noexcept
             {
-                ++interrupt_count;
-                fpu_context_switcher->enter(0);
                 interrupt_id id { vec, interrupt_type::irq };
+                fpu_context_switcher->enter(0);
 
                 auto i = vec_to_irq(vec);
                 if ((i == 7 or i == 15) and not in_service()[i]) goto spurious;
@@ -58,7 +57,6 @@ namespace jw
 
                 asm("cli");
                 fpu_context_switcher->leave();
-                --interrupt_count;
             }
 
             void irq_controller::call()

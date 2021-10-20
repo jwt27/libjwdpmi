@@ -50,7 +50,6 @@ namespace jw
         {
             bool is_irq = not self->reg.flags.interrupt;
             detail::interrupt_id id { 0, is_irq ? detail::interrupt_type::realmode_irq : detail::interrupt_type::realmode };
-            if (is_irq) ++detail::interrupt_count;
 
             allocator alloc { &self->memres };
             auto* const reg = self->reg_ptr;
@@ -76,7 +75,6 @@ namespace jw
             asm("cli");
             alloc.deallocate(self->reg_ptr, 1);
             self->reg_ptr = reg;
-            if (is_irq) --detail::interrupt_count;
         }
 
         void realmode_callback::init_code() noexcept

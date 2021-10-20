@@ -11,6 +11,9 @@
 
 namespace jw::dpmi::detail
 {
+    inline constinit std::uint32_t interrupt_count { 0 };
+    inline constinit std::uint32_t exception_count { 0 };
+
     struct jw_cxa_eh_globals
     {
         void* caughtExceptions { nullptr };
@@ -58,6 +61,20 @@ namespace jw::dpmi::detail
     {
         interrupt_id(std::uint32_t n, interrupt_type t) noexcept : interrupt_id_data { n, t, current }
         {
+            switch (type)
+            {
+            case interrupt_type::exception:
+                ++exception_count;
+                break;
+
+            case interrupt_type::irq:
+            case interrupt_type::realmode_irq:
+                ++interrupt_count;
+                break;
+
+            case interrupt_type::realmode: break;
+            default: __builtin_unreachable();
+            }
             next->eh_globals = *reinterpret_cast<jw_cxa_eh_globals*>(abi::__cxa_get_globals());
             *reinterpret_cast<jw_cxa_eh_globals*>(abi::__cxa_get_globals()) = eh_globals;
             current = this;
@@ -67,6 +84,20 @@ namespace jw::dpmi::detail
         {
             current = next;
             *reinterpret_cast<jw_cxa_eh_globals*>(abi::__cxa_get_globals()) = current->eh_globals;
+            switch (type)
+            {
+            case interrupt_type::exception:
+                --exception_count;
+                break;
+
+            case interrupt_type::irq:
+            case interrupt_type::realmode_irq:
+                --interrupt_count;
+                break;
+
+            case interrupt_type::realmode: break;
+            default: __builtin_unreachable();
+            }
         }
 
         static interrupt_id_data* main() noexcept
