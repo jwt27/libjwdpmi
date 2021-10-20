@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
@@ -70,11 +71,11 @@ namespace jw
             std::conditional_t<std::is_integral_v<T> and std::is_integral_v<U>,
             std::conditional_t<(sizeof(T) < sizeof(U)), T, U>, U>>;
 
-        template <typename U, std::enable_if_t<not std::is_same_v<promoted_type<U>, T>, bool> = { }>
+        template <typename U> requires(not std::is_same_v<promoted_type<U>, T>)
         constexpr auto promoted() const noexcept { return vector<N, promoted_type<U>> { *this }; }
-        template <typename U, std::enable_if_t<std::is_same_v<promoted_type<U>, T>, bool> = { }>
+        template <typename U> requires(std::is_same_v<promoted_type<U>, T>)
         constexpr vector& promoted() noexcept { return *this; }
-        template <typename U, std::enable_if_t<std::is_same_v<promoted_type<U>, T>, bool> = { } >
+        template <typename U> requires (std::is_same_v<promoted_type<U>, T>)
         constexpr const vector& promoted() const noexcept { return *this; }
 
         template<typename U> auto promote_scalar(const U& scalar) { return static_cast<promoted_type<U>>(scalar); }
@@ -138,7 +139,12 @@ namespace jw
         constexpr auto& normalize() { return *this /= magnitude(); }
         constexpr auto normalized() const { return vector<N, decltype(std::declval<T>() / std::declval<decltype(magnitude())>())> { *this }.normalize(); }
 
-        constexpr auto& round() noexcept { if constexpr (std::is_floating_point_v<T>) v = jw::round(v); return *this; }
+        constexpr auto& round() noexcept
+        {
+            for (unsigned i = 0; i < N; ++i)
+                a[i] = jw::round(a[i]);
+            return *this;
+        }
         constexpr auto rounded() const noexcept { return vector { *this }.round(); }
 
         constexpr auto distance_from(const auto& other) const noexcept { return (*this - other).magnitude(); }
