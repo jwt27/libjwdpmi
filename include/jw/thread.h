@@ -22,25 +22,29 @@ namespace jw::this_thread
     }
 
     // Yields execution while the given condition evaluates to true.
-    template<typename F> inline void yield_while(F&& condition)
+    template<typename F>
+    inline void yield_while(F&& condition)
     {
         while (condition()) yield();
     };
 
     // Yields execution until the given time point.
-    template<typename P> inline void yield_until(const P& time_point)
+    template<typename P>
+    inline void yield_until(const P& time_point)
     {
         yield_while([&time_point] { return P::clock::now() < time_point; });
     };
 
     // Yields execution for the given duration.
-    template<typename C = config::thread_clock> inline void yield_for(const typename C::duration& duration)
+    template<typename C = config::thread_clock>
+    inline void yield_for(const typename C::duration& duration)
     {
         yield_until(C::now() + duration);
     };
 
     // Combination of yield_while() and yield_until(). Returns true on timeout.
-    template<typename F, typename P> inline bool yield_while_until(F&& condition, const P& time_point)
+    template<typename F, typename P>
+    inline bool yield_while_until(F&& condition, const P& time_point)
     {
         bool c;
         yield_while([&] { return (c = condition()) and P::clock::now() < time_point; });
@@ -48,16 +52,19 @@ namespace jw::this_thread
     };
 
     // Combination of yield_while() and yield_for(). Returns true on timeout.
-    template<typename C = config::thread_clock, typename F> inline bool yield_while_for(F&& condition, const typename C::duration& duration)
+    template<typename C = config::thread_clock, typename F>
+    inline bool yield_while_for(F&& condition, const typename C::duration& duration)
     {
         return yield_while_until(condition, C::now() + duration);
     };
 
     // Call a function on the main thread.
-    template<typename F> void invoke_main(F&& function) { detail::scheduler::invoke_main(std::forward<F>(function)); }
+    template<typename F>
+    void invoke_main(F&& function) { detail::scheduler::invoke_main(std::forward<F>(function)); }
 
     // Call a function on the next active thread.
-    template<typename F> void invoke_next(F&& function) { detail::scheduler::invoke_next(std::forward<F>(function)); }
+    template<typename F>
+    void invoke_next(F&& function) { detail::scheduler::invoke_next(std::forward<F>(function)); }
 }
 
 namespace jw
