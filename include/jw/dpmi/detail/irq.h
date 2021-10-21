@@ -16,17 +16,19 @@ namespace jw
     {
         namespace detail
         {
-            class [[gnu::packed]] irq_wrapper : class_lock<irq_wrapper>
+            class irq_controller;
+
+            struct [[gnu::packed]] irq_wrapper : class_lock<irq_wrapper>
             {
-            public:
-                using entry_fptr = void(*)(int_vector) noexcept;
+                friend class irq_controller;
+                using entry_fptr = void(*)(irq_level) noexcept;
                 using stack_fptr = byte*(*)() noexcept;
 
             private:
                 selector ss;                    // [esi-0x26]
                 std::uint32_t* use_cnt;         // [esi-0x24]
                 stack_fptr get_stack;           // [esi-0x20]
-                int_vector vec;                 // [esi-0x1C]
+                std::uint32_t irq;              // [esi-0x1C]
                 selector ds;                    // [esi-0x18]
                 selector es;                    // [esi-0x16]
                 selector fs;                    // [esi-0x14]
@@ -35,7 +37,7 @@ namespace jw
                 std::array<byte, 0x60> code;    // [esi-0x0C]
 
             public:
-                irq_wrapper(int_vector _vec, entry_fptr entry_f, stack_fptr stack_f, std::uint32_t* use_cnt_ptr) noexcept;
+                irq_wrapper(irq_level i, entry_fptr entry_f, stack_fptr stack_f, std::uint32_t* use_cnt_ptr) noexcept;
                 auto get_ptr(selector cs = get_cs()) const noexcept { return far_ptr32 { cs, reinterpret_cast<std::uintptr_t>(code.data()) }; }
             };
 
@@ -53,7 +55,7 @@ namespace jw
             {
 
                 std::deque<irq_handler_base*, locking_allocator<irq_handler_base*>> handler_chain { };
-                int_vector vec;
+                irq_level irq;
                 far_ptr32 old_handler { };
                 irq_wrapper wrapper;
                 irq_config_flags flags { };
@@ -66,72 +68,21 @@ namespace jw
                 INTERRUPT void call();
 
             public:
-                irq_controller(int_vector v) : vec(v), old_handler(get_pm_interrupt_vector(v)),
-                    wrapper(v, interrupt_entry_point, get_stack_ptr, &data->stack_use_count)
-                {
-                    set_pm_interrupt_vector(vec, wrapper.get_ptr());
-                }
-
+                irq_controller(irq_level i);
                 irq_controller(irq_controller&& m) = delete;
                 irq_controller(const irq_controller& m) = delete;
                 irq_controller& operator=(irq_controller&& m) = delete;
                 irq_controller& operator=(const irq_controller& m) = delete;
 
-                ~irq_controller() { if (old_handler.offset != 0) set_pm_interrupt_vector(vec, old_handler); }
+                ~irq_controller() { if (old_handler.offset != 0) set_pm_interrupt_vector(irq_to_vec(wrapper.irq), old_handler); }
 
-                void add(irq_handler_base* p)
-                {
-                    interrupt_mask no_ints_here { };
-                    handler_chain.push_back(p);
-                    add_flags();
-                    if (is_irq(vec))
-                    {
-                        auto i = vec_to_irq(vec);
-                        irq_mask::unmask(i);
-                        if (i > 7) irq_mask::unmask(2);
-                    }
-                }
-
-                void remove(irq_handler_base* p)
-                {
-                    interrupt_mask no_ints_here { };
-                    handler_chain.erase(std::remove_if(handler_chain.begin(), handler_chain.end(), [p](auto a) { return a == p; }), handler_chain.end());
-                    add_flags();
-                    if (handler_chain.empty()) data->entries.erase(vec);
-                    if (data->entries.empty())
-                    {
-                        delete data;
-                        data = nullptr;
-                    }
-                }
-
-                struct irq_controller_data : class_lock<irq_controller_data>
-                {
-                    irq_controller_data()
-                    {
-                        stack.resize(config::interrupt_initial_stack_size);
-                        pic0_cmd.write(0x68);   // TODO: restore to defaults
-                        pic1_cmd.write(0x68);
-                    }
-
-                    std::map<int_vector, std::unique_ptr<irq_controller>, std::less<int_vector>, locking_allocator<std::pair<const int_vector, std::unique_ptr<irq_controller>>>> entries { };
-                    std::vector<byte, locking_allocator<byte>> stack { };
-                    std::uint32_t stack_use_count { 0 };
-                };
-
-                static irq_controller& get(int_vector v)
-                {
-                    if (data == nullptr) data = new irq_controller_data { };
-                    if (data->entries.count(v) == 0) data->entries.emplace(v, std::make_unique<irq_controller>(v));
-                    return *data->entries.at(v);
-                }
-
-                static irq_controller& get_irq(irq_level i) { return get(irq_to_vec(i)); }
+                static void add(irq_level i, irq_handler_base* p);
+                static void remove(irq_level i, irq_handler_base* p);
 
                 INTERRUPT static void acknowledge() noexcept
                 {
                     if (is_acknowledged()) return;
-                    send_eoi();
+                    send_eoi(interrupt_id::get()->num);
                     interrupt_id::acknowledge();
                 }
 
@@ -166,28 +117,99 @@ namespace jw
                     return std::bitset<16> { r };
                 }
 
-                INTERRUPT static void send_eoi() noexcept
-                {
-                    auto v = interrupt_id::get()->num;
-                    if (data->entries.at(v)->flags & always_chain) return;
-                    auto i = vec_to_irq(v);
-                    auto s = in_service();
-
-                    if (i >= 8)
-                    {
-                        if (s[i]) pic1_cmd.write((i % 8) | 0x60);
-                        if (s[2]) pic0_cmd.write(0x62);
-                    }
-                    else if (s[i]) pic0_cmd.write(i | 0x60);
-                }
+                INTERRUPT static void send_eoi(irq_level i) noexcept;
 
                 INTERRUPT static byte* get_stack_ptr() noexcept;
-                INTERRUPT [[gnu::force_align_arg_pointer, gnu::cdecl]] static void interrupt_entry_point(int_vector vec) noexcept;
+                INTERRUPT [[gnu::force_align_arg_pointer, gnu::cdecl]] static void interrupt_entry_point(irq_level) noexcept;
+
+                struct irq_controller_data;
 
                 static constexpr io::io_port<byte> pic0_cmd { 0x20 };
                 static constexpr io::io_port<byte> pic1_cmd { 0xA0 };
                 static inline irq_controller_data* data { nullptr };
             };
+
+            struct irq_controller::irq_controller_data : class_lock<irq_controller_data>
+            {
+                irq_controller_data()
+                {
+                    stack.resize(config::interrupt_initial_stack_size);
+                    pic0_cmd.write(0x68);   // TODO: restore to defaults
+                    pic1_cmd.write(0x68);
+                }
+
+                irq_controller* get(irq_level i)
+                {
+                    return reinterpret_cast<irq_controller*>(&entries[i]);
+                }
+
+                irq_controller* add(irq_level i)
+                {
+                    auto* entry = reinterpret_cast<irq_controller*>(&entries[i]);
+                    if (not allocated[i])
+                    {
+                        entry = new (entry) irq_controller { i };
+                        allocated[i] = true;
+                    }
+                    return entry;
+                }
+
+                void remove(irq_level i)
+                {
+                    auto* entry = reinterpret_cast<irq_controller*>(&entries[i]);
+                    entry->~irq_controller();
+                    allocated[i] = false;
+                }
+
+                std::bitset<16> allocated { };
+                std::array<std::aligned_storage_t<sizeof(irq_controller), alignof(irq_controller)>, 16> entries;
+                std::vector<byte, locking_allocator<byte>> stack { };
+                std::uint32_t stack_use_count { 0 };
+            };
+
+            inline irq_controller::irq_controller(irq_level i) : old_handler(get_pm_interrupt_vector(irq_to_vec(i))),
+                wrapper(i, interrupt_entry_point, get_stack_ptr, &data->stack_use_count)
+            {
+                set_pm_interrupt_vector(irq_to_vec(wrapper.irq), wrapper.get_ptr());
+            }
+
+            inline void irq_controller::add(irq_level i, irq_handler_base* p)
+            {
+                interrupt_mask no_ints_here { };
+                if (data == nullptr) data = new irq_controller_data { };
+                auto* e = data->add(i);
+                e->handler_chain.push_back(p);
+                e->add_flags();
+                irq_mask::unmask(i);
+                if (i > 7) irq_mask::unmask(2);
+            }
+
+            inline void irq_controller::remove(irq_level i, irq_handler_base* p)
+            {
+                interrupt_mask no_ints_here { };
+                auto* e = data->get(i);
+                e->handler_chain.erase(std::remove_if(e->handler_chain.begin(), e->handler_chain.end(), [p](auto a) { return a == p; }), e->handler_chain.end());
+                e->add_flags();
+                if (e->handler_chain.empty()) data->remove(i);
+                if (data->allocated.none())
+                {
+                    delete data;
+                    data = nullptr;
+                }
+            }
+
+            inline void irq_controller::send_eoi(irq_level i) noexcept
+            {
+                if (data->get(i)->flags & always_chain) return;
+                auto s = in_service();
+
+                if (i >= 8)
+                {
+                    if (s[i]) pic1_cmd.write((i % 8) | 0x60);
+                    if (s[2]) pic0_cmd.write(0x62);
+                }
+                else if (s[i]) pic0_cmd.write(i | 0x60);
+            }
         }
     }
 }

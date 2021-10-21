@@ -87,8 +87,8 @@ namespace jw
             ~irq_handler() { disable(); }
 
             void set_irq(irq_level i) { disable(); irq = i; }
-            void enable() { if (!enabled) detail::irq_controller::get_irq(irq).add(this); enabled = true; }
-            void disable() { if (enabled) detail::irq_controller::get_irq(irq).remove(this); enabled = false; }
+            void enable() { if (!enabled) detail::irq_controller::add(irq, this); enabled = true; }
+            void disable() { if (enabled) detail::irq_controller::remove(irq, this); enabled = false; }
             bool is_enabled() const noexcept { return enabled; }
 
             // Call this from your interrupt handler to signal that the IRQ has been successfully handled.

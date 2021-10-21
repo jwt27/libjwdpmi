@@ -18,35 +18,37 @@ namespace jw
     {
         namespace detail
         {
-            void irq_controller::interrupt_entry_point(int_vector vec) noexcept
+            void irq_controller::interrupt_entry_point(irq_level i) noexcept
             {
-                interrupt_id id { vec, interrupt_type::irq };
-                fpu_context_switcher->enter(0);
+                if ((i == 7 or i == 15) and not in_service()[i]) [[unlikely]]
+                {
+                    send_eoi(i);
+                    return;
+                }
 
-                auto i = vec_to_irq(vec);
-                if ((i == 7 or i == 15) and not in_service()[i]) goto spurious;
+                interrupt_id id { i, interrupt_type::irq };
+                fpu_context_switcher->enter(0);
 
                 try
                 {
                     std::optional<irq_mask> mask;
-                    auto& entry = data->entries.at(vec);
+                    auto* entry = data->get(i);
                     auto flags = entry->flags;
                     if (not (flags & no_interrupts)) asm("sti");
                     else if (flags & no_reentry) mask.emplace(i);
-                    if (not (flags & no_auto_eoi)) send_eoi();
+                    if (not (flags & no_auto_eoi)) send_eoi(i);
 
                     entry->call();
                 }
                 catch (...)
                 {
-                    std::cerr << "Exception in interrupt handler " << std::hex << vec << std::endl;
+                    std::cerr << "Exception while servicing IRQ " << std::dec << i << std::endl;
                     try { throw; }
                     catch (const std::exception& e) { print_exception(e); }
                     catch (...) { }
                     do { asm ("cli; hlt"); } while (true);
                 }
 
-            spurious:
                 acknowledge();
 
                 byte* esp; asm("mov %0, esp;":"=rm"(esp));
@@ -72,8 +74,8 @@ namespace jw
                 }
             }
 
-            irq_wrapper::irq_wrapper(int_vector _vec, entry_fptr entry_f, stack_fptr stack_f, std::uint32_t* use_cnt_ptr) noexcept
-                : use_cnt(use_cnt_ptr), get_stack(stack_f), vec(_vec), entry_point(entry_f)
+            irq_wrapper::irq_wrapper(irq_level i, entry_fptr entry_f, stack_fptr stack_f, std::uint32_t* use_cnt_ptr) noexcept
+                : use_cnt(use_cnt_ptr), get_stack(stack_f), irq(i), entry_point(entry_f)
             {
                 byte* start;
                 std::size_t size;
