@@ -47,9 +47,11 @@ namespace jw::detail
 
     void scheduler::kill_all()
     {
-        if (instance->threads.size() == 0) [[likely]] return;
+        auto* const i = instance;
+        atexit(i->main_thread.get());
+        if (i->threads.size() == 0) [[likely]] return;
         std::cerr << "Warning: exiting with active threads.\n";
-        auto thread_queue_copy = instance->threads;
+        auto thread_queue_copy = i->threads;
         for (auto& t : thread_queue_copy) t->abort();
         for (auto& t : thread_queue_copy)
         {
@@ -157,24 +159,7 @@ namespace jw::detail
         }
         if (t->state != thread::finished) t->state = thread::aborted;
 
-        for (const auto& f : t->atexit_list)
-        {
-            if (i->terminating) break;
-            try { f(); }
-            catch (const abort_thread& e) { e.defuse(); }
-            catch (const terminate_exception&) { i->terminating = true; }
-            catch (...)
-            {
-                std::cerr << "caught exception while processing atexit handlers on thread " << t->id;
-#               ifndef NDEBUG
-                std::cerr << " (" << t->name << ")\n";
-#               endif
-                try { throw; }
-                catch (std::exception& e) { print_exception(e); }
-                i->terminating = true;
-            }
-        }
-        t->atexit_list.clear();
+        atexit(t);
 
         debug::detail::notify_gdb_thread_event(debug::detail::thread_finished);
 
@@ -215,5 +200,28 @@ namespace jw::detail
             }
         }
         return ct->context;
+    }
+
+    void scheduler::atexit(thread* t)
+    {
+        auto* const i = instance;
+        for (const auto& f : t->atexit_list)
+        {
+            if (i->terminating) break;
+            try { f(); }
+            catch (const abort_thread& e) { e.defuse(); }
+            catch (const terminate_exception&) { i->terminating = true; }
+            catch (...)
+            {
+                std::cerr << "caught exception while processing atexit handlers on thread " << t->id;
+#               ifndef NDEBUG
+                std::cerr << " (" << t->name << ")\n";
+#               endif
+                try { throw; }
+                catch (std::exception& e) { print_exception(e); }
+                i->terminating = true;
+            }
+        }
+        t->atexit_list.clear();
     }
 }
