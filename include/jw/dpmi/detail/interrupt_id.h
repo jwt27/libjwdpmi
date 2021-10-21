@@ -107,12 +107,6 @@ namespace jw::dpmi::detail
             }
         }
 
-        static interrupt_id_data* main() noexcept
-        {
-            static interrupt_id_data id { };
-            return &id;
-        }
-
         static interrupt_id_data* get() noexcept { return current; }
         static const std::uint64_t& get_id() noexcept { return current->id; }
 
@@ -130,7 +124,8 @@ namespace jw::dpmi::detail
 
         static void setup() noexcept
         {
-            current = main();
+            static interrupt_id_data id { };
+            current = &id;
         }
     };
 }
