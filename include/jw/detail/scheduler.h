@@ -102,9 +102,36 @@ namespace jw::detail
 
     struct thread
     {
-        static inline std::uint32_t id_count { 1 };
-        static inline pool_resource memres { 4 * config::thread_default_stack_size };
+        friend struct scheduler;
 
+        const std::uint32_t id { id_count++ };
+
+        bool active() const noexcept { return state != finished and state != aborted; }
+        void suspend() noexcept { if (state == running) state = suspended; }
+        void resume() noexcept { if (state == suspended) state = running; }
+        void abort() noexcept { if (active()) this->state = aborting; }
+        auto get_state() noexcept { return state; }
+
+        template<typename F> void invoke(F&& function) { invoke_list.emplace_back(std::forward<F>(function)); }
+        template<typename F> void atexit(F&& function) { atexit_list.emplace_back(std::forward<F>(function)); }
+
+#       ifdef NDEBUG
+        void set_name(...) const noexcept { }
+        std::string_view get_name() const noexcept { return { }; }
+#       else
+        template<typename T>
+        void set_name(T&& string) { name = std::forward<T>(string); }
+        std::string_view get_name() const noexcept { return name; }
+#       endif
+
+        ~thread()
+        {
+            if (function.data() == nullptr) return;
+            destroy(function.data());
+            memres.deallocate(function.data(), function.size() + stack.size());
+        }
+
+    private:
         thread() = default;
 
         template <typename F, typename function_t = std::remove_cvref_t<F>>
@@ -121,6 +148,13 @@ namespace jw::detail
             new(function.data()) function_t { std::forward<F>(func) };
         }
 
+        thread& operator=(const thread&) = delete;
+        thread(const thread&) = delete;
+        thread& operator=(thread&&) = delete;
+        thread(thread&&) = delete;
+
+        void operator()() { call(function.data()); }
+
         template<typename F>
         static auto allocate(std::size_t stack)
         {
@@ -130,26 +164,17 @@ namespace jw::detail
             return std::span<std::byte> { static_cast<std::byte*>(p), n };
         }
 
-        ~thread()
-        {
-            if (function.data() == nullptr) return;
-            destroy(function.data());
-            memres.deallocate(function.data(), function.size() + stack.size());
-        }
+        template<typename F>
+        static void do_call(void* f) { (*static_cast<F*>(f))(); }
+        template<typename F>
+        static void do_destroy(void* f) { static_cast<F*>(f)->~F(); }
 
-        thread& operator=(const thread&) = delete;
-        thread(const thread&) = delete;
-        thread& operator=(thread&&) = delete;
-        thread(thread&&) = delete;
-
-        void operator()() { call(function.data()); }
-
-        const std::uint32_t id { id_count++ };
+        static inline std::uint32_t id_count { 1 };
+        static inline pool_resource memres { 4 * config::thread_default_stack_size };
 
         const std::span<std::byte> function { };
         void (*call)(void*);
         void (*destroy)(void*);
-
         const std::span<std::byte> stack;
         thread_context* context; // points to esp during context switch
 
@@ -166,34 +191,9 @@ namespace jw::detail
         std::deque<jw::function<void(), 4>, scheduler::allocator<jw::function<void(), 4>>> invoke_list { scheduler::memory_resource() };
         std::deque<jw::function<void(), 4>> atexit_list { };
 
-        void abort() noexcept
-        {
-            if (not active()) return;
-            this->state = aborting;
-        }
-
-        bool active() const noexcept { return state != finished and state != aborted; }
-
-        void suspend() noexcept { if (state == running) state = suspended; }
-        void resume() noexcept { if (state == suspended) state = running; }
-
-        template<typename F> void invoke(F&& function) { invoke_list.emplace_back(std::forward<F>(function)); }
-        template<typename F> void atexit(F&& function) { atexit_list.emplace_back(std::forward<F>(function)); }
-
-#       ifdef NDEBUG
-        void set_name(...) const noexcept { }
-        std::string_view get_name() const noexcept { return { }; }
-#       else
-        template<typename T>
-        void set_name(T&& string) { name = std::forward<T>(string); }
-        std::string_view get_name() const noexcept { return name; }
+#       ifndef NDEBUG
         std::pmr::string name { "anonymous thread", scheduler::memory_resource() };
 #       endif
-
-        template<typename F>
-        static void do_call(void* f) { (*static_cast<F*>(f))(); }
-        template<typename F>
-        static void do_destroy(void* f) { static_cast<F*>(f)->~F(); }
     };
 
     struct abort_thread
@@ -229,7 +229,11 @@ namespace jw::detail
     template<typename F>
     inline thread_ptr scheduler::create_thread(F&& func, std::size_t stack_size)
     {
-        scheduler::allocator<thread> alloc { scheduler::memory_resource() };
-        return std::allocate_shared<thread>(alloc, std::forward<F>(func), stack_size);
+        allocator<thread> alloc { memory_resource() };
+        allocator_delete<allocator<thread>> deleter { alloc };
+        auto* p = alloc.allocate(1);
+        try { p = new (p) thread { std::forward<F>(func), stack_size }; }
+        catch (...) { alloc.deallocate(p, 1); throw; }
+        return { p, deleter, alloc };
     }
 }
