@@ -1,6 +1,8 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 
+#pragma once
 #include <cstdint>
 
 namespace jw
@@ -44,6 +46,12 @@ namespace jw
                 sigusr1 = 30,
                 sigusr2 = 31,
             };
+
+#           ifndef NDEBUG
+            void notify_gdb_thread_event(debug::detail::debug_signals);
+#           else
+            inline void notify_gdb_thread_event(debug::detail::debug_signals) { }
+#           endif
         }
     }
 }

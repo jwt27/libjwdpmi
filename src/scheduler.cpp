@@ -15,10 +15,6 @@
 #include <jw/debug/debug.h>
 #include <jw/debug/detail/signals.h>
 
-namespace jw::debug::detail
-{
-    void notify_gdb_thread_event(debug::detail::debug_signals);
-}
 namespace jw::detail
 {
     scheduler::scheduler()

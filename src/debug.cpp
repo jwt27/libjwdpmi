@@ -1451,11 +1451,6 @@ namespace jw
                 return false;
             }()) break_with_signal(detail::trap_unmasked);
         }
-#       else
-        namespace detail
-        {
-            void notify_gdb_thread_event(debug_signals) { }
-        }
 #       endif
 
         _Unwind_Reason_Code unwind_print_trace(_Unwind_Context* c, void*)
