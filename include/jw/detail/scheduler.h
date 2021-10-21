@@ -196,30 +196,6 @@ namespace jw::detail
         static void do_destroy(void* f) { static_cast<F*>(f)->~F(); }
     };
 
-    template<typename T>
-    struct callable_tuple
-    {
-        template<typename... E>
-        callable_tuple(E&&... elements) : tuple { std::forward<E>(elements)... } { }
-
-        decltype(auto) operator()()
-        {
-            return call(std::make_index_sequence<std::tuple_size_v<T>> { });
-        }
-
-    private:
-        template<std::size_t... I>
-        decltype(auto) call(std::index_sequence<I...>)
-        {
-            return std::invoke(std::get<I>(std::move(tuple))...);
-        }
-
-        T tuple;
-    };
-
-    template<typename... E>
-    callable_tuple(E...) -> callable_tuple<std::tuple<std::decay_t<E>...>>;
-
     struct abort_thread
     {
         ~abort_thread() noexcept(false) { if (not defused) throw terminate_exception { }; }

@@ -138,7 +138,7 @@ namespace jw
     {
         static_assert(std::is_invocable_v<std::decay_t<F>, std::decay_t<A>...>);
 
-        auto wrapper = detail::callable_tuple { std::forward<F>(func), std::forward<A>(args)... };
+        auto wrapper = callable_tuple { std::forward<F>(func), std::forward<A>(args)... };
         return detail::scheduler::create_thread(std::move(wrapper), stack_size);
     }
 }
