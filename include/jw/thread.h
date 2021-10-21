@@ -136,13 +136,9 @@ namespace jw
     template<typename F, typename... A>
     inline auto thread::create(std::size_t stack_size, F&& func, A&&... args)
     {
-        static_assert(std::is_constructible_v<std::decay_t<F>, F>);
         static_assert(std::is_invocable_v<std::decay_t<F>, std::decay_t<A>...>);
 
-        auto wrapper = [ func = std::tuple<F> { std::forward<F>(func) },
-                            args = std::tuple<A...> { std::forward<A>(args)... } ]
-            { std::apply(std::get<0>(func), args); };
-
+        auto wrapper = detail::callable_tuple { std::forward<F>(func), std::forward<A>(args)... };
         return detail::scheduler::create_thread(std::move(wrapper), stack_size);
     }
 }

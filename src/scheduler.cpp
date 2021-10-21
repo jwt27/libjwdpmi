@@ -138,7 +138,7 @@ namespace jw::detail
         try
         {
             t->state = thread::running;
-            t->function();
+            (*t)();
             t->state = thread::finished;
         }
         catch (const abort_thread& e) { e.defuse(); }

@@ -103,23 +103,53 @@ namespace jw::detail
     struct thread
     {
         static inline std::uint32_t id_count { 1 };
-        static inline pool_resource stack_resource { 4 * config::thread_default_stack_size };
+        static inline pool_resource memres { 4 * config::thread_default_stack_size };
 
         thread() = default;
 
-        template <typename F>
-        thread(F&& func, std::size_t bytes)
-            : function { std::forward<F>(func) }
-            , stack { static_cast<std::byte*>(stack_resource.allocate(bytes)), bytes } { }
-        ~thread() { if (stack.data() != nullptr) stack_resource.deallocate(stack.data(), stack.size_bytes()); }
+        template <typename F, typename function_t = std::remove_cvref_t<F>>
+        thread(F&& func, std::size_t stack_bytes)
+            : thread { allocate<function_t>(stack_bytes), std::forward<F>(func) } { }
+
+        template <typename F, typename function_t = std::remove_cvref_t<F>>
+        thread(std::span<std::byte> span, F&& func)
+            : function { span.first(sizeof(function_t)) }
+            , call { do_call<function_t> }
+            , destroy { do_destroy<function_t> }
+            , stack { span.last(span.size() - sizeof(function_t)) }
+        {
+            new(function.data()) function_t { std::forward<F>(func) };
+        }
+
+        template<typename F>
+        static auto allocate(std::size_t stack)
+        {
+            const auto n = stack + sizeof(F);
+            const auto a = std::max(alignof(F), 4ul);
+            auto* const p = memres.allocate(n, a);
+            return std::span<std::byte> { static_cast<std::byte*>(p), n };
+        }
+
+        ~thread()
+        {
+            if (function.data() == nullptr) return;
+            destroy(function.data());
+            memres.deallocate(function.data(), function.size() + stack.size());
+        }
 
         thread& operator=(const thread&) = delete;
         thread(const thread&) = delete;
         thread& operator=(thread&&) = delete;
         thread(thread&&) = delete;
 
+        void operator()() { call(function.data()); }
+
         const std::uint32_t id { id_count++ };
-        const std::function<void()> function;
+
+        const std::span<std::byte> function { };
+        void (*call)(void*);
+        void (*destroy)(void*);
+
         const std::span<std::byte> stack;
         thread_context* context; // points to esp during context switch
 
@@ -159,7 +189,36 @@ namespace jw::detail
         std::string_view get_name() const noexcept { return name; }
         std::pmr::string name { "anonymous thread", scheduler::memory_resource() };
 #       endif
+
+        template<typename F>
+        static void do_call(void* f) { (*static_cast<F*>(f))(); }
+        template<typename F>
+        static void do_destroy(void* f) { static_cast<F*>(f)->~F(); }
     };
+
+    template<typename T>
+    struct callable_tuple
+    {
+        template<typename... E>
+        callable_tuple(E&&... elements) : tuple { std::forward<E>(elements)... } { }
+
+        decltype(auto) operator()()
+        {
+            return call(std::make_index_sequence<std::tuple_size_v<T>> { });
+        }
+
+    private:
+        template<std::size_t... I>
+        decltype(auto) call(std::index_sequence<I...>)
+        {
+            return std::invoke(std::get<I>(std::move(tuple))...);
+        }
+
+        T tuple;
+    };
+
+    template<typename... E>
+    callable_tuple(E...) -> callable_tuple<std::tuple<std::decay_t<E>...>>;
 
     struct abort_thread
     {
