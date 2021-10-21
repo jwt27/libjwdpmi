@@ -75,7 +75,7 @@ namespace jw
     struct thread
     {
         using id = std::uint32_t;
-        using native_handle_type = std::weak_ptr<detail::thread>;
+        using native_handle_type = detail::thread*;
 
         thread() noexcept = default;
         template<typename F, typename... A>
@@ -105,7 +105,7 @@ namespace jw
         void join();
         void detach() { ptr.reset(); }
         id get_id() const noexcept { return ptr ? ptr->id : 0; };
-        native_handle_type native_handle() { return ptr; };
+        native_handle_type native_handle() { return ptr.get(); };
 
         void abort() { ptr->abort(); };
         bool active() const noexcept { return ptr and ptr->active(); }
