@@ -133,6 +133,7 @@ namespace jw::detail
         } state { starting };
 
         std::deque<jw::function<void(), 4>, scheduler::allocator<jw::function<void(), 4>>> invoke_list { scheduler::memory_resource() };
+        std::deque<jw::function<void(), 4>> atexit_list { };
 
         void abort() noexcept
         {
@@ -146,6 +147,7 @@ namespace jw::detail
         void resume() noexcept { if (state == suspended) state = running; }
 
         template<typename F> void invoke(F&& function) { invoke_list.emplace_back(std::forward<F>(function)); }
+        template<typename F> void atexit(F&& function) { atexit_list.emplace_back(std::forward<F>(function)); }
 
 #       ifdef NDEBUG
         void set_name(...) const noexcept { }

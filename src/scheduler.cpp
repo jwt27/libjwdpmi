@@ -155,8 +155,27 @@ namespace jw::detail
             catch (std::exception& e) { print_exception(e); }
             i->terminating = true;
         }
-
         if (t->state != thread::finished) t->state = thread::aborted;
+
+        for (const auto& f : t->atexit_list)
+        {
+            if (i->terminating) break;
+            try { f(); }
+            catch (const abort_thread& e) { e.defuse(); }
+            catch (const terminate_exception&) { i->terminating = true; }
+            catch (...)
+            {
+                std::cerr << "caught exception while processing atexit handlers on thread " << t->id;
+#               ifndef NDEBUG
+                std::cerr << " (" << t->name << ")\n";
+#               endif
+                try { throw; }
+                catch (std::exception& e) { print_exception(e); }
+                i->terminating = true;
+            }
+        }
+        t->atexit_list.clear();
+
         debug::detail::notify_gdb_thread_event(debug::detail::thread_finished);
 
         while (true) yield();
