@@ -20,9 +20,9 @@ namespace jw
         {
             void irq_controller::interrupt_entry_point(irq_level i) noexcept
             {
-                if ((i == 7 or i == 15) and not in_service()[i]) [[unlikely]]
+                if ((i == 7 or i == 15) and not in_service(i)) [[unlikely]]
                 {
-                    send_eoi(i);
+                    if (i == 15) pic0_cmd.write(0x62);
                     return;
                 }
 
@@ -36,7 +36,7 @@ namespace jw
                     auto flags = entry->flags;
                     if (not (flags & no_interrupts)) asm("sti");
                     else if (flags & no_reentry) mask.emplace(i);
-                    if (not (flags & no_auto_eoi)) send_eoi(i);
+                    if (not (flags & no_auto_eoi)) send_eoi_without_acknowledge();
 
                     entry->call();
                 }
@@ -48,8 +48,6 @@ namespace jw
                     catch (...) { }
                     do { asm ("cli; hlt"); } while (true);
                 }
-
-                acknowledge();
 
                 byte* esp; asm("mov %0, esp;":"=rm"(esp));
                 if (static_cast<std::size_t>(esp - data->stack.data()) <= config::interrupt_minimum_stack_size) [[unlikely]]
@@ -63,11 +61,12 @@ namespace jw
 
             void irq_controller::call()
             {
+                auto* id = interrupt_id::get();
                 for (auto f : handler_chain)
                 {
-                    if (f->flags & always_call or not is_acknowledged()) f->handler_ptr();
+                    if (f->flags & always_call or id->acknowledged != ack::yes) f->handler_ptr();
                 }
-                if (flags & always_chain or not is_acknowledged())
+                if (flags & always_chain or id->acknowledged == ack::no)
                 {
                     interrupt_mask no_ints_here { };
                     call_far_iret(old_handler);

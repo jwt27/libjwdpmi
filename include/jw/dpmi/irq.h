@@ -87,7 +87,7 @@ namespace jw
             ~irq_handler() { disable(); }
 
             void set_irq(irq_level i) { disable(); irq = i; }
-            void enable() { if (!enabled) detail::irq_controller::add(irq, this); enabled = true; }
+            void enable() { if (not enabled) detail::irq_controller::add(irq, this); enabled = true; }
             void disable() { if (enabled) detail::irq_controller::remove(irq, this); enabled = false; }
             bool is_enabled() const noexcept { return enabled; }
 

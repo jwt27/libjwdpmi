@@ -29,6 +29,13 @@ namespace jw::dpmi::detail
         realmode_irq
     };
 
+    enum class ack
+    {
+        no,
+        eoi_sent,
+        yes
+    };
+
     struct interrupt_id;
 
     struct interrupt_id_data
@@ -36,7 +43,7 @@ namespace jw::dpmi::detail
         const std::uint64_t id { id_count++ };
         const std::uint32_t num;
         const interrupt_type type;
-        bool acknowledged { type != interrupt_type::irq };
+        ack acknowledged { type == interrupt_type::irq ? ack::no : ack::yes };
         jw_cxa_eh_globals eh_globals { };
         interrupt_id_data* const next;
 
@@ -114,11 +121,6 @@ namespace jw::dpmi::detail
             for (auto* p = current; p != nullptr; p = p->next)
                 if (p->id == id) return true;
             return false;
-        }
-
-        static void acknowledge() noexcept
-        {
-            current->acknowledged = true;
         }
 
     private:

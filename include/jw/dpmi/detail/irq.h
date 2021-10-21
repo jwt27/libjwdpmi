@@ -81,9 +81,10 @@ namespace jw
 
                 INTERRUPT static void acknowledge() noexcept
                 {
-                    if (is_acknowledged()) return;
-                    send_eoi(interrupt_id::get()->num);
-                    interrupt_id::acknowledge();
+                    auto* id = interrupt_id::get();
+                    if (id->acknowledged == ack::no)
+                        send_eoi(id->num);
+                    id->acknowledged = ack::yes;
                 }
 
             private:
@@ -102,12 +103,8 @@ namespace jw
                 }
 
                 static bool is_irq(int_vector v) { return vec_to_irq(v) != 0xff; }
-                static bool is_acknowledged()
-                {
-                    return interrupt_id::get()->acknowledged;
-                }
 
-                INTERRUPT static auto in_service() noexcept
+                static auto in_service() noexcept
                 {
                     split_uint16_t r;
                     pic0_cmd.write(0x0B);
@@ -117,10 +114,30 @@ namespace jw
                     return std::bitset<16> { r };
                 }
 
+                static auto in_service(irq_level i) noexcept
+                {
+                    if (i > 8)
+                    {
+                        pic1_cmd.write(0x0B);
+                        return std::bitset<8> { pic1_cmd.read() }[i - 8];
+                    }
+                    pic0_cmd.write(0x0B);
+                    return std::bitset<8> { pic0_cmd.read() }[i];
+                }
+
+                static void send_eoi_without_acknowledge()
+                {
+                    auto* id = interrupt_id::get();
+                    if (id->acknowledged != ack::no) return;
+                    send_eoi(id->num);
+                    id->acknowledged = ack::eoi_sent;
+                }
+
                 INTERRUPT static void send_eoi(irq_level i) noexcept;
 
                 INTERRUPT static byte* get_stack_ptr() noexcept;
-                INTERRUPT [[gnu::force_align_arg_pointer, gnu::cdecl]] static void interrupt_entry_point(irq_level) noexcept;
+                INTERRUPT [[gnu::force_align_arg_pointer, gnu::cdecl]]
+                static void interrupt_entry_point(irq_level) noexcept;
 
                 struct irq_controller_data;
 
@@ -145,7 +162,7 @@ namespace jw
 
                 irq_controller* add(irq_level i)
                 {
-                    auto* entry = reinterpret_cast<irq_controller*>(&entries[i]);
+                    auto* entry = get(i);
                     if (not allocated[i])
                     {
                         entry = new (entry) irq_controller { i };
@@ -156,7 +173,7 @@ namespace jw
 
                 void remove(irq_level i)
                 {
-                    auto* entry = reinterpret_cast<irq_controller*>(&entries[i]);
+                    auto* entry = get(i);
                     entry->~irq_controller();
                     allocated[i] = false;
                 }
@@ -167,8 +184,8 @@ namespace jw
                 std::uint32_t stack_use_count { 0 };
             };
 
-            inline irq_controller::irq_controller(irq_level i) : old_handler(get_pm_interrupt_vector(irq_to_vec(i))),
-                wrapper(i, interrupt_entry_point, get_stack_ptr, &data->stack_use_count)
+            inline irq_controller::irq_controller(irq_level i) : old_handler { get_pm_interrupt_vector(irq_to_vec(i)) },
+                wrapper { i, interrupt_entry_point, get_stack_ptr, &data->stack_use_count }
             {
                 set_pm_interrupt_vector(irq_to_vec(wrapper.irq), wrapper.get_ptr());
             }
@@ -201,14 +218,12 @@ namespace jw
             inline void irq_controller::send_eoi(irq_level i) noexcept
             {
                 if (data->get(i)->flags & always_chain) return;
-                auto s = in_service();
-
                 if (i >= 8)
                 {
-                    if (s[i]) pic1_cmd.write((i % 8) | 0x60);
-                    if (s[2]) pic0_cmd.write(0x62);
+                    pic1_cmd.write((i % 8) | 0x60);
+                    pic0_cmd.write(0x62);
                 }
-                else if (s[i]) pic0_cmd.write(i | 0x60);
+                else pic0_cmd.write(i | 0x60);
             }
         }
     }
