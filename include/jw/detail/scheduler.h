@@ -56,6 +56,9 @@ namespace jw::detail
 
         template <typename T = std::byte>
         using allocator = monomorphic_allocator<dpmi::locked_pool_resource<true>, T>;
+        using thread_id = std::uint32_t;
+
+        static constexpr inline thread_id main_thread_id = 1;
 
         static bool is_current_thread(const thread* t) noexcept;
         static std::weak_ptr<thread> get_current_thread() noexcept;
@@ -104,7 +107,7 @@ namespace jw::detail
     {
         friend struct scheduler;
 
-        const std::uint32_t id { id_count++ };
+        const scheduler::thread_id id { id_count++ };
 
         bool active() const noexcept { return state != finished and state != aborted; }
         void suspend() noexcept { if (state == running) state = suspended; }
@@ -169,7 +172,7 @@ namespace jw::detail
         template<typename F>
         static void do_destroy(void* f) { static_cast<F*>(f)->~F(); }
 
-        static inline std::uint32_t id_count { 1 };
+        static inline scheduler::thread_id id_count { 1 };
         static inline pool_resource memres { 4 * config::thread_default_stack_size };
 
         const std::span<std::byte> function { };

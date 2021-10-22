@@ -74,7 +74,7 @@ namespace jw
 
     struct thread
     {
-        using id = std::uint32_t;
+        using id = detail::scheduler::thread_id;
         using native_handle_type = detail::thread*;
 
         thread() noexcept = default;

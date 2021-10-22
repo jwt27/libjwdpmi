@@ -84,10 +84,12 @@ namespace jw
             std::pmr::deque<packet_string> packet { &memres };
             bool replied { false };
 
-            constexpr std::uint32_t all_threads_id { std::numeric_limits<std::uint32_t>::max() };
-            std::uint32_t current_thread_id { 1 };
-            std::uint32_t query_thread_id { 1 };
-            std::uint32_t control_thread_id { all_threads_id };
+            using thread_id = jw::detail::scheduler::thread_id;
+            constexpr thread_id main_thread_id = jw::detail::scheduler::main_thread_id;
+            constexpr thread_id all_threads_id { 0 };
+            thread_id current_thread_id { 1 };
+            thread_id query_thread_id { 1 };
+            thread_id control_thread_id { all_threads_id };
 
             struct thread_info
             {
@@ -170,7 +172,7 @@ namespace jw
                 }
             };
             
-            std::pmr::map<std::uint32_t, thread_info> threads { &memres };
+            std::pmr::map<thread_id, thread_info> threads { &memres };
             thread_info* current_thread { nullptr };
 
             inline void populate_thread_list()
