@@ -177,7 +177,7 @@ namespace jw::detail
         {
             check();
             this->result->value = std::forward<T>(value);
-            scheduler::get_current_thread().lock()->atexit([&s = this->result->state] { s = promise_state::available; });
+            scheduler::current_thread()->atexit([&s = this->result->state] { s = promise_state::available; });
         }
 
         void check()

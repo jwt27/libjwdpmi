@@ -25,7 +25,9 @@ namespace jw::detail
         main_thread = std::shared_ptr<thread> { p, deleter, alloc };
         p->state = thread::running;
         p->set_name("Main thread");
-        current_thread = main_thread;
+        debug::throw_assert(p->id == main_thread_id);
+        threads.emplace(p->id, main_thread);
+        iterator = threads.begin();
     }
 
     scheduler::dtor::~dtor()
@@ -46,13 +48,15 @@ namespace jw::detail
     {
         auto* const i = instance;
         atexit(i->main_thread.get());
-        if (i->threads.size() == 0) [[likely]] return;
+        if (i->threads.size() == 1) [[likely]] return;
         std::cerr << "Warning: exiting with active threads.\n";
         auto thread_queue_copy = i->threads;
-        for (auto& t : thread_queue_copy) t->abort();
+        thread_queue_copy.erase(main_thread_id);
+        for (auto& t : thread_queue_copy) t.second->abort();
+        i->main_thread->state = thread::running;
         for (auto& t : thread_queue_copy)
         {
-            while (t->active())
+            while (t.second->active())
             {
                 try { this_thread::yield(); }
                 catch (const jw::terminate_exception& e) { e.defuse(); }
@@ -99,28 +103,29 @@ namespace jw::detail
 
         {
             debug::trap_mask dont_trace_here { };
-            context_switch(&i->current_thread->context);
+            context_switch(&current_thread()->context);
         }
 
 #       ifndef NDEBUG
-        if (i->current_thread != i->main_thread and *reinterpret_cast<std::uint32_t*>(i->current_thread->stack.data()) != 0xDEADBEEF) [[unlikely]]
+        if (not is_current_thread(main_thread_id) and *reinterpret_cast<std::uint32_t*>(current_thread()->stack.data()) != 0xDEADBEEF) [[unlikely]]
             throw std::runtime_error { "Stack overflow!" };
 #       endif
 
         if (i->terminating) [[unlikely]] terminate();
 
-        while (i->current_thread->invoke_list.size() > 0) [[unlikely]]
+        auto* const ct = current_thread();
+        while (ct->invoke_list.size() > 0) [[unlikely]]
         {
             decltype(thread::invoke_list)::value_type f;
             {
                 dpmi::interrupt_mask no_interrupts_please { };
-                f = std::move(i->current_thread->invoke_list.front());
-                i->current_thread->invoke_list.pop_front();
+                f = std::move(ct->invoke_list.front());
+                ct->invoke_list.pop_front();
             }
             f();
         }
 
-        if (i->current_thread->state == thread::aborting) [[unlikely]] throw abort_thread();
+        if (ct->state == thread::aborting) [[unlikely]] throw abort_thread();
     }
 
     void scheduler::start_thread(const thread_ptr& t)
@@ -128,14 +133,15 @@ namespace jw::detail
         if (t->state != thread::starting) return;
         debug::trap_mask dont_trace_here { };
         dpmi::interrupt_mask no_interrupts_please { };
-        instance->threads.push_front(t);
+        auto* const i = instance;
+        i->threads.emplace_hint(i->threads.end(), t->id, t);
     }
 
     // The actual thread.
     void scheduler::run_thread() noexcept
     {
         auto* const i = instance;
-        auto* const t = i->current_thread.get();
+        auto* const t = current_thread();
         try
         {
             t->state = thread::running;
@@ -172,11 +178,11 @@ namespace jw::detail
         {
             {
                 dpmi::interrupt_mask no_interrupts_please { };
-                if (i->current_thread->active()) [[likely]] i->threads.emplace_back(std::move(i->current_thread));
-                i->current_thread = std::move(i->threads.front());
-                i->threads.pop_front();
+                if (i->iterator->second->active()) [[likely]] ++i->iterator;
+                else i->iterator = i->threads.erase(i->iterator);
+                if (i->iterator == i->threads.end()) i->iterator = i->threads.begin();
             }
-            ct = i->current_thread.get();
+            ct = current_thread();
 
             if (ct->state == thread::starting) [[unlikely]]     // new thread, initialize new context on stack
             {
@@ -185,7 +191,7 @@ namespace jw::detail
 #               endif
                 std::byte* const esp = (ct->stack.data() + ct->stack.size_bytes() - 4) - sizeof(thread_context);
                 ct->context = reinterpret_cast<thread_context*>(esp);               // *context points to top of stack
-                *ct->context = *i->threads.back()->context;
+                *ct->context = *i->main_thread->context;
                 ct->context->return_address = reinterpret_cast<std::uintptr_t>(run_thread);
             }
 

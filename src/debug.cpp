@@ -93,7 +93,7 @@ namespace jw
 
             struct thread_info
             {
-                std::weak_ptr<jw::detail::thread> thread;
+                jw::detail::thread* thread;
                 new_exception_frame frame;
                 cpu_registers reg;
                 std::pmr::set<std::int32_t> signals { &memres };
@@ -116,8 +116,7 @@ namespace jw
                 void set_action(char a, std::uintptr_t resume_at = 0, std::uintptr_t rbegin = 0, std::uintptr_t rend = 0)
                 {
                     if (resume_at != 0) frame.fault_address.offset = resume_at;
-                    auto t = thread.lock();
-                    t->resume();
+                    thread->resume();
                     if (a == 'c')  // continue
                     {
                         frame.flags.trap = false;
@@ -149,7 +148,7 @@ namespace jw
                     }
                     else if (a == 't')   // stop
                     {
-                        t->suspend();
+                        thread->suspend();
                         action = stop;
                     }
                     else throw std::exception { };
@@ -179,15 +178,15 @@ namespace jw
             {
                 for (auto i = threads.begin(); i != threads.end();)
                 {
-                    if (i->second.thread.expired()) i = threads.erase(i);
+                    if (jw::detail::scheduler::get_thread(i->first) == nullptr) i = threads.erase(i);
                     else ++i;
                 }
-                for (auto&& t : jw::detail::scheduler::get_threads())
+                for (auto&& t : jw::detail::scheduler::all_threads())
                 {
-                    threads[t->id].thread = t;
+                    threads[t.first].thread = t.second.get();
                 }
-                current_thread_id = jw::detail::scheduler::get_current_thread_id();
-                threads[current_thread_id].thread = jw::detail::scheduler::get_current_thread();
+                current_thread_id = jw::detail::scheduler::current_thread_id();
+                threads[current_thread_id].thread = jw::detail::scheduler::current_thread();
                 current_thread = &threads[current_thread_id];
             }
 
@@ -642,13 +641,13 @@ namespace jw
                 }
                 else
                 {
-                    auto t_ptr = t.thread.lock();
-                    if (not t_ptr or t_ptr->state == jw::detail::thread::starting)
+                    auto* t_ptr = t.thread;
+                    if (not t_ptr or t_ptr->get_state() == jw::detail::thread::starting)
                     {
                         encode_null(out, regsize[r]);
                         return;
                     }
-                    auto* reg = t_ptr->context;
+                    auto* reg = t_ptr->get_context();
                     auto r_esp = reinterpret_cast<std::uintptr_t>(reg) - sizeof(jw::detail::thread_context);
                     auto r_eip = reg->return_address;
                     switch (r)
@@ -731,7 +730,7 @@ namespace jw
                     };
                     if (no_stop_signal(t) and report_last) t.signals.insert(t.last_stop_signal);
 
-                    auto t_ptr = t.thread.lock();
+                    auto* t_ptr = t.thread;
 
                     for (auto i = t.signals.begin(); i != t.signals.end();)
                     {
@@ -763,7 +762,7 @@ namespace jw
                         if (signal == thread_finished)
                         {
                             s << 'w';
-                            if (t_ptr->state == jw::detail::thread::finished) s << "00";
+                            if (t_ptr->get_state() == jw::detail::thread::finished) s << "00";
                             else s << "ff";
                             s << ';' << t_ptr->id;
                             send_packet(s.str());
@@ -771,7 +770,7 @@ namespace jw
                         else
                         {
                             s << "T" << std::setw(2) << posix_signal(signal);
-                            if (t_ptr->state != jw::detail::thread::starting)
+                            if (t_ptr->get_state() != jw::detail::thread::starting)
                             {
                                 s << eip << ':'; reg(s, eip, t_ptr->id); s << ';';
                                 s << esp << ':'; reg(s, esp, t_ptr->id); s << ';';
@@ -892,11 +891,11 @@ namespace jw
                         auto id = decode(packet[1]);
                         if (threads.count(id))
                         {
-                            auto&& t = threads[id].thread.lock();
-                            msg << t->name;
+                            auto* t = threads[id].thread;
+                            msg << t->get_name();
                             if (id == current_thread_id) msg << " (*)";
                             msg << ": ";
-                            switch (t->state)
+                            switch (t->get_state())
                             {
                             case jw::detail::thread::starting:    msg << "Starting";    break;
                             case jw::detail::thread::running:     msg << "Running";     break;
@@ -1289,7 +1288,7 @@ namespace jw
                             if (thread_events_enabled) t.second.set_action('t');
                             else t.second.set_action('c');
 
-                            if (t.second.thread.lock()->state == jw::detail::thread::starting)
+                            if (t.second.thread->get_state() == jw::detail::thread::starting)
                                 t.second.signals.insert(thread_started);
                         }
 
@@ -1324,7 +1323,7 @@ namespace jw
                     auto cant_continue = []
                     {
                         for (auto&& t : threads)
-                            if (t.second.thread.lock()->active() and
+                            if (t.second.thread->active() and
                                 t.second.action == thread_info::none) return true;
                         return false;
                     };
@@ -1438,14 +1437,14 @@ namespace jw
         {
             if (not debug()) { failed = true; return; }
             if (detail::debugger_reentry) { failed = true; return; }
-            ++detail::threads[jw::detail::scheduler::get_current_thread_id()].trap_mask;
+            ++detail::threads[jw::detail::scheduler::current_thread_id()].trap_mask;
         }
 
         trap_mask::~trap_mask() noexcept
         {
             force_frame_pointer();
             if (failed) return;
-            auto& t = detail::threads[jw::detail::scheduler::get_current_thread_id()];
+            auto& t = detail::threads[jw::detail::scheduler::current_thread_id()];
             t.trap_mask = std::max(t.trap_mask - 1, 0l);
             if (t.trap_mask == 0 and [&t]
             {

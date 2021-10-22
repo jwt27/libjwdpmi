@@ -44,22 +44,15 @@ namespace jw
 
     class recursive_mutex
     {
-        using thread_ptr = std::weak_ptr<const detail::thread>;
+        using thread_id = detail::scheduler::thread_id;
         using irq_ptr = std::weak_ptr<const dpmi::detail::interrupt_id::id_t>;
-        std::variant<std::nullptr_t, thread_ptr, irq_ptr> owner { nullptr };
+        std::variant<std::nullptr_t, thread_id, irq_ptr> owner { nullptr };
         std::atomic<std::uint32_t> lock_count { 0 };
 
         struct is_owner
         {
-            bool operator()(const thread_ptr& p) const noexcept { return detail::scheduler::is_current_thread(p.lock().get()); }
+            bool operator()(const thread_id& id) const noexcept { return detail::scheduler::is_current_thread(id); }
             bool operator()(const irq_ptr& p) const noexcept { return dpmi::detail::interrupt_id::is_current_interrupt(p.lock().get()); }
-            bool operator()(const std::nullptr_t&) const noexcept { return false; }
-        };
-
-        struct has_owner
-        {
-            bool operator()(const thread_ptr& p) const noexcept { return not p.expired(); }
-            bool operator()(const irq_ptr& p) const noexcept { return not p.expired(); }
             bool operator()(const std::nullptr_t&) const noexcept { return false; }
         };
 
@@ -85,10 +78,10 @@ namespace jw
 
         bool try_lock() noexcept
         {
-            if (not std::visit(has_owner { }, owner))
+            if (owner.index() == 0)
             {
                 if (dpmi::in_irq_context()) owner = dpmi::detail::interrupt_id::get_current_interrupt();
-                else owner = detail::scheduler::get_current_thread();
+                else owner = detail::scheduler::current_thread_id();
                 lock_count = 1;
                 return true;
             }

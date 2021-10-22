@@ -128,7 +128,7 @@ namespace jw
     inline void thread::join()
     {
         if (not ptr) throw std::system_error { std::make_error_code(std::errc::no_such_process) };
-        if (get_id() == detail::scheduler::get_current_thread_id()) throw deadlock { };
+        if (get_id() == detail::scheduler::current_thread_id()) throw deadlock { };
         this_thread::yield_while([p = ptr.get()] { return p->active(); });
         ptr.reset();
     }

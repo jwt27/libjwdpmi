@@ -11,6 +11,7 @@
 #include <functional>
 #include <memory>
 #include <deque>
+#include <map>
 #include <jw/dpmi/irq_check.h>
 #include <jw/dpmi/alloc.h>
 #include <jw/function.h>
@@ -61,9 +62,10 @@ namespace jw::detail
         static constexpr inline thread_id main_thread_id = 1;
 
         static bool is_current_thread(const thread* t) noexcept;
-        static std::weak_ptr<thread> get_current_thread() noexcept;
-        static auto get_current_thread_id() noexcept;
-        static const auto& get_threads();
+        static bool is_current_thread(thread_id) noexcept;
+        static thread* current_thread() noexcept;
+        static thread_id current_thread_id() noexcept;
+        static thread* get_thread(thread_id) noexcept;
 
         template<typename F>
         static void invoke_main(F&& function);
@@ -72,7 +74,12 @@ namespace jw::detail
 
         static auto* memory_resource() noexcept { return memres; }
 
+#       ifndef NDEBUG
+        static const auto& all_threads() { return instance->threads; }
+#       endif
+
     private:
+        using map_t = std::map<thread_id, thread_ptr, std::less<thread_id>, allocator<std::pair<const thread_id, thread_ptr>>>;
         template<typename F>
         static thread_ptr create_thread(F&& func, std::size_t stack_size = config::thread_default_stack_size);
         static void start_thread(const thread_ptr&);
@@ -88,8 +95,8 @@ namespace jw::detail
         [[gnu::force_align_arg_pointer, noreturn]]
         static void run_thread() noexcept;
 
-        std::deque<thread_ptr, allocator<thread_ptr>> threads { memres };
-        thread_ptr current_thread;
+        map_t threads { memres };
+        map_t::iterator iterator;
         thread_ptr main_thread;
         bool terminating { false };
 
@@ -106,6 +113,16 @@ namespace jw::detail
     struct thread
     {
         friend struct scheduler;
+
+        enum thread_state
+        {
+            starting,
+            running,
+            suspended,
+            aborting,
+            aborted,
+            finished
+        };
 
         const scheduler::thread_id id { id_count++ };
 
@@ -125,6 +142,7 @@ namespace jw::detail
         template<typename T>
         void set_name(T&& string) { name = std::forward<T>(string); }
         std::string_view get_name() const noexcept { return name; }
+        thread_context* get_context() noexcept { return context; }
 #       endif
 
         ~thread()
@@ -180,16 +198,7 @@ namespace jw::detail
         void (*destroy)(void*);
         const std::span<std::byte> stack;
         thread_context* context; // points to esp during context switch
-
-        enum
-        {
-            starting,
-            running,
-            suspended,
-            aborting,
-            aborted,
-            finished
-        } state { starting };
+        thread_state state { starting };
 
         std::deque<jw::function<void(), 4>, scheduler::allocator<jw::function<void(), 4>>> invoke_list { scheduler::memory_resource() };
         std::deque<jw::function<void(), 4>> atexit_list { };
@@ -209,23 +218,37 @@ namespace jw::detail
         mutable bool defused { false };
     };
 
-    inline bool scheduler::is_current_thread(const thread* t) noexcept { return instance->current_thread.get() == t; }
-    inline std::weak_ptr<thread> scheduler::get_current_thread() noexcept { return instance->current_thread; }
-    inline auto scheduler::get_current_thread_id() noexcept { return instance->current_thread->id; }
-    inline const auto& scheduler::get_threads() { return instance->threads; }
+    inline bool scheduler::is_current_thread(const thread* t) noexcept { return current_thread() == t; }
+    inline bool scheduler::is_current_thread(thread_id id) noexcept { return current_thread_id() == id; }
+    inline thread* scheduler::current_thread() noexcept { return instance->iterator->second.get(); }
+    inline scheduler::thread_id scheduler::current_thread_id() noexcept { return instance->iterator->first; }
+
+    inline thread* scheduler::get_thread(thread_id id) noexcept
+    {
+        auto* const i = instance;
+        auto it = i->threads.find(id);
+        if (it == i->threads.end()) return nullptr;
+        return it->second.get();
+    }
 
     template<typename F>
     inline void scheduler::invoke_main(F&& function)
     {
-        if (is_current_thread(instance->main_thread.get()) and not dpmi::in_irq_context()) std::forward<F>(function)();
+        if (current_thread_id() == main_thread_id and not dpmi::in_irq_context()) std::forward<F>(function)();
         else instance->main_thread->invoke(std::forward<F>(function));
     }
 
     template<typename F>
     inline void scheduler::invoke_next(F&& function)
     {
-        if (not instance->threads.empty()) instance->threads.front()->invoke(std::forward<F>(function));
-        else if (dpmi::in_irq_context()) instance->current_thread->invoke(std::forward<F>(function));
+        auto* const i = instance;
+        if (not i->threads.empty())
+        {
+            auto next = i->iterator;
+            if (++next == i->threads.end()) next = i->threads.begin();
+            next->second->invoke(std::forward<F>(function));
+        }
+        else if (dpmi::in_irq_context()) current_thread()->invoke(std::forward<F>(function));
         else std::forward<F>(function)();
     }
 
