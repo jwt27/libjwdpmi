@@ -10,12 +10,11 @@
 
 namespace jw::detail
 {
-    enum class promise_state { none, available, retrieved };
     template <typename T> struct promise_result_base
     {
         using actual_type = T;
         std::variant<std::monostate, std::exception_ptr, T> value { };
-        promise_state state { promise_state::none };
+        bool available { false };
     };
 
     template <typename R> struct promise_result : promise_result_base<R> { };
@@ -32,17 +31,50 @@ namespace jw::detail
         pf_base(std::allocator_arg_t) : result { std::make_shared<promise_result<R>>() } { }
         template<typename Alloc>
         pf_base(std::allocator_arg_t, const Alloc& a) : result { std::allocate_shared<promise_result<R>>(a) } { }
+        pf_base(std::shared_ptr<promise_result<R>>&& r) : result { std::move(r) } { }
 
-        pf_base(const pf_base&) = default;
+        pf_base(const pf_base&) noexcept = default;
         pf_base(pf_base&&) noexcept = default;
-        pf_base& operator=(const pf_base&) = default;
+        pf_base& operator=(const pf_base&) noexcept = default;
         pf_base& operator=(pf_base&&) noexcept = default;
+
+        bool valid() const noexcept { return static_cast<bool>(result); }
+
+        void wait() const
+        {
+            this_thread::yield_while([&a = result.get()->available] { return not a; });
+        };
+
+        template<class Rep, class Period>
+        std::future_status wait_for(const std::chrono::duration<Rep, Period>& rel_time) const
+        {
+            auto timeout = this_thread::yield_while_for([&a = result.get()->available] { return not a; }, rel_time);
+            if (timeout) return std::future_status::timeout;
+            return std::future_status::ready;
+        }
+
+        template<class Clock, class Duration>
+        std::future_status wait_until(const std::chrono::time_point<Clock, Duration>& abs_time) const
+        {
+            auto timeout = this_thread::yield_while_until([&a = result.get()->available] { return not a; }, abs_time);
+            if (timeout) return std::future_status::timeout;
+            return std::future_status::ready;
+        }
 
         std::shared_ptr<promise_result<R>> result;
     };
+}
 
-    template <typename R>
-    struct promise_base;
+namespace jw
+{
+    template <typename R> struct future;
+    template <typename R> struct shared_future;
+}
+
+namespace jw::detail
+{
+    template <typename R> struct promise_base;
+    template <typename R> struct shared_future_base;
 
     template <typename R>
     struct future_base : pf_base<R>
@@ -61,45 +93,67 @@ namespace jw::detail
         future_base& operator=(const base&) = delete;
         future_base& operator=(base&&) = delete;
 
-        bool valid() const noexcept { return static_cast<bool>(base::result); }
+        shared_future<R> share() noexcept;
 
-        void wait() const
-        {
-            this_thread::yield_while([&s = this->result.get()->state] { return s == promise_state::none; });
-        };
-
-        template<class Rep, class Period>
-        std::future_status wait_for(const std::chrono::duration<Rep, Period>& rel_time) const
-        {
-            auto timeout = this_thread::yield_while_for([&s = this->result.get()->state] { return s == promise_state::none; }, rel_time);
-            if (timeout) return std::future_status::timeout;
-            return std::future_status::ready;
-        }
-
-        template<class Clock, class Duration>
-        std::future_status wait_until(const std::chrono::time_point<Clock, Duration>& abs_time) const
-        {
-            auto timeout = this_thread::yield_while_until([&s = this->result.get()->state] { return s == promise_state::none; }, abs_time);
-            if (timeout) return std::future_status::timeout;
-            return std::future_status::ready;
-        }
+        using base::valid;
+        using base::wait;
+        using base::wait_for;
+        using base::wait_until;
 
     protected:
-        promise_result<R> get_result()
+        promise_result<R>::actual_type get_result()
         {
             wait();
             auto result = std::move(*this->result);
-            this->result->value = { };
-            this->result->state = promise_state::retrieved;
             this->result.reset();
             if (auto* e = std::get_if<std::exception_ptr>(&result.value))
-                std::rethrow_exception(*e);
-            return result;
+                std::rethrow_exception(std::move(*e));
+            if (auto* v = std::get_if<2>(&result.value))
+                return std::move(*v);
+            __builtin_unreachable();
         }
 
         friend struct promise_base<R>;
+        friend struct shared_future_base<R>;
 
         future_base(const promise_base<R>& p) : base { p } { }
+    };
+
+    template <typename R>
+    struct shared_future_base : pf_base<R>
+    {
+        using base = pf_base<R>;
+
+        shared_future_base() noexcept = default;
+
+        shared_future_base(const shared_future_base&) noexcept = default;
+        shared_future_base(shared_future_base&&) noexcept = default;
+        shared_future_base& operator=(const shared_future_base&) = default;
+        shared_future_base& operator=(shared_future_base&&) noexcept = default;
+
+        shared_future_base(const base&) = delete;
+        shared_future_base(base&&) = delete;
+        shared_future_base& operator=(const base&) = delete;
+        shared_future_base& operator=(base&&) = delete;
+
+        shared_future_base(future_base<R>&& f) noexcept : base { std::move(f.result) } { }
+
+        using base::valid;
+        using base::wait;
+        using base::wait_for;
+        using base::wait_until;
+
+    protected:
+        promise_result<R>::actual_type& get_result() const
+        {
+            wait();
+            auto& result = *this->result;
+            if (auto* e = std::get_if<std::exception_ptr>(&result.value))
+                std::rethrow_exception(std::move(*e));
+            if (auto* v = std::get_if<2>(&result.value))
+                return *v;
+            __builtin_unreachable();
+        }
     };
 }
 
@@ -108,13 +162,13 @@ namespace jw
     template <typename R>
     struct future : detail::future_base<R>
     {
-        R get() { return std::get<2>(this->get_result().value); }
+        R get() { return this->get_result(); }
     };
 
     template <typename R>
     struct future<R&> : detail::future_base<R&>
     {
-        R& get() { return std::get<2>(this->get_result().value).get(); };
+        R& get() { return this->get_result().get(); };
     };
 
     template <>
@@ -122,9 +176,30 @@ namespace jw
     {
         void get() { this->get_result(); };
     };
+
+    template <typename R>
+    struct shared_future : detail::shared_future_base<R>
+    {
+        const R& get() const { return this->get_result(); }
+    };
+
+    template <typename R>
+    struct shared_future<R&> : detail::shared_future_base<R&>
+    {
+        R& get() const { return this->get_result().get(); };
+    };
+
+    template <>
+    struct shared_future<void> : detail::shared_future_base<void>
+    {
+        void get() const { this->get_result(); };
+    };
 }
 namespace jw::detail
 {
+    template<typename R>
+    shared_future<R> future_base<R>::share() noexcept { return shared_future<R> { std::move(*this) }; }
+
     template <typename R>
     struct promise_base : pf_base<R>
     {
@@ -160,8 +235,18 @@ namespace jw::detail
             return future<R> { *this };
         }
 
-        void set_exception(std::exception_ptr p) { check(); this->result.value = p; set(); }
-        void set_exception_at_thread_exit(std::exception_ptr p) { check(); this->result.value = p; set_atexit(); }
+        void set_exception(std::exception_ptr e)
+        {
+            check();
+            this->result->value = std::move(e);
+            this->result->available = true;
+        }
+        void set_exception_at_thread_exit(std::exception_ptr e)
+        {
+            check();
+            this->result->value = std::move(e);
+            scheduler::current_thread()->atexit([&a = this->result->available] { a = true; });
+        }
 
     protected:
         template<typename T>
@@ -169,7 +254,7 @@ namespace jw::detail
         {
             check();
             this->result->value = std::forward<T>(value);
-            this->result->state = promise_state::available;
+            this->result->available = true;
         }
 
         template<typename T>
@@ -177,7 +262,7 @@ namespace jw::detail
         {
             check();
             this->result->value = std::forward<T>(value);
-            scheduler::current_thread()->atexit([&s = this->result->state] { s = promise_state::available; });
+            scheduler::current_thread()->atexit([&a = this->result->available] { a = true; });
         }
 
         void check()
