@@ -150,8 +150,9 @@ namespace jw::detail
         {
             std::cerr << "caught exception from thread " << t->id;
 #           ifndef NDEBUG
-            std::cerr << " (" << t->name << ")\n";
+            std::cerr << " (" << t->name << ")";
 #           endif
+            std::cerr << '\n';
             try { throw; }
             catch (std::exception& e) { print_exception(e); }
             i->terminating = true;
@@ -214,8 +215,9 @@ namespace jw::detail
             {
                 std::cerr << "caught exception while processing atexit handlers on thread " << t->id;
 #               ifndef NDEBUG
-                std::cerr << " (" << t->name << ")\n";
+                std::cerr << " (" << t->name << ")";
 #               endif
+                std::cerr << '\n';
                 try { throw; }
                 catch (std::exception& e) { print_exception(e); }
                 i->terminating = true;
