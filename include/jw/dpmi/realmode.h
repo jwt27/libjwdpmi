@@ -6,7 +6,7 @@
 
 #pragma once
 #include <jw/dpmi/memory.h>
-#include <jw/dpmi/irq.h>
+#include <jw/dpmi/irq_handler.h>
 #include <jw/function.h>
 
 namespace jw

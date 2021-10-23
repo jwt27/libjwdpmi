@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
@@ -15,6 +16,7 @@ namespace jw
 {
     namespace dpmi
     {
+        using int_vector = std::uint8_t;
         using irq_level = std::uint8_t;
 
         // Disables the interrupt flag

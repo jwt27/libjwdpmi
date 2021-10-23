@@ -8,7 +8,7 @@
 #include <jw/main.h>
 #include <jw/dpmi/fpu.h>
 #include <jw/dpmi/cpu_exception.h>
-#include <jw/dpmi/irq.h>
+#include <jw/dpmi/irq_handler.h>
 #include <jw/dpmi/irq_mask.h>
 
 namespace jw

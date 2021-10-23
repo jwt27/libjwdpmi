@@ -7,6 +7,7 @@
 
 #include <bit>
 #include <jw/chrono.h>
+#include <jw/thread.h>
 #include <jw/io/ioport.h>
 #include <jw/dpmi/irq_mask.h>
 #include <jw/dpmi/cpu_exception.h>

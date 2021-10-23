@@ -10,7 +10,7 @@
 #include <mutex>
 #include <unordered_set>
 #include <jw/io/ioport.h>
-#include <jw/dpmi/irq.h>
+#include <jw/dpmi/irq_handler.h>
 #include <jw/common.h>
 #include <jw/io/io_error.h>
 #include <jw/mutex.h>

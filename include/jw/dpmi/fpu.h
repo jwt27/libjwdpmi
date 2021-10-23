@@ -14,7 +14,7 @@
 #include <jw/dpmi/irq_check.h>
 #include <jw/dpmi/lock.h>
 #include <jw/dpmi/alloc.h>
-#include <jw/dpmi/irq.h>
+#include <jw/dpmi/irq_handler.h>
 #include <jw/alloc.h>
 #include <jw/common.h>
 #include <jw/split_int.h>

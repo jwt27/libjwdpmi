@@ -10,7 +10,6 @@
 #include <variant>
 #include <jw/thread.h>
 #include <jw/detail/mutex.h>
-#include <jw/dpmi/irq.h>
 #include <jw/dpmi/detail/interrupt_id.h>
 #include <jw/variant.h>
 

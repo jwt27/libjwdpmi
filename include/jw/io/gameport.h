@@ -7,7 +7,7 @@
 #pragma once
 #include <jw/io/ioport.h>
 #include <jw/chrono.h>
-#include <jw/dpmi/irq.h>
+#include <jw/dpmi/irq_handler.h>
 #include <jw/thread.h>
 #include <jw/dpmi/lock.h>
 #include <jw/dpmi/alloc.h>
