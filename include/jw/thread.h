@@ -78,6 +78,8 @@ namespace jw
 
 namespace jw::this_thread
 {
+    inline jw::thread::id get_id() noexcept { return detail::scheduler::current_thread_id(); }
+
     // Yields execution to the next thread in the queue.
     inline void yield()
     {
