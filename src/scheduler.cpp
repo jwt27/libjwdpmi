@@ -142,12 +142,8 @@ namespace jw::detail
     {
         auto* const i = instance;
         auto* const t = current_thread();
-        try
-        {
-            t->state = thread::running;
-            (*t)();
-            t->state = thread::finished;
-        }
+        t->state = thread::running;
+        try { (*t)(); }
         catch (const abort_thread& e) { e.defuse(); }
         catch (const terminate_exception&) { i->terminating = true; }
         catch (...)
@@ -160,9 +156,9 @@ namespace jw::detail
             catch (std::exception& e) { print_exception(e); }
             i->terminating = true;
         }
-        if (t->state != thread::finished) t->state = thread::aborted;
-
+        t->state = thread::finishing;
         atexit(t);
+        t->state = thread::finished;
 
         debug::detail::notify_gdb_thread_event(debug::detail::thread_finished);
 

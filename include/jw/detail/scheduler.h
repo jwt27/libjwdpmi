@@ -120,16 +120,16 @@ namespace jw::detail
             running,
             suspended,
             aborting,
-            aborted,
+            finishing,
             finished
         };
 
         const scheduler::thread_id id { id_count++ };
 
-        bool active() const noexcept { return state != finished and state != aborted; }
+        bool active() const noexcept { return state != finished; }
         void suspend() noexcept { if (state == running) state = suspended; }
         void resume() noexcept { if (state == suspended) state = running; }
-        void abort() noexcept { if (active()) this->state = aborting; }
+        void abort() noexcept { if (state == running or state == suspended) this->state = aborting; }
         auto get_state() noexcept { return state; }
 
         template<typename F> void invoke(F&& function) { invoke_list.emplace_back(std::forward<F>(function)); }
@@ -190,7 +190,7 @@ namespace jw::detail
         template<typename F>
         static void do_destroy(void* f) { static_cast<F*>(f)->~F(); }
 
-        static inline scheduler::thread_id id_count { 1 };
+        static inline scheduler::thread_id id_count { scheduler::main_thread_id };
         static inline pool_resource memres { 4 * config::thread_default_stack_size };
 
         const std::span<std::byte> function { };

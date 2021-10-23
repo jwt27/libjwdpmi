@@ -901,7 +901,7 @@ namespace jw
                             case jw::detail::thread::running:     msg << "Running";     break;
                             case jw::detail::thread::suspended:   msg << "Suspended";   break;
                             case jw::detail::thread::aborting:    msg << "Aborting";    break;
-                            case jw::detail::thread::aborted:     msg << "Aborted";     break;
+                            case jw::detail::thread::finishing:   msg << "Finishing";   break;
                             case jw::detail::thread::finished:    msg << "Finished";    break;
                             }
                         }
