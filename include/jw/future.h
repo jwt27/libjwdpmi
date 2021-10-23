@@ -356,7 +356,7 @@ namespace jw
     };
 
     template <>
-    struct promise<void> : detail::promise_base<empty>
+    struct promise<void> : detail::promise_base<void>
     {
         void set_value() { this->template set(empty { }); }
         void set_value_at_thread_exit() { this->template set_atexit(empty { }); }
