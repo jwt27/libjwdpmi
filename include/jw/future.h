@@ -6,49 +6,101 @@
 #include <memory>
 #include <variant>
 #include <functional>
+#include <memory>
 #include <jw/thread.h>
 
 namespace jw::detail
 {
-    template <typename T> struct promise_result_base
+    template <typename T>
+    struct promise_result_base
     {
         using actual_type = T;
-        std::variant<std::monostate, std::exception_ptr, T> value { };
-        bool available { false };
+
+        template<typename U>
+        void set_value(U&& v)
+        {
+            if (has_result()) throw std::future_error { std::future_errc::promise_already_satisfied };
+            new (&value) T { std::forward<U>(v) };
+            i = index::value;
+        }
+
+        template<typename U>
+        void set_exception(U&& v)
+        {
+            if (has_result()) throw std::future_error { std::future_errc::promise_already_satisfied };
+            new (&exception) std::exception_ptr { std::forward<U>(v) };
+            i = index::exception;
+        }
+
+        void make_ready() noexcept { ready = true; }
+        bool is_ready() noexcept { return ready; }
+        bool has_result() noexcept { return i != index::none; }
+
+        T move_result()
+        {
+            if (i == index::exception) std::rethrow_exception(std::move(exception));
+            return std::move(value);
+        }
+
+        T& share_result()
+        {
+            if (i == index::exception) std::rethrow_exception(exception);
+            return (value);
+        }
+
+        promise_result_base() noexcept { };
+
+        ~promise_result_base()
+        {
+            if (i == index::exception) exception.~exception_ptr();
+            if (i == index::value) value.~T();
+        }
+
+    private:
+        union
+        {
+            std::exception_ptr exception;
+            T value;
+        };
+        enum class index : std::uint8_t
+        {
+            none,
+            exception,
+            value
+        } i { index::none };
+        bool ready;
     };
 
     template <typename R> struct promise_result : promise_result_base<R> { };
     template <typename R> struct promise_result<R&> : promise_result_base<std::reference_wrapper<R>> { };
     template <> struct promise_result<void> : promise_result_base<empty> { };
 
-    struct construct_from_promise_t { } construct_from_promise;
-
     template <typename R>
     struct pf_base
     {
     protected:
         pf_base() noexcept = default;
-        pf_base(std::allocator_arg_t) : result { std::make_shared<promise_result<R>>() } { }
+        pf_base(std::allocator_arg_t) : shared_state { allocate(std::allocator<promise_result<R>> { }) } { }
         template<typename Alloc>
-        pf_base(std::allocator_arg_t, const Alloc& a) : result { std::allocate_shared<promise_result<R>>(a) } { }
-        pf_base(std::shared_ptr<promise_result<R>>&& r) : result { std::move(r) } { }
+        pf_base(std::allocator_arg_t, const Alloc& a) : shared_state { allocate(a) } { }
+        pf_base(std::shared_ptr<promise_result<R>>&& r) : shared_state { std::move(r) } { }
 
         pf_base(const pf_base&) noexcept = default;
         pf_base(pf_base&&) noexcept = default;
         pf_base& operator=(const pf_base&) noexcept = default;
         pf_base& operator=(pf_base&&) noexcept = default;
 
-        bool valid() const noexcept { return static_cast<bool>(result); }
+        bool valid() const noexcept { return static_cast<bool>(shared_state); }
 
         void wait() const
         {
-            this_thread::yield_while([&a = result.get()->available] { return not a; });
+            this_thread::yield_while([s = state()] { return not s->has_result(); });
         };
 
         template<class Rep, class Period>
         std::future_status wait_for(const std::chrono::duration<Rep, Period>& rel_time) const
         {
-            auto timeout = this_thread::yield_while_for([&a = result.get()->available] { return not a; }, rel_time);
+            auto timeout = this_thread::yield_while_for([s = state()] { return not s->has_result(); }, rel_time);
             if (timeout) return std::future_status::timeout;
             return std::future_status::ready;
         }
@@ -56,12 +108,34 @@ namespace jw::detail
         template<class Clock, class Duration>
         std::future_status wait_until(const std::chrono::time_point<Clock, Duration>& abs_time) const
         {
-            auto timeout = this_thread::yield_while_until([&a = result.get()->available] { return not a; }, abs_time);
+            auto timeout = this_thread::yield_while_until([s = state()] { return not s->has_result(); }, abs_time);
             if (timeout) return std::future_status::timeout;
             return std::future_status::ready;
         }
 
-        std::shared_ptr<promise_result<R>> result;
+        promise_result<R>* state() const
+        {
+            if (not valid()) throw std::future_error { std::future_errc::no_state };
+            return shared_state.get();
+        }
+
+        void reset() noexcept { shared_state.reset(); }
+        std::shared_ptr<promise_result<R>> move_state() noexcept { return std::move(shared_state); }
+        const std::shared_ptr<promise_result<R>>& copy_state() const noexcept { return (shared_state); }
+
+    private:
+        template<typename A>
+        static std::shared_ptr<promise_result<R>> allocate(const A& alloc)
+        {
+            using rebind = typename std::allocator_traits<A>::rebind_alloc<promise_result<R>>;
+            using deleter = allocator_delete<rebind>;
+            rebind r { alloc };
+            auto* p = std::allocator_traits<rebind>::allocate(r, 1);
+            p = new(p) promise_result<R> { };
+            return { p, deleter { r }, r };
+        }
+
+        std::shared_ptr<promise_result<R>> shared_state;
     };
 }
 
@@ -104,13 +178,8 @@ namespace jw::detail
         promise_result<R>::actual_type get_result()
         {
             wait();
-            auto result = std::move(*this->result);
-            this->result.reset();
-            if (auto* e = std::get_if<std::exception_ptr>(&result.value))
-                std::rethrow_exception(std::move(*e));
-            if (auto* v = std::get_if<2>(&result.value))
-                return std::move(*v);
-            __builtin_unreachable();
+            local_destructor do_reset { [this] { this->reset(); } };
+            return this->state()->move_result();
         }
 
         friend struct promise_base<R>;
@@ -136,7 +205,7 @@ namespace jw::detail
         shared_future_base& operator=(const base&) = delete;
         shared_future_base& operator=(base&&) = delete;
 
-        shared_future_base(future_base<R>&& f) noexcept : base { std::move(f.result) } { }
+        shared_future_base(future_base<R>&& f) noexcept : base { std::move(f.move_state()) } { }
 
         using base::valid;
         using base::wait;
@@ -147,12 +216,7 @@ namespace jw::detail
         promise_result<R>::actual_type& get_result() const
         {
             wait();
-            auto& result = *this->result;
-            if (auto* e = std::get_if<std::exception_ptr>(&result.value))
-                std::rethrow_exception(std::move(*e));
-            if (auto* v = std::get_if<2>(&result.value))
-                return *v;
-            __builtin_unreachable();
+            return this->state()->share_result();
         }
     };
 }
@@ -221,55 +285,55 @@ namespace jw::detail
 
         ~promise_base()
         {
-            if (not this->result) return;
-            if (this->result->value.index() != 0) return;
-            set(std::make_exception_ptr(std::future_error { std::future_errc::broken_promise }));
+            if (not this->valid()) return;
+            if (this->state()->has_result()) return;
+            set_exception(std::make_exception_ptr(std::future_error { std::future_errc::broken_promise }));
         }
 
         void swap(promise_base& other) noexcept { using std::swap; swap(this->result, other.result); };
 
         future<R> get_future()
         {
-            if (not this->result) throw std::future_error { std::future_errc::no_state };
-            if (this->result.use_count() > 1) throw std::future_error { std::future_errc::future_already_retrieved };
+            this->state();
+            if (future_retrieved) throw std::future_error { std::future_errc::future_already_retrieved };
+            future_retrieved = true;
             return future<R> { *this };
         }
 
         void set_exception(std::exception_ptr e)
         {
-            check();
-            this->result->value = std::move(e);
-            this->result->available = true;
+            auto state = this->state();
+            state->set_exception(std::move(e));
+            state->make_ready();
         }
         void set_exception_at_thread_exit(std::exception_ptr e)
         {
-            check();
-            this->result->value = std::move(e);
-            scheduler::current_thread()->atexit([&a = this->result->available] { a = true; });
+            auto state = this->state();
+            state->set_exception(std::move(e));
+            make_ready_atexit();
         }
 
     protected:
         template<typename T>
         void set(T&& value)
         {
-            check();
-            this->result->value = std::forward<T>(value);
-            this->result->available = true;
+            auto state = this->state();
+            state->set_value(std::forward<T>(value));
+            state->make_ready();
         }
 
         template<typename T>
         void set_atexit(T&& value)
         {
-            check();
-            this->result->value = std::forward<T>(value);
-            scheduler::current_thread()->atexit([&a = this->result->available] { a = true; });
+            auto state = this->state();
+            state->set_value(std::forward<T>(value));
+            make_ready_atexit();
         }
 
-        void check()
-        {
-            if (not this->result) throw std::future_error { std::future_errc::no_state };
-            if (this->result->value.index() != 0) throw std::future_error { std::future_errc::promise_already_satisfied };
-        }
+    private:
+        void make_ready_atexit() { scheduler::current_thread()->atexit([s = this->copy_state()] { s->make_ready(); }); }
+
+        bool future_retrieved { false };
     };
 }
 
