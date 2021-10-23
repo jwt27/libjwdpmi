@@ -26,7 +26,7 @@ namespace jw
                 if (try_lock()) return;
                 else throw deadlock { };
             }
-            yield_while([this]() { return !try_lock(); });
+            this_thread::yield_while([this]() { return not try_lock(); });
         }
         void unlock() noexcept { locked.clear(); }
         bool try_lock() noexcept
@@ -44,7 +44,7 @@ namespace jw
                 if (try_lock_shared()) return;
                 else throw deadlock { };
             }
-            yield_while([this]() { return !try_lock_shared(); });
+            this_thread::yield_while([this]() { return not try_lock_shared(); });
         }
         void unlock_shared() noexcept { --shared_count; }
         bool try_lock_shared() noexcept
@@ -61,13 +61,13 @@ namespace jw
         template <class Rep, class Period>
         bool try_lock_shared_for(const std::chrono::duration<Rep, Period>& rel_time)
         {
-            return not yield_while_for([this] { return not this->try_lock_shared(); }, rel_time);
+            return not this_thread::yield_while_for([this] { return not this->try_lock_shared(); }, rel_time);
         }
 
         template <class Clock, class Duration>
         bool try_lock_shared_until(const std::chrono::time_point<Clock, Duration>& abs_time)
         {
-            return not yield_while_until([this] { return not this->try_lock_shared(); }, abs_time);
+            return not this_thread::yield_while_until([this] { return not this->try_lock_shared(); }, abs_time);
         }
     };
 }
