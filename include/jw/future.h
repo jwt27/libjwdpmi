@@ -366,6 +366,38 @@ namespace jw
     void swap(promise<R>& x, promise<R>& y) noexcept { x.swap(y); }
 }
 
+namespace jw::detail
+{
+    template <typename F, typename... A>
+    [[nodiscard]] auto do_async(std::launch, F&& func, A&&... args)
+    {
+        using result = std::invoke_result_t<std::decay_t<F>, std::decay_t<A>...>;
+        callable_tuple call { std::forward<F>(func), std::forward<A>(args)... };
+        promise<result> p { };
+        auto f = p.get_future();
+        jw::thread t { [call = std::move(call), p = std::move(p)] () mutable
+        {
+            try
+            {
+                if constexpr (std::is_void_v<result>) { call(); p.set_value(); }
+                else p.set_value(call());
+            }
+            catch (...) { p.set_exception(std::current_exception()); }
+        } };
+        t.detach();
+        return f;
+    }
+}
+
+namespace jw
+{
+    template <typename F, typename... A>
+    [[nodiscard]] auto async(std::launch policy, F&& f, A&&... args) { return detail::do_async(policy, std::forward<F>(f), std::forward<A>(args)...); }
+
+    template <typename F, typename... A>
+    [[nodiscard]] auto async(F&& f, A&&... args) { return detail::do_async(std::launch::async, std::forward<F>(f), std::forward<A>(args)...); }
+}
+
 namespace std
 {
     template <typename R, typename Alloc>
