@@ -11,6 +11,71 @@
 #include <jw/main.h>
 #include "jwdpmi_config.h"
 
+namespace jw
+{
+    struct deadlock : std::system_error
+    {
+        deadlock() : system_error { std::make_error_code(std::errc::resource_deadlock_would_occur) } { }
+    };
+
+    struct thread
+    {
+        using id = detail::scheduler::thread_id;
+        using native_handle_type = detail::thread*;
+
+        thread() noexcept = default;
+        template<typename F, typename... A>
+        explicit thread(F&& f, A&&... args)
+            : ptr { create(config::thread_default_stack_size, std::forward<F>(f), std::forward<A>(args)...) }
+        {
+            detail::scheduler::start_thread(ptr);
+        }
+
+        template<typename F, typename... A>
+        explicit thread(std::size_t stack_size, F&& f, A&&... args)
+            : ptr { create(stack_size, std::forward<F>(f), std::forward<A>(args)...) }
+        {
+            detail::scheduler::start_thread(ptr);
+        }
+
+        ~thread() noexcept(false) { if (ptr) terminate(); }
+
+        thread(const thread&) = delete;
+        thread& operator=(const thread&) = delete;
+        thread(thread&&) noexcept = default;
+        thread& operator=(thread&& other)
+        {
+            if (ptr) terminate();
+            ptr = std::move(other.ptr);
+            return *this;
+        }
+
+        void swap(thread& other) noexcept { using std::swap; swap(ptr, other.ptr); };
+        bool joinable() const noexcept { return static_cast<bool>(ptr); }
+        void join();
+        void detach() { ptr.reset(); }
+        id get_id() const noexcept { return ptr ? ptr->id : 0; };
+        native_handle_type native_handle() { return ptr.get(); };
+
+        void abort() { ptr->abort(); };
+        bool active() const noexcept { return ptr and ptr->active(); }
+
+        template<typename T>
+        void name(T&& string) { ptr->set_name(std::forward<T>(string)); }
+        std::string_view name() { return ptr->get_name(); }
+
+        static unsigned int hardware_concurrency() noexcept { return 1; }
+
+    private:
+        template<typename F, typename... A>
+        auto create(std::size_t stack_size, F&& func, A&&... args);
+
+        std::shared_ptr<detail::thread> ptr;
+    };
+
+    inline void swap(thread& a, thread& b) noexcept { a.swap(b); }
+}
+
 namespace jw::this_thread
 {
     // Yields execution to the next thread in the queue.
@@ -79,64 +144,6 @@ namespace jw::this_thread
 
 namespace jw
 {
-    struct deadlock : std::system_error
-    {
-        deadlock() : system_error { std::make_error_code(std::errc::resource_deadlock_would_occur) } { }
-    };
-
-    struct thread
-    {
-        using id = detail::scheduler::thread_id;
-        using native_handle_type = detail::thread*;
-
-        thread() noexcept = default;
-        template<typename F, typename... A>
-        explicit thread(F&& f, A&&... args)
-            : ptr { create(config::thread_default_stack_size, std::forward<F>(f), std::forward<A>(args)...) }
-        { detail::scheduler::start_thread(ptr); }
-
-        template<typename F, typename... A>
-        explicit thread(std::size_t stack_size, F&& f, A&&... args)
-            : ptr { create(stack_size, std::forward<F>(f), std::forward<A>(args)...) }
-        { detail::scheduler::start_thread(ptr); }
-
-        ~thread() noexcept(false) { if (ptr) terminate(); }
-
-        thread(const thread&) = delete;
-        thread& operator=(const thread&) = delete;
-        thread(thread&&) noexcept = default;
-        thread& operator=(thread&& other)
-        {
-            if (ptr) terminate();
-            ptr = std::move(other.ptr);
-            return *this;
-        }
-
-        void swap(thread& other) noexcept { using std::swap; swap(ptr, other.ptr); };
-        bool joinable() const noexcept { return static_cast<bool>(ptr); }
-        void join();
-        void detach() { ptr.reset(); }
-        id get_id() const noexcept { return ptr ? ptr->id : 0; };
-        native_handle_type native_handle() { return ptr.get(); };
-
-        void abort() { ptr->abort(); };
-        bool active() const noexcept { return ptr and ptr->active(); }
-
-        template<typename T>
-        void name(T&& string) { ptr->set_name(std::forward<T>(string)); }
-        std::string_view name() { return ptr->get_name(); }
-
-        static unsigned int hardware_concurrency() noexcept { return 1; }
-
-    private:
-        template<typename F, typename... A>
-        auto create(std::size_t stack_size, F&& func, A&&... args);
-
-        std::shared_ptr<detail::thread> ptr;
-    };
-
-    inline void swap(thread& a, thread& b) noexcept { a.swap(b); }
-
     inline void thread::join()
     {
         if (not ptr) throw std::system_error { std::make_error_code(std::errc::no_such_process) };
