@@ -33,32 +33,31 @@ namespace jw::dpmi::detail
         {
             asm
             (
-                R"(
-                push ds
+            R"( push ds
                 push es
                 push fs
                 push gs
                 pusha
                 mov bx, ss
                 mov ebp, esp
-                lea esi, %[data]
-                mov ds, cs:[esi+%[ds]]
+                mov esi, %[data]
+                mov ds, cs:[esi+%[ds]]  # restore segment registers
                 mov di, [esi+%[ss]]
                 mov es, [esi+%[es]]
                 mov fs, [esi+%[fs]]
                 mov gs, [esi+%[gs]]
-                cmp bx, di
-                je L%=keep_stack
-                call %[get_stack]
-                mov edx, [esp+0x30]
+                cmp bx, di              # check if we're already on our own SS,
+                je L%=keep_stack        # this is usually the case for nested IRQs
+                call %[get_stack]       # get a new stack pointer in EAX
+                mov edx, [esp+0x30]     # IRQ number set by trampoline
                 mov ss, di
                 mov esp, eax;
             L%=keep_stack:
-                push edx
-                call %[handle_irq]
+                push edx                # pass IRQ number
+                call %[handle_irq]      # call user interrupt handlers
                 cmp bx, di
                 je L%=ret_same_stack
-                dec dword ptr [esi+%[use_count]]
+                dec dword ptr [esi+%[use_count]]    # -- counter used by get_stack_ptr
                 mov ss, bx
             L%=ret_same_stack:
                 mov esp, ebp
@@ -67,12 +66,11 @@ namespace jw::dpmi::detail
                 pop fs
                 pop es
                 pop ds
-                add esp, 4
+                add esp, 4              # pop IRQ number
                 sti
-                iret
-                )"
+                iret )"
                 ::
-                [data]          "m" (irq_data),
+                [data]          "i" (&irq_data),
                 [ss]            "i" (offsetof(irq_data_t, ss)),
                 [ds]            "i" (offsetof(irq_data_t, ds)),
                 [es]            "i" (offsetof(irq_data_t, es)),
@@ -91,10 +89,8 @@ namespace jw::dpmi::detail
     {
         asm
         (
-            R"(
-            push %0
-            jmp %1
-            )"
+        R"( push %0     # IRQ number
+            jmp %1 )"
             ::
             "i" (N),
             "i" (irq_entry_point::enter)
@@ -107,12 +103,11 @@ namespace jw::dpmi::detail
     {
         asm
         (
-            R"(
-            push eax
-            mov al, 0x0b
-            out 0x20, al
+        R"( push eax
+            mov al, 0x0b    # PIC in-service register
+            out 0x20, al    # PIC master
             in al, 0x20
-            test al, 0x80
+            test al, 0x80   # check for spurious interrupt
             jz L%=spurious
             mov eax, [esp]
             mov dword ptr [esp], 7
@@ -120,8 +115,7 @@ namespace jw::dpmi::detail
         L%=spurious:
             pop eax
             sti
-            iret
-            )"
+            iret )"
             : : "i" (irq_entry_point::enter)
         );
     }
@@ -132,23 +126,21 @@ namespace jw::dpmi::detail
     {
         asm
         (
-            R"(
-            push eax
-            mov al, 0x0b
-            out 0xa0, al
+        R"( push eax
+            mov al, 0x0b    # in-service register
+            out 0xa0, al    # PIC slave
             in al, 0xa0
-            test al, 0x80
+            test al, 0x80   # check for spurious interrupt
             jz L%=spurious
             mov eax, [esp]
             mov dword ptr [esp], 15
             jmp %0
         L%=spurious:
-            mov al, 0x62
+            mov al, 0x62    # ACK irq 2 on master
             out 0x20, al
             pop eax
             sti
-            iret
-            )"
+            iret )"
             : : "i" (irq_entry_point::enter)
         );
     }
