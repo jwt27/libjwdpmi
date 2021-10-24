@@ -7,7 +7,7 @@ OUTPUT_FORMAT("coff-go32-exe")
 ENTRY (start)
 SECTIONS
 {
-  .text  0x1000+SIZEOF_HEADERS : {
+  .text  ALIGN(0x1000+SIZEOF_HEADERS, 0x200) : SUBALIGN(0x10) {
     *(.text)
     *(.text.*)
     *(.gnu.linkonce.t*)
@@ -17,7 +17,7 @@ SECTIONS
     etext  =  . ; PROVIDE(_etext = .) ;
     . = ALIGN(0x200);
   }
-  .data  ALIGN(0x200) : {
+  .data : {
     djgpp_first_ctor = . ;
     *(SORT(.ctors.*))
     *(.ctor)
@@ -31,18 +31,19 @@ SECTIONS
     __environ = . ;
     PROVIDE(_environ = .) ;
     LONG(0) ;
+    . = ALIGN(0x10);
     *(.data)
     *(.data.*)
+    *(.gnu.linkonce.d*)
     KEEP(*(.gcc_exc*))
     ___EH_FRAME_BEGIN__ = . ;
     KEEP(*(.eh_fram*))
     ___EH_FRAME_END__ = . ;
     LONG(0);
-    *(.gnu.linkonce.d*)
     edata  =  . ; PROVIDE(_edata = .) ;
     . = ALIGN(0x200);
   }
-  .bss  SIZEOF(.data) + ADDR(.data) :
+  .bss : SUBALIGN(0x10)
   {
     *(.bss .bss.* .gnu.linkonce.b.*)
     *(COMMON)
