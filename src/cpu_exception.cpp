@@ -55,13 +55,9 @@ namespace jw
         bool exception_handler::call_handler(exception_handler* self, raw_exception_frame* frame) noexcept
         {
             auto* f = self->new_type ? &frame->frame_10 : &frame->frame_09;
-            if (detail::fpu_context_switcher->enter(self->exc))
-            {
-                detail::fpu_context_switcher->leave();
-                return true;
-            }
-            bool success = false;
             detail::interrupt_id id { self->exc, detail::interrupt_type::exception };
+            if (id.fpu_context_switched) return true;
+            bool success = false;
 #           ifndef NDEBUG
             *reinterpret_cast<volatile std::uint32_t*>(stack.begin()) = 0xDEADBEEF;
 #           endif
@@ -100,7 +96,6 @@ namespace jw
                 std::fprintf(stderr, "Stack overflow handling exception 0x%lx\n", self->exc.value);
 #           endif
 
-            detail::fpu_context_switcher->leave();
             return success;
         }
 

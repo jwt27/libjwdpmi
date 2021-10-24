@@ -7,19 +7,9 @@
 
 #pragma once
 #include <array>
-#include <optional>
-#include <atomic>
-#include <deque>
 #include <xmmintrin.h>
-#include <jw/dpmi/irq_check.h>
-#include <jw/dpmi/lock.h>
-#include <jw/dpmi/alloc.h>
-#include <jw/dpmi/irq_handler.h>
-#include <jw/alloc.h>
-#include <jw/common.h>
 #include <jw/split_int.h>
-#include <jw/dpmi/ring0.h>
-#include "jwdpmi_config.h"
+#include <jw/uninitialized_storage.h>
 
 namespace jw
 {
@@ -66,12 +56,12 @@ namespace jw
             std::uint16_t ftag;
             unsigned : 16;
             std::uintptr_t fioff;
-            selector fiseg;
+            std::uint16_t fiseg;
             std::uint16_t fop;
             std::uintptr_t fooff;
-            selector foseg;
+            std::uint16_t foseg;
             unsigned : 16;
-            short_fpu_register st[8];
+            std::array<short_fpu_register, 8> st;
 
             void save() noexcept { asm("fsave %0;"::"m" (*this)); }
             void restore() noexcept { asm("frstor %0;"::"m" (*this)); }
@@ -86,17 +76,17 @@ namespace jw
             unsigned : 8;
             std::uint16_t fop;
             std::uintptr_t fioff;
-            selector fiseg;
+            std::uint16_t fiseg;
             unsigned : 16;
             std::uintptr_t fooff;
-            selector foseg;
+            std::uint16_t foseg;
             unsigned : 16;
             std::uint32_t mxcsr;
             std::uint32_t mxcsr_mask;
-            long_fpu_register st[8];
-            sse_register xmm[8];
-            unsigned reserved[44];
-            byte unused[48];
+            std::array<long_fpu_register, 8> st;
+            std::array<sse_register, 8> xmm;
+            std::array<std::byte, 0xb0> reserved;
+            std::array<std::byte, 0x30> unused;
 
             void save() noexcept { asm("fxsave %0;"::"m" (*this)); }
             void restore() noexcept { asm("fxrstor %0;"::"m" (*this)); }
@@ -106,41 +96,11 @@ namespace jw
 #       pragma GCC diagnostic pop
 
 #       ifdef HAVE__SSE__
-        using fpu_context = fxsave_data;
+        using fpu_context_data = fxsave_data;
 #       else
-        using fpu_context = fsave_data;
+        using fpu_context_data = fsave_data;
 #       endif
 
-        namespace detail
-        {
-            class fpu_context_switcher_t
-            {
-                locked_pool_allocator<false, fpu_context> alloc { config::interrupt_fpu_context_pool };
-                std::deque<fpu_context*, locked_pool_allocator<false, fpu_context*>> contexts { alloc };
-
-                bool context_switch_successful { false };
-                bool init { false };
-                bool cr0_em { false };
-
-                void set_fpu_emulation(bool em, bool mp = true);
-                bool get_fpu_emulation();
-
-            public:
-                fpu_context_switcher_t();
-                ~fpu_context_switcher_t();
-
-                INTERRUPT bool enter(std::uint32_t) noexcept;
-                INTERRUPT void leave() noexcept;
-
-                fpu_context* get_last_context()
-                {
-                    asm volatile ("fnop;fwait;":::"memory");   // force a context switch
-                    for (auto i = contexts.rbegin(); i != contexts.rend(); ++i)
-                        if (*i != nullptr) return *i;
-                    return nullptr;
-                }
-            };
-            inline constinit std::optional<fpu_context_switcher_t> fpu_context_switcher;
-        }
+        using fpu_context = uninitialized_storage<fpu_context_data>;
     }
 }

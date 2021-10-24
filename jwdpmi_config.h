@@ -23,9 +23,6 @@ namespace jw
         // Minimum stack size for IRQ handlers. Tries to resize when the stack size drops below this amount.
         constexpr std::size_t interrupt_minimum_stack_size = 64_KB;
 
-        // Total memory allocated to store fpu contexts.
-        constexpr std::size_t interrupt_fpu_context_pool = 32_KB;
-
         // Initial memory pool for operator new() in interrupt context.
         constexpr std::size_t interrupt_initial_memory_pool = 1_MB;
 

@@ -156,8 +156,6 @@ namespace jw::dpmi::detail
     void irq_controller::handle_irq(irq_level i) noexcept
     {
         interrupt_id id { i, interrupt_type::irq };
-        fpu_context_switcher->enter(0);
-
         try
         {
             std::optional<irq_mask> mask;
@@ -185,7 +183,6 @@ namespace jw::dpmi::detail
                 this_thread::invoke_next([data = data] { data->resize_stack(data->stack.size() * 2); });
 
         asm("cli");
-        fpu_context_switcher->leave();
     }
 
     void irq_controller::call()
