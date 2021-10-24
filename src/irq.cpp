@@ -297,4 +297,9 @@ namespace jw::dpmi::detail
         asm ("mov %0, gs" : "=rm" (d.gs));
         d.stack_use_count = 0;
     }
+
+    irq_controller::irq_controller_data::~irq_controller_data()
+    {
+        free_stack();
+    }
 }
