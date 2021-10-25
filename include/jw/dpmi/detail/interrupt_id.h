@@ -37,8 +37,6 @@ namespace jw::dpmi::detail
         yes
     };
 
-    struct interrupt_id;
-
     struct interrupt_id_data
     {
         const std::uint64_t id { id_count++ };
@@ -47,7 +45,7 @@ namespace jw::dpmi::detail
         interrupt_id_data* const next;
         interrupt_id_data* const next_fpu;
         ack acknowledged { type == interrupt_type::irq ? ack::no : ack::yes };
-        jw_cxa_eh_globals eh_globals { };
+        jw_cxa_eh_globals eh_globals;
         bool fpu_context_switched { false };
         bool has_fpu_context { false };
         fpu_context fpu;
@@ -67,7 +65,6 @@ namespace jw::dpmi::detail
     {
         interrupt_id(std::uint32_t n, interrupt_type t) noexcept : interrupt_id_data { n, t, current, current_fpu }
         {
-            current = this;
             switch (type)
             {
             case interrupt_type::exception:
@@ -82,15 +79,17 @@ namespace jw::dpmi::detail
             case interrupt_type::realmode: break;
             default: __builtin_unreachable();
             }
-            next->eh_globals = *reinterpret_cast<jw_cxa_eh_globals*>(abi::__cxa_get_globals());
-            *reinterpret_cast<jw_cxa_eh_globals*>(abi::__cxa_get_globals()) = eh_globals;
+            next->eh_globals = get_eh_globals();
+            set_eh_globals({ });
             fpu_enter();
+            current = this;
         }
 
         ~interrupt_id()
         {
+            current = next;
             fpu_leave();
-            *reinterpret_cast<jw_cxa_eh_globals*>(abi::__cxa_get_globals()) = current->eh_globals;
+            set_eh_globals(next->eh_globals);
             switch (type)
             {
             case interrupt_type::exception:
@@ -105,7 +104,6 @@ namespace jw::dpmi::detail
             case interrupt_type::realmode: break;
             default: __builtin_unreachable();
             }
-            current = next;
         }
 
         static interrupt_id_data* get() noexcept { return current; }
@@ -118,10 +116,10 @@ namespace jw::dpmi::detail
             return false;
         }
 
-        static fpu_context_data* last_fpu_context()
+        static fpu_context* last_fpu_context()
         {
             asm volatile ("fnop;fwait;":::"memory");   // force a context switch
-            return current->next_fpu->fpu.get();
+            return &current->next_fpu->fpu;
         }
 
     private:
@@ -130,10 +128,13 @@ namespace jw::dpmi::detail
         static inline interrupt_id_data* current;       // Current context
         static inline interrupt_id_data* current_fpu;   // Last context where the FPU was used
 
-        void fpu_enter();
-        void fpu_leave();
+        [[gnu::hot]] void fpu_enter();
+        [[gnu::hot]] void fpu_leave();
 
         static void setup_fpu();
+
+        static void set_eh_globals(jw_cxa_eh_globals g) { *reinterpret_cast<jw_cxa_eh_globals*>(abi::__cxa_get_globals()) = g; }
+        static jw_cxa_eh_globals get_eh_globals() { return *reinterpret_cast<jw_cxa_eh_globals*>(abi::__cxa_get_globals()); }
 
         static void setup() noexcept
         {

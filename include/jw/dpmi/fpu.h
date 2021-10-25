@@ -9,7 +9,6 @@
 #include <array>
 #include <xmmintrin.h>
 #include <jw/split_int.h>
-#include <jw/uninitialized_storage.h>
 
 namespace jw
 {
@@ -63,8 +62,8 @@ namespace jw
             unsigned : 16;
             std::array<short_fpu_register, 8> st;
 
-            void save() noexcept { asm("fsave %0;"::"m" (*this)); }
-            void restore() noexcept { asm("frstor %0;"::"m" (*this)); }
+            void save() noexcept { asm("fsave %0" : "=m" (*this)); }
+            void restore() noexcept { asm("frstor %0" :: "m" (*this)); }
         };
         static_assert(sizeof(fsave_data) == 108);
 
@@ -88,19 +87,17 @@ namespace jw
             std::array<std::byte, 0xb0> reserved;
             std::array<std::byte, 0x30> unused;
 
-            void save() noexcept { asm("fxsave %0;"::"m" (*this)); }
-            void restore() noexcept { asm("fxrstor %0;"::"m" (*this)); }
+            void save() noexcept { asm("fxsave %0" : "=m" (*this)); }
+            void restore() noexcept { asm("fxrstor %0" :: "m" (*this)); }
         };
         static_assert(sizeof(fxsave_data) == 512);
 
 #       pragma GCC diagnostic pop
 
 #       ifdef HAVE__SSE__
-        using fpu_context_data = fxsave_data;
+        using fpu_context = fxsave_data;
 #       else
-        using fpu_context_data = fsave_data;
+        using fpu_context = fsave_data;
 #       endif
-
-        using fpu_context = uninitialized_storage<fpu_context_data>;
     }
 }
