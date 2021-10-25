@@ -121,7 +121,10 @@ write_ldflags
 
 write_cxxdeps
 
-echo 'libjwdpmi.a' >> lddeps
+cat <<- EOF >> lddeps
+libjwdpmi.a
+tools/i386go32.x
+EOF
 write_lddeps
 
 write_targets
