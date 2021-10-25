@@ -14,6 +14,10 @@ SECTIONS
     *(.const*)
     *(.ro*)
     *(.gnu.linkonce.r*)
+    /* HACK:  These should be in .data but require 16-byte alignment.  */
+    *(.data)
+    *(.data.*)
+    *(.gnu.linkonce.d*)
     etext  =  . ; PROVIDE(_etext = .) ;
     . = ALIGN(0x200);
   }
@@ -31,10 +35,6 @@ SECTIONS
     __environ = . ;
     PROVIDE(_environ = .) ;
     LONG(0) ;
-    . = ALIGN(0x10);
-    *(.data)
-    *(.data.*)
-    *(.gnu.linkonce.d*)
     KEEP(*(.gcc_exc*))
     ___EH_FRAME_BEGIN__ = . ;
     KEEP(*(.eh_fram*))
