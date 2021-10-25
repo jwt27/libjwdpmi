@@ -23,14 +23,14 @@ SECTIONS
   }
   .data : {
     djgpp_first_ctor = . ;
-    *(SORT_BY_INIT_PRIORITY(.ctors.*))
-    *(.ctors)
-    *(.ctor)
+    KEEP(*(SORT_BY_INIT_PRIORITY(.ctors.*)))
+    KEEP(*(.ctors))
+    KEEP(*(.ctor))
     djgpp_last_ctor = . ;
     djgpp_first_dtor = . ;
-    *(.dtor)
-    *(.dtors)
-    *(SORT_BY_INIT_PRIORITY(.dtors.*))
+    KEEP(*(.dtor))
+    KEEP(*(.dtors))
+    KEEP(*(SORT_BY_INIT_PRIORITY(.dtors.*)))
     djgpp_last_dtor = . ;
     __environ = . ;
     PROVIDE(_environ = .) ;
