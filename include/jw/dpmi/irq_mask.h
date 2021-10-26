@@ -37,12 +37,9 @@ namespace jw
             {
                 if constexpr (use_dpmi)
                 {
-                    std::uint32_t state;
-                    asm ("int 0x31;"
-                        : "=a" (state)
-                        : "a" (0x0902)
-                        : "cc");
-                    return state & 1;
+                    std::uint16_t ax = 0x0902;
+                    asm ("int 0x31" : "+a" (ax) :: "cc");
+                    return ax & 1;
                 }
                 else return cpu_flags::current().interrupts_enabled;
             }
@@ -54,9 +51,9 @@ namespace jw
             {
                 if constexpr (use_dpmi)
                 {
-                    std::uint32_t eax = 0x0900;
-                    asm volatile ("int 0x31" : "+a" (eax) :: "cc");
-                    return eax;
+                    std::uint16_t ax = 0x0900;
+                    asm volatile ("int 0x31" : "+a" (ax) :: "cc");
+                    return ax;
                 }
                 else
                 {
