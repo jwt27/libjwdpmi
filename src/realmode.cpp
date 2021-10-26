@@ -55,7 +55,7 @@ namespace jw
             auto* const reg = self->reg_ptr;
             self->reg_ptr = alloc.allocate(1);
             new (reg) realmode_registers { self->reg };
-            if (not is_irq) interrupt_mask::sti();
+            if (not is_irq) asm ("sti");
 
             auto fail = [reg, self]
             {

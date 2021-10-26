@@ -133,7 +133,7 @@ namespace jw
                 do
                 {
                     check_irq_exception();
-                    if ((not dpmi::interrupt_mask::enabled()
+                    if ((not dpmi::interrupt_mask::interrupts_enabled()
                          or not irq_enable.read().data_available
                          or not dpmi::irq_mask::enabled(config.irq))
                         and read_status().data_available) get();

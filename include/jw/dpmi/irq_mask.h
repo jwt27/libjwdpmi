@@ -11,6 +11,7 @@
 #include <atomic>
 #include <jw/io/ioport.h>
 #include <jw/dpmi/dpmi.h>
+#include "jwdpmi_config.h"
 
 namespace jw
 {
@@ -20,11 +21,10 @@ namespace jw
         using irq_level = std::uint8_t;
 
         // Disables the interrupt flag
-        class interrupt_mask
+        struct interrupt_mask
         {
-        public:
-            interrupt_mask() noexcept { cli(); }
-            ~interrupt_mask() { if ((--count | not initially_enabled) == 0) [[likely]] { asm ("sti"); } }
+            interrupt_mask() noexcept : state { cli() } { }
+            ~interrupt_mask() { sti(); }
 
             interrupt_mask(const interrupt_mask&) = delete;
             interrupt_mask(interrupt_mask&&) = delete;
@@ -33,53 +33,52 @@ namespace jw
 
             // Get the current interrupt flag state
             // true == interrupts enabled
-            static bool enabled() noexcept
+            static bool interrupts_enabled() noexcept
             {
-                return get_interrupt_state();
-            }
-
-            // Enables the interrupt flag
-            static void sti() noexcept
-            {
-                if (count > 0) return;
-                asm ("sti");
+                if constexpr (use_dpmi)
+                {
+                    std::uint32_t state;
+                    asm ("int 0x31;"
+                        : "=a" (state)
+                        : "a" (0x0902)
+                        : "cc");
+                    return state & 1;
+                }
+                else return cpu_flags::current().interrupts_enabled;
             }
 
         private:
-            // Disables the interrupt flag
-            static void cli() noexcept
+            constexpr static bool use_dpmi = config::support_virtual_interrupt_flag;
+
+            static std::uint32_t cli()
             {
-                auto state = get_and_set_interrupt_state(false);
-                if (count++ == 0) [[likely]] initially_enabled = state;
+                if constexpr (use_dpmi)
+                {
+                    std::uint32_t eax = 0x0900;
+                    asm volatile ("int 0x31" : "+a" (eax) :: "cc");
+                    return eax;
+                }
+                else
+                {
+                    std::uint32_t flags;
+                    asm volatile ("pushfd; cli; pop %0" : "=rm" (flags));
+                    return flags;
+                }
             }
 
-            static inline std::uint32_t count { 0 };
-            static inline bool initially_enabled;
-
-            //DPMI 0.9 AX=090x
-            static bool get_and_set_interrupt_state(bool state) noexcept
+            void sti()
             {
-                asm volatile (
-                    "int 0x31;"
-                    : "=a" (state)
-                    : "a" ((state & 1) | 0x0900)
-                    : "cc");
-
-                return state & 1;
+                if constexpr (use_dpmi)
+                {
+                    asm volatile ("int 0x31" :: "a" (state) : "cc");
+                }
+                else
+                {
+                    asm volatile ("push %0; popfd" :: "rm" (state) : "cc");
+                }
             }
 
-            //DPMI 0.9 AX=0902
-            static bool get_interrupt_state() noexcept
-            {
-                std::uint32_t state;
-
-                asm("int 0x31;"
-                    : "=a" (state)
-                    : "a" (0x0902)
-                    : "cc");
-
-                return state & 1;
-            }
+            const std::uint32_t state;
         };
 
         // Masks one specific IRQ.

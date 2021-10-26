@@ -152,6 +152,15 @@ namespace jw
 
             std::set_terminate(terminate_handler);
 
+            if constexpr (not config::support_virtual_interrupt_flag)
+            {
+                if (cpu_flags::current().io_privilege < 3)
+                {
+                    std::fprintf(stderr, "IOPL 3 required.\n");
+                    std::terminate();
+                }
+            }
+
             min_chunk_size = irq_alloc_size;
             irq_alloc = new dpmi::locked_pool_resource<true> { irq_alloc_size };
 
@@ -195,12 +204,20 @@ namespace jw
             may_throw();    // HACK
             std::uint32_t cr;
             asm ("mov %0, cr0" : "=r" (cr));
-            asm ("mov cr0, %0" :: "r" (cr | 0x10));       // enable native x87 exceptions
-            if constexpr (sse)
+            asm ("mov cr0, %0" :: "r" (cr | 0x10));     // enable native x87 exceptions
+
+            asm ("mov %0, cr4" : "=r" (cr));
+            if constexpr (not config::support_virtual_interrupt_flag)
             {
-                asm ("mov %0, cr4" : "=r" (cr));
-                asm ("mov cr4, %0" :: "r" (cr | 0x600));  // enable SSE and SSE exceptions
+                if (cr & 2) // Protected-mode Virtual Interrupts flag
+                {
+                    std::fprintf(stderr, "CR4.PVI enabled, but not supported.\n");
+                    std::terminate();
+                }
             }
+#           ifdef HAVE__SSE__
+            asm ("mov cr4, %0" :: "r" (cr | 0x600));    // enable SSE and SSE exceptions
+#           endif
         }
     };
     [[gnu::init_priority(102)]] init initializer;

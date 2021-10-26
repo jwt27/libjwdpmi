@@ -38,6 +38,9 @@ namespace jw
         // Assume memory page size is 4kB.  Use DPMI function 0x0604 otherwise.
         constexpr bool assume_4k_pages = true;
 
+        // Use DPMI function 0x0900 to query and toggle interrupt-enable flag.
+        constexpr bool support_virtual_interrupt_flag = false;
+
         // Enable interrupts while the gdb interface is active
         constexpr bool enable_gdb_interrupts = true;
 

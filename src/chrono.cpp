@@ -99,7 +99,7 @@ namespace jw
                 pit0_data.write(div.lo);
                 pit0_data.write(div.hi);
             }
-            if (dpmi::interrupt_mask::enabled())
+            if (dpmi::interrupt_mask::interrupts_enabled())
             {
                 const auto ticks = pit_ticks;
                 do { } while (ticks == pit_ticks);
@@ -166,7 +166,7 @@ namespace jw
             }
 
             const unsigned ticks = tsc_ticks_per_irq;
-            if (dpmi::interrupt_mask::enabled() and tsc_ref_enabled(tsc_ref))
+            if (dpmi::interrupt_mask::interrupts_enabled() and tsc_ref_enabled(tsc_ref))
                 this_thread::yield_while([ticks] { return tsc_ticks_per_irq == ticks; });
         }
 
