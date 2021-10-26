@@ -319,18 +319,12 @@ extern "C"
         irq_alloc = ia;
     }
 
-    auto do_malloc = [](std::size_t n)
-    {
-        void* const p = __real_malloc(n);
-        if (p == nullptr) throw std::bad_alloc { };
-        return p;
-    };
-
     const auto align = static_cast<std::size_t>(alignment);
     const auto overhead = sizeof(std::size_t) + sizeof(std::uint8_t);
     const auto n = size + align + overhead;
 
-    void* const p_malloc = do_malloc(n);
+    void* const p_malloc = __real_malloc(n);
+    if (p_malloc == nullptr) throw std::bad_alloc { };
     const auto p = reinterpret_cast<std::uintptr_t>(p_malloc);
 
     const auto a = p + overhead;
