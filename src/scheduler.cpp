@@ -96,7 +96,9 @@ namespace jw::detail
 
     void scheduler::yield()
     {
-        if (dpmi::in_irq_context() or std::uncaught_exceptions() > 0) [[unlikely]] return;
+        if (dpmi::in_irq_context()) [[unlikely]] return;
+        if (std::uncaught_exceptions() > 0) [[unlikely]] return;
+        if (not dpmi::interrupt_mask::interrupts_enabled()) [[unlikely]] return;
         auto* const i = instance;
 
         debug::break_with_signal(debug::detail::thread_switched);
