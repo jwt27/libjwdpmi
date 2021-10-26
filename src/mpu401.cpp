@@ -106,16 +106,25 @@ namespace jw
 
             int mpu401_streambuf::sync()
             {
-                std::optional<dpmi::interrupt_mask> no_irq;
-            loop:
-                check_irq_exception();
-                if (cfg.use_irq) no_irq.emplace();
-                do_sync();
-                if (tx_ptr < pptr())
+                if (cfg.use_irq)
                 {
-                    no_irq.reset();
-                    this_thread::yield();
-                    goto loop;
+                    this_thread::yield_while([this]
+                    {
+                        check_irq_exception();
+                        {
+                            dpmi::interrupt_mask no_irq { };
+                            do_sync();
+                        }
+                        return tx_ptr < pptr();
+                    });
+                }
+                else
+                {
+                    this_thread::yield_while([this]
+                    {
+                        do_sync();
+                        return tx_ptr < pptr();
+                    });
                 }
                 setp(tx_buf.begin(), tx_buf.end());
                 tx_ptr = tx_buf.begin();
@@ -171,16 +180,25 @@ namespace jw
             {
                 if (pptr() == epptr())
                 {
-                    std::optional<dpmi::interrupt_mask> no_irq;
-                loop:
-                    check_irq_exception();
-                    if (cfg.use_irq) no_irq.emplace();
-                    do_sync();
-                    if (tx_ptr == pbase())
+                    if (cfg.use_irq)
                     {
-                        no_irq.reset();
-                        this_thread::yield();
-                        goto loop;
+                        this_thread::yield_while([this]
+                        {
+                            check_irq_exception();
+                            {
+                                dpmi::interrupt_mask no_irq { };
+                                do_sync();
+                            }
+                            return tx_ptr == pbase();
+                        });
+                    }
+                    else
+                    {
+                        this_thread::yield_while([this]
+                        {
+                            do_sync();
+                            return tx_ptr == pbase();
+                        });
                     }
                     std::copy(tx_ptr, pptr(), pbase());
                     pbump(pbase() - tx_ptr);
