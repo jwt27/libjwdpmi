@@ -110,7 +110,15 @@ namespace jw
         static_assert(sizeof(raw_exception_frame) == 0x78);
 
         using exception_frame = dpmi09_exception_frame; // can be static_cast to dpmi10_exception_frame type
-        using exception_handler_sig = bool(cpu_registers*, exception_frame*, bool);
+
+        struct exception_info
+        {
+            cpu_registers* registers;
+            exception_frame* frame;
+            bool is_dpmi10_frame;
+        };
+
+        using exception_handler_sig = bool(const exception_info&);
 
         struct exception_num : public enum_struct<std::uint32_t>
         {
@@ -164,7 +172,9 @@ namespace jw
             static inline std::array<exception_handler*, 0x20> last { };
             static inline std::array<byte, config::exception_stack_size> stack;
 
-            [[gnu::force_align_arg_pointer, gnu::cdecl]] static bool call_handler(exception_handler* self, raw_exception_frame* frame) noexcept;
+            [[gnu::force_align_arg_pointer, gnu::cdecl]]
+            static bool call_handler(exception_handler* self, raw_exception_frame* frame) noexcept;
+
                                                                 // sizeof   alignof     offset
             exception_handler* self { this };                   // 4        4           [eax-0x28]
             decltype(&call_handler) call_ptr { &call_handler }; // 4        4           [eax-0x24]
@@ -173,7 +183,7 @@ namespace jw
             selector es;                                        // 2        2           [eax-0x1A]
             selector fs;                                        // 2        2           [eax-0x18]
             selector gs;                                        // 2        2           [eax-0x16]
-            bool new_type;                                      // 1        1           [eax-0x14]
+            bool is_dpmi10;                                     // 1        1           [eax-0x14]
             byte _padding;                                      // 1        1           [eax-0x13]
             far_ptr32 chain_to;                                 // 6        2           [eax-0x12]
             std::array<byte, 0x100> code;                       //          1           [eax-0x0C]
@@ -185,14 +195,13 @@ namespace jw
                 , exc(e), stack_ptr(stack.data() + stack.size() - 4)
                 , chain_to { detail::cpu_exception_handlers::get_pm_handler(e) }
             {
-                detail::setup_exception_throwers();
                 init_code();
 
                 prev = last[e];
                 if (prev != nullptr) prev->next = this;
                 last[e] = this;
 
-                new_type = detail::cpu_exception_handlers::set_pm_handler(e, get_ptr());
+                is_dpmi10 = detail::cpu_exception_handlers::set_pm_handler(e, get_ptr());
             }
 
             ~exception_handler();
@@ -215,15 +224,18 @@ namespace jw
         {
             const cpu_registers registers;
             const dpmi10_exception_frame frame;
-            const bool new_frame_type;
+            const bool is_dpmi10_frame;
+
+            cpu_exception(exception_num n, const exception_info& i)
+                : cpu_exception { n, i.registers, i.frame, i.is_dpmi10_frame } { }
 
             cpu_exception(exception_num n, cpu_registers* r, exception_frame* f, bool t)
                 : system_error { static_cast<int>(n), cpu_category { } }
-                , registers { *r }, frame { init_frame(f, t) }, new_frame_type { t } { }
+                , registers { *r }, frame { init_frame(f, t) }, is_dpmi10_frame { t } { }
 
             void print() const
             {
-                if (new_frame_type) frame.print();
+                if (is_dpmi10_frame) frame.print();
                 else static_cast<const dpmi09_exception_frame*>(&frame)->print();
                 registers.print();
             }
@@ -239,7 +251,7 @@ namespace jw
         template<exception_num N>
         struct specific_cpu_exception : public cpu_exception
         {
-            specific_cpu_exception(cpu_registers* r, exception_frame* f, bool t) : cpu_exception { N, r, f, t } { }
+            specific_cpu_exception(const exception_info& i) : cpu_exception { N, i } { }
         };
 
         using divide_error             = specific_cpu_exception<exception_num::divide_error>;

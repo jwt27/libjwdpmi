@@ -54,16 +54,19 @@ namespace jw
 
         bool exception_handler::call_handler(exception_handler* self, raw_exception_frame* frame) noexcept
         {
-            auto* f = self->new_type ? &frame->frame_10 : &frame->frame_09;
+            auto* const f = self->is_dpmi10 ? &frame->frame_10 : &frame->frame_09;
             detail::interrupt_id id { self->exc, detail::interrupt_type::exception };
             if (id.fpu_context_switched) return true;
+
+            const exception_info i { &frame->reg, f, self->is_dpmi10 };
+
             bool success = false;
 #           ifndef NDEBUG
             *reinterpret_cast<volatile std::uint32_t*>(stack.begin()) = 0xDEADBEEF;
 #           endif
             try
             {
-                success = self->handler(&frame->reg, f, self->new_type);
+                success = self->handler(i);
             }
             catch (...)
             {
@@ -263,9 +266,9 @@ namespace jw
             template <exception_num N, exception_num... Next>
             static void make_throwers()
             {
-                exception_throwers[N].emplace(N, [](cpu_registers* r, exception_frame* f, bool t) -> bool
+                exception_throwers[N].emplace(N, [](const exception_info& i) -> bool
                 {
-                    throw specific_cpu_exception<N> { r, f, t };
+                    throw specific_cpu_exception<N> { i };
                 });
                 if constexpr (sizeof...(Next) > 0) make_throwers<Next...>();
             };

@@ -1166,8 +1166,10 @@ namespace jw
                 else send_packet("");   // unknown packet
             }
 
-            [[gnu::hot]] bool handle_exception(exception_num exc, cpu_registers* r, exception_frame* f, bool)
+            [[gnu::hot]] bool handle_exception(exception_num exc, const exception_info& i)
             {
+                auto* const r = i.registers;
+                auto* const f = i.frame;
                 if (debugmsg) std::clog << "entering exception 0x" << std::hex << exc << " from 0x" << f->fault_address.offset << '\n';
                 if (not debug_mode)
                 {
@@ -1386,9 +1388,9 @@ namespace jw
                 }, dpmi::always_call);
 
                 {
-                    exception_handler check_frame_type { 3, [](auto*, auto*, bool t)
+                    exception_handler check_frame_type { 3, [](const dpmi::exception_info& i)
                     { 
-                        new_frame_type = t;
+                        new_frame_type = i.is_dpmi10_frame;
                         return true; 
                     } };
                     asm("int 3;");
@@ -1397,7 +1399,7 @@ namespace jw
                 for (auto&& s : { SIGHUP, SIGABRT, SIGTERM, SIGKILL, SIGQUIT, SIGILL, SIGINT })
                     signal_handlers[s] = std::signal(s, csignal);
 
-                auto install_exception_handler = [](auto&& e) { exception_handlers[e] = std::make_unique<exception_handler>(e, [e](auto* r, auto* f, bool t) { return handle_exception(e, r, f, t); }); };
+                auto install_exception_handler = [](auto&& e) { exception_handlers[e] = std::make_unique<exception_handler>(e, [e](const auto& i) { return handle_exception(e, i); }); };
 
                 for (auto e = 0x00; e <= 0x0e; ++e)
                     install_exception_handler(e);

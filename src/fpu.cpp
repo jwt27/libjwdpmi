@@ -81,7 +81,7 @@ namespace jw::dpmi::detail
 
         set_fpu_emulation(false, true);
 
-        exc06_handler.emplace(exception_num::invalid_opcode, [](cpu_registers*, exception_frame*, bool) { return false; });
-        exc07_handler.emplace(exception_num::device_not_available, [](cpu_registers*, exception_frame*, bool) { return false; });
+        exc06_handler.emplace(exception_num::invalid_opcode, [](const exception_info&) { return false; });
+        exc07_handler.emplace(exception_num::device_not_available, [](const exception_info&) { return false; });
     }
 }
