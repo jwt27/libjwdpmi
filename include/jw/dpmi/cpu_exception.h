@@ -57,7 +57,7 @@ namespace jw
 
             void print() const
             {
-                std::fprintf(stderr, "CPU exception at cs:eip=%.4hx:%.8lx, ss:eip=%.4hx:%.8lx\n",
+                std::fprintf(stderr, "CPU exception at cs:eip=%.4hx:%.8lx, ss:esp=%.4hx:%.8lx\n",
                     fault_address.segment, fault_address.offset, stack.segment, stack.offset);
                 std::fprintf(stderr, "Error code: %.8lx, info bits: %.1hx, flags: %.8lx\n",
                     error_code, raw_info_bits, raw_eflags);
