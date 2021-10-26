@@ -32,7 +32,7 @@ namespace jw
 {
     namespace dpmi
     {
-        struct [[gnu::packed]] old_exception_frame
+        struct [[gnu::packed]] dpmi09_exception_frame
         {
             far_ptr32 return_address; unsigned : 16;
             std::uint32_t error_code;
@@ -63,7 +63,7 @@ namespace jw
                     error_code, raw_info_bits, raw_eflags);
             }
         };
-        struct [[gnu::packed]] new_exception_frame : public old_exception_frame
+        struct [[gnu::packed]] dpmi10_exception_frame : public dpmi09_exception_frame
         {
             selector es { }; unsigned : 16;
             selector ds { }; unsigned : 16;
@@ -90,7 +90,7 @@ namespace jw
 
             void print() const
             {
-                old_exception_frame::print();
+                dpmi09_exception_frame::print();
                 std::fprintf(stderr, "(if page fault) Linear: %.8lx, physical: %.8lx, PTE: %.1hhx\n",
                     linear_page_fault_address, static_cast<long unsigned int>(page_table_entry.physical_address), page_table_entry.raw_pte);
                 std::fprintf(stderr, "ds=%.4hx es=%.4hx fs=%.4hx gs=%.4hx\n",
@@ -101,15 +101,15 @@ namespace jw
         struct [[gnu::packed]] raw_exception_frame
         {
             cpu_registers reg;
-            old_exception_frame frame_09;
-            new_exception_frame frame_10;
+            dpmi09_exception_frame frame_09;
+            dpmi10_exception_frame frame_10;
         };
 
-        static_assert(sizeof(old_exception_frame) == 0x20);
-        static_assert(sizeof(new_exception_frame) == 0x38);
+        static_assert(sizeof(dpmi09_exception_frame) == 0x20);
+        static_assert(sizeof(dpmi10_exception_frame) == 0x38);
         static_assert(sizeof(raw_exception_frame) == 0x78);
 
-        using exception_frame = old_exception_frame; // can be static_cast to new_exception_frame type
+        using exception_frame = dpmi09_exception_frame; // can be static_cast to dpmi10_exception_frame type
         using exception_handler_sig = bool(cpu_registers*, exception_frame*, bool);
 
         struct exception_num : public enum_struct<std::uint32_t>
@@ -214,7 +214,7 @@ namespace jw
         struct cpu_exception : public std::system_error
         {
             const cpu_registers registers;
-            const new_exception_frame frame;
+            const dpmi10_exception_frame frame;
             const bool new_frame_type;
 
             cpu_exception(exception_num n, cpu_registers* r, exception_frame* f, bool t)
@@ -224,14 +224,14 @@ namespace jw
             void print() const
             {
                 if (new_frame_type) frame.print();
-                else static_cast<const old_exception_frame*>(&frame)->print();
+                else static_cast<const dpmi09_exception_frame*>(&frame)->print();
                 registers.print();
             }
 
         private:
-            static new_exception_frame init_frame(old_exception_frame* f, bool t) noexcept
+            static dpmi10_exception_frame init_frame(dpmi09_exception_frame* f, bool t) noexcept
             {
-                if (t) return *static_cast<new_exception_frame*>(f);
+                if (t) return *static_cast<dpmi10_exception_frame*>(f);
                 else return { *f };
             }
         };
