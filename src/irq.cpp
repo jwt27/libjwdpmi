@@ -26,62 +26,58 @@ namespace jw::dpmi::detail
         std::uint32_t stack_use_count;
     } static irq_data;
 
-    struct irq_entry_point
+    void irq_entry_point() noexcept
     {
-        [[gnu::naked, gnu::hot]]
-        static void enter() noexcept
-        {
-            asm
-            (
-            R"( push ds
-                push es
-                push fs
-                push gs
-                pusha
-                mov bx, ss
-                mov ebp, esp
-                mov esi, %[data]
-                mov ds, cs:[esi+%[ds]]  # restore segment registers
-                mov di, [esi+%[ss]]
-                mov es, [esi+%[es]]
-                mov fs, [esi+%[fs]]
-                mov gs, [esi+%[gs]]
-                cmp bx, di              # check if we're already on our own SS,
-                je L%=keep_stack        # this is usually the case for nested IRQs
-                call %[get_stack]       # get a new stack pointer in EAX
-                mov edx, [esp+0x30]     # IRQ number set by trampoline
-                mov ss, di
-                mov esp, eax;
-            L%=keep_stack:
-                push edx                # pass IRQ number
-                call %[handle_irq]      # call user interrupt handlers
-                cmp bx, di
-                je L%=ret_same_stack
-                dec dword ptr [esi+%[use_count]]    # -- counter used by get_stack_ptr
-                mov ss, bx
-            L%=ret_same_stack:
-                mov esp, ebp
-                popa
-                pop gs
-                pop fs
-                pop es
-                pop ds
-                add esp, 4              # pop IRQ number
-                sti
-                iret )"
-                ::
-                [data]          "i" (&irq_data),
-                [ss]            "i" (offsetof(irq_data_t, ss)),
-                [ds]            "i" (offsetof(irq_data_t, ds)),
-                [es]            "i" (offsetof(irq_data_t, es)),
-                [fs]            "i" (offsetof(irq_data_t, fs)),
-                [gs]            "i" (offsetof(irq_data_t, gs)),
-                [use_count]     "i" (offsetof(irq_data_t, stack_use_count)),
-                [handle_irq]    "i" (irq_controller::handle_irq),
-                [get_stack]     "i" (irq_controller::get_stack_ptr)
-            );
-        }
-    };
+        asm
+        (R"(
+            push ds
+            push es
+            push fs
+            push gs
+            pusha
+            mov bx, ss
+            mov ebp, esp
+            mov esi, %[data]
+            mov ds, cs:[esi+%[ds]]  # restore segment registers
+            mov di, [esi+%[ss]]
+            mov es, [esi+%[es]]
+            mov fs, [esi+%[fs]]
+            mov gs, [esi+%[gs]]
+            cmp bx, di              # check if we're already on our own SS,
+            je L%=keep_stack        # this is usually the case for nested IRQs
+            call %[get_stack]       # get a new stack pointer in EAX
+            mov edx, [esp+0x30]     # IRQ number set by trampoline
+            mov ss, di
+            mov esp, eax
+        L%=keep_stack:
+            push edx                # pass IRQ number
+            call %[handle_irq]      # call user interrupt handlers
+            cmp bx, di
+            je L%=ret_same_stack
+            dec dword ptr [esi+%[use_count]]    # -- counter used by get_stack_ptr
+            mov ss, bx
+        L%=ret_same_stack:
+            mov esp, ebp
+            popa
+            pop gs
+            pop fs
+            pop es
+            pop ds
+            add esp, 4              # pop IRQ number
+            sti
+            iret
+        )" : :
+            [data]       "i" (&irq_data),
+            [ss]         "i" (offsetof(irq_data_t, ss)),
+            [ds]         "i" (offsetof(irq_data_t, ds)),
+            [es]         "i" (offsetof(irq_data_t, es)),
+            [fs]         "i" (offsetof(irq_data_t, fs)),
+            [gs]         "i" (offsetof(irq_data_t, gs)),
+            [use_count]  "i" (offsetof(irq_data_t, stack_use_count)),
+            [handle_irq] "i" (irq_controller::handle_irq),
+            [get_stack]  "i" (irq_controller::get_stack_ptr)
+        );
+    }
 
     template<unsigned N>
     [[gnu::naked, gnu::hot]]
@@ -93,7 +89,7 @@ namespace jw::dpmi::detail
             jmp %1 )"
             ::
             "i" (N),
-            "i" (irq_entry_point::enter)
+            "i" (irq_entry_point)
         );
     }
 
@@ -116,7 +112,7 @@ namespace jw::dpmi::detail
             pop eax
             sti
             iret )"
-            : : "i" (irq_entry_point::enter)
+            : : "i" (irq_entry_point)
         );
     }
 
@@ -141,11 +137,11 @@ namespace jw::dpmi::detail
             pop eax
             sti
             iret )"
-            : : "i" (irq_entry_point::enter)
+            : : "i" (irq_entry_point)
         );
     }
 
-    std::uintptr_t get_trampoline(irq_level i)
+    static std::uintptr_t get_trampoline(irq_level i)
     {
         constexpr static auto array = []<std::size_t... I> (std::index_sequence<I...>) {
             return std::array<decltype(&irq_trampoline<0>), sizeof...(I)> { irq_trampoline<I>... };

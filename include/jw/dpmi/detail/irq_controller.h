@@ -23,9 +23,12 @@ namespace jw::dpmi
 
 namespace jw::dpmi::detail
 {
+    [[gnu::naked, gnu::hot]]
+    void irq_entry_point() noexcept;
+
     struct irq_controller
     {
-        friend struct irq_entry_point;
+        friend void irq_entry_point() noexcept;
 
         static void add(irq_level i, irq_handler* p);
         static void remove(irq_level i, irq_handler* p);

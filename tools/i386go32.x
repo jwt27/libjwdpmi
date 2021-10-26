@@ -8,16 +8,15 @@ ENTRY (start)
 SECTIONS
 {
   .text  ALIGN(0x1000+SIZEOF_HEADERS, 0x200) : SUBALIGN(0x10) {
+    *(.text.startup .text.startup.*)
+    *(.text.unlikely .text.unlikely.*)
+    *(.text.exit .text.exit.*)
     *(.text)
-    *(.text.*)
-    *(.gnu.linkonce.t*)
-    *(.const*)
-    *(.ro*)
-    *(.gnu.linkonce.r*)
+    *(.text.hot .text.hot.*)
+    *(.text.* .gnu.linkonce.t.*)
+    *(.const* .ro* .gnu.linkonce.r*)
     /* HACK:  These should be in .data but require 16-byte alignment.  */
-    *(.data)
-    *(.data.*)
-    *(.gnu.linkonce.d*)
+    *(.data .data.* .gnu.linkonce.d*)
     etext  =  . ; PROVIDE(_etext = .) ;
     . = ALIGN(0x200);
   }
