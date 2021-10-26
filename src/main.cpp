@@ -206,18 +206,28 @@ namespace jw
             asm ("mov %0, cr0" : "=r" (cr));
             asm ("mov cr0, %0" :: "r" (cr | 0x10));     // enable native x87 exceptions
 
-            asm ("mov %0, cr4" : "=r" (cr));
-            if constexpr (not config::support_virtual_interrupt_flag)
+#           ifdef HAVE__SSE__
+            constexpr bool have_sse = true;
+#           else
+            constexpr bool have_sse = false;
+#           endif
+
+            if constexpr (have_sse or not config::support_virtual_interrupt_flag)
             {
-                if (cr & 2) // Protected-mode Virtual Interrupts flag
+                asm ("mov %0, cr4" : "=r" (cr));
+                if constexpr (not config::support_virtual_interrupt_flag)
                 {
-                    std::fprintf(stderr, "CR4.PVI enabled, but not supported.\n");
-                    std::terminate();
+                    if (cr & 2) // Protected-mode Virtual Interrupts flag
+                    {
+                        std::fprintf(stderr, "CR4.PVI enabled, but not supported.\n");
+                        std::terminate();
+                    }
+                }
+                if constexpr (have_sse)
+                {
+                    asm("mov cr4, %0" :: "r" (cr | 0x600));    // enable SSE and SSE exceptions
                 }
             }
-#           ifdef HAVE__SSE__
-            asm ("mov cr4, %0" :: "r" (cr | 0x600));    // enable SSE and SSE exceptions
-#           endif
         }
     };
     [[gnu::init_priority(102)]] init initializer;
