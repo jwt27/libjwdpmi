@@ -52,8 +52,8 @@ namespace jw::dpmi::detail
     {
         if (fpu_context_switched) return;
         if (current_fpu == this) current_fpu = next_fpu;
-        if (not cr0_em and next->has_fpu_context) set_fpu_emulation(true);
-        else if (cr0_em and next->next == nullptr) set_fpu_emulation(false);
+        if (cr0_em and next->next == nullptr and not next->has_fpu_context) set_fpu_emulation(false);
+        else if (not cr0_em) set_fpu_emulation(true);
     }
 
     void interrupt_id::setup_fpu()
