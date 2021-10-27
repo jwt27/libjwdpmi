@@ -67,9 +67,9 @@ namespace jw
 
     private:
         template<typename F, typename... A>
-        auto create(std::size_t, F&&, A&&...);
+        detail::thread_ptr create(std::size_t, F&&, A&&...);
 
-        std::shared_ptr<detail::thread> ptr;
+        detail::thread_ptr ptr;
     };
 
     inline void swap(thread& a, thread& b) noexcept { a.swap(b); }
@@ -210,7 +210,7 @@ namespace jw
     }
 
     template<typename F, typename... A>
-    inline auto thread::create(std::size_t stack_size, F&& func, A&&... args)
+    inline detail::thread_ptr thread::create(std::size_t stack_size, F&& func, A&&... args)
     {
         auto wrapper = callable_tuple { std::forward<F>(func), std::forward<A>(args)... };
         return detail::scheduler::create_thread(std::move(wrapper), stack_size);
