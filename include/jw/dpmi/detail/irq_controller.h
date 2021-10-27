@@ -148,6 +148,7 @@ namespace jw::dpmi::detail
         {
             locking_allocator<std::byte> alloc { };
             if (stack.data() != nullptr) alloc.deallocate(stack.data(), stack.size());
+            stack = { };
         }
 
         void resize_stack(std::size_t size)
