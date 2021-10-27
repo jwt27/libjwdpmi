@@ -16,6 +16,7 @@
 #include <jw/dpmi/alloc.h>
 #include <jw/function.h>
 #include <jw/main.h>
+#include <jw/detail/eh_globals.h>
 
 
 namespace jw
@@ -200,6 +201,7 @@ namespace jw::detail
         void (*destroy)(void*);
         const std::span<std::byte> stack;
         thread_context* context; // points to esp during context switch
+        jw_cxa_eh_globals eh_globals { };
         thread_state state { starting };
         bool suspended { false };
         bool aborted { false };

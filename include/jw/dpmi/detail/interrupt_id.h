@@ -6,20 +6,14 @@
 
 #pragma once
 #include <cstdint>
-#include <cxxabi.h>
 #include <jw/dpmi/fpu.h>
 #include <jw/main.h>
+#include <jw/detail/eh_globals.h>
 
 namespace jw::dpmi::detail
 {
     inline constinit std::uint32_t interrupt_count { 0 };
     inline constinit std::uint32_t exception_count { 0 };
-
-    struct jw_cxa_eh_globals
-    {
-        void* caughtExceptions { nullptr };
-        unsigned int uncaughtExceptions { 0 };
-    };
 
     enum class interrupt_type
     {
@@ -45,7 +39,7 @@ namespace jw::dpmi::detail
         interrupt_id_data* const next;
         interrupt_id_data* const next_fpu;
         ack acknowledged { type == interrupt_type::irq ? ack::no : ack::yes };
-        jw_cxa_eh_globals eh_globals;
+        jw::detail::jw_cxa_eh_globals eh_globals;
         bool fpu_context_switched { false };
         bool has_fpu_context { false };
         fpu_context fpu;
@@ -79,8 +73,8 @@ namespace jw::dpmi::detail
             case interrupt_type::realmode: break;
             default: __builtin_unreachable();
             }
-            next->eh_globals = get_eh_globals();
-            set_eh_globals({ });
+            next->eh_globals = jw::detail::get_eh_globals();
+            jw::detail::set_eh_globals({ });
             fpu_enter();
             current = this;
         }
@@ -89,7 +83,7 @@ namespace jw::dpmi::detail
         {
             current = next;
             fpu_leave();
-            set_eh_globals(next->eh_globals);
+            jw::detail::set_eh_globals(next->eh_globals);
             switch (type)
             {
             case interrupt_type::exception:
@@ -132,9 +126,6 @@ namespace jw::dpmi::detail
         [[gnu::hot]] void fpu_leave();
 
         static void setup_fpu();
-
-        static void set_eh_globals(jw_cxa_eh_globals g) { *reinterpret_cast<jw_cxa_eh_globals*>(abi::__cxa_get_globals()) = g; }
-        static jw_cxa_eh_globals get_eh_globals() { return *reinterpret_cast<jw_cxa_eh_globals*>(abi::__cxa_get_globals()); }
 
         static void setup() noexcept
         {

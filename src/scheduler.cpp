@@ -97,7 +97,6 @@ namespace jw::detail
     void scheduler::yield()
     {
         if (dpmi::in_irq_context()) [[unlikely]] return;
-        if (std::uncaught_exceptions() > 0) [[unlikely]] return;
 
         dpmi::interrupt_unmask enable_interrupts { };
         auto* const i = instance;
@@ -173,16 +172,20 @@ namespace jw::detail
     thread_context* scheduler::switch_thread()
     {
         auto* const i = instance;
-        thread* ct;
+        auto& it = i->iterator;
+        thread* ct = it->second.get();
+
+        ct->eh_globals = get_eh_globals();
+
         for(std::size_t n = 0; ; ++n)
         {
             {
                 dpmi::interrupt_mask no_interrupts_please { };
-                if (i->iterator->second->active()) [[likely]] ++i->iterator;
-                else i->iterator = i->threads.erase(i->iterator);
-                if (i->iterator == i->threads.end()) i->iterator = i->threads.begin();
+                if (ct->active()) [[likely]] ++it;
+                else it = i->threads.erase(it);
+                if (it == i->threads.end()) it = i->threads.begin();
             }
-            ct = current_thread();
+            ct = it->second.get();
 
             if (ct->state == thread::starting) [[unlikely]]     // new thread, initialize new context on stack
             {
@@ -202,6 +205,8 @@ namespace jw::detail
                 n = 0;
             }
         }
+        set_eh_globals(ct->eh_globals);
+
         return ct->context;
     }
 
