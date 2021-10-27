@@ -100,22 +100,22 @@ namespace jw::detail
         if (std::uncaught_exceptions() > 0) [[unlikely]] return;
         if (not dpmi::interrupt_mask::interrupts_enabled()) [[unlikely]] return;
         auto* const i = instance;
+        auto* const ct = current_thread();
 
         debug::break_with_signal(debug::detail::thread_switched);
 
         {
             debug::trap_mask dont_trace_here { };
-            context_switch(&current_thread()->context);
+            context_switch(&ct->context);
         }
 
 #       ifndef NDEBUG
-        if (not is_current_thread(main_thread_id) and *reinterpret_cast<std::uint32_t*>(current_thread()->stack.data()) != 0xDEADBEEF) [[unlikely]]
+        if (ct->id != main_thread_id and *reinterpret_cast<std::uint32_t*>(ct->stack.data()) != 0xDEADBEEF) [[unlikely]]
             throw std::runtime_error { "Stack overflow!" };
 #       endif
 
         if (i->terminating) [[unlikely]] terminate();
 
-        auto* const ct = current_thread();
         while (ct->invoke_list.size() > 0) [[unlikely]]
         {
             decltype(thread::invoke_list)::value_type f;
