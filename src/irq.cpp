@@ -165,7 +165,7 @@ namespace jw::dpmi::detail
         }
         catch (...)
         {
-            std::cerr << "Exception while servicing IRQ " << std::dec << i << std::endl;
+            std::cerr << "Exception while servicing IRQ " << std::dec << static_cast<unsigned>(i) << std::endl;
             try { throw; }
             catch (const std::exception& e) { print_exception(e); }
             catch (...) { }
