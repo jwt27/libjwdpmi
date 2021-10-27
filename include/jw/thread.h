@@ -7,6 +7,7 @@
 
 #pragma once
 #include <exception>
+#include <stop_token>
 #include <jw/detail/scheduler.h>
 #include <jw/main.h>
 #include "jwdpmi_config.h"
@@ -26,10 +27,7 @@ namespace jw
         thread() noexcept = default;
         template<typename F, typename... A>
         explicit thread(F&& f, A&&... args)
-            : ptr { create(config::thread_default_stack_size, std::forward<F>(f), std::forward<A>(args)...) }
-        {
-            detail::scheduler::start_thread(ptr);
-        }
+            : thread { config::thread_default_stack_size, std::forward<F>(f), std::forward<A>(args)... } { }
 
         template<typename F, typename... A>
         explicit thread(std::size_t stack_size, F&& f, A&&... args)
@@ -51,29 +49,85 @@ namespace jw
         }
 
         void swap(thread& other) noexcept { using std::swap; swap(ptr, other.ptr); };
-        bool joinable() const noexcept { return static_cast<bool>(ptr); }
+        [[nodiscard]] bool joinable() const noexcept { return static_cast<bool>(ptr); }
         void join();
         void detach() { ptr.reset(); }
-        id get_id() const noexcept { return ptr ? ptr->id : 0; };
-        native_handle_type native_handle() { return ptr.get(); };
+        [[nodiscard]] id get_id() const noexcept { return ptr ? ptr->id : 0; };
+        [[nodiscard]] native_handle_type native_handle() { return ptr.get(); };
 
         void abort() { ptr->abort(); };
-        bool active() const noexcept { return ptr and ptr->active(); }
+        [[nodiscard]] bool active() const noexcept { return ptr and ptr->active(); }
 
         template<typename T>
         void name(T&& string) { ptr->set_name(std::forward<T>(string)); }
         std::string_view name() { return ptr->get_name(); }
 
-        static unsigned int hardware_concurrency() noexcept { return 1; }
+        [[nodiscard]] static unsigned int hardware_concurrency() noexcept { return 1; }
 
     private:
         template<typename F, typename... A>
-        auto create(std::size_t stack_size, F&& func, A&&... args);
+        auto create(std::size_t, F&&, A&&...);
 
         std::shared_ptr<detail::thread> ptr;
     };
 
     inline void swap(thread& a, thread& b) noexcept { a.swap(b); }
+
+    struct jthread
+    {
+        using id = thread::id;
+        using native_handle_type = thread::native_handle_type;
+
+        jthread() noexcept : stop { std::nostopstate }, t { } { }
+
+        template<typename F, typename... A>
+        explicit jthread(F&& f, A&&... args)
+            : jthread { config::thread_default_stack_size, std::forward<F>(f), std::forward<A>(args)... } { }
+
+        template<typename F, typename... A>
+        explicit jthread(std::size_t stack_size, F&& f, A&&... args)
+            : stop { }, t { create(stop, stack_size, std::forward<F>(f), std::forward<A>(args)...) } { }
+
+        ~jthread() { if (joinable()) { request_stop(); join(); } }
+
+        jthread(const jthread&) = delete;
+        jthread& operator=(const jthread&) = delete;
+        jthread(jthread&&) noexcept = default;
+        jthread& operator=(jthread&& other) noexcept
+        {
+            this->~jthread();
+            return *new(this) jthread { std::move(other) };
+        }
+
+        void swap(jthread& other) noexcept { using std::swap; swap(t, other.t); swap(stop, other.stop); }
+        [[nodiscard]] bool joinable() const noexcept { return t.joinable(); }
+        void join() { return t.join(); }
+        void detach() { return t.detach(); }
+        [[nodiscard]] id get_id() const noexcept { return t.get_id(); }
+        [[nodiscard]] native_handle_type native_handle() { return t.native_handle(); }
+
+        void abort() { return t.abort(); };
+        [[nodiscard]] bool active() const noexcept { return t.active(); }
+
+        template<typename T>
+        void name(T&& string) { t.name(std::forward<T>(string)); }
+        std::string_view name() { return t.name(); }
+
+        [[nodiscard]] std::stop_source get_stop_source() noexcept { return stop; }
+        [[nodiscard]] std::stop_token get_stop_token() const noexcept { return stop.get_token(); }
+        bool request_stop() noexcept { return stop.request_stop(); }
+
+        [[nodiscard]] static unsigned int hardware_concurrency() noexcept { return thread::hardware_concurrency(); }
+
+    private:
+        template<typename F, typename... A>
+        thread create(std::stop_source&, std::size_t, F&&, A&&...);
+
+        std::stop_source stop;
+        thread t;
+    };
+
+    inline void swap(jthread& a, jthread& b) noexcept { a.swap(b); }
 }
 
 namespace jw::this_thread
@@ -161,5 +215,14 @@ namespace jw
 
         auto wrapper = callable_tuple { std::forward<F>(func), std::forward<A>(args)... };
         return detail::scheduler::create_thread(std::move(wrapper), stack_size);
+    }
+
+    template<typename F, typename... A>
+    inline thread jthread::create(std::stop_source& s, std::size_t stack_size, F&& func, A&&... args)
+    {
+        if constexpr (std::is_invocable_v<std::decay_t<F>, std::stop_token, std::decay_t<A>...>)
+            return thread { stack_size, std::forward<F>(func), s.get_token(), std::forward<A>(args)... };
+        else
+            return thread { stack_size, std::forward<F>(func), std::forward<A>(args)... };
     }
 }
