@@ -8,6 +8,7 @@
 #pragma once
 #include <exception>
 #include <stop_token>
+#include <concepts>
 #include <jw/detail/scheduler.h>
 #include <jw/main.h>
 #include "jwdpmi_config.h"
@@ -25,11 +26,11 @@ namespace jw
         using native_handle_type = detail::thread*;
 
         thread() noexcept = default;
-        template<typename F, typename... A>
+        template<typename F, typename... A> requires std::invocable<std::decay_t<F>, std::decay_t<A>...>
         explicit thread(F&& f, A&&... args)
             : thread { config::thread_default_stack_size, std::forward<F>(f), std::forward<A>(args)... } { }
 
-        template<typename F, typename... A>
+        template<typename F, typename... A> requires std::invocable<std::decay_t<F>, std::decay_t<A>...>
         explicit thread(std::size_t stack_size, F&& f, A&&... args)
             : ptr { create(stack_size, std::forward<F>(f), std::forward<A>(args)...) }
         {
@@ -211,8 +212,6 @@ namespace jw
     template<typename F, typename... A>
     inline auto thread::create(std::size_t stack_size, F&& func, A&&... args)
     {
-        static_assert(std::is_invocable_v<std::decay_t<F>, std::decay_t<A>...>);
-
         auto wrapper = callable_tuple { std::forward<F>(func), std::forward<A>(args)... };
         return detail::scheduler::create_thread(std::move(wrapper), stack_size);
     }
