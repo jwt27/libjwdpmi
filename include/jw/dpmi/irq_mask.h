@@ -20,63 +20,66 @@ namespace jw
         using int_vector = std::uint8_t;
         using irq_level = std::uint8_t;
 
-        // Disables the interrupt flag
-        struct interrupt_mask
+        inline bool interrupts_enabled() noexcept
         {
-            interrupt_mask() noexcept : state { cli() } { }
-            ~interrupt_mask() { sti(); }
-
-            interrupt_mask(const interrupt_mask&) = delete;
-            interrupt_mask(interrupt_mask&&) = delete;
-            interrupt_mask& operator=(const interrupt_mask&) = delete;
-            interrupt_mask& operator=(interrupt_mask&&) = delete;
-
-            // Get the current interrupt flag state
-            // true == interrupts enabled
-            static bool interrupts_enabled() noexcept
+            if constexpr (config::support_virtual_interrupt_flag)
             {
-                if constexpr (use_dpmi)
-                {
-                    std::uint16_t ax = 0x0902;
-                    asm ("int 0x31" : "+a" (ax) :: "cc");
-                    return ax & 1;
-                }
-                else return cpu_flags::current().interrupts_enabled;
+                std::uint16_t ax = 0x0902;
+                asm ("int 0x31" : "+a" (ax) :: "cc");
+                return ax & 1;
             }
+            else return cpu_flags::current().interrupts_enabled;
+        }
+
+        template<bool enable>
+        struct interrupt_flag
+        {
+            interrupt_flag() noexcept : prev_state { get_and_set() } { }
+            ~interrupt_flag() { restore(); }
+
+            interrupt_flag(const interrupt_flag&) = delete;
+            interrupt_flag(interrupt_flag&&) = delete;
+            interrupt_flag& operator=(const interrupt_flag&) = delete;
+            interrupt_flag& operator=(interrupt_flag&&) = delete;
 
         private:
             constexpr static bool use_dpmi = config::support_virtual_interrupt_flag;
 
-            static std::uint32_t cli()
+            static std::uint32_t get_and_set()
             {
                 if constexpr (use_dpmi)
                 {
-                    std::uint16_t ax = 0x0900;
+                    std::uint16_t ax = 0x0900 | enable;
                     asm volatile ("int 0x31" : "+a" (ax) :: "cc");
                     return ax;
                 }
                 else
                 {
                     std::uint32_t flags;
-                    asm volatile ("pushfd; cli; pop %0" : "=rm" (flags));
+                    if constexpr (enable)
+                        asm volatile ("pushfd; sti; pop %0" : "=rm" (flags));
+                    else
+                        asm volatile ("pushfd; cli; pop %0" : "=rm" (flags));
                     return flags;
                 }
             }
 
-            void sti()
+            void restore()
             {
                 if constexpr (use_dpmi)
-                {
-                    asm volatile ("int 0x31" :: "a" (state) : "cc");
-                }
+                    asm volatile ("int 0x31" :: "a" (prev_state) : "cc");
                 else
-                {
-                    asm volatile ("push %0; popfd" :: "rm" (state) : "cc");
-                }
+                    asm volatile ("push %0; popfd" :: "rm" (prev_state) : "cc");
             }
 
-            const std::uint32_t state;
+            const std::uint32_t prev_state;
         };
+
+        // Disables the interrupt flag
+        using interrupt_mask = interrupt_flag<false>;
+
+        // Enables the interrupt flag
+        using interrupt_unmask = interrupt_flag<true>;
 
         // Masks one specific IRQ.
         // note: involves IO ports, so this may be slower than disabling interrupts altogether

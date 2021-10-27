@@ -98,7 +98,8 @@ namespace jw::detail
     {
         if (dpmi::in_irq_context()) [[unlikely]] return;
         if (std::uncaught_exceptions() > 0) [[unlikely]] return;
-        if (not dpmi::interrupt_mask::interrupts_enabled()) [[unlikely]] return;
+
+        dpmi::interrupt_unmask enable_interrupts { };
         auto* const i = instance;
         auto* const ct = current_thread();
 
