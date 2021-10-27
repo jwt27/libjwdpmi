@@ -120,8 +120,6 @@ namespace jw::detail
         {
             starting,
             running,
-            suspended,
-            aborting,
             finishing,
             finished
         };
@@ -129,10 +127,12 @@ namespace jw::detail
         const scheduler::thread_id id { id_count++ };
 
         bool active() const noexcept { return state != finished; }
-        void suspend() noexcept { if (state == running) state = suspended; }
-        void resume() noexcept { if (state == suspended) state = running; }
-        void abort() noexcept { if (state == running or state == suspended) this->state = aborting; }
-        auto get_state() noexcept { return state; }
+        void suspend() noexcept { suspended = true; }
+        void resume() noexcept { suspended = false; }
+        void abort() noexcept { aborted = true; }
+        auto get_state() const noexcept { return state; }
+        bool is_aborted() const noexcept { return aborted; }
+        bool is_suspended() const noexcept { return suspended; }
 
         template<typename F> void invoke(F&& function) { invoke_list.emplace_back(std::forward<F>(function)); }
         template<typename F> void atexit(F&& function) { atexit_list.emplace_back(std::forward<F>(function)); }
@@ -201,6 +201,8 @@ namespace jw::detail
         const std::span<std::byte> stack;
         thread_context* context; // points to esp during context switch
         thread_state state { starting };
+        bool suspended { false };
+        bool aborted { false };
 
         std::deque<jw::function<void(), 4>, scheduler::allocator<jw::function<void(), 4>>> invoke_list { scheduler::memory_resource() };
         std::deque<jw::function<void(), 4>> atexit_list { };

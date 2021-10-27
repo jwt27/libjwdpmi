@@ -128,7 +128,7 @@ namespace jw::detail
             f();
         }
 
-        if (ct->state == thread::aborting) [[unlikely]] throw abort_thread();
+        if (ct->aborted and ct->state != thread::finishing) [[unlikely]] throw abort_thread();
     }
 
     void scheduler::start_thread(const thread_ptr& t)
@@ -195,7 +195,7 @@ namespace jw::detail
                 ct->context->return_address = reinterpret_cast<std::uintptr_t>(run_thread);
             }
 
-            if (ct->state != thread::suspended) [[likely]] break;
+            if (not ct->suspended) [[likely]] break;
             if (n > i->threads.size())
             {
                 debug::break_with_signal(debug::detail::all_threads_suspended);
@@ -212,7 +212,6 @@ namespace jw::detail
         {
             if (i->terminating) break;
             try { f(); }
-            catch (const abort_thread& e) { e.defuse(); }
             catch (const terminate_exception&) { i->terminating = true; }
             catch (...)
             {

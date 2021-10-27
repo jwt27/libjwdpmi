@@ -899,11 +899,11 @@ namespace jw
                             {
                             case jw::detail::thread::starting:    msg << "Starting";    break;
                             case jw::detail::thread::running:     msg << "Running";     break;
-                            case jw::detail::thread::suspended:   msg << "Suspended";   break;
-                            case jw::detail::thread::aborting:    msg << "Aborting";    break;
                             case jw::detail::thread::finishing:   msg << "Finishing";   break;
                             case jw::detail::thread::finished:    msg << "Finished";    break;
                             }
+                            if (t->is_suspended()) msg << " (suspended)";
+                            if (t->is_aborted()) msg << " (aborted)";
                         }
                         else msg << "invalid thread";
                         auto str = msg.str();
