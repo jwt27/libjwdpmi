@@ -9,6 +9,18 @@
 #include <memory>
 #include <jw/thread.h>
 
+namespace jw
+{
+    template <typename R> struct promise;
+    template <typename R> struct future;
+    template <typename R> struct shared_future;
+    using std::future_category;
+    using std::future_status;
+    using std::future_errc;
+    using std::future_error;
+    using std::launch;
+}
+
 namespace jw::detail
 {
     template <typename T>
@@ -137,12 +149,6 @@ namespace jw::detail
 
         std::shared_ptr<promise_result<R>> shared_state;
     };
-}
-
-namespace jw
-{
-    template <typename R> struct future;
-    template <typename R> struct shared_future;
 }
 
 namespace jw::detail
