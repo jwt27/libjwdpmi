@@ -279,9 +279,9 @@ namespace jw
                         else scancode_queue.push_back(c);
                     } while (get_status().data_available);
 
-                    if (callback) this_thread::invoke_next(callback);
-
                     dpmi::irq_handler::acknowledge();
+
+                    if (callback) this_thread::invoke_next(callback);
                 }
             }, dpmi::no_auto_eoi };
         };

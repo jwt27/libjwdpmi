@@ -23,7 +23,7 @@ namespace jw
     {
         std::optional<key_state_pair> ps2_interface::get_scancode()
         {
-            dpmi::irq_mask disable_irq { 1 };
+            dpmi::interrupt_mask no_irq { };
             return detail::scancode::extract(scancode_queue, current_scancode_set);
         }
 
@@ -54,7 +54,7 @@ namespace jw
         void ps2_interface::init_keyboard()
         {
             if (keyboard_initialized) throw std::runtime_error("Only one keyboard instance allowed.");
-            dpmi::irq_mask irq1_disable { 1 };
+            dpmi::interrupt_mask no_irq { };
             config.translate_scancodes = true;
             read_config();
             initial_config = config;
