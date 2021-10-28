@@ -109,6 +109,8 @@ namespace jw
 
             static constexpr bool is_steady { false };
             static time_point now() noexcept;
+
+            static auto irq_delta() { return setup::ns_per_pit_tick; }
         };
 
         struct tsc  // Time Stamp Counter
@@ -139,6 +141,8 @@ namespace jw
             {
                 return time_point { to_duration(count) };
             }
+
+            static auto irq_delta() { return setup::ns_per_rtc_tick; }
         };
     }
 }
