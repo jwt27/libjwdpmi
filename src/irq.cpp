@@ -174,6 +174,14 @@ namespace jw::dpmi::detail
             do { asm("cli; hlt"); } while (true);
         }
 
+#       ifndef NDEBUG
+        if (in_service(i))
+        {
+            std::cerr << "no EOI for IRQ " << std::dec << static_cast<unsigned>(i) << '\n';
+            asm("cli;hlt");
+        }
+#       endif
+
         std::byte* esp; asm("mov %0, esp;":"=rm"(esp));
         auto stack_left = static_cast<std::size_t>(esp - data->stack.data());
         if (stack_left <= config::interrupt_minimum_stack_size) [[unlikely]]
