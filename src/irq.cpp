@@ -178,7 +178,7 @@ namespace jw::dpmi::detail
         if (in_service(i))
         {
             std::cerr << "no EOI for IRQ " << std::dec << static_cast<unsigned>(i) << '\n';
-            asm("cli;hlt");
+            do { asm("cli; hlt"); } while (true);
         }
 #       endif
 
