@@ -35,6 +35,7 @@ namespace jw::dpmi::detail
             push fs
             push gs
             pusha
+            mov edx, [esp+0x30]     # IRQ number set by trampoline
             mov bx, ss
             mov ebp, esp
             mov esi, %[data]
@@ -45,8 +46,9 @@ namespace jw::dpmi::detail
             mov gs, [esi+%[gs]]
             cmp bx, di              # check if we're already on our own SS,
             je L%=keep_stack        # this is usually the case for nested IRQs
+            push edx
             call %[get_stack]       # get a new stack pointer in EAX
-            mov edx, [esp+0x30]     # IRQ number set by trampoline
+            pop edx
             mov ss, di
             mov esp, eax
         L%=keep_stack:
