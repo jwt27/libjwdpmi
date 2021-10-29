@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <utility>
 #include <cmath>
+#include <concepts>
 #include <jw/math.h>
 
 namespace jw
@@ -23,7 +24,7 @@ namespace jw
 
         constexpr vector(V _v) noexcept : v(_v) { };
 
-        template<typename... Ts>
+        template<typename... Ts> requires (std::convertible_to<Ts, T> and ...)
         constexpr vector(Ts... args) noexcept : v { static_cast<T>(args)... } { }
 
         constexpr const T& operator[](std::ptrdiff_t i) const noexcept { return v[i]; }
@@ -123,7 +124,7 @@ namespace jw
 
         constexpr auto square_magnitude() const noexcept
         {
-            std::conditional_t<std::is_integral_v<T>, std::int64_t, double> result { };
+            std::conditional_t<std::is_integral_v<T>, std::int64_t, T> result { };
             for (auto&& i : a) result += i * i;
             return result;
         }
