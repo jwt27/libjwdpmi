@@ -281,15 +281,30 @@ namespace jw
                 auto t = std::chrono::duration_cast<duration>(std::chrono::steady_clock::now().time_since_epoch());
                 return time_point { t };
             }
-            std::uint64_t ticks;
+            std::uint64_t a, b;
             std::uint16_t counter;
+
             {
                 dpmi::interrupt_mask no_irqs { };
-                setup::pit_cmd.write(0x00); // latch counter 0
-                ticks = setup::pit_ticks;
-                counter = split_uint16_t { setup::pit0_data.read(), setup::pit0_data.read() };
+                a = setup::pit_ticks;
             }
-            auto nsec = setup::ns_per_pit_tick * ticks;
+            while (true)
+            {
+                asm ("nop");
+                {
+                    dpmi::interrupt_mask no_irqs { };
+                    setup::pit_cmd.write(0x00); // latch counter 0
+                    counter = split_uint16_t { setup::pit0_data.read(), setup::pit0_data.read() };
+                }
+                asm("nop");
+                {
+                    dpmi::interrupt_mask no_irqs { };
+                    b = setup::pit_ticks;
+                }
+                if (a == b) [[likely]] break;
+                a = b;
+            }
+            auto nsec = setup::ns_per_pit_tick * a;
             nsec += setup::ns_per_pit_count * (setup::pit_counter_max - counter);
             return time_point { duration { round(nsec) } };
         }
