@@ -978,7 +978,7 @@ namespace jw
                         else
                         {
                             for (auto&& t : threads) t.second.signals.insert(SIGINT);
-                            if (interrupt_count == 0 and exception_count == 1)
+                            if (interrupt_count == 1)
                                 stop_reply();    // breaking in interrupt context yields a useless stack trace
                         }
                     }

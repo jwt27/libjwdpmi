@@ -13,7 +13,6 @@
 namespace jw::dpmi::detail
 {
     inline constinit std::uint32_t interrupt_count { 0 };
-    inline constinit std::uint32_t exception_count { 0 };
 
     enum class interrupt_type
     {
@@ -62,9 +61,6 @@ namespace jw::dpmi::detail
             switch (type)
             {
             case interrupt_type::exception:
-                ++exception_count;
-                break;
-
             case interrupt_type::irq:
             case interrupt_type::realmode_irq:
                 ++interrupt_count;
@@ -87,9 +83,6 @@ namespace jw::dpmi::detail
             switch (type)
             {
             case interrupt_type::exception:
-                --exception_count;
-                break;
-
             case interrupt_type::irq:
             case interrupt_type::realmode_irq:
                 --interrupt_count;
