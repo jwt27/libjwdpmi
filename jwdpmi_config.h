@@ -18,16 +18,22 @@ namespace jw
         constexpr int user_crt0_startup_flags = 0;
 
         // Initial stack size for IRQ handlers.
-        constexpr std::size_t interrupt_initial_stack_size = 1_MB;
+        constexpr std::size_t interrupt_initial_stack_size = 64_KB;
 
-        // Minimum stack size for IRQ handlers. Tries to resize when the stack size drops below this amount.
-        constexpr std::size_t interrupt_minimum_stack_size = 64_KB;
+        // Minimum stack size for IRQ handlers.  Attempts to resize when the
+        // stack space drops below this amount.
+        constexpr std::size_t interrupt_minimum_stack_size = 16_KB;
 
         // Initial memory pool for operator new() in interrupt context.
         constexpr std::size_t interrupt_initial_memory_pool = 1_MB;
 
-        // Total stack size for exception handlers. Remote debugging requires a lot of stack space.
-        constexpr std::size_t exception_stack_size = 1_MB;
+        // Total stack size for exception handlers.  Remote debugging requires
+        // more stack space.
+#       ifndef NDEBUG
+        constexpr std::size_t exception_stack_size = 512_KB;
+#       else
+        constexpr std::size_t exception_stack_size = 64_KB;
+#       endif
 
         // Default stack size for threads.
         constexpr std::size_t thread_default_stack_size = 64_KB;
@@ -56,7 +62,7 @@ namespace jw
         // Clock used for midi timestamps.
         using midi_clock = jw::chrono::tsc;
 
-        // Default clock used by thread::yield_for() and thread::yield_while_for().
+        // Default clock used by yield_for() and yield_while_for().
         using thread_clock = jw::chrono::pit;
     }
 }
