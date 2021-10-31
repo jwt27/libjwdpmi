@@ -142,10 +142,16 @@ namespace jw::audio
         void write(const oscillator& value, std::uint8_t slot);
         void write(const oscillator& value, std::uint8_t ch, std::uint8_t osc) { write(value, oscillator_slot(ch, osc)); }
         void write(const channel& value, std::uint8_t ch);
+
         const common_registers& read() const noexcept { return common.value; }
-        status_t status() const noexcept { return status_register.read(); }
+        const channel& read_channel(std::uint8_t ch) const noexcept { return channels[ch].value; }
+        const oscillator& read_oscillator(std::uint8_t osc) const noexcept { return oscillators[osc].value; }
+        const oscillator& read_oscillator(std::uint8_t ch, std::uint8_t osc) const noexcept { return read_oscillator(oscillator_slot(ch, osc)); }
+
         bool is_4op(std::uint8_t ch_4op) const noexcept { return read().enable_4op.bitset()[ch_4op]; };
         void set_4op(std::uint8_t ch_4op, bool enable);
+
+        status_t status() const noexcept { return status_register.read(); }
         void reset();
 
         // Returns absolute oscillator slot number for given operator in given channel.
@@ -156,7 +162,7 @@ namespace jw::audio
         }
 
         // Returns primary 2op channel number for given 4op channel number.
-        static constexpr std::uint8_t lookup_4to2_pri(std::uint8_t ch_4op) noexcept { return (0xba9210u >> (ch_4op << 2)) & 0xf; }
+        static constexpr std::uint8_t lookup_4to2_pri(std::uint8_t ch_4op) noexcept { assume(ch_4op < 6); return (0xba9210u >> (ch_4op << 2)) & 0xf; }
 
         // Returns secondary 2op channel number for given 4op channel number.
         static constexpr std::uint8_t lookup_4to2_sec(std::uint8_t ch_4op) noexcept { return lookup_4to2_pri(ch_4op) + 3; }
@@ -168,11 +174,6 @@ namespace jw::audio
                                              3, 4, 5, 3, 4, 5, 0xff, 0xff, 0xff };
             return table[ch_2op];
         }
-
-    protected:
-        const channel& read_channel(std::uint8_t ch) const noexcept { return channels[ch].value; }
-        const oscillator& read_oscillator(std::uint8_t osc) const noexcept { return oscillators[osc].value; }
-        const oscillator& read_oscillator(std::uint8_t ch, std::uint8_t osc) const noexcept { return read_oscillator(oscillator_slot(ch, osc)); }
 
     private:
         basic_opl(const basic_opl&) = delete;
@@ -299,7 +300,10 @@ namespace jw::audio
         const opl_config& config() const noexcept { return cfg; }
         void config(const opl_config& c) { cfg = c; update_config(); };
 
-        const opl_type& type { base::type };
+        using base::read;
+        using base::read_channel;
+        using base::read_oscillator;
+        using base::type;
 
     private:
         opl(const opl&) = delete;
