@@ -426,56 +426,14 @@ namespace jw::audio
     {
         if constexpr (N == 2) channels_2op[ch->channel_num] = ch;
         if constexpr (N == 4) channels_4op[ch->channel_num] = ch;
-    };
-
-    template<unsigned N> opl::clock::time_point opl::off_time(const channel<N>* ch, clock::time_point key_off) const noexcept
-    {
-        auto saturate_add = [](clock::time_point a, clock::duration b)
-        {
-            auto c = a + b;
-            if (c < a) c = clock::time_point::max();
-            return c;
-        };
-
-        const std::bitset<N> carriers = [ch]
-        {
-            const std::uint8_t connection = ch->connection.to_ulong();
-            if constexpr (N == 2) return 0b10 | connection;
-            else if constexpr (N == 4) return 0b1000 | ((0b11'01'10'00 >> (connection * 2)) & 0b11);
-        }();
-
-        clock::time_point off_time { clock::time_point::min() };
-
-        const bool key_on = read_channel(N == 4 ? lookup_4to2_pri(ch->channel_num) : ch->channel_num).key_on;
-        const std::uint8_t freq_msb = (ch->freq_num >> (9 - read().note_sel)) & 1;
-        const std::uint8_t freq_rate = (ch->freq_block << 1) | freq_msb;
-
-        for (unsigned i = 0; i < N; ++i)
-        {
-            const auto& o = ch->osc[i];
-            if (not carriers[i]) continue;
-            if (o.attack == 0) continue;
-
-            const std::uint8_t key_scale = freq_rate >> (o.key_scale_rate << 1);
-            clock::time_point t { key_off };
-            if (not o.enable_sustain)
-            {
-                t = saturate_add(ch->on_time, attack_time((o.attack << 2) | key_scale));
-                if (o.decay != 0) t = saturate_add(t, release_time((o.decay << 2) | key_scale));
-            }
-            else if (key_on) return clock::time_point::max();
-            t = saturate_add(t, release_time((o.release << 2) | key_scale));
-            off_time = std::max(off_time, t);
-            if (off_time == clock::time_point::max()) break;
-        }
-        return off_time;
     }
 
-    opl::clock::duration opl::attack_time(std::uint8_t rate) noexcept
+    static auto attack_time(std::uint8_t rate) noexcept
     {
         using namespace std::chrono_literals;
-        static constexpr auto infinite = clock::duration::max();
-        static constexpr clock::duration table[]    // From YMF715 register description document
+        using duration = std::chrono::duration<std::uint32_t, std::micro>;
+        constexpr auto infinite = duration::max();
+        static constexpr duration table[]    // From YMF715 register description document
         {
               infinite,   infinite,   infinite,   infinite,  2826240us,  2252800us,  1884160us,  1597440us,
              1413120us,  1126400us,   942080us,   798720us,   706560us,   563200us,   471040us,   399360us,
@@ -489,11 +447,12 @@ namespace jw::audio
         return table[rate];
     }
 
-    opl::clock::duration opl::release_time(std::uint8_t rate) noexcept
+    static auto release_time(std::uint8_t rate) noexcept
     {
         using namespace std::chrono_literals;
-        static constexpr auto infinite = clock::duration::max();
-        static constexpr clock::duration table[]
+        using duration = std::chrono::duration<std::uint32_t, std::micro>;
+        constexpr auto infinite = duration::max();
+        static constexpr duration table[]
         {
               infinite,   infinite,   infinite,   infinite, 39280640us, 31416320us, 26173440us, 22446080us,
             19640320us, 15708160us, 13086720us, 11223040us,  9820160us,  7854080us,  6543360us,  5611520us,
@@ -505,6 +464,48 @@ namespace jw::audio
                 4800us,     3840us,     3200us,     2740us,     2400us,     2400us,     2400us,     2400us
         };
         return table[rate];
+    }
+
+    // Estimate when the given channel will become silent.
+    template<unsigned N> opl::clock::time_point opl::off_time(const channel<N>* ch, clock::time_point key_off) const noexcept
+    {
+        using duration = std::chrono::duration<std::uint32_t, std::micro>;
+
+        const std::bitset<N> carriers = [ch]
+        {
+            const std::uint8_t connection = ch->connection.to_ulong();
+            if constexpr (N == 2) return 0b10 | connection;
+            else if constexpr (N == 4) return 0b1000 | ((0b11'01'10'00 >> (connection * 2)) & 0b11);
+        }();
+
+        const clock::time_point infinity = clock::time_point::max();
+        const bool key_on = read_channel(N == 4 ? lookup_4to2_pri(ch->channel_num) : ch->channel_num).key_on;
+        const std::uint8_t freq_msb = (ch->freq_num >> (9 - read().note_sel)) & 1;
+        const std::uint8_t freq_rate = (ch->freq_block << 1) | freq_msb;
+
+        clock::time_point off_time = clock::time_point::min();
+
+        for (unsigned i = 0; i < N; ++i)
+        {
+            if (not carriers[i]) continue;
+            const auto& o = ch->osc[i];
+            if (o.attack == 0) continue;
+            if (o.release == 0) return infinity;
+            if (o.enable_sustain and key_on) return infinity;
+
+            const std::uint8_t key_scale = freq_rate >> (o.key_scale_rate << 1);
+            clock::time_point t;
+            duration d = release_time((o.release << 2) | key_scale);
+            if (o.enable_sustain) t = key_off + d;
+            else
+            {
+                d += attack_time((o.attack << 2) | key_scale);
+                if (o.decay != 0) d += release_time((o.decay << 2) | key_scale);
+                t = ch->on_time + d;
+            }
+            off_time = std::max(off_time, t);
+        }
+        return off_time;
     }
 
     template<unsigned N>
