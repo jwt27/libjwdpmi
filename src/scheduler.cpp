@@ -192,9 +192,8 @@ namespace jw::detail
 #               ifndef NDEBUG
                 *reinterpret_cast<std::uint32_t*>(ct->stack.data()) = 0xDEADBEEF;   // stack overflow protection
 #               endif
-                std::byte* const esp = (ct->stack.data() + ct->stack.size_bytes() - 4) - sizeof(thread_context);
-                ct->context = reinterpret_cast<thread_context*>(esp);               // *context points to top of stack
-                *ct->context = *i->main_thread->context;
+                void* const esp = (ct->stack.data() + ct->stack.size_bytes() - 4) - sizeof(thread_context);
+                ct->context = new (esp) thread_context { *i->main_thread->context };    // clone context from main thread
                 ct->context->return_address = reinterpret_cast<std::uintptr_t>(run_thread);
             }
 
