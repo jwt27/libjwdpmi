@@ -127,7 +127,7 @@ namespace jw::detail
             f();
         }
 
-        if (ct->aborted and ct->state != thread::finishing) [[unlikely]] throw abort_thread();
+        if (ct->aborted and ct->state != thread::finishing) [[unlikely]] throw abort_thread { };
     }
 
     void scheduler::start_thread(const thread_ptr& t)

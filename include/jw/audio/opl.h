@@ -162,10 +162,17 @@ namespace jw::audio
         }
 
         // Returns primary 2op channel number for given 4op channel number.
-        static constexpr std::uint8_t lookup_4to2_pri(std::uint8_t ch_4op) noexcept { assume(ch_4op < 6); return (0xba9210u >> (ch_4op << 2)) & 0xf; }
+        static constexpr std::uint8_t lookup_4to2_pri(std::uint8_t ch_4op) noexcept
+        {
+            assume(ch_4op < 6);
+            return (0xba9210u >> (ch_4op << 2)) & 0xf;
+        }
 
         // Returns secondary 2op channel number for given 4op channel number.
-        static constexpr std::uint8_t lookup_4to2_sec(std::uint8_t ch_4op) noexcept { return lookup_4to2_pri(ch_4op) + 3; }
+        static constexpr std::uint8_t lookup_4to2_sec(std::uint8_t ch_4op) noexcept
+        {
+            return lookup_4to2_pri(ch_4op) + 3;
+        }
 
         // Returns 4op channel number that the given 2op channel is part of, or 0xff if none.
         static constexpr std::uint8_t lookup_2to4(std::uint8_t ch_2op) noexcept
