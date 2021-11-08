@@ -147,7 +147,7 @@ namespace jw::detail
         t->state = thread::running;
         try { (*t)(); }
         catch (const abort_thread& e) { e.defuse(); }
-        catch (const terminate_exception&) { i->terminating = true; }
+        catch (const terminate_exception& e) { i->terminating = true; e.defuse(); }
         catch (...)
         {
             std::cerr << "caught exception from thread " << t->id;
@@ -217,7 +217,7 @@ namespace jw::detail
         {
             if (i->terminating) break;
             try { f(); }
-            catch (const terminate_exception&) { i->terminating = true; }
+            catch (const terminate_exception& e) { i->terminating = true; e.defuse(); }
             catch (...)
             {
                 std::cerr << "caught exception while processing atexit handlers on thread " << t->id;
