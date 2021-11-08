@@ -271,7 +271,7 @@ namespace jw
                     throw specific_cpu_exception<N> { i };
                 });
                 if constexpr (sizeof...(Next) > 0) make_throwers<Next...>();
-            };
+            }
 
             constinit static bool exception_throwers_setup { false };
             void setup_exception_throwers()

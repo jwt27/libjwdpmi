@@ -116,7 +116,7 @@ namespace jw::audio
 
             template<unsigned sample_rate>
             static consteval long double fnum_to_freq(std::uint8_t blk, unsigned fnum) noexcept
-            { return fnum * sample_rate / static_cast<long double>(1 << (20 - blk)); };
+            { return fnum * sample_rate / static_cast<long double>(1 << (20 - blk)); }
 
             void output(std::bitset<4> value) noexcept;
             constexpr std::bitset<4> output() const noexcept;

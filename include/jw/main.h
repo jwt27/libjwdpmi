@@ -26,7 +26,7 @@ namespace jw
         mutable bool defused { false };
     };
 
-    [[noreturn]] inline void terminate() { throw terminate_exception { }; };
+    [[noreturn]] inline void terminate() { throw terminate_exception { }; }
 
     [[nodiscard]] void* realloc(void* pointer, std::size_t new_size, std::size_t alignment);
 

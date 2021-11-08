@@ -146,21 +146,21 @@ namespace jw::this_thread
     inline void yield_while(F&& condition)
     {
         while (condition()) yield();
-    };
+    }
 
     // Yields execution until the given time point.
     template<typename P>
     inline void yield_until(const P& time_point)
     {
         yield_while([&time_point] { return P::clock::now() < time_point; });
-    };
+    }
 
     // Yields execution for the given duration.
     template<typename C = config::thread_clock>
     inline void yield_for(const typename C::duration& duration)
     {
         yield_until(C::now() + duration);
-    };
+    }
 
     // Combination of yield_while() and yield_until(). Returns true on timeout.
     template<typename F, typename P>
@@ -169,26 +169,26 @@ namespace jw::this_thread
         bool c;
         yield_while([&] { return (c = condition()) and P::clock::now() < time_point; });
         return c;
-    };
+    }
 
     // Combination of yield_while() and yield_for(). Returns true on timeout.
     template<typename C = config::thread_clock, typename F>
     inline bool yield_while_for(F&& condition, const typename C::duration& duration)
     {
         return yield_while_until(condition, C::now() + duration);
-    };
+    }
 
     inline void sleep() { return yield(); }
     template<typename F>
-    inline void sleep_while(F&& condition) { return yield_while(std::forward<F>(condition)); };
+    inline void sleep_while(F&& condition) { return yield_while(std::forward<F>(condition)); }
     template<typename P>
-    inline void sleep_until(const P& time_point) { return yield_until(time_point); };
+    inline void sleep_until(const P& time_point) { return yield_until(time_point); }
     template<typename C = config::thread_clock>
-    inline void sleep_for(const typename C::duration& duration) { return yield_for(duration); };
+    inline void sleep_for(const typename C::duration& duration) { return yield_for(duration); }
     template<typename F, typename P>
-    inline bool sleep_while_until(F&& condition, const P& time_point) { return yield_while_until(std::forward<F>(condition)); };
+    inline bool sleep_while_until(F&& condition, const P& time_point) { return yield_while_until(std::forward<F>(condition)); }
     template<typename C = config::thread_clock, typename F>
-    inline bool sleep_while_for(F&& condition, const typename C::duration& duration) { return yield_while_for(std::forward<F>(condition), duration); };
+    inline bool sleep_while_for(F&& condition, const typename C::duration& duration) { return yield_while_for(std::forward<F>(condition), duration); }
 
     // Call a function on the main thread.
     template<typename F>

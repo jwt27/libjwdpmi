@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
@@ -18,7 +19,7 @@ namespace jw
             auto i = map.find(key);
             if (i != map.cend()) return &i->second;
             else return nullptr;
-        };
+        }
 
         char key::to_ascii(bool ctrl, bool alt, bool shift, bool capslock, bool numlock) const
         {

@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 
@@ -59,7 +60,7 @@ namespace jw::video::ansi
         constexpr static std::size_t tuple_size() noexcept { return std::tuple_size_v<decltype(string)>; }
 
         template<std::size_t i>
-        constexpr static bool is_char() noexcept { return std::is_same_v<std::tuple_element_t<i, decltype(string)>, char>; };
+        constexpr static bool is_char() noexcept { return std::is_same_v<std::tuple_element_t<i, decltype(string)>, char>; }
 
         constexpr static std::size_t first_char() noexcept { return first_char(std::make_index_sequence<tuple_size()> { }); }
 
@@ -71,7 +72,7 @@ namespace jw::video::ansi
         {
             if constexpr (i > 1 and is_char<i>()) return i;
             else return first_char<next...>();
-        };
+        }
 
         template<std::size_t... is>
         void emit(std::index_sequence<is...>, char* out) const { emit<is...>(out); }

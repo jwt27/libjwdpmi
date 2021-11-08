@@ -59,8 +59,8 @@ namespace jw
             for (unsigned i = 0; i < N; ++i) v[i] = static_cast<T>(rhs2[i]);
         }
 
-        template <typename U> constexpr vector& operator=(const vector<N, U>& rhs) noexcept { return *this = rhs.template cast<T>(); };
-        template <typename U> constexpr vector& operator=(vector<N, U>&& rhs) noexcept { return *this = rhs.template cast<T>(); };
+        template <typename U> constexpr vector& operator=(const vector<N, U>& rhs) noexcept { return *this = rhs.template cast<T>(); }
+        template <typename U> constexpr vector& operator=(vector<N, U>&& rhs) noexcept { return *this = rhs.template cast<T>(); }
 
         template <typename U, std::enable_if_t<std::is_same_v<U, T>, bool> = { }> constexpr vector& cast() noexcept { return *this; }
         template <typename U, std::enable_if_t<std::is_same_v<U, T>, bool> = { } > constexpr const vector& cast() const noexcept { return *this; }

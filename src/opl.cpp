@@ -159,7 +159,7 @@ namespace jw::audio
         enable_4op.value.bitset(bits);
         if (common.value.enable_4op.bitset() != bits) write(0x104, enable_4op.raw[0]);
         common.value.enable_4op = enable_4op.value;
-    };
+    }
 
     opl::~opl()
     {
@@ -235,7 +235,7 @@ namespace jw::audio
         ch->owner = this;
         start(ch);
         return true;
-    };
+    }
 
     template<unsigned N> bool opl::insert(channel<N>* ch)
     {
@@ -383,7 +383,7 @@ namespace jw::audio
 
         if (best.i != 0xff) return insert_at(best.i, ch);
         return false;
-    };
+    }
 
     template <unsigned N> void opl::remove(channel<N>* ch) noexcept
     {
@@ -402,7 +402,7 @@ namespace jw::audio
         if constexpr (N == 2) channels_2op[ch->channel_num] = nullptr;
         if constexpr (N == 4) channels_4op[ch->channel_num] = nullptr;
         ch->owner = nullptr;
-    };
+    }
 
     template<unsigned N>
     void opl::write(channel<N>* ch)

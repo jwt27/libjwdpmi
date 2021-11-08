@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
@@ -102,5 +103,5 @@ namespace jw
     }
 }
 
-ENUM_STRUCT_SPECIALIZE_STD_HASH(jw::io::key);
-ENUM_STRUCT_SPECIALIZE_STD_HASH(jw::io::key_state);
+ENUM_STRUCT_SPECIALIZE_STD_HASH(jw::io::key)
+ENUM_STRUCT_SPECIALIZE_STD_HASH(jw::io::key_state)

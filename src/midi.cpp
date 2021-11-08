@@ -56,9 +56,9 @@ namespace jw::audio
         return *static_cast<ostream_info*>(get_pword(i, stream, ostream_list));
     }
 
-    static constexpr bool is_status(byte b) { return (b & 0x80) != 0; };
-    static constexpr bool is_realtime(byte b) { return b >= 0xf8; };
-    static constexpr bool is_system(byte b) { return b >= 0xf0; };
+    static constexpr bool is_status(byte b) { return (b & 0x80) != 0; }
+    static constexpr bool is_realtime(byte b) { return b >= 0xf8; }
+    static constexpr bool is_system(byte b) { return b >= 0xf0; }
 
     struct midi_out
     {
@@ -246,7 +246,7 @@ namespace jw::audio
             }
         default: __builtin_unreachable();
         }
-    };
+    }
 
     template<typename T>
     static midi realtime_msg(byte status, T now)
@@ -263,7 +263,7 @@ namespace jw::audio
         case 0xfd: throw io::failure { "invalid status byte" };
         default: __builtin_unreachable();
         }
-    };
+    }
 
     template<typename I, typename T>
     static auto make_msg(byte status, I i, T now)
