@@ -704,7 +704,7 @@ namespace jw::audio
                     midi::sysex msg { };
                     msg.data.push_back(0xf0);
                     msg.data.resize(size + 1);
-                    buf.read(msg.data.data(), size);
+                    buf.read(msg.data.data() + 1, size);
                     in_sysex = true;
                     if (msg.data.back() == 0xf7) in_sysex = false;
                     trk.emplace_back(std::move(msg), delta);
