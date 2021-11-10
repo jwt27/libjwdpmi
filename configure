@@ -110,6 +110,7 @@ cat <<- EOF >> ldflags
 -Wl,--wrap=malloc
 -Wl,--wrap=calloc
 -Wl,--wrap=realloc
+-Wl,--wrap=memalign
 -Wl,--wrap=free
 -L$(pwd)
 -ljwdpmi

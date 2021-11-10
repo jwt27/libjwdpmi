@@ -284,6 +284,12 @@ extern "C"
         return p;
     }
 
+    void* __wrap_memalign(std::size_t a, std::size_t n) noexcept
+    {
+        try { return ::operator new(n, std::align_val_t { a }); }
+        catch (const std::bad_alloc&) { return nullptr; }
+    }
+
     void __wrap_free(void* p) noexcept { ::operator delete(p); }
 }
 
