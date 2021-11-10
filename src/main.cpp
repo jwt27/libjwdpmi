@@ -263,7 +263,7 @@ extern "C"
         // Returning nullptr ensures the exception is allocated from an emergency
         // pool instead.
         if (in_malloc.test_and_set()) [[unlikely]] return nullptr;
-        struct x { ~x() { in_malloc.clear(); } } scope_guard;
+        local_destructor scope_guard { [] { in_malloc.clear(); } };
         try { return ::operator new(n); }
         catch (const std::bad_alloc&) { return nullptr; }
     }
@@ -311,7 +311,7 @@ extern "C"
         and irq_alloc != nullptr
         and not irq_alloc_resize.test_and_set()) [[unlikely]]
     {
-        struct x { ~x() { irq_alloc_resize.clear(); } } scope_guard;
+        local_destructor scope_guard { [] { irq_alloc_resize.clear(); } };
         dpmi::interrupt_mask no_interrupts_here { };
         debug::trap_mask dont_trap_here { };
         auto* ia = irq_alloc;

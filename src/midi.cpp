@@ -386,11 +386,7 @@ namespace jw::audio
             if (is_system(status)) rx.last_status = 0;
             else rx.last_status = status;
 
-            struct guard
-            {
-                ~guard() { rx.pending_msg.clear(); }
-                istream_info& rx;
-            } clear_pending_on_return { rx };
+            local_destructor clear_pending_on_return { [&rx] { rx.pending_msg.clear(); } };
 
             // Construct the message
             if (is_sysex) return midi { midi::sysex { { rx.pending_msg.cbegin(), rx.pending_msg.cend() } } };
