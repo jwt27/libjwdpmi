@@ -97,8 +97,8 @@ int main(int argc, const char** argv)
     _crt0_startup_flags &= ~_CRT0_FLAG_LOCK_MEMORY;
     try
     {
-        std::vector<std::string_view> args { };
-        args.reserve(argc);
+        auto* const args = static_cast<std::string_view*>(__builtin_alloca(argc * sizeof(std::string_view)));
+        auto* a = args;
         for (auto i = 1; i < argc; ++i)
         {
 #           ifndef NDEBUG
@@ -115,7 +115,7 @@ int main(int argc, const char** argv)
             else
 #           endif
             {
-                args.emplace_back(argv[i]);
+                new (a++) std::string_view { argv[i] };
             }
         }
 
@@ -125,7 +125,8 @@ int main(int argc, const char** argv)
             debug::breakpoint();
         }
 
-        jw::exit_code = jwdpmi_main(args);
+        const std::size_t n = a - args;
+        jw::exit_code = jwdpmi_main({ args, n });
     }
     catch (const std::exception& e) { std::cerr << "Caught exception in main()!\n"; jw::print_exception(e); }
     catch (const jw::terminate_exception& e) { e.defuse(); std::cerr << e.what() << '\n'; }
