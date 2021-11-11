@@ -99,6 +99,7 @@ int main(int argc, const char** argv)
     {
         auto* const args = static_cast<std::string_view*>(__builtin_alloca(argc * sizeof(std::string_view)));
         auto* a = args;
+        new (a++) std::string_view { argv[0] };
         for (auto i = 1; i < argc; ++i)
         {
 #           ifndef NDEBUG
