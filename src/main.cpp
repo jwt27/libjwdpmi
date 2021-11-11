@@ -97,7 +97,7 @@ int main(int argc, const char** argv)
     _crt0_startup_flags &= ~_CRT0_FLAG_LOCK_MEMORY;
     try
     {
-        auto* const args = static_cast<std::string_view*>(__builtin_alloca(argc * sizeof(std::string_view)));
+        std::string_view args[argc];
         auto* a = args;
         new (a++) std::string_view { argv[0] };
         for (auto i = 1; i < argc; ++i)
