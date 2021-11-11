@@ -35,7 +35,7 @@ int _crt0_startup_flags = 0
 | _CRT0_FLAG_NONMOVE_SBRK
 | _CRT0_FLAG_LOCK_MEMORY;
 
-int jwdpmi_main(const std::vector<std::string_view>&);
+int jwdpmi_main(std::span<std::string_view>);
 
 namespace jw
 {
