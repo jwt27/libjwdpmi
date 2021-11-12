@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
@@ -53,7 +54,6 @@ namespace jw
             }
 
         protected:
-            void check_error(split_uint16_t ax, const char* function_name);
             void populate_mode_list(dpmi::far_ptr16 list_ptr);
 
             vbe_info info;
