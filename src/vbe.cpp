@@ -30,12 +30,38 @@ namespace jw
         std::optional<dpmi::memory<byte>> bios_data_area;
         detail::vbe3_pm_info* pmid { nullptr };
 
-        std::vector<byte> vbe3_call_wrapper { };
-        dpmi::far_ptr32 vbe3_call asm("vbe3_call") { };
-
         dpmi::linear_memory video_bios_code;
-        dpmi::linear_memory vbe3_call_wrapper_mem;
+        dpmi::far_ptr32 vbe3_stack_ptr;
+        dpmi::far_ptr32 vbe3_entry_point;
         bool vbe3_pm { false };
+
+        [[using gnu: naked, used, section(".text.low"), error("call only from asm")]]
+        static void vbe3_call_wrapper() asm("vbe3");
+
+        static void vbe3_call_wrapper()
+        {
+            asm
+            (R"(
+                push es
+                push fs
+                push gs
+                push ebp
+                mov ebp, esp
+                mov si, ss
+                lss esp, fword ptr cs:[%0]
+                push si
+                call fword ptr cs:[%1]
+                pop si
+                mov ss, si
+                mov esp, ebp
+                pop ebp
+                pop gs
+                pop fs
+                pop es
+                ret
+            )" : : "i" (&vbe3_stack_ptr), "i" (&vbe3_entry_point)
+            );
+        }
 
         void vbe::check_error(split_uint16_t ax, const char* function_name)
         {
@@ -253,51 +279,12 @@ namespace jw
                 ar = ldt_access_rights { get_ss() };
                 ar.is_32_bit = false;
                 vbe3_stack->get_descriptor().lock()->set_access_rights(ar);
-                far_ptr32 stack_ptr { vbe3_stack->get_selector(), (vbe3_stack->get_size() - 0x10) & -0x10 };
-                far_ptr16 entry_point { video_bios_code.get_selector(), pmid->init_entry_point };
+                vbe3_stack_ptr = { vbe3_stack->get_selector(), (vbe3_stack->get_size() - 0x10) & -0x10 };
+                vbe3_entry_point = { video_bios_code.get_selector(), pmid->init_entry_point };
 
-                std::copy_n(reinterpret_cast<byte*>(&entry_point), sizeof(far_ptr16), std::back_inserter(vbe3_call_wrapper));
-                std::copy_n(reinterpret_cast<byte*>(&stack_ptr), sizeof(far_ptr32), std::back_inserter(vbe3_call_wrapper));
-                vbe3_call.offset = vbe3_call_wrapper.size();
+                asm volatile("call vbe3" ::: "eax", "ebx", "ecx", "edx", "esi", "edi", "cc");
 
-                byte* code_start;
-                std::size_t code_size;
-                asm("jmp copy_end%=;"
-                    "copy_begin%=:"
-                    "push es; push fs; push gs;"
-                    "push ebp;"
-                    "mov ebp, esp;"
-                    "mov si, ss;"
-                    "lss esp, fword ptr cs:[4];"
-                    "push si;"
-                    ".byte 0x66;"   // use "short" fword ptr
-                    "call fword ptr cs:[0];"
-                    "pop si;"
-                    "mov ss, si;"
-                    "mov esp, ebp;"
-                    "pop ebp;"
-                    "pop gs; pop fs; pop es;"
-                    "retf;"
-                    "copy_end%=:"
-                    "mov %0, offset copy_begin%=;"
-                    "mov %1, offset copy_end%=;"
-                    "sub %1, %0;"
-                    : "=rm,r" (code_start)
-                    , "=r,rm" (code_size)
-                    ::"cc");
-                std::copy_n(code_start, code_size, std::back_inserter(vbe3_call_wrapper));
-                vbe3_call_wrapper_mem = { get_ds(), vbe3_call_wrapper.data(), vbe3_call_wrapper.size() };
-                ar = ldt_access_rights { get_cs() };
-                vbe3_call_wrapper_mem.get_descriptor().lock()->set_access_rights(ar);
-                vbe3_call.segment = vbe3_call_wrapper_mem.get_selector();
-                auto cs_limit = reinterpret_cast<std::size_t>(vbe3_call_wrapper.data() + code_size);
-                if (descriptor::get_limit(get_cs()) < cs_limit)
-                    descriptor::set_limit(get_cs(), cs_limit);
-
-                asm volatile("call fword ptr [vbe3_call];":::"eax", "ebx", "ecx", "edx", "esi", "edi", "cc");
-
-                entry_point.offset = pmid->entry_point;
-                std::copy_n(reinterpret_cast<byte*>(&entry_point), sizeof(far_ptr16), vbe3_call_wrapper.data());
+                vbe3_entry_point.offset = pmid->entry_point;
                 vbe3_pm = true;
             }
             catch (...)
@@ -365,7 +352,7 @@ namespace jw
 
             std::uint16_t ax, pixels_per_scanline, bytes_per_scanline, max_scanlines;
             asm volatile(
-                "call fword ptr [vbe3_call];"
+                "call vbe3"
                 : "=a" (ax)
                 , "=b" (bytes_per_scanline)
                 , "=c" (pixels_per_scanline)
@@ -409,7 +396,7 @@ namespace jw
             if (!vbe3_pm) return vbe2::get_max_scanline_length();
 
             std::uint16_t ax, pixels_per_scanline, bytes_per_scanline, max_scanlines;
-            asm("call fword ptr [vbe3_call];"
+            asm("call vbe3"
                 : "=a" (ax)
                 , "=b" (bytes_per_scanline)
                 , "=c" (pixels_per_scanline)
@@ -465,7 +452,7 @@ namespace jw
 
             std::uint16_t ax;
             asm volatile(
-                "call fword ptr [vbe3_call];"
+                "call vbe3"
                 : "=a" (ax)
                 : "a" (0x4f07)
                 , "b" (wait_for_vsync ? 0x80 : 0)
@@ -503,7 +490,7 @@ namespace jw
             {
                 std::uint16_t ax;
                 asm volatile(
-                    "call fword ptr [vbe3_call];"
+                    "call vbe3"
                     : "=a" (ax)
                     : "a" (0x4f07)
                     , "b" (2)
@@ -534,7 +521,7 @@ namespace jw
             if (vbe3_pm)
             {
                 std::uint16_t ax, cx;
-                asm("call fword ptr [vbe3_call];"
+                asm("call vbe3"
                     : "=a" (ax)
                     , "=c" (cx)
                     : "a" (0x4f07)
@@ -572,7 +559,7 @@ namespace jw
             std::uint16_t ax;
             split_uint16_t bx;
             asm volatile(
-                "call fword ptr [vbe3_call];"
+                "call vbe3"
                 : "=a" (ax)
                 , "=b" (bx)
                 : "a" (0x4f08)
@@ -672,7 +659,7 @@ namespace jw
             asm volatile(
                 "push es;"
                 "mov es, %w1;"
-                "call fword ptr [vbe3_call];"
+                "call vbe3;"
                 "pop es;"
                 : "=a" (ax)
                 : "rm" (data_mem.get_selector())
@@ -715,7 +702,7 @@ namespace jw
             {
                 std::uint16_t ax;
                 std::uint32_t ecx;
-                asm("call fword ptr [vbe3_call];"
+                asm("call vbe3"
                     : "=a" (ax)
                     , "=c" (ecx)
                     : "a" (0x4f0b)

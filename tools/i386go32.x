@@ -8,6 +8,8 @@ ENTRY (start)
 SECTIONS
 {
   .text  ALIGN(0x1000+SIZEOF_HEADERS, 0x200) : SUBALIGN(0x10) {
+    *(.text.low .text.low.*)
+    ASSERT(. < 0x10000, ".text.low section too large");
     *(.text.startup .text.startup.*)
     *(.text.unlikely .text.unlikely.*)
     *(.text.exit .text.exit.*)
