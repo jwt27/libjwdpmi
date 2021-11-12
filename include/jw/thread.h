@@ -59,6 +59,9 @@ namespace jw
         void abort() { ptr->abort(); };
         [[nodiscard]] bool active() const noexcept { return ptr and ptr->active(); }
 
+        template<typename F>
+        void invoke(F&& func) { ptr->invoke(std::forward<F>(func)); }
+
         template<typename T>
         void name(T&& string) { ptr->set_name(std::forward<T>(string)); }
         std::string_view name() { return ptr->get_name(); }
@@ -109,6 +112,9 @@ namespace jw
 
         void abort() { return t.abort(); };
         [[nodiscard]] bool active() const noexcept { return t.active(); }
+
+        template<typename F>
+        void invoke(F&& func) { t.invoke(std::forward<F>(func)); }
 
         template<typename T>
         void name(T&& string) { t.name(std::forward<T>(string)); }
