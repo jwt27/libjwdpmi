@@ -1,10 +1,12 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #include <memory>
+#include <optional>
 #include <cstring>
 #include <jw/video/vbe.h>
 #include <jw/dpmi/memory.h>
@@ -16,16 +18,16 @@ namespace jw
     namespace video
     {
         std::vector<byte> vbe2_pm_interface { };
-        std::unique_ptr<dpmi::device_memory<byte>> vbe2_mmio;
+        std::optional<dpmi::device_memory<byte>> vbe2_mmio;
         std::uintptr_t vbe2_call_set_window;
         std::uintptr_t vbe2_call_set_display_start;
         std::uintptr_t vbe2_call_set_palette;
         bool vbe2_pm { false };
 
-        std::unique_ptr<dpmi::mapped_dos_memory<byte>> a000, b000, b800;
-        std::unique_ptr<dpmi::memory<byte>> vbe3_stack { };
-        std::unique_ptr<dpmi::memory<byte>> video_bios { };
-        std::unique_ptr<dpmi::memory<byte>> bios_data_area { };
+        std::optional<dpmi::mapped_dos_memory<byte>> a000, b000, b800;
+        std::optional<dpmi::memory<byte>> vbe3_stack;
+        std::optional<dpmi::memory<byte>> video_bios;
+        std::optional<dpmi::memory<byte>> bios_data_area;
         detail::vbe3_pm_info* pmid { nullptr };
 
         std::vector<byte> vbe3_call_wrapper { };
@@ -192,7 +194,7 @@ namespace jw
                     {
                         auto* addr = reinterpret_cast<std::uintptr_t*>(io_list);
                         auto* size = io_list + 2;
-                        vbe2_mmio = std::make_unique<dpmi::device_memory<byte>>(*size, *addr);
+                        vbe2_mmio.emplace(*size, *addr);
                         auto ar = dpmi::ldt_access_rights { dpmi::get_ds() };
                         vbe2_mmio->get_descriptor().lock()->set_access_rights(ar);
                     }
@@ -215,7 +217,7 @@ namespace jw
                     mapped_dos_memory<byte> video_bios_ptr { 128_KB, far_ptr16 { 0xC000, 0 } };
                     byte* ptr = video_bios_ptr.get_ptr();
                     bios_size = *(ptr + 2) * 512;
-                    video_bios = std::make_unique<memory<byte>>(bios_size);
+                    video_bios.emplace(bios_size);
                     std::copy_n(ptr, bios_size, video_bios->get_ptr());
                 }
                 char* search_ptr = reinterpret_cast<char*>(video_bios->get_ptr());
@@ -226,16 +228,16 @@ namespace jw
                 if (checksum8(*pmid) != 0) return;
                 pmid->in_protected_mode = true;
 
-                bios_data_area = std::make_unique<memory<byte>>(4_KB);
+                bios_data_area.emplace(4_KB);
                 std::fill_n(bios_data_area->get_ptr(), 4_KB, 0);
                 pmid->bda_selector = bios_data_area->get_selector();
                 ldt_access_rights ar { get_ds() };
                 ar.is_32_bit = false;
                 bios_data_area->get_descriptor().lock()->set_access_rights(ar);
 
-                a000 = std::make_unique<mapped_dos_memory<byte>>(64_KB, far_ptr16 { 0xA000, 0 });
-                b000 = std::make_unique<mapped_dos_memory<byte>>(64_KB, far_ptr16 { 0xB000, 0 });
-                b800 = std::make_unique<mapped_dos_memory<byte>>(32_KB, far_ptr16 { 0xB800, 0 });
+                a000.emplace(64_KB, far_ptr16 { 0xA000, 0 });
+                b000.emplace(64_KB, far_ptr16 { 0xB000, 0 });
+                b800.emplace(32_KB, far_ptr16 { 0xB800, 0 });
                 pmid->a000_selector = a000->get_selector();
                 pmid->b000_selector = b000->get_selector();
                 pmid->b800_selector = b800->get_selector();
@@ -247,7 +249,7 @@ namespace jw
                 video_bios_code.get_descriptor().lock()->set_access_rights(ar);
                 pmid->data_selector = video_bios->get_selector();
 
-                vbe3_stack = std::make_unique<memory<byte>>(4_KB);
+                vbe3_stack.emplace(4_KB);
                 ar = ldt_access_rights { get_ss() };
                 ar.is_32_bit = false;
                 vbe3_stack->get_descriptor().lock()->set_access_rights(ar);
