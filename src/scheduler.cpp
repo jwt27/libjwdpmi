@@ -114,7 +114,9 @@ namespace jw::detail
             throw std::runtime_error { "Stack overflow!" };
 #       endif
 
-        if (i->terminating) [[unlikely]] terminate();
+        if (i->terminating) [[unlikely]]
+            if (std::uncaught_exceptions() == 0)
+                terminate();
 
         while (ct->invoke_list.size() > 0) [[unlikely]]
         {
@@ -127,7 +129,9 @@ namespace jw::detail
             f();
         }
 
-        if (ct->aborted and ct->state != thread::finishing) [[unlikely]] throw abort_thread { };
+        if (ct->aborted) [[unlikely]]
+            if (ct->state != thread::finishing and std::uncaught_exceptions() == 0)
+                throw abort_thread { };
     }
 
     void scheduler::start_thread(const thread_ptr& t)
