@@ -17,23 +17,23 @@ namespace jw
 {
     namespace video
     {
-        std::vector<byte> vbe2_pm_interface { };
-        std::optional<dpmi::device_memory<byte>> vbe2_mmio;
-        std::uintptr_t vbe2_call_set_window;
-        std::uintptr_t vbe2_call_set_display_start;
-        std::uintptr_t vbe2_call_set_palette;
-        bool vbe2_pm { false };
+        static std::vector<byte> vbe2_pm_interface { };
+        static std::optional<dpmi::device_memory<byte>> vbe2_mmio;
+        static std::uintptr_t vbe2_call_set_window;
+        static std::uintptr_t vbe2_call_set_display_start;
+        static std::uintptr_t vbe2_call_set_palette;
+        static bool vbe2_pm { false };
 
-        std::optional<dpmi::mapped_dos_memory<byte>> a000, b000, b800;
-        std::optional<dpmi::memory<byte>> vbe3_stack;
-        std::optional<dpmi::memory<byte>> video_bios;
-        std::optional<dpmi::memory<byte>> bios_data_area;
-        detail::vbe3_pm_info* pmid { nullptr };
+        static std::optional<dpmi::mapped_dos_memory<byte>> a000, b000, b800;
+        static std::optional<dpmi::memory<byte>> vbe3_stack;
+        static std::optional<dpmi::memory<byte>> video_bios;
+        static std::optional<dpmi::memory<byte>> bios_data_area;
+        static detail::vbe3_pm_info* pmid { nullptr };
 
-        dpmi::linear_memory video_bios_code;
-        dpmi::far_ptr32 vbe3_stack_ptr;
-        dpmi::far_ptr32 vbe3_entry_point;
-        bool vbe3_pm { false };
+        static dpmi::linear_memory video_bios_code;
+        static dpmi::far_ptr32 vbe3_stack_ptr;
+        static dpmi::far_ptr32 vbe3_entry_point;
+        static bool vbe3_pm { false };
 
         [[using gnu: naked, used, section(".text.low"), error("call only from asm")]]
         static void vbe3_call_wrapper() asm("vbe3");
