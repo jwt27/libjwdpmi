@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
@@ -12,47 +13,60 @@ namespace jw::dpmi::detail
     {
         static far_ptr32 get_pm_handler(exception_num n)
         {
-            try { return int31_get<0x0210>(n); }
-            catch (const dpmi_error& e)
+            auto result = int31_get<0x0210>(n);
+            if (auto* error = std::get_if<dpmi_error_code>(&result)) [[unlikely]]
             {
-                switch (e.code().value())
+                switch (static_cast<unsigned>(*error))
                 {
                 case dpmi_error_code::unsupported_function:
                 case 0x0210:
-                    return int31_get<0x0202>(n);
+                    result = int31_get<0x0202>(n);
+                    if (result.index() == 0) [[likely]] break;
+                    error = std::get_if<dpmi_error_code>(&result);
+                    [[fallthrough]];
                 default:
-                    throw;
+                    throw dpmi_error(*error, __PRETTY_FUNCTION__);
                 }
             }
+            return *std::get_if<far_ptr32>(&result);
         }
 
         static bool set_pm_handler(exception_num n, const far_ptr32& ptr)
         {
-            try { int31_set<0x0212>(n, ptr); }
-            catch (const dpmi_error& e)
+            auto error = int31_set<0x0212>(n, ptr);
+            if (not error) [[likely]] return true;
+            switch (static_cast<unsigned>(*error))
             {
-                switch (e.code().value())
-                {
-                case dpmi_error_code::unsupported_function:
-                case 0x0212:
-                    int31_set<0x0203>(n, ptr);
-                    return false;
-                default:
-                    throw;
-                }
+            case static_cast<dpmi_error_code>(0x0212):
+            case dpmi_error_code::unsupported_function:
+                error = int31_set<0x0203>(n, ptr);
+                if (not error) [[likely]] return false;
+                [[fallthrough]];
+            default:
+                throw dpmi_error(*error, __PRETTY_FUNCTION__);
             }
-            return true;
         }
 
-        static far_ptr32 get_rm_handler(exception_num n) { return int31_get<0x0211>(n); }
+        static far_ptr32 get_rm_handler(exception_num n)
+        {
+            auto result = int31_get<0x0211>(n);
+            if (auto* error = std::get_if<dpmi_error_code>(&result)) [[unlikely]]
+                throw dpmi_error(*error, __PRETTY_FUNCTION__);
+            return *std::get_if<far_ptr32>(&result);
+        }
 
-        static void set_rm_handler(exception_num n, const far_ptr32& ptr) { int31_set<0x0213>(n, ptr); }
+        static void set_rm_handler(exception_num n, const far_ptr32& ptr)
+        {
+            auto error = int31_set<0x0213>(n, ptr);
+            if (not error) [[likely]] return;
+            throw dpmi_error(*error, __PRETTY_FUNCTION__);
+        }
 
     private:
         cpu_exception_handlers() = delete;
 
         template <std::uint16_t Func>
-        static far_ptr32 int31_get(exception_num exc_no)
+        static std::variant<far_ptr32, dpmi_error_code> int31_get(exception_num exc_no)
         {
             dpmi_error_code error;
             bool c;
@@ -69,12 +83,12 @@ namespace jw::dpmi::detail
                 , "b" (exc_no)
                 : "cc"
             );
-            if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
-            return { seg, offset };
+            if (c) [[unlikely]] return { error };
+            return far_ptr32 { seg, offset };
         }
 
         template <std::uint16_t Func>
-        static void int31_set(exception_num exc_no, const far_ptr32& handler_ptr)
+        static std::optional<dpmi_error_code> int31_set(exception_num exc_no, const far_ptr32& handler_ptr)
         {
             dpmi_error_code error;
             bool c;
@@ -89,7 +103,8 @@ namespace jw::dpmi::detail
                 , "d" (handler_ptr.offset)
                 : "cc"
             );
-            if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+            if (c) [[unlikely]] return { error };
+            return std::nullopt;
         }
     };
 

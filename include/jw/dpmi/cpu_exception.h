@@ -16,6 +16,8 @@
 #include <stdexcept>
 #include <bitset>
 #include <string>
+#include <optional>
+#include <variant>
 #include <jw/enum_struct.h>
 #include <jw/dpmi/dpmi.h>
 #include <jw/dpmi/lock.h>
