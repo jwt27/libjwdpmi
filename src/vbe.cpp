@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
@@ -66,31 +67,31 @@ namespace jw
         static void check_error(split_uint16_t ax, const char* function_name)
         {
             if (ax == 0x004f) [[likely]] return;
-            std::stringstream msg { };
-            msg << function_name << ": ";
+            std::string msg { function_name };
+            msg += ": VBE function ";
 
             if (ax.lo != 0x4f)
             {
-                msg << "VBE function not supported.";
-                throw vbe::not_supported { msg.str() };
+                msg += "not supported.";
+                throw vbe::not_supported { msg };
             }
             if (ax.hi == 0x01)
             {
-                msg << "VBE function call failed.";
-                throw vbe::failed { msg.str() };
+                msg += "call failed.";
+                throw vbe::failed { msg };
             }
             if (ax.hi == 0x02)
             {
-                msg << "VBE function call not supported in current hardware configuration.";
-                throw vbe::not_supported_in_current_hardware { msg.str() };
+                msg += "not supported in current hardware configuration.";
+                throw vbe::not_supported_in_current_hardware { msg };
             }
             if (ax.hi == 0x03)
             {
-                msg << "VBE function call invalid in current video mode.";
-                throw vbe::invalid_in_current_video_mode { msg.str() };
+                msg += "call invalid in current video mode.";
+                throw vbe::invalid_in_current_video_mode { msg };
             }
-            msg << "Unknown failure.";
-            throw vbe::error { msg.str() };
+            msg += "call - unknown failure.";
+            throw vbe::error { msg };
         }
 
         void vbe::populate_mode_list(dpmi::far_ptr16 list_ptr)
