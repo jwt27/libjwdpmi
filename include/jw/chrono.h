@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
@@ -98,6 +99,8 @@ namespace jw
             {
                 return time_point { std::chrono::duration_cast<duration>(std::chrono::seconds { t }) };
             }
+
+            static auto irq_delta() { return setup::ns_per_rtc_tick; }
         };
 
         struct pit  // Programmable Interval Timer
@@ -141,8 +144,6 @@ namespace jw
             {
                 return time_point { to_duration(count) };
             }
-
-            static auto irq_delta() { return setup::ns_per_rtc_tick; }
         };
     }
 }
