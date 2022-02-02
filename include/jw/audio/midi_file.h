@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 
@@ -9,11 +10,11 @@
 #include <filesystem>
 #include <jw/audio/midi.h>
 
-namespace jw::audio
+namespace jw::midi
 {
-    struct midi_file
+    struct file
     {
-        using track = std::deque<midi>;
+        using track = std::deque<timed_message<unsigned>>;
 
         struct smpte_format
         {
@@ -21,17 +22,17 @@ namespace jw::audio
             unsigned clocks_per_frame : 8;
         };
 
-        midi_file(std::istream& stream) : midi_file { read(stream) } { }
-        midi_file(const std::filesystem::path& file) : midi_file { read(file) } { }
+        file(std::istream& stream) : file { read(stream) } { }
+        file(const std::filesystem::path& f) : file { read(f) } { }
 
-        midi_file() noexcept = default;
-        midi_file(const midi_file&) = default;
-        midi_file(midi_file&&) noexcept = default;
-        midi_file& operator=(const midi_file&) = default;
-        midi_file& operator=(midi_file&&) noexcept = default;
+        file() noexcept = default;
+        file(const file&) = default;
+        file(file&&) noexcept = default;
+        file& operator=(const file&) = default;
+        file& operator=(file&&) noexcept = default;
 
-        static midi_file read(std::istream&);
-        static midi_file read(const std::filesystem::path& file)
+        static file read(std::istream&);
+        static file read(const std::filesystem::path& file)
         {
             std::ifstream stream { file, std::ios::in | std::ios::binary };
             stream.exceptions(std::ios::badbit | std::ios::failbit | std::ios::eofbit);
@@ -43,5 +44,5 @@ namespace jw::audio
         std::vector<track> tracks;
     };
 
-    inline std::istream& operator>>(std::istream& in, midi_file& out) { out = midi_file::read(in); return in; }
+    inline std::istream& operator>>(std::istream& in, file& out) { out = file::read(in); return in; }
 }

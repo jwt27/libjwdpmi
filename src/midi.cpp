@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 
@@ -12,13 +13,13 @@
 #include <jw/mutex.h>
 #include <jw/io/realtime_streambuf.h>
 
-namespace jw::audio
+namespace jw::midi
 {
     struct istream_info
     {
         jw::mutex mutex { };
         std::vector<byte> pending_msg { };
-        midi::clock::time_point pending_msg_time;
+        clock::time_point pending_msg_time;
         byte last_status { 0 };
     };
     struct ostream_info
@@ -66,7 +67,7 @@ namespace jw::audio
 
         midi_out(std::ostream& o) : out { o }, rdbuf { o.rdbuf() }, tx { tx_state(o) } { }
 
-        void emit(const midi& in)
+        void emit(const untimed_message& in)
         {
             if (not in.valid() or in.is_meta_message()) [[unlikely]] return;
             std::unique_lock lock { tx.mutex, std::defer_lock };
@@ -76,12 +77,12 @@ namespace jw::audio
             try
             {
                 const auto* begin = data.cbegin();
-                if (auto* t = std::get_if<midi::realtime>(&in.type))
+                if (auto* t = std::get_if<realtime>(&in.category))
                 {
                     put_realtime(static_cast<byte>(*t) + 0xf8);
                     return;
                 }
-                else if (auto* t = std::get_if<midi::channel_message>(&in.type))
+                else if (auto* t = std::get_if<channel_message>(&in.category))
                 {
                     visit([this, t](auto&& msg) { (*this)(t->channel, msg); }, t->message);
                     bool running_status = tx.last_status == data[0];
@@ -89,7 +90,7 @@ namespace jw::audio
                     size -= running_status;
                     tx.last_status = data[0];
                 }
-                else if (auto* t = std::get_if<midi::system_message>(&in.type))
+                else if (auto* t = std::get_if<system_message>(&in.category))
                 {
                     visit(*this, t->message);
                     if (size > 0) tx.last_status = 0;
@@ -104,7 +105,7 @@ namespace jw::audio
             catch (...) { out._M_setstate(std::ios::badbit); }
         }
 
-        void operator()(byte ch, const midi::note_event& msg)
+        void operator()(byte ch, const note_event& msg)
         {
             const byte on = 0x90 | ch;
             const byte off = 0x80 | ch;
@@ -113,32 +114,32 @@ namespace jw::audio
             else
                 put(msg.on ? on : off, msg.note, msg.velocity);
         }
-        void operator()(byte ch, const midi::key_pressure& msg)
+        void operator()(byte ch, const key_pressure& msg)
         {
             put(0xa0 | ch, msg.note, msg.value);
         }
 
-        void operator()(byte ch, const midi::control_change& msg)
+        void operator()(byte ch, const control_change& msg)
         {
             put(0xb0 | ch, msg.control, msg.value);
         }
 
-        void operator()(byte ch, const midi::program_change& msg)
+        void operator()(byte ch, const program_change& msg)
         {
             put(0xc0 | ch, msg.value);
         }
 
-        void operator()(byte ch, const midi::channel_pressure& msg)
+        void operator()(byte ch, const channel_pressure& msg)
         {
             put(0xd0 | ch, msg.value);
         }
 
-        void operator()(byte ch, const midi::pitch_change& msg)
+        void operator()(byte ch, const pitch_change& msg)
         {
             put(0xe0 | ch, msg.value.lo, msg.value.hi);
         }
 
-        void operator()(const midi::sysex& msg)
+        void operator()(const sysex& msg)
         {
             bool in_sysex = false;
             auto i = msg.data.cbegin();
@@ -164,22 +165,22 @@ namespace jw::audio
             size = 0;
         }
 
-        void operator()(const midi::mtc_quarter_frame& msg)
+        void operator()(const mtc_quarter_frame& msg)
         {
             put(0xf1, msg.data);
         }
 
-        void operator()(const midi::song_position& msg)
+        void operator()(const song_position& msg)
         {
             put(0xf2, msg.value.lo, msg.value.hi);
         }
 
-        void operator()(const midi::song_select& msg)
+        void operator()(const song_select& msg)
         {
             put(0xf3, msg.value);
         }
 
-        void operator()(const midi::tune_request&)
+        void operator()(const tune_request&)
         {
             put(0xf6);
         }
@@ -211,9 +212,9 @@ namespace jw::audio
         std::array<byte, buffer_size> data;
     };
 
-    void midi::emit(std::ostream& out) const
+    void emit(std::ostream& out, const untimed_message& msg)
     {
-        midi_out { out }.emit(*this);
+        midi_out { out }.emit(msg);
     }
 
     struct unexpected_status { };
@@ -249,7 +250,7 @@ namespace jw::audio
     }
 
     template<typename T>
-    static midi realtime_msg(byte status, T now)
+    static timed_message<std::remove_cvref_t<T>> realtime_msg(byte status, T time)
     {
         switch (status)
         {
@@ -258,7 +259,7 @@ namespace jw::audio
         case 0xfb:
         case 0xfc:
         case 0xfe:
-        case 0xff: return midi { static_cast<midi::realtime>(status - 0xf8), now };
+        case 0xff: return { static_cast<realtime>(status - 0xf8), time };
         case 0xf9:
         case 0xfd: throw io::failure { "invalid status byte" };
         default: __builtin_unreachable();
@@ -266,7 +267,7 @@ namespace jw::audio
     }
 
     template<typename I, typename T>
-    static auto make_msg(byte status, I i, T now)
+    static timed_message<std::remove_cvref_t<T>> make_msg(byte status, I i, T time)
     {
         const unsigned ch = status & 0x0f;
         switch(status & 0xf0)
@@ -281,31 +282,32 @@ namespace jw::audio
                 on = false;
                 vel = 0x40;
             }
-            return midi { ch, midi::note_event { i[0], vel, on } };
+            return { ch, note_event { i[0], vel, on }, time };
         }
-        case 0xa0: return midi { ch, midi::key_pressure     { i[0], i[1] }, now };
-        case 0xb0: return midi { ch, midi::control_change   { i[0], i[1] }, now };
-        case 0xc0: return midi { ch, midi::program_change   { i[0] }, now };
-        case 0xd0: return midi { ch, midi::channel_pressure { i[0] }, now };
-        case 0xe0: return midi { ch, midi::pitch_change     { { i[0], i[1] } }, now };
+        case 0xa0: return { ch, key_pressure     { i[0], i[1] }, time };
+        case 0xb0: return { ch, control_change   { i[0], i[1] }, time };
+        case 0xc0: return { ch, program_change   { i[0] }, time };
+        case 0xd0: return { ch, channel_pressure { i[0] }, time };
+        case 0xe0: return { ch, pitch_change     { { i[0], i[1] } }, time };
         case 0xf0:
             switch (status)
             {
             case 0xf0: __builtin_unreachable();
-            case 0xf1: return midi { midi::mtc_quarter_frame { i[0] }, now };
-            case 0xf2: return midi { midi::song_position     { { i[0], i[1] } }, now };
-            case 0xf3: return midi { midi::song_select       { i[0] }, now };
-            case 0xf6: return midi { midi::tune_request      { }, now };
+            case 0xf1: return { mtc_quarter_frame { i[0] }, time };
+            case 0xf2: return { song_position     { { i[0], i[1] } }, time };
+            case 0xf3: return { song_select       { i[0] }, time };
+            case 0xf6: return { tune_request      { }, time };
             case 0xf4:
             case 0xf5:
             case 0xf7: throw io::failure { "invalid status byte" };
-            default: return realtime_msg(status, now);
+            default: return realtime_msg(status, time);
             }
         default: __builtin_unreachable();
         }
     }
 
-    midi midi::do_extract(std::istream& in, bool dont_block)
+    template<bool dont_block>
+    static message do_extract(std::istream& in)
     {
         auto& rx { rx_state(in) };
         std::unique_lock lock { rx.mutex };
@@ -389,7 +391,7 @@ namespace jw::audio
             local_destructor clear_pending_on_return { [&rx] { rx.pending_msg.clear(); } };
 
             // Construct the message
-            if (is_sysex) return midi { midi::sysex { { rx.pending_msg.cbegin(), rx.pending_msg.cend() } } };
+            if (is_sysex) return { sysex { { rx.pending_msg.cbegin(), rx.pending_msg.cend() } }, rx.pending_msg_time };
             else return make_msg(status, rx.pending_msg.cbegin() + new_status, rx.pending_msg_time);
         }
         catch (const io::failure&)
@@ -411,6 +413,9 @@ namespace jw::audio
         catch (...)                         { in._M_setstate(std::ios::badbit); }
         return { };
     }
+
+    message extract(std::istream& in) { return do_extract<false>(in); }
+    message try_extract(std::istream& in) { return do_extract<true>(in); }
 
     struct file_buffer
     {
@@ -528,23 +533,23 @@ namespace jw::audio
     {
         switch (type)
         {
-        case 0x01: return midi::meta::text::any;
-        case 0x02: return midi::meta::text::copyright;
-        case 0x03: return midi::meta::text::track_name;
-        case 0x04: return midi::meta::text::instrument_name;
-        case 0x05: return midi::meta::text::lyric;
-        case 0x06: return midi::meta::text::marker;
-        case 0x07: return midi::meta::text::cue_point;
+        case 0x01: return meta::text::any;
+        case 0x02: return meta::text::copyright;
+        case 0x03: return meta::text::track_name;
+        case 0x04: return meta::text::instrument_name;
+        case 0x05: return meta::text::lyric;
+        case 0x06: return meta::text::marker;
+        case 0x07: return meta::text::cue_point;
         default: __builtin_unreachable();
         }
     }
 
-    static void read_track(midi_file::track& trk, file_buffer& buf)
+    static void read_track(file::track& trk, file_buffer& buf)
     {
         std::array<byte, 8> v;
         bool in_sysex = false;
         byte last_status = 0;
-        decltype(midi::meta::channel) meta_ch { };
+        decltype(meta::channel) meta_ch { };
         while (true)
         {
             const unsigned delta = buf.read_vlq();
@@ -560,13 +565,13 @@ namespace jw::audio
                     {
                     case 0x00:
                         if (size != 2) throw io::failure { "incorrect message size" };
-                        trk.emplace_back(meta_ch, midi::meta::sequence_number { buf.read_16() });
+                        trk.emplace_back(meta_ch, meta::sequence_number { buf.read_16() });
                         break;
 
                     case 0x01: case 0x02: case 0x03: case 0x04:
                     case 0x05: case 0x06: case 0x07:
                         {
-                            midi::meta::text msg { text_type(type), { } };
+                            meta::text msg { text_type(type), { } };
                             msg.text.resize(size);
                             buf.read(msg.text.data(), size);
                             trk.emplace_back(meta_ch, std::move(msg), delta);
@@ -587,14 +592,14 @@ namespace jw::audio
 
                     case 0x51:
                         if (size != 3) throw io::failure { "incorrect message size" };
-                        trk.emplace_back(meta_ch, midi::meta::tempo_change { std::chrono::microseconds { buf.read_24() } }, delta);
+                        trk.emplace_back(meta_ch, meta::tempo_change { std::chrono::microseconds { buf.read_24() } }, delta);
                         break;
 
                     case 0x54:
                         {
                             if (size != 5) throw io::failure { "incorrect message size" };
                             buf.read(v.data(), 5);
-                            trk.emplace_back(meta_ch, midi::meta::smpte_offset { v[0], v[1], v[2], v[3], v[4] }, delta);
+                            trk.emplace_back(meta_ch, meta::smpte_offset { v[0], v[1], v[2], v[3], v[4] }, delta);
                             break;
                         }
 
@@ -602,7 +607,7 @@ namespace jw::audio
                         {
                             if (size != 4) throw io::failure { "incorrect message size" };
                             buf.read(v.data(), 4);
-                            trk.emplace_back(meta_ch, midi::meta::time_signature { v[0], v[1], v[2], v[3] }, delta);
+                            trk.emplace_back(meta_ch, meta::time_signature { v[0], v[1], v[2], v[3] }, delta);
                             break;
                         }
 
@@ -610,13 +615,13 @@ namespace jw::audio
                         {
                             if (size != 2) throw io::failure { "incorrect message size" };
                             buf.read(v.data(), 2);
-                            trk.emplace_back(meta_ch, midi::meta::key_signature { v[0], v[1] != 0 }, delta);
+                            trk.emplace_back(meta_ch, meta::key_signature { v[0], v[1] != 0 }, delta);
                             break;
                         }
 
                     default:
                         {
-                            midi::meta::unknown msg { type, { } };
+                            meta::unknown msg { type, { } };
                             msg.data.resize(size);
                             buf.read(msg.data.data(), size);
                             trk.emplace_back(meta_ch, std::move(msg), delta);
@@ -652,7 +657,7 @@ namespace jw::audio
                             if (i == size) break;
                             [[fallthrough]];
                         case 0xf7:
-                            trk.emplace_back(midi::sysex { std::move(data) }, delta);
+                            trk.emplace_back(sysex { std::move(data) }, delta);
                             if (i < size)
                             {
                                 data = { };
@@ -687,7 +692,7 @@ namespace jw::audio
                             }
                         }
                     }
-                    if (data.size() > 0) trk.emplace_back(midi::sysex { std::move(data) }, delta);
+                    if (data.size() > 0) trk.emplace_back(sysex { std::move(data) }, delta);
                     last_status = 0;
                     break;
                 }
@@ -697,7 +702,7 @@ namespace jw::audio
                     last_status = 0;
                     meta_ch.reset();
                     const std::size_t size = buf.read_vlq();
-                    midi::sysex msg { };
+                    sysex msg { };
                     msg.data.push_back(0xf0);
                     msg.data.resize(size + 1);
                     buf.read(msg.data.data() + 1, size);
@@ -738,9 +743,9 @@ namespace jw::audio
         }
     }
 
-    midi_file midi_file::read(std::istream& in)
+    file file::read(std::istream& in)
     {
-        midi_file output { };
+        file output { };
         auto* const rdbuf { in.rdbuf() };
         std::istream::sentry sentry { in, true };
         if (not sentry) return output;
