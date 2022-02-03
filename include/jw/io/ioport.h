@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
@@ -14,7 +15,7 @@ namespace jw::io
     using port_num = std::uint_fast16_t;
 
     template<typename T = std::byte> requires (std::is_trivial_v<T>)
-    T read_port(port_num p) { T v; asm volatile ("in %0, %w1" : "=a" (v) : "Nd" (p)); return v; }
+    inline T read_port(port_num p) { T v; asm volatile ("in %0, %w1" : "=a" (v) : "Nd" (p)); return v; }
 
     template<typename T> requires (std::is_trivial_v<T>)
     inline void write_port(port_num p, const T& v) noexcept { asm volatile ("out %w0, %1" :: "Nd" (p), "a" (v)); }
