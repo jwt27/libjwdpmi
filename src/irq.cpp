@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
@@ -182,11 +183,14 @@ namespace jw::dpmi::detail
         }
 #       endif
 
-        std::byte* esp; asm("mov %0, esp;":"=rm"(esp));
-        auto stack_left = static_cast<std::size_t>(esp - data->stack.data());
-        if (stack_left <= config::interrupt_minimum_stack_size) [[unlikely]]
-            if (not data->resizing_stack.test_and_set())
-                this_thread::invoke_next([data = data] { data->resize_stack(data->stack.size() * 2); });
+        if constexpr (config::interrupt_minimum_stack_size > 0)
+        {
+            std::byte* esp; asm("mov %0, esp;":"=rm"(esp));
+            auto stack_left = static_cast<std::size_t>(esp - data->stack.data());
+            if (stack_left <= config::interrupt_minimum_stack_size) [[unlikely]]
+                if (not data->resizing_stack.test_and_set())
+                    this_thread::invoke_next([data = data] { data->resize_stack(data->stack.size() * 2); });
+        }
 
         asm("cli");
     }

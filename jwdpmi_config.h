@@ -21,7 +21,8 @@ namespace jw
         constexpr std::size_t interrupt_initial_stack_size = 64_KB;
 
         // Minimum stack size for IRQ handlers.  Attempts to resize when the
-        // stack space drops below this amount.
+        // stack space drops below this amount.  When set to 0, automatic
+        // resizing is disabled.
         constexpr std::size_t interrupt_minimum_stack_size = 16_KB;
 
         // Initial memory pool for operator new() in interrupt context.
