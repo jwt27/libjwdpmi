@@ -7,18 +7,17 @@ OUTPUT_FORMAT("coff-go32-exe")
 ENTRY (start)
 SECTIONS
 {
-  .text  ALIGN(0x1000+SIZEOF_HEADERS, 0x200) : SUBALIGN(0x10) {
+  .text  ALIGN(0x1000+SIZEOF_HEADERS, 0x200) : {
     *(.text.low .text.low.*)
     ASSERT(. < 0x10000, ".text.low section too large");
+    *crt0.o(.text)
     *(.text.startup .text.startup.*)
     *(.text.unlikely .text.unlikely.*)
     *(.text.exit .text.exit.*)
-    *(.text)
+    *(.text .gnu.linkonce.t.*)
     *(.text.hot .text.hot.*)
-    *(.text.* .gnu.linkonce.t.*)
+    *(.text.*)
     *(.const* .ro* .gnu.linkonce.r*)
-    /* HACK:  These should be in .data but require 16-byte alignment.  */
-    *(.data .data.* .gnu.linkonce.d*)
     etext  =  . ; PROVIDE(_etext = .) ;
     . = ALIGN(0x200);
   }
@@ -41,10 +40,11 @@ SECTIONS
     KEEP(*(.eh_fram*))
     ___EH_FRAME_END__ = . ;
     LONG(0);
+    *(.data .data.* .gnu.linkonce.d*)
     edata  =  . ; PROVIDE(_edata = .) ;
     . = ALIGN(0x200);
   }
-  .bss : SUBALIGN(0x10)
+  .bss :
   {
     *(.bss .bss.* .gnu.linkonce.b.*)
     *(COMMON)
