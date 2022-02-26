@@ -43,8 +43,8 @@ if [[ ! -z "$host" ]]; then
 	CXX="$host-g++"
 	AR="$host-ar"
 fi
-CXX=${CXX-g++}
-AR=${AR-ar}
+CXX=${CXX:-g++}
+AR=${AR:-ar}
 
 check_programs $CXX $AR
 check_compiler -std=gnu++20 -masm=intel
