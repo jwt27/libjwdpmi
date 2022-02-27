@@ -14,10 +14,10 @@ Current features include:
 * Integrated GDB remote debugging backend.
 * Access to PIT, RTC and RDTSC clocks using `std::chrono` interface.
 * Yamaha OPL2/OPL3 driver with automatic channel allocation.
-* MIDI protocol implementation and MPU-401 driver.
+* ~~MIDI protocol implementation.~~ (moved to [jwmidi](https://github.com/jwt27/libjwmidi))
 * VESA VBE3 graphics interface.
 * Accurate analog game port driver.
-* Serial port driver with `std::iostream` interface.
+* Serial port and MPU-401 driver with `std::iostream` interface.
 
 ## Installing
 First, you need a toolchain compiled with `--target=i386-pc-msdosdjgpp`, and
@@ -36,8 +36,8 @@ $ git submodule update --init --recursive
 If you use [jwbuild](https://github.com/jwt27/jwbuild), simply add the
 following to your `configure` script, and you're all set:  
 ```sh
-add_library lib/libjwutil
-add_library lib/libjwdpmi --with-jwutil=$(pwd)/lib/libjwutil
+add_submodule lib/libjwutil
+add_submodule lib/libjwdpmi --with-jwutil=$(pwd)/lib/libjwutil
 ```
 
 For other build systems, you need some way to call the `configure` script, and
