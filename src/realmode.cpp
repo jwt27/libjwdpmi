@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
@@ -10,6 +11,8 @@ namespace jw
 {
     namespace dpmi
     {
+        static constinit std::optional<std::map<std::uint8_t, raw_realmode_interrupt_handler*>> rm_int_handlers { std::nullopt };
+
         void realmode_callback_base::alloc(void* func)
         {
             dpmi::dpmi_error_code error;
@@ -143,6 +146,52 @@ namespace jw
                 "mov %w1, gs;"
                 : "=m" (fs)
                 , "=m" (gs));
+        }
+
+        raw_realmode_interrupt_handler::raw_realmode_interrupt_handler(std::uint8_t i, far_ptr16 ptr)
+            : int_num { i }, prev_handler { get(i) }
+        {
+            if (not rm_int_handlers.has_value()) [[unlikely]] rm_int_handlers.emplace();
+            auto*& pos = (*rm_int_handlers)[i];
+            prev = pos;
+            if (prev != nullptr) prev->next = this;
+            pos = this;
+            set(i, ptr);
+        }
+
+        raw_realmode_interrupt_handler::~raw_realmode_interrupt_handler()
+        {
+            if (next != nullptr)    // middle of chain
+            {
+                next->prev = prev;
+                next->prev_handler = prev_handler;
+            }
+            else                    // last in chain
+            {
+                (*rm_int_handlers)[int_num] = prev;
+                set(int_num, prev_handler);
+            }
+        }
+
+        far_ptr16 raw_realmode_interrupt_handler::get(std::uint8_t i)
+        {
+            far_ptr16 ptr;
+            asm ("int 0x31"
+                : "=c" (ptr.segment)
+                , "=d" (ptr.offset)
+                : "a" (0x0200)
+                , "b" (i));
+            return ptr;
+        }
+
+        void raw_realmode_interrupt_handler::set(std::uint8_t i, far_ptr16 ptr)
+        {
+            asm("int 0x31"
+                :
+                : "a" (0x0201)
+                , "b" (i)
+                , "c" (ptr.segment)
+                , "d" (ptr.offset));
         }
     }
 }

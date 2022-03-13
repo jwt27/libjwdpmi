@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
@@ -176,6 +177,31 @@ namespace jw
             [[gnu::packed]] realmode_registers* reg_ptr;                            // [eax-0x0D]
             [[gnu::packed]] realmode_callback* self { this };                       // [eax-0x09]
             std::array<byte, 0x60> code;                                            // [eax-0x05]
+        };
+
+        // Registers a real-mode procedure as real-mode software interrupt
+        // handler.  The code must be located in conventional memory.
+        struct raw_realmode_interrupt_handler
+        {
+            raw_realmode_interrupt_handler(std::uint8_t i, far_ptr16 p);
+            ~raw_realmode_interrupt_handler();
+
+            raw_realmode_interrupt_handler(raw_realmode_interrupt_handler&&) = delete;
+            raw_realmode_interrupt_handler(const raw_realmode_interrupt_handler&) = delete;
+            raw_realmode_interrupt_handler& operator=(raw_realmode_interrupt_handler&&) = delete;
+            raw_realmode_interrupt_handler& operator=(const raw_realmode_interrupt_handler&) = delete;
+
+            far_ptr16 previous_handler() const noexcept { return prev_handler; }
+
+            static far_ptr16 get(std::uint8_t);
+
+        private:
+            const std::uint8_t int_num;
+            far_ptr16 prev_handler;
+            raw_realmode_interrupt_handler* next { nullptr };
+            raw_realmode_interrupt_handler* prev;
+
+            static void set(std::uint8_t, far_ptr16);
         };
     }
 }
