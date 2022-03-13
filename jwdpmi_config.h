@@ -2,6 +2,10 @@
 #include <crt0.h>
 #include <jw/common.h>
 
+#if __has_include(<tcp.h>)
+# define JWDPMI_WITH_WATT32
+#endif
+
 namespace jw
 {
     namespace chrono

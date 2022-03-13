@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
@@ -14,6 +15,9 @@
 #include <jw/thread.h>
 #include <jw/debug/debug.h>
 #include <jw/debug/detail/signals.h>
+#ifdef JWDPMI_WITH_WATT32
+# include <tcp.h>
+#endif
 
 namespace jw::detail
 {
@@ -28,6 +32,10 @@ namespace jw::detail
         debug::throw_assert(p->id == main_thread_id);
         threads.emplace(p->id, main_thread);
         iterator = threads.begin();
+
+#       ifdef JWDPMI_WITH_WATT32
+        sock_yield(nullptr, yield);
+#       endif
     }
 
     scheduler::dtor::~dtor()
