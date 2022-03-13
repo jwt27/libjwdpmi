@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
@@ -23,8 +24,6 @@
 // Lock all static code and data with _CRT0_FLAG_LOCK_MEMORY. (main() does this for you)
 // Lock dynamically allocated memory with dpmi::class_lock or dpmi::data_lock.
 // For STL containers, use dpmi::locking_allocator (read-only) or dpmi::locked_pool_allocator (read/write).
-
-// TODO: (eventually) software interrupts
 
 #define INTERRUPT [[gnu::hot, gnu::optimize("O3")]]
 

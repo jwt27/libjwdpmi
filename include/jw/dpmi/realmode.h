@@ -11,6 +11,11 @@
 #include <jw/function.h>
 #include <jw/allocator_adaptor.h>
 
+namespace jw::dpmi::detail
+{
+    struct rm_int_callback;
+}
+
 namespace jw
 {
     namespace dpmi
@@ -158,7 +163,7 @@ namespace jw
         // which may be modified, and a far pointer to access the real-mode
         // stack.  The return CS/IP (and flags) will have already been popped
         // off and stored in the registers struct.
-        struct realmode_callback : raw_realmode_callback, private class_lock<realmode_callback>
+        struct realmode_callback final : raw_realmode_callback, private class_lock<realmode_callback>
         {
             using function_type = void(realmode_registers*, far_ptr32);
 
@@ -214,6 +219,38 @@ namespace jw
             raw_realmode_interrupt_handler* prev;
 
             static void set(std::uint8_t, far_ptr16);
+        };
+
+        // Registers a procedure as real-mode software interrupt handler,
+        // using a callback to protected mode.
+        // The handler function returns a bool, indicating whether the
+        // interrupt was successfully handled.  If false, the next handler in
+        // the chain will be called.
+        // This is not suitable for servicing hardware interrupts.  To do
+        // that, use dpmi::irq_handler instead.
+        struct realmode_interrupt_handler final
+        {
+            using function_type = bool(realmode_registers*, far_ptr32);
+
+            template<typename F>
+            realmode_interrupt_handler(std::uint8_t i, F&& f)
+                : int_num { i }, func { std::forward<F>(f) } { init(); }
+
+            ~realmode_interrupt_handler();
+
+            realmode_interrupt_handler(realmode_interrupt_handler&&) = delete;
+            realmode_interrupt_handler(const realmode_interrupt_handler&) = delete;
+            realmode_interrupt_handler& operator=(realmode_interrupt_handler&&) = delete;
+            realmode_interrupt_handler& operator=(const realmode_interrupt_handler&) = delete;
+
+        private:
+            friend struct detail::rm_int_callback;
+            void init();
+
+            const std::uint8_t int_num;
+            const function<function_type> func;
+            realmode_interrupt_handler* next { nullptr };
+            realmode_interrupt_handler* prev;
         };
     }
 }

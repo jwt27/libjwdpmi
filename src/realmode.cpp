@@ -7,11 +7,56 @@
 #include <jw/dpmi/realmode.h>
 #include <jw/dpmi/detail/interrupt_id.h>
 
+namespace jw::dpmi::detail
+{
+    struct rm_int_callback
+    {
+        rm_int_callback(std::uint8_t i) : raw_handler { i, callback.pointer() } { }
+
+        realmode_interrupt_handler* last { nullptr };
+
+    private:
+        realmode_callback callback { [this](realmode_registers* reg, far_ptr32 stack) { handle(reg, stack); }, true };
+        raw_realmode_interrupt_handler raw_handler;
+
+        void handle(realmode_registers* reg, far_ptr32 stack)
+        {
+            force_frame_pointer();
+            for (auto i = last; i != nullptr; i = i->prev)
+            {
+                if (i->func(reg, stack)) return;
+            }
+            auto chain_to = raw_handler.previous_handler();
+            asm volatile
+            (R"(
+                push fs
+                mov fs, %w[ss]
+                mov word ptr fs:[%[sp] + 0], %w[ip]
+                mov word ptr fs:[%[sp] + 2], %w[cs]
+                mov word ptr fs:[%[sp] + 4], %w[flags]
+                pop fs
+             )" :
+                :   [ss]    "rm"    (stack.segment),
+                    [sp]    "r"     (stack.offset),
+                    [cs]    "r"     (reg->cs),
+                    [ip]    "r"     (reg->ip),
+                    [flags] "r"     (reg->flags)
+            );
+            reg->sp -= 6;
+            reg->cs = chain_to.segment;
+            reg->ip = chain_to.offset;
+            reg->flags.interrupt = false;
+            reg->flags.trap = false;
+        }
+    };
+}
+
 namespace jw
 {
     namespace dpmi
     {
         static constinit std::optional<std::map<std::uint8_t, raw_realmode_interrupt_handler*>> rm_int_handlers { std::nullopt };
+        static constinit std::optional<std::map<std::uint8_t, detail::rm_int_callback>> rm_int_callbacks { std::nullopt };
 
         static far_ptr16 allocate_rm_callback(far_ptr32 func, realmode_registers* reg)
         {
@@ -196,6 +241,26 @@ namespace jw
                 , "b" (i)
                 , "c" (ptr.segment)
                 , "d" (ptr.offset));
+        }
+
+        void realmode_interrupt_handler::init()
+        {
+            if (not rm_int_callbacks.has_value()) [[unlikely]] rm_int_callbacks.emplace();
+            auto& pos = rm_int_callbacks->try_emplace(int_num, int_num).first->second;
+            prev = pos.last;
+            if (prev != nullptr) prev->next = this;
+            pos.last = this;
+        }
+
+        realmode_interrupt_handler::~realmode_interrupt_handler()
+        {
+            if (next == nullptr)
+            {
+                auto i = rm_int_callbacks->find(int_num);
+                if (prev == nullptr) rm_int_callbacks->erase(i);
+                else i->second.last = prev;
+            }
+            else next->prev = prev;
         }
     }
 }
