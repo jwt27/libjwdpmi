@@ -9,6 +9,7 @@
 #include <jw/dpmi/memory.h>
 #include <jw/dpmi/irq_handler.h>
 #include <jw/function.h>
+#include <jw/allocator_adaptor.h>
 
 namespace jw
 {
@@ -129,54 +130,65 @@ namespace jw
 
         // Reference for writing real-mode callback functions:
         // http://www.delorie.com/djgpp/doc/dpmi/ch4.6.html
-
-        struct realmode_callback_base
+        struct raw_realmode_callback
         {
-            virtual ~realmode_callback_base() { free(); }
+            virtual ~raw_realmode_callback();
 
-            realmode_callback_base(const realmode_callback_base&) = delete;
-            realmode_callback_base(realmode_callback_base&&) = delete;
-            realmode_callback_base& operator=(const realmode_callback_base&) = delete;
-            realmode_callback_base& operator=(realmode_callback_base&&) = delete;
+            raw_realmode_callback(const raw_realmode_callback&) = delete;
+            raw_realmode_callback(raw_realmode_callback&&) = delete;
+            raw_realmode_callback& operator=(const raw_realmode_callback&) = delete;
+            raw_realmode_callback& operator=(raw_realmode_callback&&) = delete;
 
-            far_ptr16 get_ptr() const noexcept { return ptr; }
+            far_ptr16 pointer() const noexcept { return ptr; }
 
         protected:
-            realmode_callback_base(auto* function_ptr) { alloc(reinterpret_cast<void*>(function_ptr)); }
+            raw_realmode_callback(far_ptr32 func);
             realmode_registers reg;
-
-        private:
-            far_ptr16 ptr;
-            void alloc(void* function_ptr);
-            void free();
+            const far_ptr16 ptr;
         };
 
-        struct realmode_callback : public realmode_callback_base, class_lock<realmode_callback>
+        // Allocates a callback function that can be invoked from real-mode.
+        // The constructor parameter 'iret_frame' specifies whether the real-
+        // mode code should return via IRET or RETF.  This also determines
+        // whether the callback is considered to be executing in IRQ context,
+        // but not in the way you might expect: if the interrupt-enable flag
+        // is clear *before* the callback is invoked, either via CALL FAR or
+        // INT, in_irq_context() will return true.
+        // The callback function takes a pointer to a registers structure
+        // which may be modified, and a far pointer to access the real-mode
+        // stack.  The return CS/IP (and flags) will have already been popped
+        // off and stored in the registers struct.
+        struct realmode_callback : raw_realmode_callback, private class_lock<realmode_callback>
         {
+            using function_type = void(realmode_registers*, far_ptr32);
+
             template<typename F>
-            realmode_callback(F&& function, std::size_t pool_size = 1_KB)
-                : realmode_callback_base(code.data())
-                , function_ptr { std::forward<F>(function) }
+            realmode_callback(F&& function, bool iret_frame = false, std::size_t stack_size = 16_KB, std::size_t pool_size = 1_KB)
+                : raw_realmode_callback({ get_cs(), reinterpret_cast<std::uintptr_t>(iret_frame ? entry_point<true> : entry_point<false>) })
+                , func { std::forward<F>(function) }
                 , memres { pool_size }
-            { init_code(); }
+            {
+                stack.resize(stack_size);
+                stack_ptr = stack.data() + stack.size() - 4;
+                allocator alloc { &memres };
+                reg_ptr = allocator_traits::allocate(alloc, 1);
+            }
 
         private:
-            [[gnu::__cdecl__]]
-            static void entry_point(realmode_callback* self, std::uint32_t rm_stack_selector, std::uint32_t rm_stack_offset) noexcept;
-            void init_code() noexcept;
-
-            trivial_function<void(realmode_registers*)> function_ptr;
-            std::array<byte, 16_KB> stack;  // TODO: adjustable size
-            locked_pool_resource<false> memres;
             using allocator = monomorphic_allocator<locked_pool_resource<false>, realmode_registers>;
+            using allocator_traits = std::allocator_traits<allocator>;
 
-            [[gnu::packed]] selector fs;                                            // [eax-0x19]
-            [[gnu::packed]] selector gs;                                            // [eax-0x17]
-            [[gnu::packed]] decltype(&entry_point) entry_ptr { &entry_point };      // [eax-0x15]
-            [[gnu::packed]] byte* stack_ptr { stack.data() + stack.size() - 4 };    // [eax-0x11]
-            [[gnu::packed]] realmode_registers* reg_ptr;                            // [eax-0x0D]
-            [[gnu::packed]] realmode_callback* self { this };                       // [eax-0x09]
-            std::array<byte, 0x60> code;                                            // [eax-0x05]
+            template<bool>
+            [[gnu::naked]] static void entry_point() noexcept;
+            [[gnu::__cdecl__]] static void call(realmode_callback*, std::uintptr_t, selector) noexcept;
+
+            trivial_function<function_type> func;
+            std::vector<std::byte, default_constructing_allocator_adaptor<locking_allocator<std::byte>>> stack;
+            locked_pool_resource<false> memres;
+
+            selector gs { get_gs() };
+            std::byte* stack_ptr;
+            realmode_registers* reg_ptr;
         };
 
         // Registers a real-mode procedure as real-mode software interrupt
