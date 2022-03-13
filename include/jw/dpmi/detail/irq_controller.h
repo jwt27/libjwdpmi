@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
@@ -91,9 +92,9 @@ namespace jw::dpmi::detail
 
         static void send_eoi(irq_level i) noexcept;
 
-        [[gnu::cdecl, gnu::hot]]
+        [[gnu::__cdecl__, gnu::hot]]
         static std::byte* get_stack_ptr() noexcept;
-        [[gnu::force_align_arg_pointer, gnu::cdecl, gnu::hot]]
+        [[gnu::force_align_arg_pointer, gnu::__cdecl__, gnu::hot]]
         static void handle_irq(irq_level) noexcept;
 
         irq_controller(irq_level i);

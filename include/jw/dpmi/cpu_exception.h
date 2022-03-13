@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
@@ -174,7 +175,7 @@ namespace jw
             static inline std::array<exception_handler*, 0x20> last { };
             static inline std::array<byte, config::exception_stack_size> stack;
 
-            [[gnu::force_align_arg_pointer, gnu::cdecl]]
+            [[gnu::force_align_arg_pointer, gnu::__cdecl__]]
             static bool call_handler(exception_handler* self, raw_exception_frame* frame) noexcept;
 
                                                                 // sizeof   alignof     offset

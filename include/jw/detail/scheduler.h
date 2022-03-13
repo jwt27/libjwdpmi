@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
@@ -92,7 +93,7 @@ namespace jw::detail
         [[gnu::hot, gnu::noinline, gnu::noclone, gnu::naked]]
         static void context_switch(thread_context**);
 
-        [[gnu::hot, gnu::noinline, gnu::cdecl]]
+        [[gnu::hot, gnu::noinline, gnu::__cdecl__]]
         static thread_context* switch_thread();
 
         [[gnu::force_align_arg_pointer, noreturn]]
