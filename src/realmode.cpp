@@ -68,13 +68,13 @@ namespace jw
                 pop es
                 pop ds
              )" : "=@ccc" (c)
-                    , "=a" (error)
-                    , "=c" (ptr.segment)
-                    , "=d" (ptr.offset)
-                    : "a" (0x0303)
-                    , [seg] "rm" (func.segment)
-                    , "S" (func.offset)
-                    , "D" (reg)
+                , "=a" (error)
+                , "=c" (ptr.segment)
+                , "=d" (ptr.offset)
+                : "a" (0x0303)
+                , [seg] "rm" (func.segment)
+                , "S" (func.offset)
+                , "D" (reg)
             );
             if (c) throw dpmi_error { error, __PRETTY_FUNCTION__ };
             return ptr;
