@@ -19,23 +19,19 @@ namespace jw::dpmi::detail
 
         void handle(realmode_registers* reg, far_ptr32 stack)
         {
-            force_frame_pointer();
             for (auto i = last; i != nullptr; i = i->prev)
             {
                 if (i->func(reg, stack)) return;
             }
             auto chain_to = raw_handler.previous_handler();
+            gs_override gs { stack.segment };
             asm volatile
             (R"(
-                push fs
-                mov fs, %w[ss]
-                mov word ptr fs:[%[sp] + 0], %w[ip]
-                mov word ptr fs:[%[sp] + 2], %w[cs]
-                mov word ptr fs:[%[sp] + 4], %w[flags]
-                pop fs
+                mov word ptr gs:[%[sp] + 0], %w[ip]
+                mov word ptr gs:[%[sp] + 2], %w[cs]
+                mov word ptr gs:[%[sp] + 4], %w[flags]
              )" :
-                :   [ss]    "rm"    (stack.segment),
-                    [sp]    "r"     (stack.offset),
+                :   [sp]    "r"     (stack.offset),
                     [cs]    "r"     (reg->cs),
                     [ip]    "r"     (reg->ip),
                     [flags] "r"     (reg->flags)
