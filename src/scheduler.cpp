@@ -23,6 +23,7 @@
 extern "C" void __wrap___dpmi_yield()
 {
     jw::this_thread::yield();
+    errno = 0;
 }
 
 namespace jw::detail
