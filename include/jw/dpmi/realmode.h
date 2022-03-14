@@ -169,9 +169,9 @@ namespace jw
             template<typename F>
             realmode_callback(F&& function, bool iret_frame = false, bool irq_context = false, std::size_t stack_size = 16_KB, std::size_t pool_size = 1_KB)
                 : raw_realmode_callback({ get_cs(), reinterpret_cast<std::uintptr_t>(iret_frame ? entry_point<true> : entry_point<false>) })
+                , is_irq { irq_context }
                 , func { std::forward<F>(function) }
                 , memres { pool_size }
-                , is_irq { irq_context }
             {
                 stack.resize(stack_size);
                 stack_ptr = stack.data() + stack.size() - 4;
