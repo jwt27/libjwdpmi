@@ -143,9 +143,10 @@ namespace jw
 #           define OFFSET(X) offsetof(realmode_callback, X)
             asm
             (R"(
-                # on entry here:
-                # DS:ESI = real-mode stack pointer
-                # ES:EDI = real-mode registers struct
+                    # on entry here:
+                    # DS:ESI = real-mode stack pointer
+                    # ES:EDI = real-mode registers struct
+                cld
                 lodsw
                 mov word ptr es:[edi + 0x2a], ax    # return IP
                 lodsw
