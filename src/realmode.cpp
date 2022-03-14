@@ -25,6 +25,8 @@ namespace jw::dpmi::detail
             }
             auto chain_to = raw_handler.previous_handler();
             gs_override gs { stack.segment };
+            stack.offset -= 6;
+            reg->sp -= 6;
             asm volatile
             (R"(
                 mov word ptr gs:[%[sp] + 0], %w[ip]
@@ -36,7 +38,6 @@ namespace jw::dpmi::detail
                     [ip]    "r"     (reg->ip),
                     [flags] "r"     (reg->flags)
             );
-            reg->sp -= 6;
             reg->cs = chain_to.segment;
             reg->ip = chain_to.offset;
             reg->flags.interrupt = false;
