@@ -82,52 +82,25 @@ namespace jw
             void call(int_vector interrupt)
             {
                 force_frame_pointer();
-                selector new_reg_ds = get_ds();
-                realmode_registers* new_reg;
                 dpmi_error_code error;
                 bool c;
 
-                asm volatile(
-                    "push es;"
-                    "mov es, %w2;"
-                    "int 0x31;"
-                    "mov %w2, es;"
-                    "pop es;"
-                    : "=@ccc" (c)
+                asm volatile
+                (R"(
+                    push es
+                    mov es, %w2
+                    int 0x31
+                    pop es
+                 )" : "=@ccc" (c)
                     , "=a" (error)
-                    , "+rm" (new_reg_ds)
-                    , "=D" (new_reg)
-                    : "a" (dpmi_function)
+                    : "rm" (get_ds())
+                    , "a" (dpmi_function)
                     , "b" (interrupt)
                     , "D" (this)
                     , "c" (0)
-                    : "memory");
+                    : "memory"
+                );
                 if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
-                copy_from(new_reg_ds, new_reg);
-            }
-
-            void copy_from(selector new_reg_ds, realmode_registers* new_reg)
-            {
-                if (new_reg == this and new_reg_ds == get_ds()) [[likely]] return;
-                auto ptr = linear_memory { new_reg_ds, new_reg };
-                if (ptr.requires_new_selector()) [[unlikely]]
-                {
-                    force_frame_pointer();
-                    asm("push es;"
-                        "push ds;"
-                        "pop es;"
-                        "mov ds, %w0;"
-                        "rep movsb;"
-                        "push es;"
-                        "pop ds;"
-                        "pop es;"
-                        :: "rm" (new_reg_ds)
-                        , "c" (sizeof(realmode_registers))
-                        , "S" (new_reg)
-                        , "D" (this)
-                        : "memory");
-                }
-                else *this = *(ptr.get_ptr<realmode_registers>());
             }
         };
 
