@@ -23,10 +23,10 @@ namespace jw
         // CPU register structure for DPMI real-mode functions.
         struct alignas(2) [[gnu::packed]] realmode_registers : public cpu_registers
         {
-            union[[gnu::packed]]
+            union
             {
                 std::uint16_t raw_flags;
-                struct[[gnu::packed]]
+                struct [[gnu::packed]]
                 {
                     bool carry : 1;
                     unsigned : 1;
