@@ -154,11 +154,10 @@ namespace jw
 
         // Allocates a callback function that can be invoked from real-mode.
         // The constructor parameter 'iret_frame' specifies whether the real-
-        // mode code should return via IRET or RETF.  This also determines
-        // whether the callback is considered to be executing in IRQ context,
-        // but not in the way you might expect: if the interrupt-enable flag
-        // is clear *before* the callback is invoked, either via CALL FAR or
-        // INT, in_irq_context() will return true.
+        // mode code should return via IRET or RETF.  Parameter 'irq_context'
+        // specifies what dpmi::in_irq_context() returns when this callback
+        // is invoked, enable this if your callback will be used from a
+        // hardware interrupt handler.
         // The callback function takes a pointer to a registers structure
         // which may be modified, and a far pointer to access the real-mode
         // stack.  The return CS/IP (and flags) will have already been popped
@@ -168,10 +167,11 @@ namespace jw
             using function_type = void(realmode_registers*, far_ptr32);
 
             template<typename F>
-            realmode_callback(F&& function, bool iret_frame = false, std::size_t stack_size = 16_KB, std::size_t pool_size = 1_KB)
+            realmode_callback(F&& function, bool iret_frame = false, bool irq_context = false, std::size_t stack_size = 16_KB, std::size_t pool_size = 1_KB)
                 : raw_realmode_callback({ get_cs(), reinterpret_cast<std::uintptr_t>(iret_frame ? entry_point<true> : entry_point<false>) })
                 , func { std::forward<F>(function) }
                 , memres { pool_size }
+                , is_irq { irq_context }
             {
                 stack.resize(stack_size);
                 stack_ptr = stack.data() + stack.size() - 4;
@@ -190,6 +190,7 @@ namespace jw
             trivial_function<function_type> func;
             std::vector<std::byte, default_constructing_allocator_adaptor<locking_allocator<std::byte>>> stack;
             locked_pool_resource<false> memres;
+            const bool is_irq;
 
             selector gs { get_gs() };
             std::byte* stack_ptr;

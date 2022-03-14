@@ -110,15 +110,14 @@ namespace jw
 
         void realmode_callback::call(realmode_callback* self, std::uintptr_t stack_offset, selector stack_selector) noexcept
         {
-            bool is_irq = not self->reg.flags.interrupt;
-            detail::interrupt_id id { 0, is_irq ? detail::interrupt_type::realmode_irq : detail::interrupt_type::realmode };
+            detail::interrupt_id id { 0, self->is_irq ? detail::interrupt_type::realmode_irq : detail::interrupt_type::realmode };
 
             allocator alloc { &self->memres };
             auto* const reg = self->reg_ptr;
             allocator_traits::construct(alloc, reg, self->reg);
             self->reg_ptr = allocator_traits::allocate(alloc, 1);
 
-            if (not is_irq) asm ("sti");
+            if (not self->is_irq) asm ("sti");
 
             far_ptr32 stack { stack_selector, stack_offset };
             try
