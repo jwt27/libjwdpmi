@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
@@ -239,14 +240,6 @@ namespace jw
                 "popa;"
                 :: "m" (ptr)
                 : "memory");
-        }
-
-        // Yield execution to the host (used when running in a multi-tasking OS)
-        // Don't confuse this with jw::thread::yield() !
-        inline void yield()
-        {
-            if (in_irq_context()) return;
-            asm volatile("int 0x2f;"::"a"(0x1680));
         }
 
         // EFLAGS register

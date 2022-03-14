@@ -15,12 +15,15 @@
 #include <jw/thread.h>
 #include <jw/debug/debug.h>
 #include <jw/debug/detail/signals.h>
+#include <jw/dpmi/realmode.h>
 #ifdef JWDPMI_WITH_WATT32
 # include <tcp.h>
 #endif
 
 namespace jw::detail
 {
+    static constinit std::optional<dpmi::realmode_interrupt_handler> int2f_handler { std::nullopt };
+
     scheduler::scheduler()
     {
         allocator<thread> alloc { memres };
@@ -33,6 +36,15 @@ namespace jw::detail
         threads.emplace(p->id, main_thread);
         iterator = threads.begin();
 
+        int2f_handler.emplace(0x2f, [](dpmi::realmode_registers* reg, dpmi::far_ptr32)
+        {
+            if (reg->ax != 0x1680) return false;
+            if (dpmi::in_irq_context()) return false;
+            yield();
+            errno = 0;
+            reg->al = 0;
+            return true;
+        });
 #       ifdef JWDPMI_WITH_WATT32
         sock_yield(nullptr, yield);
 #       endif
@@ -54,6 +66,7 @@ namespace jw::detail
 
     void scheduler::kill_all()
     {
+        int2f_handler.reset();
         auto* const i = instance;
         atexit(i->main_thread.get());
         if (i->threads.size() == 1) [[likely]] return;
