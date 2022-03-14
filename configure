@@ -112,6 +112,7 @@ cat <<- EOF >> ldflags
 -Wl,--wrap=realloc
 -Wl,--wrap=memalign
 -Wl,--wrap=free
+-Wl,--wrap=__dpmi_yield
 -L$(pwd)
 -ljwdpmi
 EOF

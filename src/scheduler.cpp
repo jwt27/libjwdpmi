@@ -20,6 +20,11 @@
 # include <tcp.h>
 #endif
 
+extern "C" void __wrap___dpmi_yield()
+{
+    jw::this_thread::yield();
+}
+
 namespace jw::detail
 {
     static constinit std::optional<dpmi::realmode_interrupt_handler> int2f_handler { std::nullopt };
