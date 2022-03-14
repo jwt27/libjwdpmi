@@ -179,6 +179,8 @@ namespace jw
                 reg_ptr = allocator_traits::allocate(alloc, 1);
             }
 
+            bool is_irq;
+
         private:
             using allocator = monomorphic_allocator<locked_pool_resource<false>, realmode_registers>;
             using allocator_traits = std::allocator_traits<allocator>;
@@ -190,7 +192,6 @@ namespace jw
             trivial_function<function_type> func;
             std::vector<std::byte, default_constructing_allocator_adaptor<locking_allocator<std::byte>>> stack;
             locked_pool_resource<false> memres;
-            const bool is_irq;
 
             selector gs { get_gs() };
             std::byte* stack_ptr;
@@ -234,8 +235,9 @@ namespace jw
             using function_type = bool(realmode_registers*, far_ptr32);
 
             template<typename F>
-            realmode_interrupt_handler(std::uint8_t i, F&& f)
-                : int_num { i }, func { std::forward<F>(f) } { init(); }
+            realmode_interrupt_handler(std::uint8_t i, F&& f, bool irq_context = false)
+                : int_num { i }, func { std::forward<F>(f) }, is_irq { irq_context }
+            { init(); }
 
             ~realmode_interrupt_handler();
 
@@ -250,6 +252,7 @@ namespace jw
 
             const std::uint8_t int_num;
             const function<function_type> func;
+            const bool is_irq;
             realmode_interrupt_handler* next { nullptr };
             realmode_interrupt_handler* prev;
         };

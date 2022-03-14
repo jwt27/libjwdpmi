@@ -14,8 +14,6 @@ namespace jw::dpmi::detail
         rm_int_callback(std::uint8_t i) : raw_handler { i, callback.pointer() } { }
 
         realmode_interrupt_handler* last { nullptr };
-
-    private:
         realmode_callback callback { [this](realmode_registers* reg, far_ptr32 stack) { handle(reg, stack); }, true };
         raw_realmode_interrupt_handler raw_handler;
 
@@ -249,17 +247,29 @@ namespace jw
             prev = pos.last;
             if (prev != nullptr) prev->next = this;
             pos.last = this;
+            pos.callback.is_irq |= is_irq;
         }
 
         realmode_interrupt_handler::~realmode_interrupt_handler()
         {
+            auto it = rm_int_callbacks->find(int_num);
+            auto& pos = it->second;
             if (next == nullptr)
             {
-                auto i = rm_int_callbacks->find(int_num);
-                if (prev == nullptr) rm_int_callbacks->erase(i);
-                else i->second.last = prev;
+                if (prev == nullptr)
+                {
+                    rm_int_callbacks->erase(it);
+                    return;
+                }
+                else pos.last = prev;
             }
             else next->prev = prev;
+
+            pos.callback.is_irq = false;
+            for (auto* i = pos.last; i != nullptr; i = i->prev)
+            {
+                pos.callback.is_irq |= i->is_irq;
+            }
         }
     }
 }
