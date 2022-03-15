@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
@@ -96,4 +97,27 @@ namespace jw
 
     using timed_mutex = detail::timed_mutex_adapter<mutex>;
     using recursive_timed_mutex = detail::timed_mutex_adapter<recursive_mutex>;
+
+    struct once_flag
+    {
+        constexpr once_flag() noexcept = default;
+
+    private:
+        once_flag(once_flag&&) = delete;
+        once_flag(const once_flag&) = delete;
+        once_flag& operator=(once_flag&&) = delete;
+        once_flag& operator=(const once_flag&) = delete;
+
+        template <typename F, typename... A>
+        friend void call_once(once_flag&, F&&, A&&...);
+
+        std::atomic_flag called { false };
+    };
+
+    template <typename F, typename... A>
+    void call_once(once_flag& flag, F&& f, A&&... args)
+    {
+        if (flag.called.test_and_set()) return;
+        std::invoke(std::forward<F>(f), std::forward<A>(args)...);
+    }
 }
