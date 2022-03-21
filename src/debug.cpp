@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
@@ -7,14 +8,14 @@
 
 #include <array>
 #include <cstring>
-#include <sstream>
-#include <iomanip>
 #include <memory>
 #include <csignal>
 #include <cstdlib>
 #include <string_view>
 #include <set>
 #include <unwind.h>
+#include <fmt/format.h>
+#include <fmt/ostream.h>
 #include <jw/main.h>
 #include <jw/dpmi/fpu.h>
 #include <jw/dpmi/dpmi.h>
@@ -25,9 +26,10 @@
 #include <jw/io/rs232.h>
 #include <jw/alloc.h>
 #include <jw/dpmi/ring0.h>
+#include <jw/allocator_adaptor.h>
 #include "jwdpmi_config.h"
 
-using namespace std::string_literals;
+using namespace std::literals;
 using namespace jw::dpmi;
 using namespace jw::dpmi::detail;
 
@@ -49,7 +51,6 @@ namespace jw
             };
 
             const bool debugmsg = config::enable_gdb_debug_messages;
-            const bool temp_debugmsg = config::enable_gdb_debug_messages and true;
 
             volatile bool debugger_reentry { false };
             bool debug_mode { false };
@@ -57,9 +58,15 @@ namespace jw
             bool thread_events_enabled { false };
             bool new_frame_type { true };
 
-            using pmr_stringstream = std::basic_stringstream<char, std::char_traits<char>, std::pmr::polymorphic_allocator<char>>;
+            using resource_type = locked_pool_resource<false>;
 
-            locked_pool_resource<false> memres { 1_MB };
+            template<typename T = std::byte>
+            using allocator = default_constructing_allocator_adaptor<monomorphic_allocator<resource_type, T>>;
+
+            resource_type memres { 1_MB };
+
+            using string = std::basic_string<char, std::char_traits<char>, allocator<char>>;
+
             std::pmr::map<std::pmr::string, std::pmr::string> supported { &memres };
             std::pmr::map<std::uintptr_t, watchpoint> watchpoints { &memres };
             std::pmr::map<std::uintptr_t, byte> breakpoints { &memres };
@@ -79,9 +86,9 @@ namespace jw
                 using std::string_view::basic_string_view;
             };
 
-            std::pmr::deque<std::pmr::string> sent_packets { &memres };
-            std::pmr::string raw_packet_string { &memres };
-            std::pmr::deque<packet_string> packet { &memres };
+            std::deque<string, allocator<string>> sent_packets { &memres };
+            string raw_packet_string { &memres };
+            std::deque<packet_string, allocator<packet_string>> packet { &memres };
             bool replied { false };
 
             using thread_id = jw::detail::scheduler::thread_id;
@@ -411,16 +418,16 @@ namespace jw
             }
 
             // Decode big-endian hex string
-            inline auto decode(const std::string_view& str)
+            inline auto decode(const std::string_view& in)
             {
                 std::uint32_t result { };
-                if (str[0] == '-') return all_threads_id;
-                for (auto&& c : str)
+                if (in[0] == '-') return all_threads_id;
+                for (const auto c : in)
                 {
                     result <<= 4;
                     if (c >= 'a' and c <= 'f') result |= 10 + c - 'a';
                     else if (c >= '0' and c <= '9') result |= c - '0';
-                    else throw std::invalid_argument { "decode() failed: "s + str.data() };
+                    else throw std::invalid_argument { "decode() failed: "s + in.data() };
                 }
                 return result;
             }
@@ -433,34 +440,38 @@ namespace jw
                 auto ptr = reinterpret_cast<byte*>(out);
                 for (std::size_t i = 0; i < len; ++i)
                 {
-                    auto l = i * 2 + 2 >= in.size() ? in.npos : 2;
-                    ptr[i] = decode(in.substr(i * 2, l));
+                    ptr[i] = decode(in.substr(i * 2, 2));
                 }
                 return true;
             }
 
             // Encode little-endian hex string
             template <typename T>
-            inline void encode(std::ostream& out, T* in, std::size_t len = sizeof(T))
+            inline void encode(string& out, T* in, std::size_t len = sizeof(T))
             {
-                auto ptr = reinterpret_cast<const volatile byte*>(in);
+                constexpr char hex[] = "0123456789abcdef";
+                auto* const ptr = reinterpret_cast<const volatile byte*>(in);
+                const auto size = out.size();
+                out.resize(size + len * 2);
+                auto it = out.data() + size;
+
                 for (std::size_t i = 0; i < len; ++i)
-                    out << std::setw(2) << static_cast<std::uint32_t>(ptr[i]);
+                {
+                    const byte b = ptr[i];
+                    const byte hi = b >> 4;
+                    const byte lo = b & 0xf;
+                    *it++ = hex[hi];
+                    *it++ = hex[lo];
+                }
             }
 
-            // Encode big-endian hex string
-            template <typename T>
-            inline void reverse_encode(std::ostream& out, T* in, std::size_t len = sizeof(T))
+            inline void encode_null(string& out, std::size_t len)
             {
-                auto ptr = reinterpret_cast<const volatile byte*>(in);
-                for (std::size_t i = 0; i < len; ++i)
-                    out << std::setw(2) << static_cast<std::uint32_t>(ptr[len - i - 1]);
-            }
-
-            inline void encode_null(std::ostream& out, std::size_t len)
-            {
-                for (std::size_t i = 0; i < len; ++i) 
-                    out << "xx";
+                const auto size = out.size();
+                out.resize(size + len * 2);
+                auto it = out.data() + size;
+                for (std::size_t i = 0; i < len * 2; ++i)
+                    *it++ = 'x';
             }
 
             inline std::uint32_t checksum(const std::string_view& s)
@@ -475,24 +486,32 @@ namespace jw
                 auto* p = gdb_streambuf->get_gptr();
                 std::size_t size = gdb_streambuf->get_egptr() - p;
                 std::string_view str { p, size };
-                bool result = str.find(0x03) != std::string_view::npos
-                    or str.find('#', str.find('$')) != std::string_view::npos;
-                return result;
+                for (auto i = str.begin(); i != str.end(); ++i)
+                {
+                    if (*i == 3) return true;
+                    if (*i != '$') continue;
+                    for (; i != str.end(); ++i)
+                    {
+                        if (*i == 3) return true;
+                        if (*i == '#') return true;
+                    }
+                    return false;
+                }
+                return false;
             }
 
             // not used
-            void send_notification(const std::pmr::string& output)
+            void send_notification(const std::string_view& output)
             {
-                if (config::enable_gdb_protocol_dump) std::clog << "note --> \"" << output << "\"\n";
-                const auto sum = checksum(output);
-                *gdb << '%' << output << '#' << std::setfill('0') << std::hex << std::setw(2) << sum << std::flush;
+                if (config::enable_gdb_protocol_dump) fmt::print(stderr, FMT_STRING("note --> \"{}\"\n"), output);
+                fmt::print(*gdb, FMT_STRING("%{}#{:0>2x}"), output, checksum(output));
             }
             
             void send_packet(const std::string_view& output)
             {
-                if (config::enable_gdb_protocol_dump) std::clog << "send --> \"" << output << "\"\n";
+                if (config::enable_gdb_protocol_dump) fmt::print(stderr, FMT_STRING("send --> \"{}\"\n"), output);
 
-                static std::pmr::string rle_output { &memres };
+                static string rle_output { &memres };
                 rle_output.clear();
                 rle_output.reserve(output.size());
                 auto& s = rle_output;
@@ -504,7 +523,7 @@ namespace jw
                     auto count = j - i;
                     if (count > 3)
                     {
-                        count = std::min(count, 98ul);  // above 98, rle byte would be non-printable
+                        count = std::min(count, std::size_t { 98 }); // above 98, rle byte would be non - printable
                         if (count == 7 or count == 8) count = 6;    // rle byte can't be '#' or '$'
                         s += output[i];
                         s += '*';
@@ -517,7 +536,7 @@ namespace jw
                 }
 
                 const auto sum = checksum(rle_output);
-                *gdb << '$' << rle_output << '#' << std::setfill('0') << std::hex << std::setw(2) << sum << std::flush;
+                fmt::print(*gdb, FMT_STRING("${}#{:0>2x}"), rle_output, sum);
                 sent_packets.emplace_back(output);
                 replied = true;
             }
@@ -528,7 +547,7 @@ namespace jw
                 if (gdb->rdbuf()->in_avail()) switch (gdb->peek())
                 {
                 case '-':
-                    std::cerr << "NACK --> " << sent_packets.back() << '\n';
+                    fmt::print(stderr, FMT_STRING("NACK --> {}\n"), sent_packets.back());
                     if (sent_packets.size() > 0) send_packet(sent_packets.back());
                     [[fallthrough]];
                 case '+':
@@ -539,7 +558,8 @@ namespace jw
 
             void recv_packet()
             {
-                static std::pmr::string sum { &memres };
+                char sum_data[2];
+                std::string_view sum { sum_data, 2 };
 
             retry:
                 recv_ack();
@@ -561,19 +581,19 @@ namespace jw
                 replied = false;
                 raw_packet_string.clear();
                 std::getline(*gdb, raw_packet_string, '#');
-                sum.clear();
-                sum += gdb->get();
-                sum += gdb->get();
+                sum_data[0] = gdb->get();
+                sum_data[1] = gdb->get();
                 if (decode(sum) == checksum(raw_packet_string)) *gdb << '+';
                 else 
                 {
-                    std::cerr << "BAD CHECKSUM: " << raw_packet_string << ": " << sum << ", calculated: " << checksum(raw_packet_string) << '\n';
-                    *gdb << '-';
+                    fmt::print(stderr, FMT_STRING("BAD CHECKSUM: {}: {}, calculated: {:0>2x}\n"),
+                               raw_packet_string, sum, checksum(raw_packet_string));
+                    gdb->put('-');
                     goto retry;
                 }
 
             parse:
-                if (config::enable_gdb_protocol_dump) std::clog << "recv <-- \"" << raw_packet_string << "\"\n";
+                if (config::enable_gdb_protocol_dump) fmt::print(stderr, FMT_STRING("recv <-- \"{}\"\n"), raw_packet_string);
                 std::size_t pos { 1 };
                 packet.clear();
                 std::string_view input { raw_packet_string };
@@ -587,7 +607,7 @@ namespace jw
                 }
             }
 
-            void reg(std::ostream& out, regnum r, std::uint32_t id)
+            void reg(string& out, regnum r, std::uint32_t id)
             {
                 if (threads.count(id) == 0)
                 {
@@ -674,7 +694,7 @@ namespace jw
                 if (threads.count(id) == 0) return false;
                 auto&& t = threads[id];
                 if (&t != current_thread) return false; // TODO
-                if (debugmsg) std::clog << "set register " << std::hex << r << '=' << value << '\n';
+                if (debugmsg) fmt::print(stderr, FMT_STRING("set register {:x}={}\n"), r, value);
                 switch (r)
                 {
                 case eax:    return reverse_decode(value, &t.reg.eax, regsize[r]);
@@ -735,17 +755,14 @@ namespace jw
                     for (auto i = t.signals.begin(); i != t.signals.end();)
                     {
                         auto signal = *i;
-                        if (temp_debugmsg) std::clog << "stop reply for thread 0x" << std::hex << t_ptr->id << " signal 0x" << signal << ": ";
                         if (not is_stop_signal(signal)
                             or (is_trap_signal(signal) and t.trap_mask > 0))
                         {
-                            if (temp_debugmsg) std::clog << "ignored.\n";
                             ++i;
                             continue;
                         }
                         else i = t.signals.erase(i);
                         if (signal == SIGINT) for (auto&&t : threads) t.second.signals.erase(SIGINT);
-                        if (temp_debugmsg) std::clog << "handled.\n";
 
                         if (not thread_events_enabled and (signal == thread_started or signal == thread_finished))
                             continue;
@@ -753,33 +770,31 @@ namespace jw
                         t.action = thread_info::none;
                         t.last_stop_signal = signal;
 
-                        static pmr_stringstream s { std::pmr::string { &memres } };
-                        s.str({ });
-                        s.clear();
-                        s.exceptions(std::ios::failbit | std::ios::badbit);
-                        s << std::hex << std::setfill('0');
-                        if (async) s << "Stop:";
+                        static string str { &memres };
+                        str.clear();
+
+                        auto it = [] { return std::back_inserter(str); };
+
+                        if (async) str += "Stop:"sv;
                         if (signal == thread_finished)
                         {
-                            s << 'w';
-                            if (t_ptr->get_state() == jw::detail::thread::finished) s << "00";
-                            else s << "ff";
-                            s << ';' << t_ptr->id;
-                            send_packet(s.str());
+                            fmt::format_to(it(), FMT_STRING("w{};{:x}"),
+                                t_ptr->get_state() == jw::detail::thread::finished ? "00"sv : "ff"sv, t_ptr->id);
+                            send_packet(str);
                         }
                         else
                         {
-                            s << "T" << std::setw(2) << posix_signal(signal);
+                            fmt::format_to(std::back_inserter(str), FMT_STRING("T{:0>2x}"), posix_signal(signal));
                             if (t_ptr->get_state() != jw::detail::thread::starting)
                             {
-                                s << eip << ':'; reg(s, eip, t_ptr->id); s << ';';
-                                s << esp << ':'; reg(s, esp, t_ptr->id); s << ';';
-                                s << ebp << ':'; reg(s, ebp, t_ptr->id); s << ';';
+                                fmt::format_to(it(), FMT_STRING("{:x}:"), eip); reg(str, eip, t_ptr->id); str += ';';
+                                fmt::format_to(it(), FMT_STRING("{:x}:"), esp); reg(str, esp, t_ptr->id); str += ';';
+                                fmt::format_to(it(), FMT_STRING("{:x}:"), ebp); reg(str, ebp, t_ptr->id); str += ';';
                             }
-                            s << "thread:" << t_ptr->id << ';';
+                            fmt::format_to(it(), FMT_STRING("thread:{:x};"), t_ptr->id);
                             if (signal == thread_started)
                             {
-                                s << "create:;";
+                                str += "create:;"sv;
                             }
                             else if (is_trap_signal(signal))
                             {
@@ -789,16 +804,16 @@ namespace jw
                                     {
                                         if (w.second.get_state())
                                         {
-                                            if (w.second.get_type() == watchpoint::execute) s << "hwbreak:;";
-                                            else s << "watch:" << w.first << ";";
+                                            if (w.second.get_type() == watchpoint::execute) str += "hwbreak:;"sv;
+                                            else fmt::format_to(it(), FMT_STRING("watch:{:x};"), w.first);
                                             break;
                                         }
                                     }
                                 }
-                                else s << "swbreak:;";
+                                else str += "swbreak:;"sv;
                             }
-                            if (async) send_notification(s.str());
-                            else send_packet(s.str());
+                            if (async) send_notification(str);
+                            else send_packet(str);
                             query_thread_id = t_ptr->id;
                         }
 
@@ -833,11 +848,11 @@ namespace jw
                 recv_packet();
                 current_thread->signals.erase(packet_received);
 
-                static pmr_stringstream s { std::pmr::string { &memres } };
-                s.str({ });
-                s.clear();
-                s.exceptions(std::ios::failbit | std::ios::badbit);
-                s << std::hex << std::setfill('0');
+                static string str { &memres };
+                str.clear();
+                auto it = std::back_inserter(str);
+
+                //s << std::hex << std::setfill('0');
                 auto& p = packet.front().delim;
                 if (p == '?')   // stop reason
                 {
@@ -846,7 +861,7 @@ namespace jw
                 else if (p == 'q')  // query
                 {
                     auto& q = packet[0];
-                    if (q == "Supported")
+                    if (q == "Supported"sv)
                     {
                         sent_packets.clear();
                         packet.pop_front();
@@ -863,59 +878,55 @@ namespace jw
                                 supported[str.substr(0, equals_sign).data()] = str.substr(equals_sign + 1);
                             }
                         }
-                        send_packet("PacketSize=399;swbreak+;hwbreak+;QThreadEvents+;no-resumed+");
+                        send_packet("PacketSize=399;swbreak+;hwbreak+;QThreadEvents+;no-resumed+"sv);
                     }
-                    else if (q == "Attached") send_packet("0");
-                    else if (q == "C")
+                    else if (q == "Attached"sv) send_packet("0");
+                    else if (q == "C"sv)
                     {
-                        s << "QC" << current_thread_id;
-                        send_packet(s.str());
+                        it = fmt::format_to(it, FMT_STRING("QC{:x}"), current_thread_id);
+                        send_packet(str);
                     }
-                    else if (q == "fThreadInfo")
+                    else if (q == "fThreadInfo"sv)
                     {
-                        s << "m";
+                        *it++ = 'm';
                         for (auto&& t : threads)
                         {
-                            s << t.first << ',';
+                            it = fmt::format_to(it, FMT_STRING("{:x},"), t.first);
                         }
-                        send_packet(s.str());
+                        send_packet(str);
                     }
-                    else if (q == "sThreadInfo") send_packet("l");
-                    else if (q == "ThreadExtraInfo")
+                    else if (q == "sThreadInfo"sv) send_packet("l");
+                    else if (q == "ThreadExtraInfo"sv)
                     {
                         using namespace jw::detail;
-                        static pmr_stringstream msg { std::pmr::string { &memres } };
-                        msg.str({ });
+                        static string msg { &memres };
                         msg.clear();
-                        msg.exceptions(std::ios::failbit | std::ios::badbit);
                         auto id = decode(packet[1]);
                         if (threads.count(id))
                         {
                             auto* t = threads[id].thread;
-                            msg << t->get_name();
-                            if (id == current_thread_id) msg << " (*)";
-                            msg << ": ";
+                            fmt::format_to(std::back_inserter(msg), FMT_STRING("{}{}: "),
+                                           t->get_name(), id == current_thread_id ? " (*)"sv : ""sv);
                             switch (t->get_state())
                             {
-                            case jw::detail::thread::starting:    msg << "Starting";    break;
-                            case jw::detail::thread::running:     msg << "Running";     break;
-                            case jw::detail::thread::finishing:   msg << "Finishing";   break;
-                            case jw::detail::thread::finished:    msg << "Finished";    break;
+                            case jw::detail::thread::starting:    msg += "Starting"sv;    break;
+                            case jw::detail::thread::running:     msg += "Running"sv;     break;
+                            case jw::detail::thread::finishing:   msg += "Finishing"sv;   break;
+                            case jw::detail::thread::finished:    msg += "Finished"sv;    break;
                             }
-                            if (t->is_suspended()) msg << " (suspended)";
-                            if (t->is_aborted()) msg << " (aborted)";
+                            if (t->is_suspended()) msg += " (suspended)"sv;
+                            if (t->is_aborted()) msg += " (aborted)"sv;
                         }
-                        else msg << "invalid thread";
-                        auto str = msg.str();
-                        encode(s, str.c_str(), str.size());
-                        send_packet(s.str());
+                        else msg = "invalid thread"sv;
+                        encode(str, msg.c_str(), msg.size());
+                        send_packet(str);
                     }
                     else send_packet("");
                 }
                 else if (p == 'Q')
                 {
                     auto& q = packet[0];
-                    if (q == "ThreadEvents")
+                    if (q == "ThreadEvents"sv)
                     {
                         thread_events_enabled = packet[1][0] - '0';
                         send_packet("OK");
@@ -925,15 +936,15 @@ namespace jw
                 else if (p == 'v')
                 {
                     auto& v = packet[0];
-                    if (v == "Stopped")
+                    if (v == "Stopped"sv)
                     {
                         stop_reply(true);
                     }
-                    else if (v == "Cont?")
+                    else if (v == "Cont?"sv)
                     {
-                        send_packet("vCont;s;S;c;C;t;r");
+                        send_packet("vCont;s;S;c;C;t;r"sv);
                     }
-                    else if (v == "Cont")
+                    else if (v == "Cont"sv)
                     {
                         for (std::size_t i = 1; i < packet.size(); ++i)
                         {
@@ -1010,8 +1021,8 @@ namespace jw
                     if (threads.count(query_thread_id))
                     {
                         auto regn = static_cast<regnum>(decode(packet[0]));
-                        reg(s, regn, query_thread_id);
-                        send_packet(s.str());
+                        reg(str, regn, query_thread_id);
+                        send_packet(str);
                     }
                     else send_packet("E00");
                 }
@@ -1025,8 +1036,8 @@ namespace jw
                     if (threads.count(query_thread_id))
                     {
                         for (auto i = eax; i <= gs; ++i)
-                            reg(s, i, query_thread_id);
-                        send_packet(s.str());
+                            reg(str, i, query_thread_id);
+                        send_packet(str);
                     }
                     else send_packet("E00");
                 }
@@ -1051,8 +1062,8 @@ namespace jw
                 {
                     auto* addr = reinterpret_cast<byte*>(decode(packet[0]));
                     std::size_t len = decode(packet[1]);
-                    encode(s, addr, len);
-                    send_packet(s.str());
+                    encode(str, addr, len);
+                    send_packet(str);
                 }
                 else if (p == 'M')  // write memory
                 {
@@ -1069,7 +1080,8 @@ namespace jw
                         if (packet.size() > 0)
                         {
                             std::uintptr_t jmp = decode(packet[0]);
-                            if (debugmsg and t.frame.fault_address.offset != jmp) std::clog << "JUMP to 0x" << std::hex << jmp << '\n';
+                            if (debugmsg and t.frame.fault_address.offset != jmp)
+                                fmt::print(stderr, FMT_STRING("JUMP to {:#x}\n"), jmp);
                             t.frame.fault_address.offset = jmp;
                         }
                         t.set_action(packet[0].delim);
@@ -1087,7 +1099,8 @@ namespace jw
                         if (packet.size() > 1)
                         {
                             std::uintptr_t jmp = decode(packet[1]);
-                            if (debugmsg and t.frame.fault_address.offset != jmp) std::clog << "JUMP to 0x" << std::hex << jmp << '\n';
+                            if (debugmsg and t.frame.fault_address.offset != jmp)
+                                fmt::print(stderr, FMT_STRING("JUMP to {:#x}\n"), jmp);
                             t.frame.fault_address.offset = jmp;
                         }
                         t.set_action(packet[0].delim);
@@ -1156,11 +1169,11 @@ namespace jw
                 }
                 else if (p == 'k')  // kill
                 {
-                    if (debugmsg) std::clog << "KILL signal received.";
-                    for (auto&&t : threads) t.second.set_action('c');
+                    if (debugmsg) fmt::print(stdout, FMT_STRING("KILL signal received."));
+                    for (auto&& t : threads) t.second.set_action('c');
                     simulate_call(&current_thread->frame, dpmi::detail::kill);
-                    s << "X" << std::setw(2) << posix_signal(current_thread->last_stop_signal);
-                    send_packet(s.str());
+                    it = fmt::format_to(it, FMT_STRING("X{:0>2x}"), posix_signal(current_thread->last_stop_signal));
+                    send_packet(str);
                     uninstall_gdb_interface();
                 }
                 else send_packet("");   // unknown packet
@@ -1170,10 +1183,11 @@ namespace jw
             {
                 auto* const r = i.registers;
                 auto* const f = i.frame;
-                if (debugmsg) std::clog << "entering exception 0x" << std::hex << exc << " from 0x" << f->fault_address.offset << '\n';
+                if (debugmsg) fmt::print(stderr, FMT_STRING("entering exception {:0>#2x} from {:#x}\n"),
+                                         exc, std::uintptr_t { f->fault_address.offset });
                 if (not debug_mode)
                 {
-                    if (debugmsg) std::cerr << "already killed!\n";
+                    if (debugmsg) fmt::print(stderr, "already killed!\n");
                     return false;
                 }
 
@@ -1181,9 +1195,11 @@ namespace jw
 
                 auto catch_exception = []
                 {
-                    std::cerr << "Exception occured while communicating with GDB.\n";
-                    std::cerr << "caused by this packet: " << raw_packet_string << '\n';
-                    std::cerr << std::boolalpha << "good=" << gdb->good() << " bad=" << gdb->bad() << " fail=" << gdb->fail() << " eof=" << gdb->eof() << '\n';
+                    fmt::print(stderr, FMT_STRING("Exception occured while communicating with GDB.\n"
+                                                  "caused by this packet: {}\n"
+                                                  "good={} bad={} fail={} eof={}\n"),
+                               raw_packet_string,
+                               gdb->good(), gdb->bad(), gdb->fail(), gdb->eof());
                     do { } while (true);
                 };
 
@@ -1198,7 +1214,8 @@ namespace jw
                         else f->fault_address.offset += 1;  // hardcoded breakpoint, safe to skip
                     }
 
-                    if (debugmsg) std::clog << "leaving exception 0x" << std::hex << exc << ", resuming at 0x" << f->fault_address.offset << '\n';
+                    if (debugmsg) fmt::print(stderr, FMT_STRING("leaving exception {:0>#2x}, resuming at {:#x}\n"),
+                                             exc, std::uintptr_t { f->fault_address.offset });
                 };
 
                 auto clear_trap_signals = []
@@ -1213,8 +1230,10 @@ namespace jw
                 if (f->fault_address.segment != ring3_cs and f->fault_address.segment != ring0_cs) [[unlikely]]
                 {
                     if (exc == exception_num::trap) return true; // keep stepping until we get back to our own code
-                    std::cerr << "Can't debug this! CS is neither 0x" << std::hex << ring3_cs << " nor 0x" << ring0_cs << ".\n";
-                    std::cerr << cpu_exception { exc, r, f, new_frame_type }.what() << '\n';
+                    fmt::print(stderr, FMT_STRING("Can't debug this!  CS is neither {:0>#4x} nor {:0>#4x}.\n"
+                                                  "{}\n"),
+                               ring3_cs, ring0_cs,
+                               cpu_exception { exc, r, f, new_frame_type }.what());
                     return false;
                 }
 
@@ -1222,14 +1241,14 @@ namespace jw
                 {
                     if (exc == 0x01 or exc == 0x03)
                     {   // breakpoint in debugger code, ignore
-                        if (debugmsg) std::clog << "reentry caused by breakpoint, ignoring.\n";
+                        if (debugmsg) fmt::print(stderr, "reentry caused by breakpoint, ignoring.\n");
                         leave();
                         f->flags.trap = false;
                         return true;
                     }
                     if (debugmsg)
                     {
-                        std::clog << "debugger re-entry!\n";
+                        fmt::print(stderr, "debugger re-entry!\n");
                         static_cast<dpmi10_exception_frame*>(f)->print();
                         r->print();
                     }
@@ -1244,7 +1263,7 @@ namespace jw
 
                     if (exc == exception_num::breakpoint and current_signal != -1)
                     {
-                        if (debugmsg) std::clog << "break with signal 0x" << std::hex << current_signal << '\n';
+                        if (debugmsg) fmt::print(stderr, FMT_STRING("break with signal {:0>#2x}\n"), int { current_signal });
                         current_thread->signals.insert(current_signal);
                         current_signal = -1;
                     }
@@ -1266,7 +1285,8 @@ namespace jw
                     {
                         if (all_benign_signals(current_thread))
                         {
-                            if (debugmsg) std::clog << "trap masked at 0x" << std::hex << f->fault_address.offset << "\n";
+                            if (debugmsg) fmt::print(stderr, FMT_STRING("trap masked at {:#x}\n"),
+                                                     std::uintptr_t { f->fault_address.offset });
                         }
                         else
                         {
@@ -1305,19 +1325,14 @@ namespace jw
                         current_thread->frame.fault_address.offset >= current_thread->step_range_begin and
                         current_thread->frame.fault_address.offset <= current_thread->step_range_end)
                     {
-                        if (debugmsg) std::clog << "range step until 0x" << std::hex << current_thread->step_range_end;
-                        if (debugmsg) std::clog << ", now at 0x" << f->fault_address.offset << '\n';
+                        if (debugmsg) fmt::print(stderr,FMT_STRING("range step until {:#x}, now at {:#x}\n"),
+                                                 current_thread->step_range_end, std::uintptr_t { f->fault_address.offset });
                         clear_trap_signals();
                     }
 
-                    if (debugmsg)
-                    {
-                        std::clog << "signals:";
-                        for (auto&& s : current_thread->signals) std::clog << " 0x" << std::hex << s;
-                        std::clog << '\n';
-                    }
+                    if (debugmsg) fmt::print(stderr, FMT_STRING("signals: {}\n"),
+                                             fmt::join(current_thread->signals, ", "));
 
-                    if (temp_debugmsg) std::clog << "sending stop reply.\n";
                     stop_reply();
 
                     if (config::enable_gdb_interrupts and current_thread->frame.flags.interrupts_enabled) asm("sti");
@@ -1329,7 +1344,6 @@ namespace jw
                                 t.second.action == thread_info::none) return true;
                         return false;
                     };
-                    if (temp_debugmsg) std::clog << "entering main loop.\n";
                     do
                     {
                         try
@@ -1343,7 +1357,6 @@ namespace jw
                         }
                         recv_ack();
                     } while (cant_continue());
-                    if (temp_debugmsg) std::clog << "leaving main loop.\n";
 
                     while (sent_packets.size() > 0 and debug_mode) recv_ack();
                 }
@@ -1426,11 +1439,9 @@ namespace jw
 
             void notify_gdb_exit(byte result)
             {
-                pmr_stringstream s { std::pmr::string { &memres } };
-                s.exceptions(std::ios::failbit | std::ios::badbit);
-                s << std::hex << std::setfill('0');
-                s << "W" << std::setw(2) << static_cast<std::uint32_t>(result);
-                send_packet(s.str());
+                string str { &memres };
+                fmt::format_to(std::back_inserter(str), FMT_STRING("W{:0>2x}"), result);
+                send_packet(str);
                 uninstall_gdb_interface();
             }
         }
@@ -1458,15 +1469,15 @@ namespace jw
 
         _Unwind_Reason_Code unwind_print_trace(_Unwind_Context* c, void*)
         {
-            std::clog << " --> " << std::hex << std::noshowbase << std::setfill(' ') << std::setw(11) << _Unwind_GetIP(c);
+            fmt::print(stderr, FMT_STRING(" --> {: >11x}"), _Unwind_GetIP(c));
             return _URC_NO_REASON;
         }
 
         void print_backtrace() noexcept
         {
-            std::clog << "Backtrace  ";
+            fmt::print(stderr, "Backtrace  ");
             _Unwind_Backtrace(unwind_print_trace, nullptr);
-            std::clog << '\n';
+            fmt::print(stderr, "\n");
         }
     }
 }
