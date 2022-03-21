@@ -110,9 +110,16 @@ namespace jw
             dpmi10_exception_frame frame_10;
         };
 
+#       pragma GCC diagnostic push
+#       pragma GCC diagnostic ignored "-Winvalid-offsetof"
+
+        static_assert(offsetof(dpmi09_exception_frame, return_address) == 0);
+        static_assert(offsetof(dpmi10_exception_frame, return_address) == 0);
         static_assert(sizeof(dpmi09_exception_frame) == 0x20);
         static_assert(sizeof(dpmi10_exception_frame) == 0x38);
         static_assert(sizeof(raw_exception_frame) == 0x78);
+
+#       pragma GCC diagnostic pop
 
         using exception_frame = dpmi09_exception_frame; // can be static_cast to dpmi10_exception_frame type
 
