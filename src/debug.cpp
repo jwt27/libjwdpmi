@@ -1420,11 +1420,11 @@ namespace jw
                 serial_irq->set_irq(cfg.irq);
                 serial_irq->enable();
 
-                capabilities c { };
-                if (!c.supported) return;
-                if (std::strncmp(c.vendor_info.name, "HDPMI", 5) != 0) return;  // TODO: figure out if other hosts support these too
                 for (auto&& e : { 0x10, 0x11, 0x12, 0x13, 0x14, 0x1e })
-                    install_exception_handler(e);
+                {
+                    try { install_exception_handler(e); }
+                    catch (const dpmi_error&) { /* ignore */ }
+                }
             }
 
             void uninstall_gdb_interface()

@@ -285,11 +285,9 @@ namespace jw::dpmi::detail
         exception_throwers_setup = true;
 
         make_throwers<0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-                        0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e>();
+                      0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e>();
 
-        capabilities c { };
-        if (not c.supported) return;
-        if (std::strncmp(c.vendor_info.name, "HDPMI", 5) != 0) return;  // TODO: figure out if other hosts support these too
-        make_throwers<0x10, 0x11, 0x12, 0x13, 0x14, 0x1e>();
+        try { make_throwers<0x10, 0x11, 0x12, 0x13, 0x14, 0x1e>(); }
+        catch (const dpmi_error&) { /* ignore */ }
     }
 }
