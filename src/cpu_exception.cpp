@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
@@ -255,7 +256,7 @@ namespace jw
             case exception_num::sse_exception:            return "SSE Floating-point exception"s;
             case exception_num::virtualization_exception: return "Virtualization exception"s;
             case exception_num::security_exception:       return "Security exception"s;
-            default:std::stringstream s; s << "Unknown CPU exception 0x" << std::hex << ev; return s.str();
+            default: return fmt::format("Unknown CPU exception {:0>#2x}", ev);
             }
         }
 

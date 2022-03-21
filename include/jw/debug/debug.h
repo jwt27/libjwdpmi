@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
@@ -7,6 +8,7 @@
 #pragma once
 #include <limits>
 #include <experimental/source_location>
+#include <fmt/format.h>
 #include <jw/dpmi/memory.h>
 
 namespace jw
@@ -55,11 +57,10 @@ namespace jw
         {
             if (not condition)
             {
-                std::stringstream s { };
-                s << "Assertion failed at 0x" << std::hex << __builtin_return_address(0) << " in function " << loc.function_name();
-                s << " (" << loc.file_name() << ':' << std::dec << loc.line() << ')';
                 breakpoint();
-                throw assertion_failed { s.str() };
+                auto str = fmt::format("Assertion failed at {:p} in function {} ({}:{:d})",
+                                       __builtin_return_address(0), loc.function_name(), loc.file_name(), loc.line());
+                throw assertion_failed { str };
             }
         }
 #       else

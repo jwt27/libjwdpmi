@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include <iostream>
 #include <cstdint>
 #include <algorithm>
 #include <deque>
@@ -19,6 +18,7 @@
 #include <string>
 #include <optional>
 #include <variant>
+#include <fmt/core.h>
 #include <jw/enum_struct.h>
 #include <jw/dpmi/dpmi.h>
 #include <jw/dpmi/lock.h>

@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
@@ -6,6 +7,7 @@
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
 #include <optional>
+#include <fmt/core.h>
 #include <jw/io/key.h>
 #include <jw/io/keyboard.h>
 
@@ -41,9 +43,7 @@ namespace jw
             if (auto a = find(ascii_caps_table, value)) return sv(a);
             if (auto a = find(ascii_table, value)) return sv(a);
 
-            std::stringstream s { };
-            s << std::hex << std::setw(4) << std::setfill('0') << value;
-            auto& a = name_table.emplace(value, s.str()).first->second;
+            auto& a = name_table.emplace(value, fmt::format("{:0>4x}", value)).first->second;
             return a;
         }
 
