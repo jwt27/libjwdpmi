@@ -3,10 +3,10 @@ CXXFLAGS += -Wno-address-of-packed-member
 
 CXXFLAGS_NOFPU := -mgeneral-regs-only
 
-SRC := chrono.cpp cpu_exception.cpp cpuid.cpp debug.cpp dpmi_error.cpp fpu.cpp
-SRC += irq.cpp key.cpp keyboard.cpp keyboard_streambuf.cpp main.cpp memory.cpp
-SRC += mpu401.cpp opl.cpp pci.cpp ps2_interface.cpp realmode.cpp
-SRC += ring0.cpp  rs232.cpp scancode.cpp scheduler.cpp vbe.cpp vga.cpp
+SRC := debug.cpp chrono.cpp cpuid.cpp dpmi_error.cpp key.cpp keyboard.cpp
+SRC += keyboard_streambuf.cpp mpu401.cpp opl.cpp pci.cpp ps2_interface.cpp
+SRC += realmode.cpp rs232.cpp scancode.cpp scheduler.cpp vbe.cpp vga.cpp
+SRC += cpu_exception.cpp fpu.cpp irq.cpp memory.cpp ring0.cpp main.cpp
 SRC := $(addprefix src/,$(SRC))
 
 OBJ := $(SRC:%.cpp=%.o)
