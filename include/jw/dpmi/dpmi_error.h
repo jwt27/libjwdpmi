@@ -20,7 +20,7 @@ namespace jw
             invalid_segment = 0x0009,
             unsupported_function = 0x8001,
             invalid_state = 0x8002,
-            system_integritiy = 0x8003,
+            system_integrity = 0x8003,
             deadlock = 0x8004,
             request_cancelled = 0x8005,
             resource_unavailable = 0x8010,
