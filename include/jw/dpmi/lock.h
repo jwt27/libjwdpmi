@@ -32,13 +32,7 @@ namespace jw
                 virtual ~memory_lock()
                 {
                     try { unlock(); }
-                    catch (const std::exception& e)
-                    {
-                        std::cerr << "Caught exception in memory_lock destructor! \n"
-                            << "locked region: " << std::hex << mem.get_address() << " - " << (mem.get_address() + mem.get_size()) << "\n"
-                            << "error: " << e.what() << std::endl;
-                    }
-                    catch (...) { std::cerr << "Caught exception in memory_lock destructor!" << std::endl; }
+                    catch (const dpmi_error&) { /* ignore */ }
                 }
 
             protected:
