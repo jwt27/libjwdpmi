@@ -8,7 +8,6 @@
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
-#include <iostream>
 #include <functional>
 #include <memory>
 #include <deque>
