@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 
-set -e
-
-readonly src=$(cd $(dirname "$0") && pwd)
-
-source $src/tools/jwbuild/jwbuild.sh
+source $(dirname "${BASH_SOURCE[0]}")/tools/jwbuild/jwbuild.sh
 
 save_vars CXX AR CXXFLAGS
 
 # Parse options
+
+option_default help no
+option_default debug yes
+option_default fmt-header-only no
 
 if test_option help; then
 	cat <<- EOF
@@ -17,6 +17,7 @@ if test_option help; then
 	  --jwdpmi-config=<...>  location of configuration header
 	  --with-jwutil=<...>    location of libjwutil "build" dir (where you
 	                           invoked 'configure')
+	  --fmt-header-only      use libfmt in header-only mode
 	  --debug=no             disable debug mode
 
 	Important variables:
@@ -29,7 +30,7 @@ fi
 
 # Check debug flag
 
-if test_option debug yes; then
+if test_option debug; then
 	debug_flag='-D_DEBUG'
 else
 	debug_flag='-DNDEBUG'
@@ -57,6 +58,10 @@ more_cxxflags+=" -iquote $(pwd)/include"
 more_cxxflags+=" -masm=intel"
 more_cxxflags+=" $debug_flag"
 more_cxxflags+=" $($src/tools/missing-macros.sh $CXX $CXXFLAGS $more_cxxflags)"
+more_cxxflags+=" -I$src/lib/fmt/include"
+if test_option fmt-header-only; then
+	more_cxxflags+=" -DFMT_HEADER_ONLY=1"
+fi
 prepend CXXFLAGS "$more_cxxflags"
 
 check_compiler
@@ -65,7 +70,7 @@ check_compiler
 
 CXXFLAGS+=" $(read_flags "${options[with-jwutil]}/cxxflags")"
 cat <<- EOF | compile || fail "jwutil not found"
-#include <jw/common.h>
+	#include <jw/common.h>
 EOF
 
 # Find config header
@@ -75,10 +80,9 @@ if [[ -z "$config_file" ]]; then
 	warn "no configuration header specified, using default."
 	config_file="$src/jwdpmi_config.h"
 fi
-config_file="$(realpath "$config_file")"
-config_file="$(winpath "$config_file")"
+config_file="$(winpath "$(realpath "$config_file")")"
 cat <<- EOF | compile || fail "configuration header not found"
-#include "$config_file"
+	#include "$config_file"
 EOF
 
 # Generate config.status
@@ -89,6 +93,43 @@ save_config
 
 mkdir -p src/
 mkdir -p include/
+mkdir -p lib/fmt/
+
+if not test_option fmt-header-only; then
+	cd lib/fmt/
+
+	# Generate CMake toolchain file
+
+	cat <<- EOF > toolchain.CMake
+		set(CMAKE_SYSTEM_NAME Generic)
+		set(CMAKE_SYSTEM_PROCESSOR i386)
+
+		set(CMAKE_CXX_COMPILER $CXX)
+
+		set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+		set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+		set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+		set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
+	EOF
+
+	# Configure fmt
+
+	case $(uname) in
+	MSYS*|MINGW*) cmake_generator='MSYS Makefiles' ;;
+	*)            cmake_generator='Unix Makefiles' ;;
+	esac
+
+	CXXFLAGS="$CXXFLAGS -Wno-attributes"                                  \
+		cmake   -G "$cmake_generator"                                 \
+			-DCMAKE_BUILD_TYPE=Release                            \
+			-DCMAKE_CXX_STANDARD=20                               \
+			--toolchain=toolchain.CMake                           \
+			--no-warn-unused-cli                                  \
+			-DFMT_TEST=0                                          \
+			$src/lib/fmt
+
+	cd ../..
+fi
 
 # Generate config file wrapper
 
@@ -113,29 +154,47 @@ cat <<- EOF >> ldflags
 -Wl,--wrap=memalign
 -Wl,--wrap=free
 -Wl,--wrap=__dpmi_yield
--L$(pwd)
--ljwdpmi
+-L$(pwd) -ljwdpmi
 EOF
+if not test_option fmt-header-only; then
+	echo -L$(pwd)/lib/fmt -lfmt >> ldflags
+fi
 write_ldflags
-
 
 # Generate dependency lists
 
 write_cxxdeps
 
 cat <<- EOF >> lddeps
-libjwdpmi.a
-$src/tools/i386go32.x
+	libjwdpmi.a
+	$src/tools/i386go32.x
 EOF
+if not test_option fmt-header-only; then
+	echo lib/fmt/libfmt.a >> lddeps
+fi
 write_lddeps
 
 write_targets
 cat <<- EOF >> targets
-jwdpmi
-preprocessed
-asm
+	jwdpmi
+	preprocessed
+	asm
 EOF
+if not test_option fmt-header-only; then
+	echo fmt >> targets
+fi
 
 # Generate Makefile
 
 write_makefile
+
+if not test_option fmt-header-only; then
+	cat <<- EOF >> Makefile
+	.PHONY: fmt
+	all:: fmt
+	fmt: lib/fmt/libfmt.a
+	lib/fmt/libfmt.a: FORCE ; \$(MAKE) -C lib/fmt/ fmt
+	clean:: ; \$(MAKE) -C lib/fmt/ clean
+	distclean:: clean ; rm -rf lib/fmt/*
+	EOF
+fi

@@ -17,7 +17,7 @@ PREPROCESSED := $(OBJ:%.o=%.ii)
 
 .PHONY: all jwdpmi clean preprocessed asm
 
-all: jwdpmi
+all:: jwdpmi
 
 jwdpmi: libjwdpmi.a
 
@@ -25,7 +25,7 @@ preprocessed: $(PREPROCESSED)
 
 asm: $(ASM)
 
-clean:
+clean::
 	rm -f $(OBJ) $(DEP) $(ASM) $(DWO) $(PREPROCESSED) libjwdpmi.a
 
 libjwdpmi.a: $(OBJ)
