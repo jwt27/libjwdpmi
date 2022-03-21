@@ -12,7 +12,7 @@
 #include <iomanip>
 #include <memory>
 #include <cassert>
-
+#include <fmt/core.h>
 #include <jw/dpmi/dpmi_error.h>
 #include <jw/dpmi/irq_check.h>
 #include <jw/split_int.h>
@@ -328,10 +328,12 @@ namespace jw
             }
             friend auto& operator<<(std::ostream& out, const cpu_registers& in) { return in.print(out); }
 
-            void print() const
+            void print(FILE* out = stderr) const
             {
-                std::fprintf(stderr, "eax=%.8lx ebx=%.8lx ecx=%.8lx edx=%.8lx\n", eax, ebx, ecx, edx);
-                std::fprintf(stderr, "edi=%.8lx esi=%.8lx ebp=%.8lx\n", edi, esi, ebp);
+                fmt::print(out, "eax={:0>8x} ebx={:0>8x} ecx={:0>8x} edx={:0>8x}\n"
+                                "edi={:0>8x} esi={:0>8x} ebp={:0>8x}\n",
+                           eax, ebx, ecx, edx,
+                           edi, esi, ebp);
             }
         };
 

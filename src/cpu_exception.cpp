@@ -88,7 +88,7 @@ namespace jw
                 }
                 else
                 {
-                    std::fprintf(stderr, "Caught exception while handling CPU exception 0x%lx\n", self->exc.value);
+                    fmt::print(stderr, "Caught exception while handling CPU exception {:0>#2x}\n", self->exc.value);
                     try { throw; }
                     catch (const std::exception& e) { print_exception(e); }
                     catch (...) { }
@@ -97,7 +97,7 @@ namespace jw
             }
 #           ifndef NDEBUG
             if (*reinterpret_cast<volatile std::uint32_t*>(stack.begin()) != 0xDEADBEEF)
-                std::fprintf(stderr, "Stack overflow handling exception 0x%lx\n", self->exc.value);
+                fmt::print(stderr, "Stack overflow handling exception {:0>#2x}\n", self->exc.value);
 #           endif
 
             return success;

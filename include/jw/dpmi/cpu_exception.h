@@ -30,6 +30,7 @@
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpacked-not-aligned"
+#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
 
 namespace jw
 {
@@ -58,12 +59,12 @@ namespace jw
             };
             far_ptr32 stack; unsigned : 16;
 
-            void print() const
+            void print(FILE* out = stderr) const
             {
-                std::fprintf(stderr, "CPU exception at cs:eip=%.4hx:%.8lx, ss:esp=%.4hx:%.8lx\n",
-                    fault_address.segment, fault_address.offset, stack.segment, stack.offset);
-                std::fprintf(stderr, "Error code: %.8lx, info bits: %.1hx, flags: %.8lx\n",
-                    error_code, raw_info_bits, raw_eflags);
+                fmt::print(out, "CPU exception at cs:eip={:0>4x}:{:0>8x}, ss:esp={:0>4x}:{:0>8x}\n"
+                                "Error code: {:0>8x}, info bits: {:0>4x}, flags: {:0>8x}\n",
+                           fault_address.segment, fault_address.offset, stack.segment, stack.offset,
+                           error_code, raw_info_bits, raw_eflags);
             }
         };
         struct [[gnu::packed]] dpmi10_exception_frame : public dpmi09_exception_frame
@@ -91,13 +92,14 @@ namespace jw
                 unsigned raw_pte : 32;
             } page_table_entry { };
 
-            void print() const
+            void print(FILE* out = stderr) const
             {
                 dpmi09_exception_frame::print();
-                std::fprintf(stderr, "(if page fault) Linear: %.8lx, physical: %.8lx, PTE: %.1hhx\n",
-                    linear_page_fault_address, static_cast<long unsigned int>(page_table_entry.physical_address), page_table_entry.raw_pte);
-                std::fprintf(stderr, "ds=%.4hx es=%.4hx fs=%.4hx gs=%.4hx\n",
-                    ds, es, fs, gs);
+                fmt::print(out, "ds={:0>4x} es={:0>4x} fs={:0>4x} gs={:0>4x}\n"
+                                "(if page fault) Linear: {:0>8x}, physical: {:0>8x}, PTE: {:0>2x}\n",
+                           ds, es, fs, gs,
+                           linear_page_fault_address, page_table_entry.physical_address,
+                           static_cast<std::uint8_t>(page_table_entry.raw_pte));
             }
         };
 

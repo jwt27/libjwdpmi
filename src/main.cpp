@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
@@ -10,6 +11,7 @@
 #include <vector>
 #include <crt0.h>
 #include <csignal>
+#include <fmt/core.h>
 #include <jw/main.h>
 #include <jw/alloc.h>
 #include <jw/debug/debug.h>
@@ -47,11 +49,11 @@ namespace jw
 
     void print_exception(const std::exception& e, int level) noexcept
     {
-        std::fprintf(stderr, "Exception %u: %s\n", level, e.what());
+        fmt::print(stderr, "Exception {:d}: {}\n", level, e.what());
         if (auto* cpu_ex = dynamic_cast<const dpmi::cpu_exception*>(&e)) cpu_ex->print();
         try { std::rethrow_if_nested(e); }
         catch (const std::exception& e) { print_exception(e, level + 1); }
-        catch (...) { std::fprintf(stderr, "Exception %u: unknown exception\n", level + 1); }
+        catch (...) { fmt::print(stderr, "Exception {:d}: unknown exception\n", level + 1); }
     }
 
     [[noreturn]] static void terminate_handler() noexcept
@@ -60,7 +62,7 @@ namespace jw
         ++terminated;
         if (terminated == 2)
         {
-            std::fprintf(stderr, "Re-entry in std::terminate!\n");
+            fmt::print(stderr, "Re-entry in std::terminate!\n");
             std::abort();
         }
         else if (terminated > 2)
@@ -72,17 +74,17 @@ namespace jw
         if (io::ps2_interface::instantiated()) io::ps2_interface::instance().reset();
         if (auto exc = std::current_exception())
         {
-            std::fprintf(stderr, "std::terminate called after throwing an exception:\n");
+            fmt::print(stderr, "std::terminate called after throwing an exception:\n");
             try { std::rethrow_exception(exc); }
             catch (const std::exception& e) { print_exception(e); }
             catch (const terminate_exception& e)
             {
                 e.defuse();
-                std::fprintf(stderr, "terminate_exception\n");
+                fmt::print(stderr, "terminate_exception\n");
             }
-            catch (...) { std::fprintf(stderr, "unknown exception\n"); }
+            catch (...) { fmt::print(stderr, "unknown exception\n"); }
         }
-        else std::fprintf(stderr, "Terminating.\n");
+        else fmt::print(stderr, "Terminating.\n");
         debug::print_backtrace();
 
         std::_Exit(-1);
@@ -122,16 +124,16 @@ int main(int argc, const char** argv)
 
         if (debug::debug())
         {
-            std::cout << "Debug mode activated. Connecting to GDB..." << std::endl;
+            fmt::print(stderr, "Debug mode activated. Connecting to GDB...\n");
             debug::breakpoint();
         }
 
         const std::size_t n = a - args;
         jw::exit_code = jwdpmi_main({ args, n });
     }
-    catch (const std::exception& e) { std::cerr << "Caught exception in main()!\n"; jw::print_exception(e); }
-    catch (const jw::terminate_exception& e) { e.defuse(); std::cerr << e.what() << '\n'; }
-    catch (...) { std::cerr << "Caught unknown exception in main()!\n"; }
+    catch (const std::exception& e) { fmt::print(stderr, "Caught exception in main()!\n"); jw::print_exception(e); }
+    catch (const jw::terminate_exception& e) { e.defuse(); fmt::print(stderr, "{}\n", e.what()); }
+    catch (...) { fmt::print(stderr, "Caught unknown exception in main()!\n"); }
 
     jw::detail::scheduler::kill_all();
 
@@ -158,7 +160,7 @@ namespace jw
             {
                 if (cpu_flags::current().io_privilege < 3)
                 {
-                    std::fprintf(stderr, "IOPL 3 required.\n");
+                    fmt::print(stderr, "IOPL 3 required.\n");
                     std::terminate();
                 }
             }
@@ -221,7 +223,7 @@ namespace jw
                 {
                     if (cr & 2) // Protected-mode Virtual Interrupts flag
                     {
-                        std::fprintf(stderr, "CR4.PVI enabled, but not supported.\n");
+                        fmt::print(stderr, "CR4.PVI enabled, but not supported.\n");
                         std::terminate();
                     }
                 }
