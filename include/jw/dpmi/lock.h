@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
@@ -16,7 +17,9 @@ namespace jw
             {
             public:
                 memory_lock(const memory_lock& c) = delete;
-                memory_lock(memory_lock&& m) noexcept : mem(std::move(m.mem)) { m.locked = false; }
+                memory_lock(memory_lock&& m) noexcept
+                    : mem { std::move(m.mem) }, locked { m.locked }
+                { m.locked = false; }
 
                 memory_lock& operator=(const memory_lock& c) = delete;
                 memory_lock& operator=(memory_lock&& m) noexcept
