@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
@@ -406,14 +407,11 @@ namespace jw
                 {
                     deallocate();
                 }
-                catch (const std::exception& e)
-                {
-                    std::cerr << "Warning: caught exception while deallocating memory!\n";
-                    std::cerr << e.what() << '\n';
-                }
                 catch (...)
                 {
-                    std::cerr << "Warning: caught exception while deallocating memory!\n";
+                    fmt::print(stderr, "Warning: caught exception while deallocating memory!\n");
+                    try { throw; }
+                    catch (const std::exception& e) { fmt::print(stderr, "{}\n", e.what()); }
                 }
             }
 

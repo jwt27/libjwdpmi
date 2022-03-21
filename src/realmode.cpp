@@ -98,7 +98,7 @@ namespace jw
             );
             if (c) [[unlikely]]
             {
-                std::cerr << dpmi_error { error, __PRETTY_FUNCTION__ }.what() << '\n';
+                fmt::print(stderr, "{}\n", dpmi_error { error, __PRETTY_FUNCTION__ }.what());
                 terminate();
             }
         }
@@ -121,12 +121,13 @@ namespace jw
             }
             catch (...)
             {
-                std::cerr << "Caught exception in real-mode callback handler!\n";
-                std::cerr << "Callback pointer: " << self->ptr << '\n';
-                std::cerr << "Exception: ";
+                fmt::print(stderr, FMT_STRING("Caught exception in real-mode callback handler!\n"
+                                              "Callback pointer: {:0>4x}:{:0>4x}\n"
+                                              "Exception: "),
+                           self->ptr.segment, self->ptr.offset);
                 try { throw; }
-                catch (const std::exception& e) { std::cerr << e.what() << '\n'; }
-                catch (...) { std::cerr << "Unknown exception.\n"; }
+                catch (const std::exception& e) { fmt::print(stderr, "{}\n", e.what()); }
+                catch (...) { fmt::print(stderr, "Unknown exception.\n"); }
                 reg->flags.carry = true;
             }
 

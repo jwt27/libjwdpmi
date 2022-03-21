@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <memory_resource>
+#include <fmt/format.h>
 #include <jw/main.h>
 #include <jw/dpmi/irq_mask.h>
 #include <jw/detail/scheduler.h>
@@ -76,7 +77,7 @@ namespace jw::detail
         auto* const i = instance;
         atexit(i->main_thread.get());
         if (i->threads.size() == 1) [[likely]] return;
-        std::cerr << "Warning: exiting with active threads.\n";
+        fmt::print(stderr, "Warning: exiting with active threads.\n");
         auto thread_queue_copy = i->threads;
         thread_queue_copy.erase(main_thread_id);
         for (auto& t : thread_queue_copy) t.second->abort();
@@ -181,11 +182,11 @@ namespace jw::detail
         catch (const terminate_exception& e) { i->terminating = true; e.defuse(); }
         catch (...)
         {
-            std::cerr << "caught exception from thread " << t->id;
+            fmt::print(stderr, FMT_STRING("caught exception from thread {:d}"), t->id);
 #           ifndef NDEBUG
-            std::cerr << " (" << t->name << ")";
+            fmt::print(stderr, FMT_STRING(" ({})"), t->name);
 #           endif
-            std::cerr << '\n';
+            fmt::print(stderr, "\n");
             try { throw; }
             catch (std::exception& e) { print_exception(e); }
             i->terminating = true;
@@ -250,11 +251,11 @@ namespace jw::detail
             catch (const terminate_exception& e) { i->terminating = true; e.defuse(); }
             catch (...)
             {
-                std::cerr << "caught exception while processing atexit handlers on thread " << t->id;
+                fmt::print(stderr, FMT_STRING("caught exception while processing atexit handlers on thread {:d}"), t->id);
 #               ifndef NDEBUG
-                std::cerr << " (" << t->name << ")";
+                fmt::print(stderr, FMT_STRING(" ({})"), t->name);
 #               endif
-                std::cerr << '\n';
+                fmt::print(stderr, "\n");
                 try { throw; }
                 catch (std::exception& e) { print_exception(e); }
                 i->terminating = true;

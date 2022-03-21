@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <optional>
 #include <cstddef>
+#include <fmt/core.h>
 #include <jw/main.h>
 #include <jw/thread.h>
 #include <jw/dpmi/irq_handler.h>
@@ -168,7 +169,7 @@ namespace jw::dpmi::detail
         }
         catch (...)
         {
-            std::cerr << "Exception while servicing IRQ " << std::dec << static_cast<unsigned>(i) << std::endl;
+            fmt::print(stderr, "Exception while servicing IRQ {:d}\n", i);
             try { throw; }
             catch (const std::exception& e) { print_exception(e); }
             catch (...) { }
@@ -178,7 +179,7 @@ namespace jw::dpmi::detail
 #       ifndef NDEBUG
         if (in_service(i))
         {
-            std::cerr << "no EOI for IRQ " << std::dec << static_cast<unsigned>(i) << '\n';
+            fmt::print(stderr, "no EOI for IRQ {:d}\n", i);
             do { asm("cli; hlt"); } while (true);
         }
 #       endif

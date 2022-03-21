@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
@@ -149,7 +150,7 @@ namespace jw
                     switch (b)
                     {
                     case ACK:
-                        std::cerr << "PS/2 interface: unexpected ACK!" << std::endl;
+                        fmt::print(stderr, "PS/2 interface: unexpected ACK!");
                         [[fallthrough]];
                     case RESEND:
                         throw io_error("Keyboard on fire.");
@@ -165,7 +166,7 @@ namespace jw
                     [[likely]] case ACK:
                         return;
                     default:
-                        std::cerr << "PS/2 interface: expected ACK, got this: " << std::hex << static_cast<unsigned>(b) << std::endl;
+                        fmt::print(stderr, "PS/2 interface: expected ACK, got this: {:0>#2x}\n", b);
                         [[fallthrough]];
                     case RESEND:
                         throw io_error("Keyboard on fire.");
@@ -199,12 +200,11 @@ namespace jw
                 }
                 catch (const io_error& e)
                 {
-                    std::cerr << "Error occured during PS/2 command sequence:";
-                    for (auto c : { seq... }) std::cerr << ' ' << std::hex << std::setfill('0') << std::setw(2) << static_cast<unsigned>(c);
-                    std::cerr << '\n';
-                    std::cerr << "With data:";
-                    for (auto d : data) std::cerr << ' ' << std::hex << std::setfill('0') << std::setw(2) << static_cast<unsigned>(d);
-                    std::cerr << '\n';
+                    fmt::print(stderr, "Error occured during PS/2 command sequence:");
+                    for (auto c : { seq... }) fmt::print(stderr, " {:0>2x}", c);
+                    fmt::print(stderr, "\nWith data:");
+                    for (auto d : data) fmt::print(stderr, " {:0>2x}", d);
+                    fmt::print(stderr, "\n");
                     print_exception(e);
                     if (retried) throw;
                     reset();
