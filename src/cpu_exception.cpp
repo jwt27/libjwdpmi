@@ -11,12 +11,13 @@
 #include <jw/debug/debug.h>
 #include <jw/dpmi/detail/interrupt_id.h>
 #include <jw/dpmi/ring0.h>
+#include <jw/sso_vector.h>
 #include <cstring>
 #include <vector>
 
 namespace jw::dpmi::detail
 {
-    static std::vector<std::exception_ptr> pending_exceptions { };
+    static constinit std::optional<sso_vector<std::exception_ptr, 3>> pending_exceptions { std::nullopt };
 
     void kill()
     {
@@ -26,8 +27,8 @@ namespace jw::dpmi::detail
     [[noreturn, gnu::no_caller_saved_registers, gnu::force_align_arg_pointer]]
     static void rethrow_cpu_exception()
     {
-        auto e = std::move(pending_exceptions.back());
-        pending_exceptions.pop_back();
+        auto e = std::move(pending_exceptions->back());
+        pending_exceptions->pop_back();
         std::rethrow_exception(e);
     }
 
@@ -80,7 +81,7 @@ namespace jw::dpmi
 
             if (really_throw())
             {
-                detail::pending_exceptions.emplace_back(std::current_exception());
+                detail::pending_exceptions->emplace_back(std::current_exception());
                 detail::simulate_call(f, detail::rethrow_cpu_exception);
                 success = true;
             }
@@ -283,6 +284,8 @@ namespace jw::dpmi::detail
         if constexpr (not config::enable_throwing_from_cpu_exceptions) return;
         if (exception_throwers_setup) [[likely]] return;
         exception_throwers_setup = true;
+
+        pending_exceptions.emplace();
 
         make_throwers<0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
                       0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e>();
