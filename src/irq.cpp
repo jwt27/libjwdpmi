@@ -109,8 +109,8 @@ namespace jw::dpmi::detail
             in al, 0x20
             test al, 0x80   # check for spurious interrupt
             jz L%=spurious
-            mov eax, [esp]
-            mov dword ptr [esp], 7
+            pop eax
+            push 7
             jmp %0
         L%=spurious:
             pop eax
@@ -132,8 +132,8 @@ namespace jw::dpmi::detail
             in al, 0xa0
             test al, 0x80   # check for spurious interrupt
             jz L%=spurious
-            mov eax, [esp]
-            mov dword ptr [esp], 15
+            pop eax
+            push 15
             jmp %0
         L%=spurious:
             mov al, 0x62    # ACK irq 2 on master
