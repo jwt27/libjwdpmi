@@ -20,13 +20,9 @@ namespace jw::dpmi::detail
 {
     struct irq_data_t
     {
-        selector ss;
         selector ds;
-        selector es;
-        selector fs;
-        selector gs;
         std::uint32_t stack_use_count;
-    } static irq_data;
+    } static constinit irq_data;
 
     void irq_entry_point() noexcept
     {
@@ -37,29 +33,25 @@ namespace jw::dpmi::detail
             push fs
             push gs
             pusha
-            mov edx, [esp+0x30]     # IRQ number set by trampoline
-            mov bx, ss
-            mov ebp, esp
+            mov ebx, ss
             mov esi, %[data]
-            mov ds, cs:[esi+%[ds]]  # restore segment registers
-            mov di, [esi+%[ss]]
-            mov es, [esi+%[es]]
-            mov fs, [esi+%[fs]]
-            mov gs, [esi+%[gs]]
+            mov ebp, esp
+            mov edi, cs:[esi+%[ds]]
+            mov fs, ebx
+            mov ds, edi
+            mov es, edi
             cmp bx, di              # check if we're already on our own SS,
             je L%=keep_stack        # this is usually the case for nested IRQs
-            push edx
             call %[get_stack]       # get a new stack pointer in EAX
-            pop edx
-            mov ss, di
+            mov ss, edi
             mov esp, eax
         L%=keep_stack:
-            push edx                # pass IRQ number
+            push fs:[ebp+0x30]      # IRQ number set by trampoline
             call %[handle_irq]      # call user interrupt handlers
             cmp bx, di
             je L%=ret_same_stack
             dec dword ptr [esi+%[use_count]]    # -- counter used by get_stack_ptr
-            mov ss, bx
+            mov ss, ebx
         L%=ret_same_stack:
             mov esp, ebp
             popa
@@ -72,11 +64,7 @@ namespace jw::dpmi::detail
             iret
         )" : :
             [data]       "i" (&irq_data),
-            [ss]         "i" (offsetof(irq_data_t, ss)),
             [ds]         "i" (offsetof(irq_data_t, ds)),
-            [es]         "i" (offsetof(irq_data_t, es)),
-            [fs]         "i" (offsetof(irq_data_t, fs)),
-            [gs]         "i" (offsetof(irq_data_t, gs)),
             [use_count]  "i" (offsetof(irq_data_t, stack_use_count)),
             [handle_irq] "i" (irq_controller::handle_irq),
             [get_stack]  "i" (irq_controller::get_stack_ptr)
@@ -290,11 +278,7 @@ namespace jw::dpmi::detail
         pic0_cmd.write(0x68);   // TODO: restore to defaults
         pic1_cmd.write(0x68);
         auto& d = irq_data;
-        asm ("mov %0, ss" : "=rm" (d.ss));
-        asm ("mov %0, ds" : "=rm" (d.ds));
-        asm ("mov %0, es" : "=rm" (d.es));
-        asm ("mov %0, fs" : "=rm" (d.fs));
-        asm ("mov %0, gs" : "=rm" (d.gs));
+        d.ds = get_ds();
         d.stack_use_count = 0;
     }
 
