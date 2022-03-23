@@ -87,6 +87,9 @@ namespace jw
         else fmt::print(stderr, "Terminating.\n");
         debug::print_backtrace();
 
+        if (dpmi::detail::interrupt_id::get()->next != nullptr)
+            do { asm("cli; hlt"); } while (true);
+
         std::_Exit(-1);
     }
 
