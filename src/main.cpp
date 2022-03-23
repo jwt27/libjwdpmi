@@ -168,7 +168,7 @@ namespace jw
             min_chunk_size = irq_alloc_size;
             irq_alloc = new dpmi::locked_pool_resource<true> { irq_alloc_size };
 
-            setup_exception_throwers();
+            setup_exception_handling();
             interrupt_id::setup();
 
             // Try setting control registers first in ring 3.  If we have no ring0 access, the

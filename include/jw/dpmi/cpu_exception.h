@@ -101,13 +101,6 @@ namespace jw::dpmi
         }
     };
 
-    struct [[gnu::packed]] raw_exception_frame
-    {
-        cpu_registers reg;
-        dpmi09_exception_frame frame_09;
-        dpmi10_exception_frame frame_10;
-    };
-
 #   pragma GCC diagnostic push
 #   pragma GCC diagnostic ignored "-Winvalid-offsetof"
 
@@ -115,7 +108,6 @@ namespace jw::dpmi
     static_assert(offsetof(dpmi10_exception_frame, return_address) == 0);
     static_assert(sizeof(dpmi09_exception_frame) == 0x20);
     static_assert(sizeof(dpmi10_exception_frame) == 0x38);
-    static_assert(sizeof(raw_exception_frame) == 0x78);
 
 #   pragma GCC diagnostic pop
 
@@ -169,56 +161,36 @@ namespace jw::dpmi
 
 namespace jw::dpmi
 {
-    class exception_handler : class_lock<exception_handler>
+    struct exception_handler
     {
-        void init_code();
-        trivial_function<exception_handler_sig> handler;
-        exception_num exc;
-        exception_handler* next { nullptr };
-        exception_handler* prev { nullptr };
-        static inline std::array<exception_handler*, 0x20> last { };
-        static inline std::array<byte, config::exception_stack_size> stack;
+        template<typename F>
+        exception_handler(exception_num n, F&& f)
+            : trampoline { detail::exception_trampoline::create(n, std::forward<F>(f)) }
+        { }
 
-        [[gnu::force_align_arg_pointer, gnu::__cdecl__]]
-        static bool call_handler(exception_handler* self, raw_exception_frame* frame) noexcept;
-
-                                                            // sizeof   alignof     offset
-        exception_handler* self { this };                   // 4        4           [eax-0x28]
-        decltype(&call_handler) call_ptr { &call_handler }; // 4        4           [eax-0x24]
-        byte* stack_ptr;                                    // 4        4           [eax-0x20]
-        selector ds;                                        // 2        2           [eax-0x1C]
-        selector es;                                        // 2        2           [eax-0x1A]
-        selector fs;                                        // 2        2           [eax-0x18]
-        selector gs;                                        // 2        2           [eax-0x16]
-        bool is_dpmi10;                                     // 1        1           [eax-0x14]
-        byte _padding;                                      // 1        1           [eax-0x13]
-        far_ptr32 chain_to;                                 // 6        2           [eax-0x12]
-        std::array<byte, 0x100> code;                       //          1           [eax-0x0C]
-
-    public:
-        template<typename F>    // TODO: real-mode (requires a separate wrapper list)
-        exception_handler(exception_num e, F&& f, bool = false)
-            : handler(std::forward<F>(f))
-            , exc(e), stack_ptr(stack.data() + stack.size() - 4)
-            , chain_to { detail::cpu_exception_handlers::get_pm_handler(e) }
+        ~exception_handler()
         {
-            init_code();
-
-            prev = last[e];
-            if (prev != nullptr) prev->next = this;
-            last[e] = this;
-
-            is_dpmi10 = detail::cpu_exception_handlers::set_pm_handler(e, get_ptr());
+            if (trampoline == nullptr) return;
+            detail::exception_trampoline::destroy(trampoline);
         }
 
-        ~exception_handler();
+        exception_handler(exception_handler&& other)
+            : trampoline { other.trampoline }
+        {
+            other.trampoline = nullptr;
+        }
+
+        exception_handler& operator=(exception_handler&& other)
+        {
+            std::swap(trampoline, other.trampoline);
+            return *this;
+        }
 
         exception_handler(const exception_handler&) = delete;
-        exception_handler(exception_handler&&) = delete;
         exception_handler& operator=(const exception_handler&) = delete;
-        exception_handler& operator=(exception_handler&&) = delete;
 
-        far_ptr32 get_ptr() const noexcept { return far_ptr32 { get_cs(), reinterpret_cast<std::uintptr_t>(code.data()) }; }
+    private:
+        detail::exception_trampoline* trampoline;
     };
 
     struct cpu_category : public std::error_category

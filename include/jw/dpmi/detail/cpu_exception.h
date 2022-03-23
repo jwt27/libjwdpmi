@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
@@ -108,7 +109,108 @@ namespace jw::dpmi::detail
         }
     };
 
-    void setup_exception_throwers();
+    struct exception_trampoline;
+
+    struct exception_handler_data
+    {
+        function<exception_handler_sig> func;
+        exception_num num;
+        exception_trampoline* next { nullptr };
+        exception_trampoline* prev;
+        bool is_dpmi10;
+
+    private:
+        friend struct exception_trampoline;
+
+        template <typename F>
+        exception_handler_data(exception_num n, F&& f)
+            : func { std::forward<F>(f) }
+            , num { n } { }
+    };
+
+    struct exception_trampoline
+    {
+        template<typename F>
+        static exception_trampoline* create(exception_num n, F&& f)
+        {
+            auto* const p = allocate();
+            return new (p) exception_trampoline { n, std::forward<F>(f) };
+        }
+
+        static void destroy(exception_trampoline* p)
+        {
+            p->~exception_trampoline();
+            deallocate(p);
+        }
+
+    private:
+        static inline constinit std::array<exception_trampoline*, 0x1f> last { };
+        static inline constinit locking_allocator<exception_handler_data> data_alloc { };
+
+        static exception_trampoline* allocate();
+        static void deallocate(exception_trampoline* p);
+        std::ptrdiff_t find_entry_point() const noexcept;
+
+        template<typename F>
+        exception_trampoline(exception_num n, F&& f)
+            : data { data_alloc.allocate(1) }
+            , entry_point { find_entry_point() }
+        {
+            data = new (data) exception_handler_data { n, std::forward<F>(f) };
+            data->prev = last[n];
+            if (data->prev != nullptr) data->prev->data->next = this;
+            last[n] = this;
+
+            auto chain_to = detail::cpu_exception_handlers::get_pm_handler(n);
+            chain_to_segment = chain_to.segment;
+            chain_to_offset = chain_to.offset;
+
+            const auto p = reinterpret_cast<std::uintptr_t>(&push0_imm32);
+            data->is_dpmi10 = detail::cpu_exception_handlers::set_pm_handler(n, { get_cs(), p });
+        }
+
+        ~exception_trampoline();
+
+        exception_trampoline(exception_trampoline&&) = delete;
+        exception_trampoline(const exception_trampoline&) = delete;
+        exception_trampoline& operator=(exception_trampoline&&) = delete;
+        exception_trampoline& operator=(const exception_trampoline&) = delete;
+
+        struct alignas(0x10) [[gnu::packed]]
+        {
+            const std::uint8_t push0_imm32 { 0x68 };
+            selector chain_to_segment;
+            const unsigned : 16;
+            const std::uint8_t push1_imm32 { 0x68 };
+            std::uintptr_t chain_to_offset;
+            const std::uint8_t push2_imm32 { 0x68 };
+            exception_handler_data* data;
+            const std::uint8_t jmp_rel32 { 0xe9 };
+            std::ptrdiff_t entry_point;
+        };
+    };
+
+    struct raw_exception_frame
+    {
+        selector gs;
+        unsigned : 16;
+        selector fs;
+        unsigned : 16;
+        selector es;
+        unsigned : 16;
+        selector ds;
+        unsigned : 16;
+        cpu_registers reg;
+        const exception_handler_data* data;
+        far_ptr32 chain_to;
+        unsigned : 16;
+        dpmi09_exception_frame frame_09;
+        dpmi10_exception_frame frame_10;
+    };
+
+    static_assert(sizeof(raw_exception_frame) == 0x94);
+
+    void setup_exception_handling();
 
     [[noreturn, gnu::no_caller_saved_registers, gnu::force_align_arg_pointer]]
     void kill();
