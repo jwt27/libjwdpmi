@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
@@ -30,17 +31,16 @@ namespace jw
         {
             virtual ~locking_memory_resource()
             {
-                if (map == nullptr) return;
+                if (not map) return;
                 if (not map->empty()) return;
-                delete map;
-                map = nullptr;
+                map.reset();
             }
 
         protected:
             [[nodiscard]] virtual void* do_allocate(std::size_t n, std::size_t a) override
             {
                 throw_if_irq();
-                if (map == nullptr) [[unlikely]] map = new std::map<void*, data_lock> { };
+                if (not map) [[unlikely]] map.emplace();
                 void* p = ::operator new(n, std::align_val_t { a });
                 map->emplace(p, data_lock { p, n });
                 return p;
@@ -58,7 +58,7 @@ namespace jw
                 return o != nullptr;
             }
 
-            static inline std::map<void*, data_lock>* map { };
+            static inline constinit std::optional<std::map<void*, data_lock>> map { std::nullopt };
         };
 
         // Legacy allocator based on locking_memory_resource
