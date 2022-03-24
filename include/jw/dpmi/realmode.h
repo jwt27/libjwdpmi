@@ -131,6 +131,9 @@ namespace jw
         // specifies what dpmi::in_irq_context() returns when this callback
         // is invoked, enable this if your callback will be used from a
         // hardware interrupt handler.
+        // The callback may be re-entered multiple times, as long as there is
+        // enough space available to store the incoming realmode_registers.
+        // This is controlled via parameter 'pool_size'.
         // The callback function takes a pointer to a registers structure
         // which may be modified, and a far pointer to access the real-mode
         // stack.  The return CS/IP (and flags) will have already been popped
@@ -140,23 +143,22 @@ namespace jw
             using function_type = void(realmode_registers*, far_ptr32);
 
             template<typename F>
-            realmode_callback(F&& function, bool iret_frame = false, bool irq_context = false, std::size_t stack_size = 16_KB, std::size_t pool_size = 1_KB)
+            realmode_callback(F&& function, bool iret_frame = false, bool irq_context = false, std::size_t stack_size = 16_KB, std::size_t pool_size = 8)
                 : raw_realmode_callback({ get_cs(), reinterpret_cast<std::uintptr_t>(iret_frame ? entry_point<true> : entry_point<false>) })
                 , is_irq { irq_context }
                 , func { std::forward<F>(function) }
-                , memres { pool_size }
             {
                 stack.resize(stack_size);
                 stack_ptr = stack.data() + stack.size() - 4;
-                allocator alloc { &memres };
-                reg_ptr = allocator_traits::allocate(alloc, 1);
+                reg_pool.resize(pool_size);
+                reg_ptr = reg_pool.data();
             }
 
             bool is_irq;
 
         private:
-            using allocator = monomorphic_allocator<locked_pool_resource<false>, realmode_registers>;
-            using allocator_traits = std::allocator_traits<allocator>;
+            template <typename T>
+            using allocator = default_constructing_allocator_adaptor<locking_allocator<T>>;
 
             template<bool>
             [[gnu::naked]] static void entry_point() noexcept;
@@ -166,8 +168,8 @@ namespace jw
             realmode_registers* reg_ptr;
 
             trivial_function<function_type> func;
-            std::vector<std::byte, default_constructing_allocator_adaptor<locking_allocator<std::byte>>> stack;
-            locked_pool_resource<false> memres;
+            std::vector<std::byte, allocator<std::byte>> stack;
+            std::vector<realmode_registers, allocator<realmode_registers>> reg_pool;
         };
 
         // Registers a real-mode procedure as real-mode software interrupt

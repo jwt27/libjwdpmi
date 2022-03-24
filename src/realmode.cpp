@@ -107,10 +107,17 @@ namespace jw
         {
             detail::interrupt_id id { 0, self->is_irq ? detail::interrupt_type::realmode_irq : detail::interrupt_type::realmode };
 
-            allocator alloc { &self->memres };
-            auto* const reg = self->reg_ptr;
-            allocator_traits::construct(alloc, reg, self->reg);
-            self->reg_ptr = allocator_traits::allocate(alloc, 1);
+            auto* const reg = self->reg_ptr++;
+            if (self->reg_ptr > self->reg_pool.data() + self->reg_pool.size()) [[unlikely]]
+            {
+                fmt::print(stderr, FMT_STRING("Too many re-entries in real-mode callback!\n"
+                                              "Callback pointer: {:0>4x}:{:0>4x}\n"
+                                              "Pool size: {:d}\n"),
+                           self->ptr.segment, self->ptr.offset,
+                           self->reg_pool.size());
+                do { asm("cli; hlt"); } while (true);
+            }
+            *reg = self->reg;
 
             if (not self->is_irq) asm ("sti");
 
@@ -132,8 +139,7 @@ namespace jw
             }
 
             asm ("cli");
-            allocator_traits::deallocate(alloc, self->reg_ptr, 1);
-            self->reg_ptr = reg;
+            --self->reg_ptr;
         }
 
         template<bool iret_frame>
