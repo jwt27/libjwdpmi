@@ -162,13 +162,12 @@ namespace jw
             [[gnu::naked]] static void entry_point() noexcept;
             [[gnu::__cdecl__]] static void call(realmode_callback*, std::uintptr_t, selector) noexcept;
 
+            std::byte* stack_ptr;
+            realmode_registers* reg_ptr;
+
             trivial_function<function_type> func;
             std::vector<std::byte, default_constructing_allocator_adaptor<locking_allocator<std::byte>>> stack;
             locked_pool_resource<false> memres;
-
-            selector gs { get_gs() };
-            std::byte* stack_ptr;
-            realmode_registers* reg_ptr;
         };
 
         // Registers a real-mode procedure as real-mode software interrupt

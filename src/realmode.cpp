@@ -159,31 +159,30 @@ namespace jw
                 add word ptr es:[edi + 0x2e], 4 + 2 * %[iret_frame]
                 lea eax, [edi - %[self_offset]]     # points to 'this'
                 mov ebp, esp
-                mov cx, es
-                mov dx, ds
-                mov bx, ss
-                mov ds, cx
-                mov fs, dx
-                mov gs, word ptr [eax + %[gs]]
+                mov ecx, es
+                mov edx, ds
+                mov ebx, ss
+                mov ds, ecx
+                mov fs, edx
                 cmp bx, cx
                 je L%=keep_stack
-                mov ss, cx
+                mov ss, ecx
                 mov esp, [eax + %[stack_ptr]]
             L%=keep_stack:
                 mov edi, [eax + %[reg_ptr]]     # Pointer to temporary register struct
                 and esp, -0x10                  # Align stack
+                sub esp, 0x04
                 push edx                        # Real-mode stack selector
                 push esi                        # Real-mode stack pointer
                 push eax                        # Pointer to self
                 call %[callback]
-                mov ss, bx
+                mov ss, ebx
                 mov esp, ebp
                 iret
              )" : : [iret_frame]    "i" (iret_frame),
                     [self_offset]   "i" (OFFSET(reg)),
                     [stack_ptr]     "i" (OFFSET(stack_ptr)),
                     [reg_ptr]       "i" (OFFSET(reg_ptr)),
-                    [gs]            "i" (OFFSET(gs)),
                     [callback]      "i" (call)
             );
 #           undef OFFSET
