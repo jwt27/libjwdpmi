@@ -137,7 +137,7 @@ namespace jw
         // off and stored in the registers struct.
         struct realmode_callback final : raw_realmode_callback, private class_lock<realmode_callback>
         {
-            using function_type = void(realmode_registers*, far_ptr32);
+            using function_type = void(realmode_registers*, __seg_fs void*);
 
             template<typename F>
             realmode_callback(F&& function, bool iret_frame = false, bool irq_context = false, std::size_t stack_size = 16_KB, std::size_t pool_size = 1_KB)
@@ -160,7 +160,7 @@ namespace jw
 
             template<bool>
             [[gnu::naked]] static void entry_point() noexcept;
-            [[gnu::__cdecl__]] static void call(realmode_callback*, std::uintptr_t, selector) noexcept;
+            [[gnu::__cdecl__]] static void call(realmode_callback*, __seg_fs void*) noexcept;
 
             std::byte* stack_ptr;
             realmode_registers* reg_ptr;
@@ -204,7 +204,7 @@ namespace jw
         // that, use dpmi::irq_handler instead.
         struct realmode_interrupt_handler final
         {
-            using function_type = bool(realmode_registers*, far_ptr32);
+            using function_type = bool(realmode_registers*, __seg_fs void*);
 
             template<typename F>
             realmode_interrupt_handler(std::uint8_t i, F&& f, bool irq_context = false)

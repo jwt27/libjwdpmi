@@ -14,30 +14,22 @@ namespace jw::dpmi::detail
         rm_int_callback(std::uint8_t i) : raw_handler { i, callback.pointer() } { }
 
         realmode_interrupt_handler* last { nullptr };
-        realmode_callback callback { [this](realmode_registers* reg, far_ptr32 stack) { handle(reg, stack); }, true };
+        realmode_callback callback { [this](realmode_registers* reg, __seg_fs void* stack) { handle(reg, stack); }, true };
         raw_realmode_interrupt_handler raw_handler;
 
-        void handle(realmode_registers* reg, far_ptr32 stack)
+        void handle(realmode_registers* reg, __seg_fs void* stack)
         {
             for (auto i = last; i != nullptr; i = i->prev)
             {
                 if (i->func(reg, stack)) return;
             }
             auto chain_to = raw_handler.previous_handler();
-            gs_override gs { stack.segment };
-            stack.offset -= 6;
+            auto* sp = static_cast<__seg_fs std::uint16_t*>(stack);
+            sp -= 3;
+            sp[0] = reg->ip;
+            sp[1] = reg->cs;
+            sp[2] = reg->raw_flags;
             reg->sp -= 6;
-            asm volatile
-            (R"(
-                mov word ptr gs:[%[sp] + 0], %w[ip]
-                mov word ptr gs:[%[sp] + 2], %w[cs]
-                mov word ptr gs:[%[sp] + 4], %w[flags]
-             )" :
-                :   [sp]    "r"     (stack.offset),
-                    [cs]    "r"     (reg->cs),
-                    [ip]    "r"     (reg->ip),
-                    [flags] "r"     (reg->flags)
-            );
             reg->cs = chain_to.segment;
             reg->ip = chain_to.offset;
             reg->flags.interrupt = false;
@@ -103,7 +95,7 @@ namespace jw
             }
         }
 
-        void realmode_callback::call(realmode_callback* self, std::uintptr_t stack_offset, selector stack_selector) noexcept
+        void realmode_callback::call(realmode_callback* self, __seg_fs void* stack) noexcept
         {
             detail::interrupt_id id { 0, self->is_irq ? detail::interrupt_type::realmode_irq : detail::interrupt_type::realmode };
 
@@ -114,7 +106,6 @@ namespace jw
 
             if (not self->is_irq) asm ("sti");
 
-            far_ptr32 stack { stack_selector, stack_offset };
             try
             {
                 self->func(reg, stack);
@@ -171,8 +162,7 @@ namespace jw
             L%=keep_stack:
                 mov edi, [eax + %[reg_ptr]]     # Pointer to temporary register struct
                 and esp, -0x10                  # Align stack
-                sub esp, 0x04
-                push edx                        # Real-mode stack selector
+                sub esp, 0x08
                 push esi                        # Real-mode stack pointer
                 push eax                        # Pointer to self
                 call %[callback]

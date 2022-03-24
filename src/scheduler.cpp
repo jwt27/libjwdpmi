@@ -43,7 +43,7 @@ namespace jw::detail
         threads.emplace(p->id, main_thread);
         iterator = threads.begin();
 
-        int2f_handler.emplace(0x2f, [](dpmi::realmode_registers* reg, dpmi::far_ptr32)
+        int2f_handler.emplace(0x2f, [](dpmi::realmode_registers* reg, __seg_fs void*)
         {
             if (reg->ax != 0x1680) return false;
             if (dpmi::in_irq_context()) return false;
