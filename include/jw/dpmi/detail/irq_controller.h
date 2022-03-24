@@ -92,9 +92,9 @@ namespace jw::dpmi::detail
 
         static void send_eoi(irq_level i) noexcept;
 
-        [[gnu::__cdecl__, gnu::hot]]
+        [[gnu::cdecl, gnu::hot]]
         static std::byte* get_stack_ptr() noexcept;
-        [[gnu::force_align_arg_pointer, gnu::__cdecl__, gnu::hot]]
+        [[gnu::force_align_arg_pointer, gnu::cdecl, gnu::hot]]
         static void handle_irq(irq_level) noexcept;
 
         irq_controller(irq_level i);

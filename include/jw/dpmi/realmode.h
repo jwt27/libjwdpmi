@@ -162,7 +162,7 @@ namespace jw
 
             template<bool>
             [[gnu::naked]] static void entry_point() noexcept;
-            [[gnu::__cdecl__]] static void call(realmode_callback*, std::uintptr_t, selector) noexcept;
+            [[gnu::cdecl]] static void call(realmode_callback*, std::uintptr_t, selector) noexcept;
 
             std::byte* stack_ptr;
             realmode_registers* reg_ptr;
