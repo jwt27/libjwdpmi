@@ -41,7 +41,7 @@ namespace jw::dpmi::detail
     }
 
     [[gnu::cdecl, gnu::hot]]
-    static bool handle_exception(raw_exception_frame* frame) noexcept
+    static bool handle_exception(__seg_fs raw_exception_frame* frame) noexcept
     {
         auto* data = frame->data;
         auto* const f = data->is_dpmi10 ? &frame->frame_10 : &frame->frame_09;
@@ -101,53 +101,33 @@ namespace jw::dpmi::detail
             pusha
             push ds; push es; push fs; push gs
 
-            mov edx, cs:[%[ds]]
+            mov edi, cs:[%[ds]]
             mov ebx, ss
-            mov es, edx
-            cmp bx, dx
+            mov ebp, esp
+            cmp bx, di
+            mov esi, ss:[esp + %[data]]
             je Lkeep_stack
 
-            #   Copy frame to new stack
-            xor ecx, ecx
-            mov edi, %[stack]
-            mov cl, %[frame_size] / 4
-            mov ds, ebx
-            lea esi, [esp + ecx * 4]
-            std
-            rep movsd
-
-            #   Switch to the new stack
-            mov ss, edx
-            mov esp, edi
+            #   Switch to local stack
+            mov edx, %[stack]
+            mov ss, edi
+            mov esp, edx
         Lkeep_stack:
-            mov ds, edx
-            mov ebp, esp
-            push eax
+            mov ds, edi
+            mov es, edi
+            push ebp
             mov fs, ebx
-            and esp, -0x10          # Align stack
+            and esp, -0x10
 
             cld
             mov ss:[esp], ebp       # Pointer to raw_exception_frame
             call %[handle_exception]
 
-            mov edx, ss
-            cmp dx, bx
-            mov edx, ss:[ebp + %[data]]
-            je Lret_same_stack
-
-            #   Copy frame and switch back to previous stack
-            mov es, ebx
-            mov ebp, esi
-            xor ecx, ecx
-            xchg edi, esi
-            mov cl, %[frame_size] / 4
-            cld
-            rep movsd
             mov ss, ebx
-        Lret_same_stack:
             mov esp, ebp
-            mov dl, [edx + %[is_dpmi10]]
+            mov dl, [esi + %[is_dpmi10]]
             pop gs; pop fs; pop es; pop ds
+
             test al, al              # Check return value
             jz Lchain                # Chain if false
             test dl, dl              # Check which frame to return
@@ -172,7 +152,6 @@ namespace jw::dpmi::detail
          )" :
             :   [ds]                "i" (&exception_data.ds),
                 [stack]             "i" (exception_data.stack.begin() + exception_data.stack.size() - 0x10),
-                [frame_size]        "i" (sizeof(raw_exception_frame)),
                 [handle_exception]  "i" (handle_exception),
                 [data]              "i" (offsetof(raw_exception_frame, data)),
                 [is_dpmi10]         "i" (offsetof(exception_handler_data, is_dpmi10)),
@@ -225,21 +204,10 @@ namespace jw::dpmi::detail
         jw::terminate();
     }
 
-    [[gnu::naked, gnu::stdcall]]
-    static void call_from_exception(void(*)())
+    void call_from_exception(void(*)())
     {
         asm (".cfi_signal_frame");
         asm ("call [esp+4]; ret 4");
-    }
-
-    void simulate_call(exception_frame* frame, void(*func)()) noexcept
-    {
-        frame->stack.offset -= 4;
-        *reinterpret_cast<std::uintptr_t*>(frame->stack.offset) = reinterpret_cast<std::uintptr_t>(func);
-        frame->stack.offset -= 4;
-        *reinterpret_cast<std::uintptr_t*>(frame->stack.offset) = frame->fault_address.offset;
-        frame->fault_address.offset = reinterpret_cast<std::uintptr_t>(call_from_exception);
-        frame->info_bits.redirect_elsewhere = true;
     }
 
     template <exception_num N, exception_num... Next>

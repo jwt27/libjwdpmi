@@ -1249,7 +1249,7 @@ namespace jw
                     if (debugmsg)
                     {
                         fmt::print(stderr, "debugger re-entry!\n");
-                        static_cast<dpmi10_exception_frame*>(f)->print();
+                        static_cast<const __seg_fs dpmi10_exception_frame*>(f)->print();
                         r->print();
                     }
                     throw cpu_exception { exc, r, f, new_frame_type };
@@ -1296,12 +1296,12 @@ namespace jw
 
                     if (debugmsg)
                     {
-                        static_cast<dpmi10_exception_frame*>(f)->print();
+                        static_cast<const __seg_fs dpmi10_exception_frame*>(f)->print();
                         r->print();
                     }
-                    if (new_frame_type) current_thread->frame = *static_cast<dpmi10_exception_frame*>(f);
-                    else static_cast<dpmi09_exception_frame&>(current_thread->frame) = *f;
-                    current_thread->reg = *r;
+                    if (new_frame_type) far_copy(&current_thread->frame, static_cast<const __seg_fs dpmi10_exception_frame*>(f));
+                    else far_copy(static_cast<dpmi09_exception_frame*>(&current_thread->frame), f);
+                    far_copy(&current_thread->reg, r);
 
                     for (auto&&t : threads)
                     {
@@ -1364,9 +1364,9 @@ namespace jw
                 catch (...) { catch_exception(); }
                 asm("cli");
 
-                if (new_frame_type) *f = static_cast<dpmi10_exception_frame&>(current_thread->frame);
-                else *static_cast<dpmi09_exception_frame*>(f) = current_thread->frame;
-                *r = current_thread->reg;
+                if (new_frame_type) far_copy(static_cast<__seg_fs dpmi10_exception_frame*>(f), &current_thread->frame);
+                else far_copy(f, static_cast<dpmi09_exception_frame*>(&current_thread->frame));
+                far_copy(r, &current_thread->reg);
 
                 leave();
                 debugger_reentry = false;

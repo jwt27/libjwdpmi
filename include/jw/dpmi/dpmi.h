@@ -13,6 +13,7 @@
 #include <memory>
 #include <cassert>
 #include <fmt/core.h>
+#include <jw/address_space.h>
 #include <jw/dpmi/dpmi_error.h>
 #include <jw/dpmi/irq_check.h>
 #include <jw/split_int.h>
@@ -328,12 +329,16 @@ namespace jw
             }
             friend auto& operator<<(std::ostream& out, const cpu_registers& in) { return in.print(out); }
 
-            void print(FILE* out = stderr) const
+            void print(FILE* out = stderr)          const { print(out, *this); }
+            void print(FILE* out = stderr) __seg_fs const { print(out, *this); }
+
+            template<any_address_space<cpu_registers> R>
+            static void print(FILE* out, const R& r)
             {
                 fmt::print(out, "eax={:0>8x} ebx={:0>8x} ecx={:0>8x} edx={:0>8x}\n"
                                 "edi={:0>8x} esi={:0>8x} ebp={:0>8x}\n",
-                           eax, ebx, ecx, edx,
-                           edi, esi, ebp);
+                           r.eax, r.ebx, r.ecx, r.edx,
+                           r.edi, r.esi, r.ebp);
             }
         };
 

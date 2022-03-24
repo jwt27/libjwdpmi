@@ -26,6 +26,7 @@
 #include <jw/dpmi/irq_check.h>
 #include <jw/dpmi/fpu.h>
 #include <jw/function.h>
+#include <jw/address_space.h>
 #include "jwdpmi_config.h"
 
 #pragma GCC diagnostic push
@@ -57,12 +58,16 @@ namespace jw::dpmi
         };
         far_ptr32 stack; unsigned : 16;
 
-        void print(FILE* out = stderr) const
+        void print(FILE* out = stderr) const { print(out, *this); }
+        void print(FILE* out = stderr) __seg_fs const { print(out, *this); }
+
+        template <any_address_space<dpmi09_exception_frame> F>
+        static void print(FILE* out, const F& f)
         {
             fmt::print(out, "CPU exception at cs:eip={:0>4x}:{:0>8x}, ss:esp={:0>4x}:{:0>8x}\n"
                             "Error code: {:0>8x}, info bits: {:0>4x}, flags: {:0>8x}\n",
-                        fault_address.segment, fault_address.offset, stack.segment, stack.offset,
-                        error_code, raw_info_bits, raw_eflags);
+                       f.fault_address.segment, f.fault_address.offset, f.stack.segment, f.stack.offset,
+                       f.error_code, f.raw_info_bits, f.raw_eflags);
         }
     };
     struct [[gnu::packed]] dpmi10_exception_frame : public dpmi09_exception_frame
@@ -90,14 +95,18 @@ namespace jw::dpmi
             unsigned raw_pte : 32;
         } page_table_entry { };
 
-        void print(FILE* out = stderr) const
+        void print(FILE* out = stderr) const { print(out, *this); }
+        void print(FILE* out = stderr) __seg_fs const { print(out, *this); }
+
+        template <any_address_space<dpmi10_exception_frame> F>
+        static void print(FILE* out, const F& f)
         {
-            dpmi09_exception_frame::print();
+            dpmi09_exception_frame::print(out, f);
             fmt::print(out, "ds={:0>4x} es={:0>4x} fs={:0>4x} gs={:0>4x}\n"
                             "(if page fault) Linear: {:0>8x}, physical: {:0>8x}, PTE: {:0>2x}\n",
-                        ds, es, fs, gs,
-                        linear_page_fault_address, page_table_entry.physical_address,
-                        static_cast<std::uint8_t>(page_table_entry.raw_pte));
+                       f.ds, f.es, f.fs, f.gs,
+                       f.linear_page_fault_address, f.page_table_entry.physical_address,
+                       static_cast<std::uint8_t>(f.page_table_entry.raw_pte));
         }
     };
 
@@ -115,8 +124,8 @@ namespace jw::dpmi
 
     struct exception_info
     {
-        cpu_registers* registers;
-        exception_frame* frame;
+        __seg_fs cpu_registers* registers;
+        __seg_fs exception_frame* frame;
         bool is_dpmi10_frame;
     };
 
@@ -201,29 +210,29 @@ namespace jw::dpmi
 
     struct cpu_exception : public std::system_error
     {
-        const cpu_registers registers;
-        const dpmi10_exception_frame frame;
+        cpu_registers registers;
+        dpmi10_exception_frame frame;
         const bool is_dpmi10_frame;
 
         cpu_exception(exception_num n, const exception_info& i)
             : cpu_exception { n, i.registers, i.frame, i.is_dpmi10_frame } { }
 
-        cpu_exception(exception_num n, cpu_registers* r, exception_frame* f, bool t)
+        template <any_address_space<cpu_registers> R, any_address_space<exception_frame> F>
+        [[gnu::noinline]]
+        cpu_exception(exception_num n, const R* r, const F* f, bool t)
             : system_error { static_cast<int>(n), cpu_category { } }
-            , registers { *r }, frame { init_frame(f, t) }, is_dpmi10_frame { t } { }
+            , is_dpmi10_frame { t }
+        {
+            far_copy(&registers, r);
+            if (t) far_copy(&frame, static_cast<copy_address_space_t<const dpmi10_exception_frame, F>*>(f));
+            else far_copy(&frame, f);
+        }
 
         void print() const
         {
             if (is_dpmi10_frame) frame.print();
             else static_cast<const dpmi09_exception_frame*>(&frame)->print();
             registers.print();
-        }
-
-    private:
-        static dpmi10_exception_frame init_frame(dpmi09_exception_frame* f, bool t) noexcept
-        {
-            if (t) return *static_cast<dpmi10_exception_frame*>(f);
-            else return { *f };
         }
     };
 

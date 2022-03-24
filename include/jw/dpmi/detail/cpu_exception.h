@@ -215,5 +215,17 @@ namespace jw::dpmi::detail
     [[noreturn, gnu::no_caller_saved_registers, gnu::force_align_arg_pointer]]
     void kill();
 
-    void simulate_call(exception_frame*, void(*)()) noexcept;
+    [[gnu::naked, gnu::stdcall]]
+    void call_from_exception(void(*)());
+
+    template<any_address_space<exception_frame> F>
+    void simulate_call(F* frame, void(*func)()) noexcept
+    {
+        frame->stack.offset -= 4;
+        *reinterpret_cast<std::uintptr_t*>(frame->stack.offset) = reinterpret_cast<std::uintptr_t>(func);
+        frame->stack.offset -= 4;
+        *reinterpret_cast<std::uintptr_t*>(frame->stack.offset) = frame->fault_address.offset;
+        frame->fault_address.offset = reinterpret_cast<std::uintptr_t>(call_from_exception);
+        frame->info_bits.redirect_elsewhere = true;
+    }
 }
