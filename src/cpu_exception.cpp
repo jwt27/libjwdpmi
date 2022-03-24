@@ -87,6 +87,7 @@ namespace jw::dpmi::detail
             fmt::print(stderr, "Stack overflow handling exception {:0>#2x}\n", data->num.value);
 #       endif
 
+        asm ("cli");
         return success;
     }
 
@@ -120,16 +121,14 @@ namespace jw::dpmi::detail
             mov esp, edi
         Lkeep_stack:
             mov ds, edx
-            lea eax, [esp - 4]
-            mov fs, ebx
-            and al, 0x0f
             mov ebp, esp
-            mov esp, eax
+            push eax
+            mov fs, ebx
+            and esp, -0x10          # Align stack
 
             cld
-            mov [esp], ebp
+            mov ss:[esp], ebp       # Pointer to raw_exception_frame
             call %[handle_exception]
-            cli
 
             mov edx, ss
             cmp dx, bx
