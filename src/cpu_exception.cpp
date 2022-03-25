@@ -74,11 +74,17 @@ namespace jw::dpmi::detail
             }
             else
             {
-                fmt::print(stderr, "Caught exception while handling CPU exception {:0>#2x}\n", data->num.value);
                 try { throw; }
-                catch (const std::exception& e) { print_exception(e); }
-                catch (...) { }
-                do { asm("cli; hlt"); } while (true);
+                catch (const cpu_exception& e) { e.print(); }
+                catch (...)
+                {
+                    fmt::print(stderr, "Caught exception while handling CPU exception {:0>#2x}\n", data->num.value);
+                    try { throw; }
+                    catch (const std::exception& e) { print_exception(e); }
+                    catch (...) { }
+                }
+                detail::simulate_call(f, kill);
+                success = true;
             }
         }
 
