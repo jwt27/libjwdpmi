@@ -57,28 +57,25 @@ namespace jw::dpmi::detail
         }
         catch (...)
         {
-            auto really_throw = [&]
-            {
-                if constexpr (not config::enable_throwing_from_cpu_exceptions) return false;    // Only throw if this option is enabled
-                if (f->fault_address.segment != get_cs() and
-                    f->fault_address.segment != detail::ring0_cs) return false;                 // and exception happened in our code
-                if (f->flags.v86_mode) return false;                                            // and not in real mode (sanity check)
-                return true;
-            };
+            const auto base = descriptor::get_base(get_cs());
+            const bool can_redirect = not f->flags.v86_mode and
+                                      descriptor::get_base(f->fault_address.segment) == base and
+                                      descriptor::get_base(f->stack.segment) == base;
+            const bool can_throw = config::enable_throwing_from_cpu_exceptions and can_redirect;
 
-            if (really_throw())
+            if (can_throw)
             {
                 detail::pending_exceptions->emplace_back(std::current_exception());
                 detail::simulate_call(f, detail::rethrow_cpu_exception);
                 success = true;
             }
-            else
+            else if (can_redirect)
             {
                 try { throw; }
                 catch (const cpu_exception& e) { e.print(); }
                 catch (...)
                 {
-                    fmt::print(stderr, "Caught exception while handling CPU exception {:0>#2x}\n", data->num.value);
+                    fmt::print(stderr, "Caught exception while handling CPU exception 0x{:0>2x}\n", data->num.value);
                     try { throw; }
                     catch (const std::exception& e) { print_exception(e); }
                     catch (...) { }
@@ -86,11 +83,12 @@ namespace jw::dpmi::detail
                 detail::simulate_call(f, kill);
                 success = true;
             }
+            else std::terminate();
         }
 
 #       ifndef NDEBUG
         if (exception_data.stack_end != 0xDEADBEEF)
-            fmt::print(stderr, "Stack overflow handling exception {:0>#2x}\n", data->num.value);
+            fmt::print(stderr, "Stack overflow handling exception 0x{:0>2x}\n", data->num.value);
 #       endif
 
         asm ("cli");
