@@ -116,9 +116,11 @@ namespace jw::dpmi::detail
             mov edi, %[stack]
             mov cl, %[frame_size] / 4
             mov ds, ebx
-            lea esi, [esp + ecx * 4]
+            lea esi, [esp + ecx * 4 - 4]
             std
             rep movsd
+            add edi, 4
+            add esi, 4
 
             #   Switch to the new stack
             mov ss, edx
@@ -175,7 +177,7 @@ namespace jw::dpmi::detail
             retf
          )" :
             :   [ds]                "i" (&exception_data.ds),
-                [stack]             "i" (exception_data.stack.begin() + exception_data.stack.size() - 0x10),
+                [stack]             "i" (exception_data.stack.begin() + exception_data.stack.size() - 0x04),
                 [frame_size]        "i" (sizeof(raw_exception_frame)),
                 [handle_exception]  "i" (handle_exception),
                 [data]              "i" (offsetof(raw_exception_frame, data)),
