@@ -268,8 +268,6 @@ namespace jw::dpmi::detail
         exception_data.ds = get_ds();
         exception_data.stack_end = 0xDEADBEEF;
 
-        if constexpr (not config::enable_throwing_from_cpu_exceptions) return;
-
         pending_exceptions.emplace();
 
         make_throwers<0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,

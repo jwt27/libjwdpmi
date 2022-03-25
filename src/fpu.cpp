@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 
 #include <optional>
@@ -7,7 +8,6 @@
 
 namespace jw::dpmi::detail
 {
-    static constinit std::optional<exception_handler> exc07_handler, exc06_handler;
     static constinit bool cr0_em { false };
 
     static void set_fpu_emulation(bool em, bool mp = true)
@@ -80,8 +80,5 @@ namespace jw::dpmi::detail
 #       endif
 
         set_fpu_emulation(false, true);
-
-        exc06_handler.emplace(exception_num::invalid_opcode, [](const exception_info&) { return false; });
-        exc07_handler.emplace(exception_num::device_not_available, [](const exception_info&) { return false; });
     }
 }
