@@ -113,9 +113,8 @@ namespace jw::dpmi::detail
             je L%=keep_stack
 
             #   Switch to local stack
-            mov edx, %[stack]
             mov ss, edi
-            mov esp, edx
+            mov esp, %[stack]
         L%=keep_stack:
             mov ds, edi
             mov es, edi
