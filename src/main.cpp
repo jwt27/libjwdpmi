@@ -29,9 +29,6 @@ using namespace jw;
 
 int _crt0_startup_flags = 0
 | config::user_crt0_startup_flags
-#ifndef NDEBUG
-//| _CRT0_FLAG_NULLOK
-#endif
 | _CRT0_FLAG_NMI_SIGNAL
 | _CRT0_DISABLE_SBRK_ADDRESS_WRAP
 | _CRT0_FLAG_NONMOVE_SBRK
@@ -87,8 +84,22 @@ namespace jw
         else fmt::print(stderr, "Terminating.\n");
         debug::print_backtrace();
 
-        if (dpmi::detail::interrupt_id::get()->next != nullptr)
+        using namespace ::jw::dpmi::detail;
+        auto* id = interrupt_id::get();
+        if (id->next != nullptr)
+        {
+            fmt::print(stderr, "Currently servicing ");
+            switch (id->type)
+            {
+            case interrupt_type::realmode:
+            case interrupt_type::realmode_irq:  fmt::print(stderr, "real-mode callback"); break;
+            case interrupt_type::exception:     fmt::print(stderr, "CPU exception 0x{:0>2x}", id->num); break;
+            case interrupt_type::irq:           fmt::print(stderr, "IRQ 0x{:0>2x}", id->num); break;
+            case interrupt_type::none:          fmt::print(stderr, "no interrupt (?)"); break;
+            }
+            fmt::print(stderr, ", unable to terminate.\n");
             do { asm("cli; hlt"); } while (true);
+        }
 
         std::_Exit(-1);
     }

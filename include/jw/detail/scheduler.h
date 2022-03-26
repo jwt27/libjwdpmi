@@ -92,7 +92,7 @@ namespace jw::detail
         [[gnu::hot, gnu::noinline, gnu::noclone, gnu::naked]]
         static void context_switch(thread_context**);
 
-        [[gnu::hot, gnu::noinline, gnu::__cdecl__]]
+        [[gnu::hot, gnu::noinline, gnu::cdecl]]
         static thread_context* switch_thread();
 
         [[gnu::force_align_arg_pointer, noreturn]]

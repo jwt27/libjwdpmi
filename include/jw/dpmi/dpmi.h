@@ -26,8 +26,9 @@ namespace jw
         using selector = std::uint16_t;
 
     #define GET_SEG_REG(reg)                \
-        selector s;                         \
-        asm ("mov %w0, "#reg";":"=rm" (s)); \
+        std::uint32_t s;                    \
+        asm ("mov %0, "#reg : "=r" (s));    \
+        assume(s >> 16 == 0);               \
         return s;
 
         inline selector get_cs() noexcept { GET_SEG_REG(cs); }
@@ -205,7 +206,7 @@ namespace jw
         struct gs_override
         {
             gs_override(selector new_gs) { set_gs(new_gs); }
-            ~gs_override() { set_gs(old_gs); }
+            ~gs_override() { set_gs(prev_gs); }
 
             gs_override() = delete;
             gs_override(const gs_override&) = delete;
@@ -214,8 +215,8 @@ namespace jw
             gs_override& operator=(gs_override&&) = delete;
 
         private:
-            void set_gs(auto s) { asm volatile("mov gs, %w0;" :: "rm" (s)); }
-            selector old_gs { get_gs() };
+            void set_gs(std::uint32_t s) { asm volatile("mov gs, %0;" :: "r" (s)); }
+            const selector prev_gs { get_gs() };
         };
 
         // Call a function which returns with RETF

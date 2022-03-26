@@ -57,40 +57,45 @@ namespace jw::dpmi::detail
         }
         catch (...)
         {
-            auto really_throw = [&]
-            {
-                if constexpr (not config::enable_throwing_from_cpu_exceptions) return false;    // Only throw if this option is enabled
-                if (f->fault_address.segment != get_cs() and
-                    f->fault_address.segment != detail::ring0_cs) return false;                 // and exception happened in our code
-                if (f->flags.v86_mode) return false;                                            // and not in real mode (sanity check)
-                return true;
-            };
+            const auto base = descriptor::get_base(get_cs());
+            const bool can_redirect = not f->flags.v86_mode and
+                                      descriptor::get_base(f->fault_address.segment) == base and
+                                      descriptor::get_base(f->stack.segment) == base;
+            const bool can_throw = config::enable_throwing_from_cpu_exceptions and can_redirect;
 
-            if (really_throw())
+            if (can_throw)
             {
                 detail::pending_exceptions->emplace_back(std::current_exception());
                 detail::simulate_call(f, detail::rethrow_cpu_exception);
                 success = true;
             }
-            else
+            else if (can_redirect)
             {
-                fmt::print(stderr, "Caught exception while handling CPU exception {:0>#2x}\n", data->num.value);
                 try { throw; }
-                catch (const std::exception& e) { print_exception(e); }
-                catch (...) { }
-                do { asm("cli; hlt"); } while (true);
+                catch (const cpu_exception& e) { e.print(); }
+                catch (...)
+                {
+                    fmt::print(stderr, "Caught exception while handling CPU exception 0x{:0>2x}\n", data->num.value);
+                    try { throw; }
+                    catch (const std::exception& e) { print_exception(e); }
+                    catch (...) { }
+                }
+                detail::simulate_call(f, kill);
+                success = true;
             }
+            else std::terminate();
         }
 
 #       ifndef NDEBUG
         if (exception_data.stack_end != 0xDEADBEEF)
-            fmt::print(stderr, "Stack overflow handling exception {:0>#2x}\n", data->num.value);
+            fmt::print(stderr, "Stack overflow handling exception 0x{:0>2x}\n", data->num.value);
 #       endif
 
         asm ("cli");
         return success;
     }
 
+    template<bool dpmi10_frame>
     [[gnu::naked, gnu::hot]]
     static void exception_entry_point()
     {
@@ -105,14 +110,13 @@ namespace jw::dpmi::detail
             mov ebx, ss
             mov ebp, esp
             cmp bx, di
-            mov esi, ss:[esp + %[data]]
-            je Lkeep_stack
+            je L%=keep_stack
 
             #   Switch to local stack
             mov edx, %[stack]
             mov ss, edi
             mov esp, edx
-        Lkeep_stack:
+        L%=keep_stack:
             mov ds, edi
             mov es, edi
             push ebp
@@ -125,47 +129,31 @@ namespace jw::dpmi::detail
 
             mov ss, ebx
             mov esp, ebp
-            mov dl, [esi + %[is_dpmi10]]
             pop gs; pop fs; pop es; pop ds
-
-            test al, al              # Check return value
-            jz Lchain                # Chain if false
-            test dl, dl              # Check which frame to return
-            jz Ldpmi09_type
-
-            #   Return with DPMI 1.0 frame
+            test al, al             # Check return value
             popa
-            add esp, %[dpmi10_offset]
+            jz L%=chain             # Chain if false
+            add esp, %[frame_offset]
             retf
 
-        Ldpmi09_type:
-            #   Return with DPMI 0.9 frame
-            popa
-            add esp, %[dpmi09_offset]
-            retf
-
-        Lchain:
+        L%=chain:
             #   Chain to next handler
-            popa
             add esp, %[chain_offset]
             retf
          )" :
             :   [ds]                "i" (&exception_data.ds),
-                [stack]             "i" (exception_data.stack.begin() + exception_data.stack.size() - 0x10),
+                [stack]             "i" (exception_data.stack.begin() + exception_data.stack.size() - 0x04),
                 [handle_exception]  "i" (handle_exception),
-                [data]              "i" (offsetof(raw_exception_frame, data)),
-                [is_dpmi10]         "i" (offsetof(exception_handler_data, is_dpmi10)),
-                [dpmi09_offset]     "i" (offsetof(raw_exception_frame, frame_09) - offsetof(raw_exception_frame, data)),
-                [dpmi10_offset]     "i" (offsetof(raw_exception_frame, frame_10) - offsetof(raw_exception_frame, data)),
+                [frame_offset]      "i" ((dpmi10_frame ? offsetof(raw_exception_frame, frame_10) : offsetof(raw_exception_frame, frame_09)) - offsetof(raw_exception_frame, data)),
                 [chain_offset]      "i" (offsetof(raw_exception_frame, chain_to) - offsetof(raw_exception_frame, data))
         );
 #       pragma GCC diagnostic pop
     }
 
-    std::ptrdiff_t exception_trampoline::find_entry_point() const noexcept
+    std::ptrdiff_t exception_trampoline::find_entry_point(bool dpmi10_frame) const noexcept
     {
         auto src = reinterpret_cast<intptr_t>(&entry_point + 1);
-        auto dst = reinterpret_cast<intptr_t>(exception_entry_point);
+        auto dst = reinterpret_cast<intptr_t>(dpmi10_frame ? exception_entry_point<true> : exception_entry_point<false>);
         return dst - src;
     }
 
@@ -229,8 +217,6 @@ namespace jw::dpmi::detail
         trampoline_memres.emplace(trampoline_pool);
         exception_data.ds = get_ds();
         exception_data.stack_end = 0xDEADBEEF;
-
-        if constexpr (not config::enable_throwing_from_cpu_exceptions) return;
 
         pending_exceptions.emplace();
 
