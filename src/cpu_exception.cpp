@@ -95,6 +95,7 @@ namespace jw::dpmi::detail
         return success;
     }
 
+    template<bool dpmi10_frame>
     [[gnu::naked, gnu::hot]]
     static void exception_entry_point()
     {
@@ -109,7 +110,7 @@ namespace jw::dpmi::detail
             mov ebx, ss
             mov es, edx
             cmp bx, dx
-            je Lkeep_stack
+            je L%=keep_stack
 
             #   Copy frame to new stack
             xor ecx, ecx
@@ -125,10 +126,10 @@ namespace jw::dpmi::detail
             #   Switch to the new stack
             mov ss, edx
             mov esp, edi
-        Lkeep_stack:
+        L%=keep_stack:
             mov ds, edx
             mov ebp, esp
-            push eax
+            push esp
             mov fs, ebx
             and esp, -0x10          # Align stack
 
@@ -138,8 +139,7 @@ namespace jw::dpmi::detail
 
             mov edx, ss
             cmp dx, bx
-            mov edx, ss:[ebp + %[data]]
-            je Lret_same_stack
+            je L%=ret_same_stack
 
             #   Copy frame and switch back to previous stack
             mov es, ebx
@@ -150,49 +150,34 @@ namespace jw::dpmi::detail
             cld
             rep movsd
             mov ss, ebx
-        Lret_same_stack:
+        L%=ret_same_stack:
             mov esp, ebp
-            mov dl, [edx + %[is_dpmi10]]
             pop gs; pop fs; pop es; pop ds
-            test al, al              # Check return value
-            jz Lchain                # Chain if false
-            test dl, dl              # Check which frame to return
-            jz Ldpmi09_type
-
-            #   Return with DPMI 1.0 frame
+            test al, al             # Check return value
             popa
-            add esp, %[dpmi10_offset]
+            jz L%=chain             # Chain if false
+            add esp, %[frame_offset]
             retf
 
-        Ldpmi09_type:
-            #   Return with DPMI 0.9 frame
-            popa
-            add esp, %[dpmi09_offset]
-            retf
-
-        Lchain:
+        L%=chain:
             #   Chain to next handler
-            popa
             add esp, %[chain_offset]
             retf
          )" :
             :   [ds]                "i" (&exception_data.ds),
                 [stack]             "i" (exception_data.stack.begin() + exception_data.stack.size() - 0x04),
-                [frame_size]        "i" (sizeof(raw_exception_frame)),
+                [frame_size]        "i" (sizeof(raw_exception_frame) - (dpmi10_frame ? 0 : sizeof(dpmi10_exception_frame))),
                 [handle_exception]  "i" (handle_exception),
-                [data]              "i" (offsetof(raw_exception_frame, data)),
-                [is_dpmi10]         "i" (offsetof(exception_handler_data, is_dpmi10)),
-                [dpmi09_offset]     "i" (offsetof(raw_exception_frame, frame_09) - offsetof(raw_exception_frame, data)),
-                [dpmi10_offset]     "i" (offsetof(raw_exception_frame, frame_10) - offsetof(raw_exception_frame, data)),
+                [frame_offset]      "i" ((dpmi10_frame ? offsetof(raw_exception_frame, frame_10) : offsetof(raw_exception_frame, frame_09)) - offsetof(raw_exception_frame, data)),
                 [chain_offset]      "i" (offsetof(raw_exception_frame, chain_to) - offsetof(raw_exception_frame, data))
         );
 #       pragma GCC diagnostic pop
     }
 
-    std::ptrdiff_t exception_trampoline::find_entry_point() const noexcept
+    std::ptrdiff_t exception_trampoline::find_entry_point(bool dpmi10_frame) const noexcept
     {
         auto src = reinterpret_cast<intptr_t>(&entry_point + 1);
-        auto dst = reinterpret_cast<intptr_t>(exception_entry_point);
+        auto dst = reinterpret_cast<intptr_t>(dpmi10_frame ? exception_entry_point<true> : exception_entry_point<false>);
         return dst - src;
     }
 

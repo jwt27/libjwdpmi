@@ -149,12 +149,11 @@ namespace jw::dpmi::detail
 
         static exception_trampoline* allocate();
         static void deallocate(exception_trampoline* p);
-        std::ptrdiff_t find_entry_point() const noexcept;
+        std::ptrdiff_t find_entry_point(bool) const noexcept;
 
         template<typename F>
         exception_trampoline(exception_num n, F&& f)
             : data { data_alloc.allocate(1) }
-            , entry_point { find_entry_point() }
         {
             data = new (data) exception_handler_data { n, std::forward<F>(f) };
             data->prev = last[n];
@@ -165,8 +164,10 @@ namespace jw::dpmi::detail
             chain_to_segment = chain_to.segment;
             chain_to_offset = chain_to.offset;
 
+            interrupt_mask no_irqs { };
             const auto p = reinterpret_cast<std::uintptr_t>(&push0_imm32);
             data->is_dpmi10 = detail::cpu_exception_handlers::set_pm_handler(n, { get_cs(), p });
+            entry_point = find_entry_point(data->is_dpmi10);
         }
 
         ~exception_trampoline();
