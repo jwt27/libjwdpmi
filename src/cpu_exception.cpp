@@ -238,7 +238,9 @@ namespace jw::dpmi::detail
     {
         exception_throwers[N].emplace(N, [](const exception_info& i) -> bool
         {
-            throw specific_cpu_exception<N> { i };
+            if constexpr (config::enable_throwing_from_cpu_exceptions)
+                throw specific_cpu_exception<N> { i };
+            return false;
         });
         if constexpr (sizeof...(Next) > 0) make_throwers<Next...>();
     }
