@@ -21,7 +21,7 @@
 #include <jw/dpmi/dpmi.h>
 #include <jw/debug/debug.h>
 #include <jw/dpmi/cpu_exception.h>
-#include <jw/dpmi/detail/cpu_exception.h>
+#include <jw/dpmi/detail/selectors.h>
 #include <jw/debug/detail/signals.h>
 #include <jw/io/rs232.h>
 #include <jw/alloc.h>
@@ -1227,12 +1227,12 @@ namespace jw
                     }
                 };
 
-                if (f->fault_address.segment != ring3_cs and f->fault_address.segment != ring0_cs) [[unlikely]]
+                if (f->fault_address.segment != main_cs and f->fault_address.segment != ring0_cs) [[unlikely]]
                 {
                     if (exc == exception_num::trap) return true; // keep stepping until we get back to our own code
                     fmt::print(stderr, FMT_STRING("Can't debug this!  CS is neither {:0>#4x} nor {:0>#4x}.\n"
                                                   "{}\n"),
-                               ring3_cs, ring0_cs,
+                               main_cs, ring0_cs,
                                cpu_exception { exc, r, f, new_frame_type }.what());
                     return false;
                 }
