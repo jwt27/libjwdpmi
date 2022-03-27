@@ -25,8 +25,6 @@
 // Lock dynamically allocated memory with dpmi::class_lock or dpmi::data_lock.
 // For STL containers, use dpmi::locking_allocator (read-only) or dpmi::locked_pool_allocator (read/write).
 
-#define INTERRUPT [[gnu::hot, gnu::optimize("O3")]]
-
 namespace jw::dpmi
 {
     // Main IRQ handler class
