@@ -2,7 +2,6 @@
 /* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
-#include <sys/exceptn.h>
 #include <jw/dpmi/dpmi.h>
 
 namespace jw::dpmi::detail

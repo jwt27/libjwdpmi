@@ -10,6 +10,7 @@
 #include <string_view>
 #include <vector>
 #include <crt0.h>
+#include <sys/exceptn.h>
 #include <csignal>
 #include <fmt/core.h>
 #include <jw/main.h>
