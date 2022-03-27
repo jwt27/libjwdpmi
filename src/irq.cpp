@@ -14,15 +14,12 @@
 #include <jw/thread.h>
 #include <jw/dpmi/irq_handler.h>
 #include <jw/dpmi/fpu.h>
+#include <jw/dpmi/detail/selectors.h>
 #include <jw/alloc.h>
 
 namespace jw::dpmi::detail
 {
-    struct irq_data_t
-    {
-        selector ds;
-        std::uint32_t stack_use_count;
-    } static constinit irq_data;
+    static constinit std::uint32_t stack_use_count;
 
     void irq_entry_point() noexcept
     {
@@ -34,9 +31,8 @@ namespace jw::dpmi::detail
             push gs
             pusha
             mov ebx, ss
-            mov esi, %[data]
+            mov edi, cs:[%[ds]]
             mov ebp, esp
-            mov edi, cs:[esi+%[ds]]
             mov fs, ebx
             mov ds, edi
             mov es, edi
@@ -50,7 +46,7 @@ namespace jw::dpmi::detail
             call %[handle_irq]      # call user interrupt handlers
             cmp bx, di
             je L%=ret_same_stack
-            dec dword ptr [esi+%[use_count]]    # -- counter used by get_stack_ptr
+            dec %[use_count]        # counter used by get_stack_ptr
             mov ss, ebx
         L%=ret_same_stack:
             mov esp, ebp
@@ -63,9 +59,8 @@ namespace jw::dpmi::detail
             sti
             iret
         )" : :
-            [data]       "i" (&irq_data),
-            [ds]         "i" (offsetof(irq_data_t, ds)),
-            [use_count]  "i" (offsetof(irq_data_t, stack_use_count)),
+            [ds]         "i" (&safe_ds),
+            [use_count]  "m" (stack_use_count),
             [handle_irq] "i" (irq_controller::handle_irq),
             [get_stack]  "i" (irq_controller::get_stack_ptr)
         );
@@ -200,7 +195,7 @@ namespace jw::dpmi::detail
 
     std::byte* irq_controller::get_stack_ptr() noexcept
     {
-        return data->stack.data() + (data->stack.size() >> (irq_data.stack_use_count++)) - 4;
+        return data->stack.data() + (data->stack.size() >> (stack_use_count++)) - 4;
     }
 
     void irq_controller::set_pm_interrupt_vector(int_vector v, far_ptr32 ptr)
@@ -277,9 +272,7 @@ namespace jw::dpmi::detail
         resize_stack(config::interrupt_initial_stack_size);
         pic0_cmd.write(0x68);   // TODO: restore to defaults
         pic1_cmd.write(0x68);
-        auto& d = irq_data;
-        d.ds = get_ds();
-        d.stack_use_count = 0;
+        stack_use_count = 0;
     }
 
     irq_controller::irq_controller_data::~irq_controller_data()

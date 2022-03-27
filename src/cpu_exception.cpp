@@ -10,6 +10,7 @@
 #include <jw/dpmi/cpu_exception.h>
 #include <jw/debug/debug.h>
 #include <jw/dpmi/detail/interrupt_id.h>
+#include <jw/dpmi/detail/selectors.h>
 #include <jw/dpmi/ring0.h>
 #include <jw/sso_vector.h>
 #include <cstring>
@@ -27,13 +28,7 @@ namespace jw::dpmi::detail
     static constinit std::optional<basic_pool_resource> trampoline_memres { std::nullopt };
     static constinit std::optional<sso_vector<std::exception_ptr, 3>> pending_exceptions { std::nullopt };
     static constinit std::array<std::optional<exception_handler>, 0x1f> exception_throwers { };
-
-    struct
-    {
-        selector ds;
-        std::uint32_t stack_end;
-        alignas (0x10) std::array<std::byte, config::exception_stack_size> stack;
-    } static constinit exception_data;
+    alignas (0x10) static constinit std::array<std::byte, config::exception_stack_size> exception_stack;
 
     [[noreturn]]
     static void rethrow_cpu_exception()
@@ -90,7 +85,7 @@ namespace jw::dpmi::detail
         }
 
 #       ifndef NDEBUG
-        if (exception_data.stack_end != 0xDEADBEEF)
+        if (*reinterpret_cast<std::uint32_t*>(exception_stack.data()) != 0xdeadbeef)
             fmt::print(stderr, "Stack overflow handling exception 0x{:0>2x}\n", data->num.value);
 #       endif
 
@@ -167,8 +162,8 @@ namespace jw::dpmi::detail
             add esp, %[chain_offset]
             retf
          )" :
-            :   [ds]                "i" (&exception_data.ds),
-                [stack]             "i" (exception_data.stack.begin() + exception_data.stack.size() - 0x04),
+            :   [ds]                "i" (&safe_ds),
+                [stack]             "i" (exception_stack.begin() + exception_stack.size() - 0x10),
                 [frame_size]        "i" (sizeof(raw_exception_frame) - (dpmi10_frame ? 0 : sizeof(dpmi10_exception_frame))),
                 [handle_exception]  "i" (handle_exception),
                 [frame_offset]      "i" ((dpmi10_frame ? offsetof(raw_exception_frame, frame_10) : offsetof(raw_exception_frame, frame_09)) - offsetof(raw_exception_frame, data)),
@@ -307,8 +302,7 @@ namespace jw::dpmi::detail
         done = true;
 
         trampoline_memres.emplace(trampoline_pool);
-        exception_data.ds = get_ds();
-        exception_data.stack_end = 0xDEADBEEF;
+        *reinterpret_cast<std::uint32_t*>(exception_stack.data()) = 0xdeadbeef;
 
         pending_exceptions.emplace();
 
