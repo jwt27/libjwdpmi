@@ -32,7 +32,7 @@ namespace jw::dpmi::detail
         alignas (0x10) std::array<std::byte, config::exception_stack_size> stack;
     } static constinit exception_data;
 
-    [[noreturn, gnu::no_caller_saved_registers, gnu::force_align_arg_pointer]]
+    [[noreturn]]
     static void rethrow_cpu_exception()
     {
         auto e = std::move(pending_exceptions->back());
@@ -193,8 +193,35 @@ namespace jw::dpmi::detail
 
     void call_from_exception(void(*)())
     {
-        asm (".cfi_signal_frame");
-        asm ("call [esp+4]; ret 4");
+        asm
+        (R"(
+        .cfi_signal_frame
+            xchg ebp, [esp]             # The function pointer to call is on *top* of the stack!
+        .cfi_def_cfa esp, 0x08
+            push eax                    # These registers are caller-saved
+            push ecx
+            push edx
+            mov eax, ebp
+            lea ebp, [esp + 0x0c]
+        .cfi_def_cfa_register ebp
+        .cfi_offset ebp, -0x08
+        .cfi_offset eax, -0x0c
+        .cfi_offset ecx, -0x10
+        .cfi_offset edx, -0x14
+            and esp, -0x10              # Align stack
+            call eax
+            lea esp, [ebp - 0x0c]
+            pop edx
+        .cfi_restore edx
+            pop ecx
+        .cfi_restore ecx
+            pop eax
+        .cfi_restore eax
+            pop ebp
+        .cfi_restore ebp
+        .cfi_def_cfa esp, 0x04
+            ret
+        )");
     }
 
     template <exception_num N, exception_num... Next>
@@ -202,7 +229,9 @@ namespace jw::dpmi::detail
     {
         exception_throwers[N].emplace(N, [](const exception_info& i) -> bool
         {
-            throw specific_cpu_exception<N> { i };
+            if constexpr (config::enable_throwing_from_cpu_exceptions)
+                throw specific_cpu_exception<N> { i };
+            return false;
         });
         if constexpr (sizeof...(Next) > 0) make_throwers<Next...>();
     }
