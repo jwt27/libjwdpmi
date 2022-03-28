@@ -213,7 +213,7 @@ namespace jw::dpmi::detail
 
     void setup_exception_handling();
 
-    [[noreturn, gnu::no_caller_saved_registers, gnu::force_align_arg_pointer]]
+    [[noreturn]]
     void kill();
 
     void simulate_call(exception_frame*, void(*)()) noexcept;
