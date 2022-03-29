@@ -322,8 +322,10 @@ namespace jw::dpmi::detail
 
 namespace jw::dpmi
 {
-    void redirect_exception(exception_frame* frame, void(*func)()) noexcept
+    void redirect_exception(exception_frame* frame, void(*func)())
     {
+        if (frame->info_bits.redirect_elsewhere) throw already_redirected { };
+
         using namespace ::jw::dpmi::detail;
         redirect_allocator alloc { &*trampoline_memres };
         auto* const p = std::allocator_traits<redirect_allocator>::allocate(alloc, 1);
