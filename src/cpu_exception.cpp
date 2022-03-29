@@ -17,11 +17,14 @@
 
 namespace jw::dpmi::detail
 {
+    struct redirect_trampoline;
+
     using trampoline_allocator = monomorphic_allocator<basic_pool_resource, exception_trampoline>;
+    using redirect_allocator = monomorphic_allocator<basic_pool_resource, redirect_trampoline>;
 
     [[gnu::section(".text.hot")]] alignas (exception_trampoline)
-    static constinit std::array<std::byte, 4_KB> trampoline_pool;
-    static inline constinit std::optional<basic_pool_resource> trampoline_memres { std::nullopt };
+    static constinit std::array<std::byte, 8_KB> trampoline_pool;
+    static constinit std::optional<basic_pool_resource> trampoline_memres { std::nullopt };
     static constinit std::optional<sso_vector<std::exception_ptr, 3>> pending_exceptions { std::nullopt };
     static constinit std::array<std::optional<exception_handler>, 0x1f> exception_throwers { };
 
@@ -211,53 +214,89 @@ namespace jw::dpmi::detail
         data_alloc.deallocate(data, 1);
     }
 
-    void kill()
+    struct redirect_trampoline
     {
-        jw::terminate();
-    }
+        redirect_trampoline(std::uintptr_t ret, cpu_flags fl, void (*f)())
+            : return_address { ret }
+            , flags { fl }
+            , self { this }
+            , stage2_offset { find_stage2() }
+            , func { f }
+        { }
 
-    [[gnu::naked]]
-    static void call_from_exception()
-    {
-        asm
-        (R"(
-        .cfi_signal_frame
-            xchg ebp, [esp]             # The function pointer to call is on *top* of the stack!
-        .cfi_def_cfa esp, 0x08
-            push eax                    # These registers are caller-saved
-            push ecx
-            push edx
-            mov eax, ebp
-            lea ebp, [esp + 0x0c]
-        .cfi_def_cfa_register ebp
-        .cfi_offset ebp, -0x08
-        .cfi_offset eax, -0x0c
-        .cfi_offset ecx, -0x10
-        .cfi_offset edx, -0x14
-            and esp, -0x10              # Align stack
-            call eax
-            lea esp, [ebp - 0x0c]
-            pop edx
-        .cfi_restore edx
-            pop ecx
-        .cfi_restore ecx
-            pop eax
-        .cfi_restore eax
-            pop ebp
-        .cfi_restore ebp
-        .cfi_def_cfa esp, 0x04
-            ret
-        )");
-    }
+
+        std::uintptr_t code() const noexcept
+        {
+            return reinterpret_cast<std::uintptr_t>(&push0_imm32);
+        }
+
+    private:
+        std::ptrdiff_t find_stage2() const noexcept
+        {
+            auto src = reinterpret_cast<intptr_t>(&stage2_offset + 1);
+            auto dst = reinterpret_cast<intptr_t>(stage2);
+            return dst - src;
+        }
+
+        struct [[gnu::packed]] alignas(0x10)
+        {
+            const std::uint8_t push0_imm32 { 0x68 };
+            std::uintptr_t return_address;
+            const std::uint8_t push1_imm32 { 0x68 };
+            cpu_flags flags;
+            const std::uint8_t push2_imm32 { 0x68 };
+            redirect_trampoline* self;
+            const std::uint8_t jmp_rel32 { 0xe9 };
+            std::ptrdiff_t stage2_offset;
+        };
+        void (*func)();
+
+        [[gnu::naked]]
+        static void stage2()
+        {
+            asm
+            (R"(
+            .cfi_signal_frame
+            .cfi_def_cfa esp, 0x0c
+            .cfi_offset eflags, -0x08
+                call %0
+                add esp, 4
+            .cfi_def_cfa_offset 0x08
+                popf
+            .cfi_restore eflags
+            .cfi_def_cfa_offset 0x04
+                ret
+             )" :
+                : "i" (stage3)
+            );
+        }
+
+        [[gnu::no_caller_saved_registers, gnu::force_align_arg_pointer, gnu::cdecl]]
+        static void stage3(redirect_trampoline* self, cpu_flags flags)
+        {
+            auto f = self->func;
+            redirect_allocator alloc { &*trampoline_memres };
+            std::allocator_traits<redirect_allocator>::destroy(alloc, self);
+            std::allocator_traits<redirect_allocator>::deallocate(alloc, self, 1);
+            asm ("push %0; popf" : : "rm" (flags) : "cc");
+            f();
+        }
+    };
 
     void simulate_call(exception_frame* frame, void(*func)()) noexcept
     {
-        frame->stack.offset -= 2 * sizeof(std::uintptr_t);
-        auto* esp = reinterpret_cast<std::uintptr_t*>(frame->stack.offset);
-        esp[1] = frame->fault_address.offset;
-        esp[0] = reinterpret_cast<std::uintptr_t>(func);
-        frame->fault_address.offset = reinterpret_cast<std::uintptr_t>(call_from_exception);
+        redirect_allocator alloc { &*trampoline_memres };
+        auto* const p = std::allocator_traits<redirect_allocator>::allocate(alloc, 1);
+        std::allocator_traits<redirect_allocator>::construct(alloc, p, std::uintptr_t { frame->fault_address.offset }, cpu_flags { frame->flags }, func);
+
+        frame->flags.interrupts_enabled = false;
+        frame->fault_address.offset = p->code();
         frame->info_bits.redirect_elsewhere = true;
+    }
+
+    void kill()
+    {
+        jw::terminate();
     }
 
     template <exception_num N, exception_num... Next>
