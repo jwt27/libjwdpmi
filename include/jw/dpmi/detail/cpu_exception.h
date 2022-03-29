@@ -216,5 +216,5 @@ namespace jw::dpmi::detail
     [[noreturn]]
     void kill();
 
-    void simulate_call(exception_frame*, void(*)()) noexcept;
+    void redirect_exception(exception_frame*, void(*)()) noexcept;
 }

@@ -69,7 +69,7 @@ namespace jw::dpmi::detail
             if (can_throw)
             {
                 detail::pending_exceptions->emplace_back(std::current_exception());
-                detail::simulate_call(f, detail::rethrow_cpu_exception);
+                detail::redirect_exception(f, detail::rethrow_cpu_exception);
                 success = true;
             }
             else if (can_redirect)
@@ -83,7 +83,7 @@ namespace jw::dpmi::detail
                     catch (const std::exception& e) { print_exception(e); }
                     catch (...) { }
                 }
-                detail::simulate_call(f, kill);
+                detail::redirect_exception(f, kill);
                 success = true;
             }
             else std::terminate();
@@ -283,7 +283,7 @@ namespace jw::dpmi::detail
         }
     };
 
-    void simulate_call(exception_frame* frame, void(*func)()) noexcept
+    void redirect_exception(exception_frame* frame, void(*func)()) noexcept
     {
         redirect_allocator alloc { &*trampoline_memres };
         auto* const p = std::allocator_traits<redirect_allocator>::allocate(alloc, 1);
