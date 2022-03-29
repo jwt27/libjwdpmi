@@ -48,7 +48,7 @@ namespace jw::dpmi::detail
     {
         auto* data = frame->data;
         auto* const f = data->is_dpmi10 ? &frame->frame_10 : &frame->frame_09;
-        detail::interrupt_id id { data->num, detail::interrupt_type::exception };
+        interrupt_id id { data->num, interrupt_type::exception };
         if (id.fpu_context_switched) return true;
 
         const exception_info i { &frame->reg, f, data->is_dpmi10 };
@@ -68,8 +68,8 @@ namespace jw::dpmi::detail
 
             if (can_throw)
             {
-                detail::pending_exceptions->emplace_back(std::current_exception());
-                detail::redirect_exception(f, detail::rethrow_cpu_exception);
+                pending_exceptions->emplace_back(std::current_exception());
+                redirect_exception(f, detail::rethrow_cpu_exception);
                 success = true;
             }
             else if (can_redirect)
@@ -83,7 +83,7 @@ namespace jw::dpmi::detail
                     catch (const std::exception& e) { print_exception(e); }
                     catch (...) { }
                 }
-                detail::redirect_exception(f, kill);
+                redirect_exception(f, kill);
                 success = true;
             }
             else std::terminate();
@@ -283,17 +283,6 @@ namespace jw::dpmi::detail
         }
     };
 
-    void redirect_exception(exception_frame* frame, void(*func)()) noexcept
-    {
-        redirect_allocator alloc { &*trampoline_memres };
-        auto* const p = std::allocator_traits<redirect_allocator>::allocate(alloc, 1);
-        std::allocator_traits<redirect_allocator>::construct(alloc, p, std::uintptr_t { frame->fault_address.offset }, cpu_flags { frame->flags }, func);
-
-        frame->flags.interrupts_enabled = false;
-        frame->fault_address.offset = p->code();
-        frame->info_bits.redirect_elsewhere = true;
-    }
-
     void kill()
     {
         jw::terminate();
@@ -333,6 +322,18 @@ namespace jw::dpmi::detail
 
 namespace jw::dpmi
 {
+    void redirect_exception(exception_frame* frame, void(*func)()) noexcept
+    {
+        using namespace ::jw::dpmi::detail;
+        redirect_allocator alloc { &*trampoline_memres };
+        auto* const p = std::allocator_traits<redirect_allocator>::allocate(alloc, 1);
+        std::allocator_traits<redirect_allocator>::construct(alloc, p, std::uintptr_t { frame->fault_address.offset }, cpu_flags { frame->flags }, func);
+
+        frame->flags.interrupts_enabled = false;
+        frame->fault_address.offset = p->code();
+        frame->info_bits.redirect_elsewhere = true;
+    }
+
     std::string cpu_category::message(int ev) const
     {
         using namespace std::string_literals;

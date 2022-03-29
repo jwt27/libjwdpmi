@@ -215,6 +215,4 @@ namespace jw::dpmi::detail
 
     [[noreturn]]
     void kill();
-
-    void redirect_exception(exception_frame*, void(*)()) noexcept;
 }

@@ -154,6 +154,9 @@ namespace jw::dpmi
         using E::E;
         using E::operator=;
     };
+
+    // Redirect to the given function on return from an exception handler.
+    void redirect_exception(exception_frame*, void(*)()) noexcept;
 }
 
 #pragma GCC diagnostic pop
