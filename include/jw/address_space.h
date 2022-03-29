@@ -51,7 +51,9 @@ namespace jw
     {
         using dst_type = remove_address_space_t<T>;
         using src_type = remove_address_space_t<U>;
-        static_assert(std::is_base_of_v<src_type, dst_type> or std::is_base_of_v<dst_type, src_type>);
+        static_assert(std::is_same_v<dst_type, src_type> or
+                      std::is_base_of_v<src_type, dst_type> or
+                      std::is_base_of_v<dst_type, src_type>);
         static_assert(std::is_trivially_copy_assignable_v<dst_type>);
         const std::size_t size = std::min(sizeof(dst_type), sizeof(src_type));
         for (std::size_t i = 0; i < num; ++i)

@@ -76,7 +76,7 @@ namespace jw::dpmi
         selector ds { }; unsigned : 16;
         selector fs { }; unsigned : 16;
         selector gs { }; unsigned : 16;
-        std::uintptr_t linear_page_fault_address : 32 { };
+        std::uintptr_t cr2 : 32 { };
         union
         {
             struct [[gnu::packed]]
@@ -88,11 +88,13 @@ namespace jw::dpmi
                 bool cache_disabled : 1;
                 bool accessed : 1;
                 bool dirty : 1;
+                bool page_attribute_table : 1;
                 bool global : 1;
                 unsigned reserved : 3;
-                unsigned physical_address : 21;
+                unsigned address_high_bits : 20;
             };
             unsigned raw_pte : 32;
+            std::uintptr_t physical_address() const noexcept { return raw_pte & 0xfffff000; }
         } page_table_entry { };
 
         void print(FILE* out = stderr) const { print(out, *this); }
@@ -103,10 +105,9 @@ namespace jw::dpmi
         {
             dpmi09_exception_frame::print(out, f);
             fmt::print(out, "ds={:0>4x} es={:0>4x} fs={:0>4x} gs={:0>4x}\n"
-                            "(if page fault) Linear: {:0>8x}, physical: {:0>8x}, PTE: {:0>2x}\n",
-                       f.ds, f.es, f.fs, f.gs,
-                       f.linear_page_fault_address, f.page_table_entry.physical_address,
-                       static_cast<std::uint8_t>(f.page_table_entry.raw_pte));
+                            "[if page fault] Linear: {:0>8x}, PTE: {:0>8x}\n",
+                        f.ds, f.es, f.fs, f.gs,
+                        f.cr2, f.page_table_entry.raw_pte);
         }
     };
 
