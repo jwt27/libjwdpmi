@@ -57,6 +57,7 @@ namespace jw::dpmi::detail
         {
             const auto base = descriptor::get_base(get_cs());
             const bool can_redirect = not f->flags.v86_mode and
+                                      not f->info_bits.redirect_elsewhere and
                                       descriptor::get_base(f->fault_address.segment) == base and
                                       descriptor::get_base(f->stack.segment) == base;
             const bool can_throw = config::enable_throwing_from_cpu_exceptions and can_redirect;
