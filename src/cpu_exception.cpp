@@ -48,7 +48,7 @@ namespace jw::dpmi::detail
     {
         auto* data = frame->data;
         auto* const f = data->is_dpmi10 ? &frame->frame_10 : &frame->frame_09;
-        detail::interrupt_id id { data->num, detail::interrupt_type::exception };
+        interrupt_id id { data->num, interrupt_type::exception };
         if (id.fpu_context_switched) return true;
 
         const exception_info i { &frame->reg, f, data->is_dpmi10 };
@@ -68,8 +68,8 @@ namespace jw::dpmi::detail
 
             if (can_throw)
             {
-                detail::pending_exceptions->emplace_back(std::current_exception());
-                detail::simulate_call(f, detail::rethrow_cpu_exception);
+                pending_exceptions->emplace_back(std::current_exception());
+                redirect_exception(f, detail::rethrow_cpu_exception);
                 success = true;
             }
             else if (can_redirect)
@@ -83,7 +83,7 @@ namespace jw::dpmi::detail
                     catch (const std::exception& e) { print_exception(e); }
                     catch (...) { }
                 }
-                detail::simulate_call(f, kill);
+                redirect_exception(f, kill);
                 success = true;
             }
             else std::terminate();
@@ -257,31 +257,6 @@ namespace jw::dpmi::detail
         }
     };
 
-    static void do_simulate_call(any_address_space<exception_frame> auto* frame, void(*func)()) noexcept
-    {
-        std::uintptr_t ret = frame->fault_address.offset;
-        cpu_flags flags;
-        far_copy(&flags, &frame->flags);
-
-        redirect_allocator alloc { &*trampoline_memres };
-        auto* const p = std::allocator_traits<redirect_allocator>::allocate(alloc, 1);
-        std::allocator_traits<redirect_allocator>::construct(alloc, p, ret, flags, func);
-
-        frame->flags.interrupts_enabled = false;
-        frame->fault_address.offset = p->code();
-        frame->info_bits.redirect_elsewhere = true;
-    }
-
-    void simulate_call(exception_frame* frame, void(*func)()) noexcept
-    {
-        do_simulate_call(frame, func);
-    }
-
-    void simulate_call(__seg_fs exception_frame* frame, void(*func)()) noexcept
-    {
-        do_simulate_call(frame, func);
-    }
-
     void kill()
     {
         jw::terminate();
@@ -321,6 +296,35 @@ namespace jw::dpmi::detail
 
 namespace jw::dpmi
 {
+    static void do_redirect_exception(any_address_space<exception_frame> auto* frame, void(*func)())
+    {
+        if (frame->info_bits.redirect_elsewhere) throw already_redirected { };
+
+        using namespace ::jw::dpmi::detail;
+
+        std::uintptr_t ret = frame->fault_address.offset;
+        cpu_flags flags;
+        far_copy(&flags, &frame->flags);
+
+        redirect_allocator alloc { &*trampoline_memres };
+        auto* const p = std::allocator_traits<redirect_allocator>::allocate(alloc, 1);
+        std::allocator_traits<redirect_allocator>::construct(alloc, p, ret, flags, func);
+
+        frame->flags.interrupts_enabled = false;
+        frame->fault_address.offset = p->code();
+        frame->info_bits.redirect_elsewhere = true;
+    }
+
+    void redirect_exception(exception_frame* frame, void(*func)())
+    {
+        do_redirect_exception(frame, func);
+    }
+
+    void redirect_exception(__seg_fs exception_frame* frame, void(*func)())
+    {
+        do_redirect_exception(frame, func);
+    }
+
     std::string cpu_category::message(int ev) const
     {
         using namespace std::string_literals;

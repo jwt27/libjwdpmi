@@ -215,10 +215,4 @@ namespace jw::dpmi::detail
 
     [[noreturn]]
     void kill();
-
-    [[gnu::naked]]
-    void call_from_exception(void(*)());
-
-    void simulate_call(exception_frame* frame, void(*func)()) noexcept;
-    void simulate_call(__seg_fs exception_frame* frame, void(*func)()) noexcept;
 }

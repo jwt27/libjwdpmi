@@ -163,6 +163,15 @@ namespace jw::dpmi
         using E::E;
         using E::operator=;
     };
+
+    struct already_redirected : std::runtime_error
+    {
+        already_redirected() : std::runtime_error { "Exception already redirected" } { }
+    };
+
+    // Redirect to the given function on return from an exception handler.
+    void redirect_exception(__seg_fs exception_frame*, void(*)());
+    void redirect_exception(exception_frame*, void(*)());
 }
 
 #pragma GCC diagnostic pop
