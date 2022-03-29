@@ -1183,7 +1183,7 @@ namespace jw
             {
                 auto* const r = i.registers;
                 auto* const f = i.frame;
-                if (debugmsg) fmt::print(stderr, FMT_STRING("entering exception {:0>#2x} from {:#x}\n"),
+                if (debugmsg) fmt::print(stderr, FMT_STRING("entering exception 0x{:0>2x} from {:#x}\n"),
                                          exc, std::uintptr_t { f->fault_address.offset });
                 if (not debug_mode)
                 {
@@ -1214,7 +1214,7 @@ namespace jw
                         else f->fault_address.offset += 1;  // hardcoded breakpoint, safe to skip
                     }
 
-                    if (debugmsg) fmt::print(stderr, FMT_STRING("leaving exception {:0>#2x}, resuming at {:#x}\n"),
+                    if (debugmsg) fmt::print(stderr, FMT_STRING("leaving exception 0x{:0>2x}, resuming at {:#x}\n"),
                                              exc, std::uintptr_t { f->fault_address.offset });
                 };
 
@@ -1230,7 +1230,7 @@ namespace jw
                 if (f->fault_address.segment != main_cs and f->fault_address.segment != ring0_cs) [[unlikely]]
                 {
                     if (exc == exception_num::trap) return true; // keep stepping until we get back to our own code
-                    fmt::print(stderr, FMT_STRING("Can't debug this!  CS is neither {:0>#4x} nor {:0>#4x}.\n"
+                    fmt::print(stderr, FMT_STRING("Can't debug this!  CS is neither 0x{:0>4x} nor 0x{:0>4x}.\n"
                                                   "{}\n"),
                                main_cs, ring0_cs,
                                cpu_exception { exc, r, f, new_frame_type }.what());
@@ -1263,7 +1263,7 @@ namespace jw
 
                     if (exc == exception_num::breakpoint and current_signal != -1)
                     {
-                        if (debugmsg) fmt::print(stderr, FMT_STRING("break with signal {:0>#2x}\n"), int { current_signal });
+                        if (debugmsg) fmt::print(stderr, FMT_STRING("break with signal 0x{:0>2x}\n"), int { current_signal });
                         current_thread->signals.insert(current_signal);
                         current_signal = -1;
                     }

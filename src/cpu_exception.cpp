@@ -356,7 +356,7 @@ namespace jw::dpmi
         case exception_num::sse_exception:            return "SSE Floating-point exception"s;
         case exception_num::virtualization_exception: return "Virtualization exception"s;
         case exception_num::security_exception:       return "Security exception"s;
-        default: return fmt::format("Unknown CPU exception {:0>#2x}", ev);
+        default: return fmt::format("Unknown CPU exception 0x{:0>2x}", ev);
         }
     }
 }

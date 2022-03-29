@@ -45,6 +45,6 @@ namespace jw::dpmi
 
     std::string dpmi_error_category::message(int ev) const
     {
-        return fmt::format(FMT_STRING("DPMI error {:0>#4x}: {}."), ev, msg(ev));
+        return fmt::format(FMT_STRING("DPMI error 0x{:0>4x}: {}."), ev, msg(ev));
     }
 }
