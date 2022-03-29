@@ -274,6 +274,7 @@ namespace jw::dpmi::detail
             std::allocator_traits<redirect_allocator>::destroy(alloc, self);
             std::allocator_traits<redirect_allocator>::deallocate(alloc, self, 1);
             asm ("push %0; popf" : : "rm" (flags) : "cc");
+            asm ("mov ss, %k0; nop" : : "r" (main_ds));
             f();
         }
     };
@@ -325,6 +326,7 @@ namespace jw::dpmi
         auto* const p = std::allocator_traits<redirect_allocator>::allocate(alloc, 1);
         std::allocator_traits<redirect_allocator>::construct(alloc, p, std::uintptr_t { frame->fault_address.offset }, cpu_flags { frame->flags }, func);
 
+        frame->stack.segment = safe_ds;
         frame->flags.interrupts_enabled = false;
         frame->fault_address.offset = p->code();
         frame->info_bits.redirect_elsewhere = true;
