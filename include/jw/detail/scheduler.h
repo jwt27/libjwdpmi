@@ -38,14 +38,14 @@ namespace jw::detail
     {
         std::uint32_t gs;
         std::uint32_t fs;
-        std::uint32_t es;
+        dpmi::cpu_flags flags;
         std::uint32_t ebx;
         std::uint32_t esi;
         std::uint32_t edi;
         std::uint32_t ebp;
         std::uintptr_t return_address;
         // eax, ecx, edx are caller-saved.
-        // cs, ds, ss (should) never change.
+        // cs, ds, es, ss (should) never change.
         // esp is the pointer to this struct.
     };
 

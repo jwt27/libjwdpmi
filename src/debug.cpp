@@ -140,6 +140,8 @@ namespace jw
                 {
                     if (current_thread == this)
                         current_exception.frame->flags.trap = t;
+                    else
+                        thread->get_context()->flags.trap = t;
                 };
 
                 void set_action(char a, std::uintptr_t rbegin = 0, std::uintptr_t rend = 0)
@@ -702,10 +704,10 @@ namespace jw
                     case esi: encode(out, &r->esi); return;
                     case edi: encode(out, &r->edi); return;
                     case esp: encode(out, &r_esp); return;
-                    case cs: { std::uint32_t s = main_cs;  encode(out, &s); return; }
-                    case ss: { std::uint32_t s = main_ds; encode(out, &s); return; }
-                    case ds: { std::uint32_t s = main_ds; encode(out, &s); return; }
-                    case es: { std::uint32_t s = r->es; encode(out, &s, regsize[reg]); return; }
+                    case cs: { std::uint32_t s = main_cs; encode(out, &s); return; }
+                    case ss:
+                    case ds:
+                    case es: { std::uint32_t s = main_ds; encode(out, &s); return; }
                     case fs: { std::uint32_t s = r->fs; encode(out, &s, regsize[reg]); return; }
                     case gs: { std::uint32_t s = r->gs; encode(out, &s, regsize[reg]); return; }
                     case eip: encode(out, &r_eip); return;
