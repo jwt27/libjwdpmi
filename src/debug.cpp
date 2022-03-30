@@ -1233,7 +1233,7 @@ namespace jw
                 {
                     if (debugmsg) fmt::print(stdout, FMT_STRING("KILL signal received."));
                     for (auto&& t : threads) t.second.set_action('c');
-                    redirect_exception(current_exception.frame, dpmi::detail::kill);
+                    redirect_exception(current_exception, dpmi::detail::kill);
                     it = fmt::format_to(it, FMT_STRING("X{:0>2x}"), posix_signal(current_thread->last_stop_signal));
                     send_packet(str);
                     uninstall_gdb_interface();

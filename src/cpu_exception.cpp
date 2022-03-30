@@ -65,7 +65,7 @@ namespace jw::dpmi::detail
             if (can_throw)
             {
                 pending_exceptions->emplace_back(std::current_exception());
-                redirect_exception(f, detail::rethrow_cpu_exception);
+                redirect_exception(i, detail::rethrow_cpu_exception);
                 success = true;
             }
             else if (can_redirect)
@@ -79,7 +79,7 @@ namespace jw::dpmi::detail
                     catch (const std::exception& e) { print_exception(e); }
                     catch (...) { }
                 }
-                redirect_exception(f, kill);
+                redirect_exception(i, kill);
                 success = true;
             }
             else std::terminate();
@@ -292,24 +292,24 @@ namespace jw::dpmi::detail
 
 namespace jw::dpmi
 {
-    void redirect_exception(__seg_fs exception_frame* frame, void(*func)())
+    void redirect_exception(const exception_info& info, void(*func)())
     {
-        if (frame->info_bits.redirect_elsewhere) throw already_redirected { };
+        if (info.frame->info_bits.redirect_elsewhere) throw already_redirected { };
 
         using namespace ::jw::dpmi::detail;
 
-        std::uintptr_t ret = frame->fault_address.offset;
+        std::uintptr_t ret = info.frame->fault_address.offset;
         cpu_flags flags;
-        far_copy(&flags, &frame->flags);
+        far_copy(&flags, &info.frame->flags);
 
         redirect_allocator alloc { &*trampoline_memres };
         auto* const p = std::allocator_traits<redirect_allocator>::allocate(alloc, 1);
         std::allocator_traits<redirect_allocator>::construct(alloc, p, ret, flags, func);
 
-        frame->stack.segment = safe_ds;
-        frame->flags.interrupts_enabled = false;
-        frame->fault_address.offset = p->code();
-        frame->info_bits.redirect_elsewhere = true;
+        info.frame->stack.segment = safe_ds;
+        info.frame->flags.interrupts_enabled = false;
+        info.frame->fault_address.offset = p->code();
+        info.frame->info_bits.redirect_elsewhere = true;
     }
 
     std::string cpu_category::message(int ev) const

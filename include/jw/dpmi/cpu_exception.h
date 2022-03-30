@@ -170,7 +170,7 @@ namespace jw::dpmi
     };
 
     // Redirect to the given function on return from an exception handler.
-    void redirect_exception(__seg_fs exception_frame*, void(*)());
+    void redirect_exception(const exception_info& info, void(*)());
 }
 
 #pragma GCC diagnostic pop
