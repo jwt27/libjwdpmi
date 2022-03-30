@@ -5,6 +5,7 @@
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #include <jw/dpmi/realmode.h>
+#include <jw/dpmi/detail/selectors.h>
 #include <jw/dpmi/detail/interrupt_id.h>
 
 namespace jw::dpmi::detail
@@ -47,6 +48,7 @@ namespace jw
 
         static far_ptr16 allocate_rm_callback(far_ptr32 func, realmode_registers* reg)
         {
+            force_frame_pointer();
             far_ptr16 ptr;
             dpmi::dpmi_error_code error;
             bool c;
@@ -54,8 +56,8 @@ namespace jw
             (R"(
                 push ds
                 push es
-                push ds; pop es
-                mov ds, %w[seg]
+                mov ds, %[cs]
+                mov es, %[ds]
                 int 0x31
                 pop es
                 pop ds
@@ -64,7 +66,8 @@ namespace jw
                 , "=c" (ptr.segment)
                 , "=d" (ptr.offset)
                 : "a" (0x0303)
-                , [seg] "rm" (func.segment)
+                , [cs] "rm" (func.segment)
+                , [ds] "rm" (detail::safe_ds)
                 , "S" (func.offset)
                 , "D" (reg)
             );

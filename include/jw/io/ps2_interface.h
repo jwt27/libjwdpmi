@@ -166,7 +166,7 @@ namespace jw
                     [[likely]] case ACK:
                         return;
                     default:
-                        fmt::print(stderr, "PS/2 interface: expected ACK, got this: {:0>#2x}\n", b);
+                        fmt::print(stderr, "PS/2 interface: expected ACK, got this: 0x{:0>2x}\n", b);
                         [[fallthrough]];
                     case RESEND:
                         throw io_error("Keyboard on fire.");

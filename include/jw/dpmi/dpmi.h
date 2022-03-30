@@ -15,7 +15,6 @@
 #include <fmt/core.h>
 #include <jw/address_space.h>
 #include <jw/dpmi/dpmi_error.h>
-#include <jw/dpmi/irq_check.h>
 #include <jw/split_int.h>
 #include <jw/common.h>
 

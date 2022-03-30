@@ -10,6 +10,7 @@
 #include <string_view>
 #include <vector>
 #include <crt0.h>
+#include <sys/exceptn.h>
 #include <csignal>
 #include <fmt/core.h>
 #include <jw/main.h>
@@ -20,6 +21,7 @@
 #include <jw/io/rs232.h>
 #include <jw/io/ps2_interface.h>
 #include <jw/dpmi/ring0.h>
+#include <jw/dpmi/detail/selectors.h>
 #include <jw/video/ansi.h>
 #include <cxxabi.h>
 #include <unwind.h>
@@ -182,8 +184,12 @@ namespace jw
             min_chunk_size = irq_alloc_size;
             irq_alloc = new dpmi::locked_pool_resource<true> { irq_alloc_size };
 
-            setup_exception_handling();
+            safe_ds = __djgpp_ds_alias;
+            main_cs = get_cs();
+            main_ds = get_ds();
+
             interrupt_id::setup();
+            setup_exception_handling();
 
             // Try setting control registers first in ring 3.  If we have no ring0 access, the
             // dpmi host might still trap and emulate control register access.

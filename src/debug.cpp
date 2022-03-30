@@ -21,7 +21,7 @@
 #include <jw/dpmi/dpmi.h>
 #include <jw/debug/debug.h>
 #include <jw/dpmi/cpu_exception.h>
-#include <jw/dpmi/detail/cpu_exception.h>
+#include <jw/dpmi/detail/selectors.h>
 #include <jw/debug/detail/signals.h>
 #include <jw/io/rs232.h>
 #include <jw/alloc.h>
@@ -56,7 +56,7 @@ namespace jw
             bool debug_mode { false };
             volatile int current_signal { -1 };
             bool thread_events_enabled { false };
-            bool new_frame_type { true };
+            exception_info current_exception;
 
             using resource_type = locked_pool_resource<false>;
 
@@ -91,18 +91,18 @@ namespace jw
             std::deque<packet_string, allocator<packet_string>> packet { &memres };
             bool replied { false };
 
+            struct thread_info;
             using thread_id = jw::detail::scheduler::thread_id;
             constexpr thread_id main_thread_id = jw::detail::scheduler::main_thread_id;
             constexpr thread_id all_threads_id { 0 };
             thread_id current_thread_id { 1 };
             thread_id query_thread_id { 1 };
             thread_id control_thread_id { all_threads_id };
+            thread_info* current_thread { nullptr };
 
             struct thread_info
             {
                 jw::detail::thread* thread;
-                dpmi10_exception_frame frame;
-                cpu_registers reg;
                 std::pmr::set<std::int32_t> signals { &memres };
                 std::int32_t last_stop_signal { -1 };
                 std::uintptr_t step_range_begin { 0 };
@@ -120,35 +120,58 @@ namespace jw
                     step_range
                 } action;
 
-                void set_action(char a, std::uintptr_t resume_at = 0, std::uintptr_t rbegin = 0, std::uintptr_t rend = 0)
+                std::uintptr_t eip() const noexcept
                 {
-                    if (resume_at != 0) frame.fault_address.offset = resume_at;
+                    if (current_thread == this)
+                        return current_exception.frame->fault_address.offset;
+                    else
+                        return thread->get_context()->return_address;
+                }
+
+                void jmp(std::uintptr_t dst) noexcept
+                {
+                    if (current_thread == this)
+                        current_exception.frame->fault_address.offset = dst;
+                    else
+                        thread->get_context()->return_address = dst;
+                }
+
+                void trap(bool t) noexcept
+                {
+                    if (current_thread == this)
+                        current_exception.frame->flags.trap = t;
+                    else
+                        thread->get_context()->flags.trap = t;
+                };
+
+                void set_action(char a, std::uintptr_t rbegin = 0, std::uintptr_t rend = 0)
+                {
                     thread->resume();
                     if (a == 'c')  // continue
                     {
-                        frame.flags.trap = false;
+                        trap(false);
                         action = cont;
                     }
                     else if (a == 's')  // step
                     {
-                        frame.flags.trap = trap_mask == 0;
+                        trap(trap_mask == 0);
                         action = step;
                     }
                     else if (a == 'C')  // continue with signal
                     {
-                        frame.flags.trap = false;
+                        trap(false);
                         if (not is_fault_signal(last_stop_signal)) action = cont;
                         else action = cont_sig;
                     }
                     else if (a == 'S')  // step with signal
                     {
-                        frame.flags.trap = trap_mask == 0;
+                        trap(trap_mask == 0);
                         if (not is_fault_signal(last_stop_signal)) action = step;
                         else action = step_sig;
                     }
                     else if (a == 'r')   // step with range
                     {
-                        frame.flags.trap = trap_mask == 0;
+                        trap(trap_mask == 0);
                         step_range_begin = rbegin;
                         step_range_end = rend;
                         action = step_range;
@@ -179,7 +202,6 @@ namespace jw
             };
             
             std::pmr::map<thread_id, thread_info> threads { &memres };
-            thread_info* current_thread { nullptr };
 
             inline void populate_thread_list()
             {
@@ -221,6 +243,18 @@ namespace jw
                 4, 4, 4, 4, 4, 4, 4, 4,
                 16, 16, 16, 16, 16, 16, 16, 16,
                 4
+            };
+
+            constexpr std::array<std::string_view, 41> regname
+            {
+                "eax", "ecx", "edx", "ebx",
+                "esp", "ebp", "esi", "edi",
+                "eip", "eflags",
+                "cs", "ss", "ds", "es", "fs", "gs",
+                "st0", "st1", "st2", "st3", "st4", "st5", "st6", "st7",
+                "fctrl", "fstat", "ftag", "fiseg", "fioff", "foseg", "fooff", "fop",
+                "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7",
+                "mxcsr"
             };
 
 #           ifndef HAVE__SSE__
@@ -437,7 +471,7 @@ namespace jw
             inline bool reverse_decode(const std::string_view& in, T* out, std::size_t len = sizeof(T))
             {
                 len = std::min(len, in.size() / 2);
-                auto ptr = reinterpret_cast<byte*>(out);
+                auto ptr = reinterpret_cast<copy_address_space_t<byte, T>*>(out);
                 for (std::size_t i = 0; i < len; ++i)
                 {
                     ptr[i] = decode(in.substr(i * 2, 2));
@@ -450,7 +484,7 @@ namespace jw
             inline void encode(string& out, T* in, std::size_t len = sizeof(T))
             {
                 constexpr char hex[] = "0123456789abcdef";
-                auto* const ptr = reinterpret_cast<const volatile byte*>(in);
+                auto* const ptr = reinterpret_cast<const volatile copy_address_space_t<byte, T>*>(in);
                 const auto size = out.size();
                 out.resize(size + len * 2);
                 auto it = out.data() + size;
@@ -607,41 +641,46 @@ namespace jw
                 }
             }
 
-            void reg(string& out, regnum r, std::uint32_t id)
+            void reg(string& out, regnum reg, std::uint32_t id)
             {
                 if (threads.count(id) == 0)
                 {
-                    encode_null(out, regsize[r]);
+                    encode_null(out, regsize[reg]);
                     return;
                 }
                 auto&& t = threads[id];
                 if (&t == current_thread)
                 {
-                    switch (r)
+                    auto* const r = current_exception.registers;
+                    auto* const f = current_exception.frame;
+                    auto* const d10f = static_cast<__seg_fs dpmi10_exception_frame*>(current_exception.frame);
+                    const bool dpmi10_frame = current_exception.is_dpmi10_frame;
+
+                    switch (reg)
                     {
-                    case eax: encode(out, &t.reg.eax); return;
-                    case ebx: encode(out, &t.reg.ebx); return;
-                    case ecx: encode(out, &t.reg.ecx); return;
-                    case edx: encode(out, &t.reg.edx); return;
-                    case ebp: encode(out, &t.reg.ebp); return;
-                    case esi: encode(out, &t.reg.esi); return;
-                    case edi: encode(out, &t.reg.edi); return;
-                    case esp: encode(out, &t.frame.stack.offset); return;
-                    case eflags: encode(out, &t.frame.raw_eflags); return;
-                    case cs: { std::uint32_t s = t.frame.fault_address.segment; encode(out, &s); return; }
-                    case ss: { std::uint32_t s = t.frame.stack.segment; encode(out, &s); return; }
-                    case ds: { if (new_frame_type) { std::uint32_t s = t.frame.ds; encode(out, &s); } else encode_null(out, regsize[r]); return; }
-                    case es: { if (new_frame_type) { std::uint32_t s = t.frame.es; encode(out, &s); } else encode_null(out, regsize[r]); return; }
-                    case fs: { if (new_frame_type) { std::uint32_t s = t.frame.fs; encode(out, &s); } else encode_null(out, regsize[r]); return; }
-                    case gs: { if (new_frame_type) { std::uint32_t s = t.frame.gs; encode(out, &s); } else encode_null(out, regsize[r]); return; }
-                    case eip: encode(out, &t.frame.fault_address.offset); return;
+                    case eax: encode(out, &r->eax); return;
+                    case ebx: encode(out, &r->ebx); return;
+                    case ecx: encode(out, &r->ecx); return;
+                    case edx: encode(out, &r->edx); return;
+                    case ebp: encode(out, &r->ebp); return;
+                    case esi: encode(out, &r->esi); return;
+                    case edi: encode(out, &r->edi); return;
+                    case esp: encode(out, &f->stack.offset); return;
+                    case eflags: encode(out, &f->raw_eflags); return;
+                    case cs: { std::uint32_t s = f->fault_address.segment; encode(out, &s); return; }
+                    case ss: { std::uint32_t s = f->stack.segment; encode(out, &s); return; }
+                    case ds: { if (dpmi10_frame) { std::uint32_t s = d10f->ds; encode(out, &s); } else encode_null(out, regsize[reg]); return; }
+                    case es: { if (dpmi10_frame) { std::uint32_t s = d10f->es; encode(out, &s); } else encode_null(out, regsize[reg]); return; }
+                    case fs: { if (dpmi10_frame) { std::uint32_t s = d10f->fs; encode(out, &s); } else encode_null(out, regsize[reg]); return; }
+                    case gs: { if (dpmi10_frame) { std::uint32_t s = d10f->gs; encode(out, &s); } else encode_null(out, regsize[reg]); return; }
+                    case eip: encode(out, &f->fault_address.offset); return;
                     default:
-                        if (r > reg_max) return;
+                        if (reg > reg_max) return;
                         auto* fpu = interrupt_id::last_fpu_context();
-                        switch (r)
+                        switch (reg)
                         {
                             case st0: case st1: case st2: case st3: case st4: case st5: case st6: case st7:
-                                encode(out, &fpu->st[r - st0], regsize[r]); return;
+                                encode(out, &fpu->st[reg - st0], regsize[reg]); return;
                             case fctrl: { std::uint32_t s = fpu->fctrl; encode(out, &s); return; }
                             case fstat: { std::uint32_t s = fpu->fstat; encode(out, &s); return; }
                             case ftag:  { std::uint32_t s = fpu->ftag ; encode(out, &s); return; }
@@ -652,10 +691,10 @@ namespace jw
                             case fop:   { std::uint32_t s = fpu->fop  ; encode(out, &s); return; }
 #                           ifdef HAVE__SSE__
                             case xmm0: case xmm1: case xmm2: case xmm3: case xmm4: case xmm5: case xmm6: case xmm7:
-                                encode(out, &fpu->xmm[r - xmm0]); return;
+                                encode(out, &fpu->xmm[reg - xmm0]); return;
                             case mxcsr: encode(out, &fpu->mxcsr); return;
 #                           endif
-                            default: encode_null(out, regsize[r]); return;
+                            default: encode_null(out, regsize[reg]); return;
                         }
                     }
                 }
@@ -664,74 +703,97 @@ namespace jw
                     auto* t_ptr = t.thread;
                     if (not t_ptr or t_ptr->get_state() == jw::detail::thread::starting)
                     {
-                        encode_null(out, regsize[r]);
+                        encode_null(out, regsize[reg]);
                         return;
                     }
-                    auto* reg = t_ptr->get_context();
-                    auto r_esp = reinterpret_cast<std::uintptr_t>(reg) - sizeof(jw::detail::thread_context);
-                    auto r_eip = reg->return_address;
-                    switch (r)
+                    auto* r = t_ptr->get_context();
+                    std::uint32_t r_esp = reinterpret_cast<std::uintptr_t>(r) - sizeof(jw::detail::thread_context);
+                    std::uint32_t r_eip = r->return_address;
+                    switch (reg)
                     {
-                    case ebx: encode(out, &reg->ebx); return;
-                    case ebp: encode(out, &reg->ebp); return;
-                    case esi: encode(out, &reg->esi); return;
-                    case edi: encode(out, &reg->edi); return;
+                    case ebx: encode(out, &r->ebx); return;
+                    case ebp: encode(out, &r->ebp); return;
+                    case esi: encode(out, &r->esi); return;
+                    case edi: encode(out, &r->edi); return;
                     case esp: encode(out, &r_esp); return;
-                    case cs: { std::uint32_t s = current_thread->frame.fault_address.segment;  encode(out, &s); return; }
-                    case ss: { std::uint32_t s = current_thread->frame.stack.segment; encode(out, &s); return; }
-                    case ds: { std::uint32_t s = current_thread->frame.stack.segment; encode(out, &s); return; }
-                    case es: { std::uint32_t s = reg->es; encode(out, &s, regsize[r]); return; }
-                    case fs: { std::uint32_t s = reg->fs; encode(out, &s, regsize[r]); return; }
-                    case gs: { std::uint32_t s = reg->gs; encode(out, &s, regsize[r]); return; }
+                    case cs: { std::uint32_t s = main_cs; encode(out, &s); return; }
+                    case ss:
+                    case ds:
+                    case es: { std::uint32_t s = main_ds; encode(out, &s); return; }
+                    case fs: { std::uint32_t s = r->fs; encode(out, &s, regsize[reg]); return; }
+                    case gs: { std::uint32_t s = r->gs; encode(out, &s, regsize[reg]); return; }
                     case eip: encode(out, &r_eip); return;
-                    default: encode_null(out, regsize[r]);
+                    default: encode_null(out, regsize[reg]);
                     }
                 }
             }
 
-            bool setreg(regnum r, const std::string_view& value, std::uint32_t id)
+            bool setreg(regnum reg, const std::string_view& value, std::uint32_t id)
             {
                 if (threads.count(id) == 0) return false;
                 auto&& t = threads[id];
-                if (&t != current_thread) return false; // TODO
-                if (debugmsg) fmt::print(stderr, FMT_STRING("set register {:x}={}\n"), r, value);
-                switch (r)
+                if (&t == current_thread)
                 {
-                case eax:    return reverse_decode(value, &t.reg.eax, regsize[r]);
-                case ebx:    return reverse_decode(value, &t.reg.ebx, regsize[r]);
-                case ecx:    return reverse_decode(value, &t.reg.ecx, regsize[r]);
-                case edx:    return reverse_decode(value, &t.reg.edx, regsize[r]);
-                case ebp:    return reverse_decode(value, &t.reg.ebp, regsize[r]);
-                case esi:    return reverse_decode(value, &t.reg.esi, regsize[r]);
-                case edi:    return reverse_decode(value, &t.reg.edi, regsize[r]);
-                case esp:    return reverse_decode(value, &t.frame.stack.offset, regsize[r]);
-                case eip:    return reverse_decode(value, &t.frame.fault_address.offset, regsize[r]);
-                case eflags: return reverse_decode(value, &t.frame.raw_eflags, regsize[r]);
-                case cs:     return reverse_decode(value.substr(0, 4), &t.frame.fault_address.segment, 2);
-                case ss:     return reverse_decode(value.substr(0, 4), &t.frame.stack.segment, 2);
-                case ds: if (new_frame_type) { return reverse_decode(value.substr(0, 4), &t.frame.ds, 2); } return false;
-                case es: if (new_frame_type) { return reverse_decode(value.substr(0, 4), &t.frame.es, 2); } return false;
-                case fs: if (new_frame_type) { return reverse_decode(value.substr(0, 4), &t.frame.fs, 2); } return false;
-                case gs: if (new_frame_type) { return reverse_decode(value.substr(0, 4), &t.frame.gs, 2); } return false;
-                default:
-                    auto* fpu = interrupt_id::last_fpu_context();
-                    switch (r)
+                    auto* const r = current_exception.registers;
+                    auto* const f = current_exception.frame;
+                    auto* const d10f = static_cast<__seg_fs dpmi10_exception_frame*>(current_exception.frame);
+                    const bool dpmi10_frame = current_exception.is_dpmi10_frame;
+                    if (debugmsg) fmt::print(stderr, FMT_STRING("set register {}={}\n"), regname[reg], value);
+                    switch (reg)
                     {
-                    case st0: case st1: case st2: case st3: case st4: case st5: case st6: case st7:
-                        return reverse_decode(value, &fpu->st[r - st0], regsize[r]);
-                    case fctrl: { return reverse_decode(value, &fpu->fctrl, regsize[r]); }
-                    case fstat: { return reverse_decode(value, &fpu->fstat, regsize[r]); }
-                    case ftag:  { return reverse_decode(value, &fpu->ftag,  regsize[r]); }
-                    case fiseg: { return reverse_decode(value, &fpu->fiseg, regsize[r]); }
-                    case fioff: { return reverse_decode(value, &fpu->fioff, regsize[r]); }
-                    case foseg: { return reverse_decode(value, &fpu->foseg, regsize[r]); }
-                    case fooff: { return reverse_decode(value, &fpu->fooff, regsize[r]); }
-                    case fop:   { return reverse_decode(value, &fpu->fop,   regsize[r]); }
-#                   ifdef HAVE__SSE__
-                    case xmm0: case xmm1: case xmm2: case xmm3: case xmm4: case xmm5: case xmm6: case xmm7:
-                        return reverse_decode(value, &fpu->xmm[r - xmm0], regsize[r]);
-                    case mxcsr: return reverse_decode(value, &fpu->mxcsr, regsize[r]);
-#                   endif
+                    case eax:    return reverse_decode(value, &r->eax, regsize[reg]);
+                    case ebx:    return reverse_decode(value, &r->ebx, regsize[reg]);
+                    case ecx:    return reverse_decode(value, &r->ecx, regsize[reg]);
+                    case edx:    return reverse_decode(value, &r->edx, regsize[reg]);
+                    case ebp:    return reverse_decode(value, &r->ebp, regsize[reg]);
+                    case esi:    return reverse_decode(value, &r->esi, regsize[reg]);
+                    case edi:    return reverse_decode(value, &r->edi, regsize[reg]);
+                    case esp:    return reverse_decode(value, &f->stack.offset, regsize[reg]);
+                    case eip:    return reverse_decode(value, &f->fault_address.offset, regsize[reg]);
+                    case eflags: return reverse_decode(value, &f->raw_eflags, regsize[reg]);
+                    case cs:     return reverse_decode(value.substr(0, 4), &f->fault_address.segment, 2);
+                    case ss:     return reverse_decode(value.substr(0, 4), &f->stack.segment, 2);
+                    case ds: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->ds, 2); } return false;
+                    case es: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->es, 2); } return false;
+                    case fs: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->fs, 2); } return false;
+                    case gs: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->gs, 2); } return false;
+                    default:
+                        auto* fpu = interrupt_id::last_fpu_context();
+                        switch (reg)
+                        {
+                        case st0: case st1: case st2: case st3: case st4: case st5: case st6: case st7:
+                            return reverse_decode(value, &fpu->st[reg - st0], regsize[reg]);
+                        case fctrl: { return reverse_decode(value, &fpu->fctrl, regsize[reg]); }
+                        case fstat: { return reverse_decode(value, &fpu->fstat, regsize[reg]); }
+                        case ftag:  { return reverse_decode(value, &fpu->ftag,  regsize[reg]); }
+                        case fiseg: { return reverse_decode(value, &fpu->fiseg, regsize[reg]); }
+                        case fioff: { return reverse_decode(value, &fpu->fioff, regsize[reg]); }
+                        case foseg: { return reverse_decode(value, &fpu->foseg, regsize[reg]); }
+                        case fooff: { return reverse_decode(value, &fpu->fooff, regsize[reg]); }
+                        case fop:   { return reverse_decode(value, &fpu->fop,   regsize[reg]); }
+#                       ifdef HAVE__SSE__
+                        case xmm0: case xmm1: case xmm2: case xmm3: case xmm4: case xmm5: case xmm6: case xmm7:
+                            return reverse_decode(value, &fpu->xmm[reg - xmm0], regsize[reg]);
+                        case mxcsr: return reverse_decode(value, &fpu->mxcsr, regsize[reg]);
+#                       endif
+                        default: return false;
+                        }
+                    }
+                }
+                else
+                {
+                    auto* const r = t.thread->get_context();
+                    if (debugmsg) fmt::print(stderr, FMT_STRING("set thread {:d} register {}={}\n"), id, regname[reg], value);
+                    switch (reg)
+                    {
+                    case ebx:    return reverse_decode(value, &r->ebx, regsize[reg]);
+                    case ebp:    return reverse_decode(value, &r->ebp, regsize[reg]);
+                    case esi:    return reverse_decode(value, &r->esi, regsize[reg]);
+                    case edi:    return reverse_decode(value, &r->edi, regsize[reg]);
+                    case eip:    return reverse_decode(value, &r->return_address, regsize[reg]);
+                    case eflags: return reverse_decode(value, &r->flags, regsize[reg]);
+                    case fs:     return reverse_decode(value.substr(0, 4), &r->fs, 2);
+                    case gs:     return reverse_decode(value.substr(0, 4), &r->gs, 2);
                     default: return false;
                     }
                 }
@@ -964,7 +1026,7 @@ namespace jw
                             if (i + 1 < packet.size() and packet[i + 1].delim == ':')
                             {
                                 auto id = decode(packet[i + 1]);
-                                if (threads.count(id)) threads[id].set_action(c, 0, begin, end);
+                                if (threads.count(id)) threads[id].set_action(c, begin, end);
                                 ++i;
                             }
                             else
@@ -972,7 +1034,7 @@ namespace jw
                                 for (auto&& t : threads)
                                 {
                                     if (t.second.action == thread_info::none)
-                                        t.second.set_action(c, 0, begin, end);
+                                        t.second.set_action(c, begin, end);
                                 }
                             }
                         }
@@ -1080,9 +1142,9 @@ namespace jw
                         if (packet.size() > 0)
                         {
                             std::uintptr_t jmp = decode(packet[0]);
-                            if (debugmsg and t.frame.fault_address.offset != jmp)
+                            if (debugmsg and t.eip() != jmp)
                                 fmt::print(stderr, FMT_STRING("JUMP to {:#x}\n"), jmp);
-                            t.frame.fault_address.offset = jmp;
+                            t.jmp(jmp);
                         }
                         t.set_action(packet[0].delim);
                     };
@@ -1099,9 +1161,9 @@ namespace jw
                         if (packet.size() > 1)
                         {
                             std::uintptr_t jmp = decode(packet[1]);
-                            if (debugmsg and t.frame.fault_address.offset != jmp)
+                            if (debugmsg and t.eip() != jmp)
                                 fmt::print(stderr, FMT_STRING("JUMP to {:#x}\n"), jmp);
-                            t.frame.fault_address.offset = jmp;
+                            t.jmp(jmp);
                         }
                         t.set_action(packet[0].delim);
                     };
@@ -1171,7 +1233,7 @@ namespace jw
                 {
                     if (debugmsg) fmt::print(stdout, FMT_STRING("KILL signal received."));
                     for (auto&& t : threads) t.second.set_action('c');
-                    redirect_exception(&current_thread->frame, dpmi::detail::kill);
+                    redirect_exception(current_exception.frame, dpmi::detail::kill);
                     it = fmt::format_to(it, FMT_STRING("X{:0>2x}"), posix_signal(current_thread->last_stop_signal));
                     send_packet(str);
                     uninstall_gdb_interface();
@@ -1179,11 +1241,11 @@ namespace jw
                 else send_packet("");   // unknown packet
             }
 
-            [[gnu::hot]] bool handle_exception(exception_num exc, const exception_info& i)
+            [[gnu::hot]] bool handle_exception(exception_num exc, const exception_info& info)
             {
-                auto* const r = i.registers;
-                auto* const f = i.frame;
-                if (debugmsg) fmt::print(stderr, FMT_STRING("entering exception {:0>#2x} from {:#x}\n"),
+                auto* const r = info.registers;
+                auto* const f = info.frame;
+                if (debugmsg) fmt::print(stderr, FMT_STRING("entering exception 0x{:0>2x} from {:#x}\n"),
                                          exc, std::uintptr_t { f->fault_address.offset });
                 if (not debug_mode)
                 {
@@ -1214,7 +1276,7 @@ namespace jw
                         else f->fault_address.offset += 1;  // hardcoded breakpoint, safe to skip
                     }
 
-                    if (debugmsg) fmt::print(stderr, FMT_STRING("leaving exception {:0>#2x}, resuming at {:#x}\n"),
+                    if (debugmsg) fmt::print(stderr, FMT_STRING("leaving exception 0x{:0>2x}, resuming at {:#x}\n"),
                                              exc, std::uintptr_t { f->fault_address.offset });
                 };
 
@@ -1227,13 +1289,13 @@ namespace jw
                     }
                 };
 
-                if (f->fault_address.segment != ring3_cs and f->fault_address.segment != ring0_cs) [[unlikely]]
+                if (f->fault_address.segment != main_cs and f->fault_address.segment != ring0_cs) [[unlikely]]
                 {
                     if (exc == exception_num::trap) return true; // keep stepping until we get back to our own code
-                    fmt::print(stderr, FMT_STRING("Can't debug this!  CS is neither {:0>#4x} nor {:0>#4x}.\n"
+                    fmt::print(stderr, FMT_STRING("Can't debug this!  CS is neither 0x{:0>4x} nor 0x{:0>4x}.\n"
                                                   "{}\n"),
-                               ring3_cs, ring0_cs,
-                               cpu_exception { exc, r, f, new_frame_type }.what());
+                               main_cs, ring0_cs,
+                               cpu_exception { exc, info }.what());
                     return false;
                 }
 
@@ -1252,7 +1314,7 @@ namespace jw
                         static_cast<const __seg_fs dpmi10_exception_frame*>(f)->print();
                         r->print();
                     }
-                    throw cpu_exception { exc, r, f, new_frame_type };
+                    throw cpu_exception { exc, info };
                 }
 
                 try
@@ -1263,7 +1325,7 @@ namespace jw
 
                     if (exc == exception_num::breakpoint and current_signal != -1)
                     {
-                        if (debugmsg) fmt::print(stderr, FMT_STRING("break with signal {:0>#2x}\n"), int { current_signal });
+                        if (debugmsg) fmt::print(stderr, FMT_STRING("break with signal 0x{:0>2x}\n"), int { current_signal });
                         current_thread->signals.insert(current_signal);
                         current_signal = -1;
                     }
@@ -1299,9 +1361,7 @@ namespace jw
                         static_cast<const __seg_fs dpmi10_exception_frame*>(f)->print();
                         r->print();
                     }
-                    if (new_frame_type) far_copy(&current_thread->frame, static_cast<const __seg_fs dpmi10_exception_frame*>(f));
-                    else far_copy(static_cast<dpmi09_exception_frame*>(&current_thread->frame), f);
-                    far_copy(&current_thread->reg, r);
+                    current_exception = info;
 
                     for (auto&&t : threads)
                     {
@@ -1322,8 +1382,8 @@ namespace jw
 
                     if (exc == exception_num::trap and current_thread->signals.count(watchpoint_hit) == 0 and
                         current_thread->action == thread_info::step_range and
-                        current_thread->frame.fault_address.offset >= current_thread->step_range_begin and
-                        current_thread->frame.fault_address.offset <= current_thread->step_range_end)
+                        current_exception.frame->fault_address.offset >= current_thread->step_range_begin and
+                        current_exception.frame->fault_address.offset <= current_thread->step_range_end)
                     {
                         if (debugmsg) fmt::print(stderr,FMT_STRING("range step until {:#x}, now at {:#x}\n"),
                                                  current_thread->step_range_end, std::uintptr_t { f->fault_address.offset });
@@ -1335,7 +1395,7 @@ namespace jw
 
                     stop_reply();
 
-                    if (config::enable_gdb_interrupts and current_thread->frame.flags.interrupts_enabled) asm("sti");
+                    if (config::enable_gdb_interrupts and current_exception.frame->flags.interrupts_enabled) asm("sti");
 
                     auto cant_continue = []
                     {
@@ -1363,10 +1423,6 @@ namespace jw
                 catch (const std::exception& e) { print_exception(e); catch_exception(); }
                 catch (...) { catch_exception(); }
                 asm("cli");
-
-                if (new_frame_type) far_copy(static_cast<__seg_fs dpmi10_exception_frame*>(f), &current_thread->frame);
-                else far_copy(f, static_cast<dpmi09_exception_frame*>(&current_thread->frame));
-                far_copy(r, &current_thread->reg);
 
                 leave();
                 debugger_reentry = false;
@@ -1399,15 +1455,6 @@ namespace jw
                     if (debugger_reentry) return;
                     if (packet_available()) break_with_signal(packet_received);
                 }, dpmi::always_call);
-
-                {
-                    exception_handler check_frame_type { 3, [](const dpmi::exception_info& i)
-                    { 
-                        new_frame_type = i.is_dpmi10_frame;
-                        return true; 
-                    } };
-                    asm("int 3;");
-                }
 
                 for (auto&& s : { SIGHUP, SIGABRT, SIGTERM, SIGKILL, SIGQUIT, SIGILL, SIGINT })
                     signal_handlers[s] = std::signal(s, csignal);
