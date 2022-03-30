@@ -720,49 +720,68 @@ namespace jw
             {
                 if (threads.count(id) == 0) return false;
                 auto&& t = threads[id];
-                if (&t != current_thread) return false; // TODO
-                auto* const r = current_exception.registers;
-                auto* const f = current_exception.frame;
-                auto* const d10f = static_cast<dpmi10_exception_frame*>(current_exception.frame);
-                const bool dpmi10_frame = current_exception.is_dpmi10_frame;
-                if (debugmsg) fmt::print(stderr, FMT_STRING("set register {:x}={}\n"), reg, value);
-                switch (reg)
+                if (&t == current_thread)
                 {
-                case eax:    return reverse_decode(value, &r->eax, regsize[reg]);
-                case ebx:    return reverse_decode(value, &r->ebx, regsize[reg]);
-                case ecx:    return reverse_decode(value, &r->ecx, regsize[reg]);
-                case edx:    return reverse_decode(value, &r->edx, regsize[reg]);
-                case ebp:    return reverse_decode(value, &r->ebp, regsize[reg]);
-                case esi:    return reverse_decode(value, &r->esi, regsize[reg]);
-                case edi:    return reverse_decode(value, &r->edi, regsize[reg]);
-                case esp:    return reverse_decode(value, &f->stack.offset, regsize[reg]);
-                case eip:    return reverse_decode(value, &f->fault_address.offset, regsize[reg]);
-                case eflags: return reverse_decode(value, &f->raw_eflags, regsize[reg]);
-                case cs:     return reverse_decode(value.substr(0, 4), &f->fault_address.segment, 2);
-                case ss:     return reverse_decode(value.substr(0, 4), &f->stack.segment, 2);
-                case ds: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->ds, 2); } return false;
-                case es: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->es, 2); } return false;
-                case fs: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->fs, 2); } return false;
-                case gs: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->gs, 2); } return false;
-                default:
-                    auto* fpu = interrupt_id::last_fpu_context();
+                    auto* const r = current_exception.registers;
+                    auto* const f = current_exception.frame;
+                    auto* const d10f = static_cast<dpmi10_exception_frame*>(current_exception.frame);
+                    const bool dpmi10_frame = current_exception.is_dpmi10_frame;
+                    if (debugmsg) fmt::print(stderr, FMT_STRING("set register {:x}={}\n"), reg, value);
                     switch (reg)
                     {
-                    case st0: case st1: case st2: case st3: case st4: case st5: case st6: case st7:
-                        return reverse_decode(value, &fpu->st[reg - st0], regsize[reg]);
-                    case fctrl: { return reverse_decode(value, &fpu->fctrl, regsize[reg]); }
-                    case fstat: { return reverse_decode(value, &fpu->fstat, regsize[reg]); }
-                    case ftag:  { return reverse_decode(value, &fpu->ftag,  regsize[reg]); }
-                    case fiseg: { return reverse_decode(value, &fpu->fiseg, regsize[reg]); }
-                    case fioff: { return reverse_decode(value, &fpu->fioff, regsize[reg]); }
-                    case foseg: { return reverse_decode(value, &fpu->foseg, regsize[reg]); }
-                    case fooff: { return reverse_decode(value, &fpu->fooff, regsize[reg]); }
-                    case fop:   { return reverse_decode(value, &fpu->fop,   regsize[reg]); }
-#                   ifdef HAVE__SSE__
-                    case xmm0: case xmm1: case xmm2: case xmm3: case xmm4: case xmm5: case xmm6: case xmm7:
-                        return reverse_decode(value, &fpu->xmm[reg - xmm0], regsize[reg]);
-                    case mxcsr: return reverse_decode(value, &fpu->mxcsr, regsize[reg]);
-#                   endif
+                    case eax:    return reverse_decode(value, &r->eax, regsize[reg]);
+                    case ebx:    return reverse_decode(value, &r->ebx, regsize[reg]);
+                    case ecx:    return reverse_decode(value, &r->ecx, regsize[reg]);
+                    case edx:    return reverse_decode(value, &r->edx, regsize[reg]);
+                    case ebp:    return reverse_decode(value, &r->ebp, regsize[reg]);
+                    case esi:    return reverse_decode(value, &r->esi, regsize[reg]);
+                    case edi:    return reverse_decode(value, &r->edi, regsize[reg]);
+                    case esp:    return reverse_decode(value, &f->stack.offset, regsize[reg]);
+                    case eip:    return reverse_decode(value, &f->fault_address.offset, regsize[reg]);
+                    case eflags: return reverse_decode(value, &f->raw_eflags, regsize[reg]);
+                    case cs:     return reverse_decode(value.substr(0, 4), &f->fault_address.segment, 2);
+                    case ss:     return reverse_decode(value.substr(0, 4), &f->stack.segment, 2);
+                    case ds: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->ds, 2); } return false;
+                    case es: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->es, 2); } return false;
+                    case fs: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->fs, 2); } return false;
+                    case gs: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->gs, 2); } return false;
+                    default:
+                        auto* fpu = interrupt_id::last_fpu_context();
+                        switch (reg)
+                        {
+                        case st0: case st1: case st2: case st3: case st4: case st5: case st6: case st7:
+                            return reverse_decode(value, &fpu->st[reg - st0], regsize[reg]);
+                        case fctrl: { return reverse_decode(value, &fpu->fctrl, regsize[reg]); }
+                        case fstat: { return reverse_decode(value, &fpu->fstat, regsize[reg]); }
+                        case ftag:  { return reverse_decode(value, &fpu->ftag,  regsize[reg]); }
+                        case fiseg: { return reverse_decode(value, &fpu->fiseg, regsize[reg]); }
+                        case fioff: { return reverse_decode(value, &fpu->fioff, regsize[reg]); }
+                        case foseg: { return reverse_decode(value, &fpu->foseg, regsize[reg]); }
+                        case fooff: { return reverse_decode(value, &fpu->fooff, regsize[reg]); }
+                        case fop:   { return reverse_decode(value, &fpu->fop,   regsize[reg]); }
+#                       ifdef HAVE__SSE__
+                        case xmm0: case xmm1: case xmm2: case xmm3: case xmm4: case xmm5: case xmm6: case xmm7:
+                            return reverse_decode(value, &fpu->xmm[reg - xmm0], regsize[reg]);
+                        case mxcsr: return reverse_decode(value, &fpu->mxcsr, regsize[reg]);
+#                       endif
+                        default: return false;
+                        }
+                    }
+                }
+                else
+                {
+                    auto* const r = t.thread->get_context();
+                    if (debugmsg) fmt::print(stderr, FMT_STRING("set thread {:d} register {:x}={}\n"), id, reg, value);
+                    switch (reg)
+                    {
+                    case ebx:    return reverse_decode(value, &r->ebx, regsize[reg]);
+                    case ebp:    return reverse_decode(value, &r->ebp, regsize[reg]);
+                    case esi:    return reverse_decode(value, &r->esi, regsize[reg]);
+                    case edi:    return reverse_decode(value, &r->edi, regsize[reg]);
+                    case eip:    return reverse_decode(value, &r->return_address, regsize[reg]);
+                    case eflags: return reverse_decode(value, &r->flags, regsize[reg]);
+                    case fs:     return reverse_decode(value.substr(0, 4), &r->fs, 2);
+                    case gs:     return reverse_decode(value.substr(0, 4), &r->gs, 2);
                     default: return false;
                     }
                 }
