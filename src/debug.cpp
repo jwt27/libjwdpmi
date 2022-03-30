@@ -245,6 +245,18 @@ namespace jw
                 4
             };
 
+            constexpr std::array<std::string_view, 41> regname
+            {
+                "eax", "ecx", "edx", "ebx",
+                "esp", "ebp", "esi", "edi",
+                "eip", "eflags",
+                "cs", "ss", "ds", "es", "fs", "gs",
+                "st0", "st1", "st2", "st3", "st4", "st5", "st6", "st7",
+                "fctrl", "fstat", "ftag", "fiseg", "fioff", "foseg", "fooff", "fop",
+                "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7",
+                "mxcsr"
+            };
+
 #           ifndef HAVE__SSE__
             constexpr auto reg_max = regnum::fop;
 #           else
@@ -726,7 +738,7 @@ namespace jw
                     auto* const f = current_exception.frame;
                     auto* const d10f = static_cast<dpmi10_exception_frame*>(current_exception.frame);
                     const bool dpmi10_frame = current_exception.is_dpmi10_frame;
-                    if (debugmsg) fmt::print(stderr, FMT_STRING("set register {:x}={}\n"), reg, value);
+                    if (debugmsg) fmt::print(stderr, FMT_STRING("set register {}={}\n"), regname[reg], value);
                     switch (reg)
                     {
                     case eax:    return reverse_decode(value, &r->eax, regsize[reg]);
@@ -771,7 +783,7 @@ namespace jw
                 else
                 {
                     auto* const r = t.thread->get_context();
-                    if (debugmsg) fmt::print(stderr, FMT_STRING("set thread {:d} register {:x}={}\n"), id, reg, value);
+                    if (debugmsg) fmt::print(stderr, FMT_STRING("set thread {:d} register {}={}\n"), id, regname[reg], value);
                     switch (reg)
                     {
                     case ebx:    return reverse_decode(value, &r->ebx, regsize[reg]);
