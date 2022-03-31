@@ -25,32 +25,32 @@ namespace jw::dpmi::detail
         cr0_em = em;
     }
 
-    void interrupt_id::fpu_enter()
+    bool interrupt_id::try_fpu_context_switch()
     {
-        if (not cr0_em) [[likely]] return set_fpu_emulation(true);
-
-        if (type != interrupt_type::exception) return;
-        if (num != exception_num::device_not_available and
-            num != exception_num::invalid_opcode) return;
+        if (not cr0_em) return false;
 
         set_fpu_emulation(false);
-        if (next->has_fpu_context)
+        if (current->has_fpu_context)
         {
-            next->fpu.restore();
-            next->has_fpu_context = false;
+            current->fpu.restore();
+            current->has_fpu_context = false;
         }
         else if (not current_fpu->has_fpu_context)
         {
             current_fpu->fpu.save();
             current_fpu->has_fpu_context = true;
         }
-        current_fpu = next;
-        fpu_context_switched = true;
+        current_fpu = current;
+        return true;
+    }
+
+    void interrupt_id::fpu_enter()
+    {
+        if (not cr0_em) [[likely]] set_fpu_emulation(true);
     }
 
     void interrupt_id::fpu_leave()
     {
-        if (fpu_context_switched) return;
         if (current_fpu == this) current_fpu = next_fpu;
         if (cr0_em and next->next == nullptr and not next->has_fpu_context) set_fpu_emulation(false);
         else if (not cr0_em) set_fpu_emulation(true);

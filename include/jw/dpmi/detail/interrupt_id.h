@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
@@ -39,7 +40,6 @@ namespace jw::dpmi::detail
         interrupt_id_data* const next_fpu;
         ack acknowledged { type == interrupt_type::irq ? ack::no : ack::yes };
         jw::detail::jw_cxa_eh_globals eh_globals;
-        bool fpu_context_switched { false };
         bool has_fpu_context { false };
         fpu_context fpu;
 
@@ -92,6 +92,8 @@ namespace jw::dpmi::detail
             default: __builtin_unreachable();
             }
         }
+
+        static bool try_fpu_context_switch();
 
         static interrupt_id_data* get() noexcept { return current; }
         static const std::uint64_t& get_id() noexcept { return current->id; }

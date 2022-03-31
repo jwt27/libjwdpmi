@@ -41,10 +41,17 @@ namespace jw::dpmi::detail
     [[gnu::cdecl, gnu::hot]]
     static bool handle_exception(raw_exception_frame* frame) noexcept
     {
-        auto* data = frame->data;
+        auto* const data = frame->data;
+
+        if (data->num == exception_num::device_not_available or
+            data->num == exception_num::invalid_opcode)
+        {
+            if (interrupt_id::try_fpu_context_switch())
+                return true;
+        }
+
         auto* const f = data->is_dpmi10 ? &frame->frame_10 : &frame->frame_09;
         interrupt_id id { data->num, interrupt_type::exception };
-        if (id.fpu_context_switched) return true;
 
         const exception_info i { &frame->reg, f, data->is_dpmi10 };
 
