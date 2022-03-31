@@ -41,7 +41,7 @@ namespace jw::dpmi::detail
         ack acknowledged { type == interrupt_type::irq ? ack::no : ack::yes };
         jw::detail::jw_cxa_eh_globals eh_globals;
         bool has_fpu_context { false };
-        fpu_context fpu;
+        fpu_registers fpu;
 
     protected:
         friend struct jw::init;
@@ -105,7 +105,7 @@ namespace jw::dpmi::detail
             return false;
         }
 
-        static fpu_context* last_fpu_context()
+        static fpu_registers* last_fpu_context()
         {
             asm volatile ("fnop;fwait;":::"memory");   // force a context switch
             return &current->next_fpu->fpu;

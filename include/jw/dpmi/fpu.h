@@ -94,8 +94,8 @@ namespace jw::dpmi
 #   pragma GCC diagnostic pop
 
 #   ifdef HAVE__SSE__
-    using fpu_context = fxsave_data;
+    using fpu_registers = fxsave_data;
 #   else
-    using fpu_context = fsave_data;
+    using fpu_registers = fsave_data;
 #   endif
 }
