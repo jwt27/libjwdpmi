@@ -163,8 +163,8 @@ namespace jw::dpmi
 
     // Redirect to the given function on return from an exception handler.
     // Constructs a call frame on the stack so that execution resumes at the
-    // fault location when this function returns.  All general-purpose
-    // registers (including flags) are preserved.
+    // fault location when this function returns.  All registers (including
+    // FPU and flags) are preserved.
     void redirect_exception(const exception_info& info, void(*)());
 }
 

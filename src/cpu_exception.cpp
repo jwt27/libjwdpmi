@@ -281,6 +281,7 @@ namespace jw::dpmi::detail
             redirect_allocator alloc { &*trampoline_memres };
             std::allocator_traits<redirect_allocator>::destroy(alloc, self);
             std::allocator_traits<redirect_allocator>::deallocate(alloc, self, 1);
+            fpu_context fpu { };
             asm ("push %0; popf" : : "rm" (flags) : "cc");
             asm ("mov ss, %k0; nop" : : "r" (main_ds));
             f();
