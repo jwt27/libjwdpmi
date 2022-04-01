@@ -66,7 +66,7 @@ namespace jw
         }
         else if (terminated > 2)
         {
-            do { asm("cli; hlt"); } while (true);
+            halt();
         }
         dpmi::ring0_privilege::force_leave();
         debug::break_with_signal(SIGTERM);
@@ -99,7 +99,7 @@ namespace jw
             case interrupt_type::none:          fmt::print(stderr, "no interrupt (?)"); break;
             }
             fmt::print(stderr, ", unable to terminate.\n");
-            do { asm("cli; hlt"); } while (true);
+            halt();
         }
 
         std::_Exit(-1);

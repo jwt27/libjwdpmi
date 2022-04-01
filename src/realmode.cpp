@@ -119,7 +119,7 @@ namespace jw
                                               "Pool size: {:d}\n"),
                            self->ptr.segment, self->ptr.offset,
                            self->reg_pool.size());
-                do { asm("cli; hlt"); } while (true);
+                halt();
             }
             *reg = self->reg;
 
