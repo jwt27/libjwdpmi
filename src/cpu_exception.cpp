@@ -46,7 +46,7 @@ namespace jw::dpmi::detail
         if (data->num == exception_num::device_not_available or
             data->num == exception_num::invalid_opcode)
         {
-            if (interrupt_id::try_fpu_context_switch())
+            if (fpu_context::try_context_switch())
                 return true;
         }
 

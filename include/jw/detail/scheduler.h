@@ -12,6 +12,7 @@
 #include <memory>
 #include <deque>
 #include <map>
+#include <jw/dpmi/fpu.h>
 #include <jw/dpmi/irq_check.h>
 #include <jw/dpmi/alloc.h>
 #include <jw/function.h>
@@ -116,6 +117,7 @@ namespace jw::detail
     struct thread
     {
         friend struct scheduler;
+        friend struct dpmi::fpu_context;
 
         enum thread_state
         {
@@ -202,6 +204,7 @@ namespace jw::detail
         const std::span<std::byte> stack;
         thread_context* context; // points to esp during context switch
         jw_cxa_eh_globals eh_globals { };
+        dpmi::detail::fpu_state* restore { nullptr };
         thread_state state { starting };
         bool suspended { false };
         bool aborted { false };

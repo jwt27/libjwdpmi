@@ -137,6 +137,8 @@ namespace jw::detail
             context_switch(&ct->context);
         }
 
+        dpmi::fpu_context::update_cr0();
+
 #       ifndef NDEBUG
         if (ct->id != main_thread_id and *reinterpret_cast<std::uint32_t*>(ct->stack.data()) != 0xDEADBEEF) [[unlikely]]
             throw std::runtime_error { "Stack overflow!" };

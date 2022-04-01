@@ -43,6 +43,10 @@ namespace jw
         // Default stack size for threads.
         constexpr std::size_t thread_default_stack_size = 64_KB;
 
+        // Number of FPU contexts to allocate storage for.  The size of one
+        // context is 120 bytes, or 512 bytes if SSE is enabled.
+        constexpr std::size_t fpu_context_storage_size = 32;
+
         // Set up cpu exception handlers to throw C++ exceptions instead.
         constexpr bool enable_throwing_from_cpu_exceptions = true;
 
