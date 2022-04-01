@@ -93,8 +93,7 @@ namespace jw
             fmt::print(stderr, "Currently servicing ");
             switch (id->type)
             {
-            case interrupt_type::realmode:
-            case interrupt_type::realmode_irq:  fmt::print(stderr, "real-mode callback"); break;
+            case interrupt_type::realmode_irq:  fmt::print(stderr, "real-mode IRQ callback"); break;
             case interrupt_type::exception:     fmt::print(stderr, "CPU exception 0x{:0>2x}", id->num); break;
             case interrupt_type::irq:           fmt::print(stderr, "IRQ 0x{:0>2x}", id->num); break;
             case interrupt_type::none:          fmt::print(stderr, "no interrupt (?)"); break;

@@ -20,7 +20,6 @@ namespace jw::dpmi::detail
         none,
         exception,
         irq,
-        realmode,
         realmode_irq
     };
 
@@ -58,17 +57,7 @@ namespace jw::dpmi::detail
     {
         interrupt_id(std::uint32_t n, interrupt_type t) noexcept : interrupt_id_data { n, t, current, current_fpu }
         {
-            switch (type)
-            {
-            case interrupt_type::exception:
-            case interrupt_type::irq:
-            case interrupt_type::realmode_irq:
-                ++interrupt_count;
-                break;
-
-            case interrupt_type::realmode: break;
-            default: __builtin_unreachable();
-            }
+            ++interrupt_count;
             next->eh_globals = jw::detail::get_eh_globals();
             jw::detail::set_eh_globals({ });
             fpu_enter();
@@ -80,17 +69,7 @@ namespace jw::dpmi::detail
             current = next;
             fpu_leave();
             jw::detail::set_eh_globals(next->eh_globals);
-            switch (type)
-            {
-            case interrupt_type::exception:
-            case interrupt_type::irq:
-            case interrupt_type::realmode_irq:
-                --interrupt_count;
-                break;
-
-            case interrupt_type::realmode: break;
-            default: __builtin_unreachable();
-            }
+            --interrupt_count;
         }
 
         static bool try_fpu_context_switch();
