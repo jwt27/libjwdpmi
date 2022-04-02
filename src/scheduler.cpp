@@ -34,15 +34,14 @@ namespace jw::detail
     void scheduler::setup()
     {
         memres.emplace(64_KB);
-        thread_allocator<thread> alloc { &*memres };
-        allocator_delete<thread_allocator<thread>> deleter { alloc };
-        auto* const p = new (alloc.allocate(1)) thread { };
-        main_thread = std::shared_ptr<thread> { p, deleter, alloc };
-        p->state = thread::running;
-        p->set_name("Main thread");
-        debug::throw_assert(p->id == thread::main_thread_id);
-        threads.emplace(&*memres);
-        threads->emplace(p->id, main_thread);
+        thread_allocator<thread> alloc { memory_resource() };
+        threads.emplace(memory_resource());
+
+        thread& p = const_cast<thread&>(*threads->emplace().first);
+        p.state = thread::running;
+        p.set_name("Main thread");
+        debug::throw_assert(p.id == thread::main_thread_id);
+
         iterator.emplace(threads->begin());
 
         int2f_handler.emplace(0x2f, [](dpmi::realmode_registers* reg, dpmi::far_ptr32)
@@ -62,20 +61,29 @@ namespace jw::detail
     void scheduler::kill_all()
     {
         int2f_handler.reset();
-        atexit(main_thread.get());
+        auto* main = get_thread(thread::main_thread_id);
+        atexit(main);
         if (threads->size() == 1) [[likely]] return;
         fmt::print(stderr, "Warning: exiting with active threads.\n");
-        auto thread_queue_copy = *threads;
-        thread_queue_copy.erase(thread::main_thread_id);
-        for (auto& t : thread_queue_copy) t.second->abort();
-        main_thread->state = thread::running;
-        for (auto& t : thread_queue_copy)
+        std::vector<thread_id> ids;
+        ids.reserve(threads->size());
+        for (auto& ct : *threads)
         {
-            while (t.second->active())
+            if (ct.id == thread::main_thread_id) continue;
+            ids.push_back(ct.id);
+            auto& t = const_cast<thread&>(ct);
+            t.abort();
+        }
+        main->state = thread::running;
+        for (auto id : ids)
+        {
+            thread* t;
+            do
             {
                 try { this_thread::yield(); }
                 catch (const jw::terminate_exception& e) { e.defuse(); }
-            }
+                t = get_thread(id);
+            } while (t != nullptr and t->active());
         }
     }
 
@@ -150,14 +158,6 @@ namespace jw::detail
                 throw abort_thread { };
     }
 
-    void scheduler::start_thread(const thread_ptr& t)
-    {
-        if (t->state != thread::starting) return;
-        debug::trap_mask dont_trace_here { };
-        dpmi::interrupt_mask no_interrupts_please { };
-        threads->emplace_hint(threads->end(), t->id, t);
-    }
-
     // The actual thread.
     void scheduler::run_thread() noexcept
     {
@@ -190,7 +190,7 @@ namespace jw::detail
     thread_context* scheduler::switch_thread()
     {
         auto& it = iterator;
-        thread* ct = (*it)->second.get();
+        thread* ct = current_thread();
 
         ct->eh_globals = get_eh_globals();
 
@@ -198,11 +198,11 @@ namespace jw::detail
         {
             {
                 dpmi::interrupt_mask no_interrupts_please { };
-                if (ct->active()) [[likely]] ++*it;
+                if (not ct->detached or ct->active()) [[likely]] ++*it;
                 else *it = threads->erase(*it);
                 if (*it == threads->end()) *it = threads->begin();
             }
-            ct = (*it)->second.get();
+            ct = current_thread();
 
             if (ct->state == thread::starting) [[unlikely]]     // new thread, initialize new context on stack
             {
@@ -210,11 +210,11 @@ namespace jw::detail
                 *reinterpret_cast<std::uint32_t*>(ct->stack.data()) = 0xDEADBEEF;   // stack overflow protection
 #               endif
                 void* const esp = (ct->stack.data() + ct->stack.size_bytes() - 4) - sizeof(thread_context);
-                ct->context = new (esp) thread_context { *main_thread->context };    // clone context from main thread
+                ct->context = new (esp) thread_context { *threads->begin()->context };    // clone context from main thread
                 ct->context->return_address = reinterpret_cast<std::uintptr_t>(run_thread);
             }
 
-            if (not ct->suspended) [[likely]] break;
+            if (not ct->suspended and ct->active()) [[likely]] break;
             if (n > threads->size())
             {
                 debug::break_with_signal(debug::detail::all_threads_suspended);

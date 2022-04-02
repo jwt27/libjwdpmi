@@ -31,19 +31,14 @@ namespace jw::dpmi
         cr0_em = em;
     }
 
-    static void update_cr0_impl(detail::fpu_state* restore)
+    void fpu_context::update_cr0()
     {
         const bool do_save = save != nullptr;
-        const bool do_restore = restore != nullptr;
+        const bool do_restore = *restore_ptr() != nullptr;
         const bool new_em = do_save | do_restore;
 
         if (new_em == cr0_em) return;
         set_cr0_em(new_em);
-    }
-
-    void fpu_context::update_cr0()
-    {
-        update_cr0_impl(*restore_ptr());
     }
 
     static bool in_use(detail::fpu_state* p)
@@ -63,7 +58,6 @@ namespace jw::dpmi
 
     fpu_context::fpu_context(init_tag)
         : state { nullptr }
-        , restore { nullptr }
     {
         set_cr0_em(false);
         asm
@@ -89,8 +83,8 @@ namespace jw::dpmi
     }
 
     fpu_context::fpu_context()
-        : restore { restore_ptr() }
     {
+        auto** restore = restore_ptr();
         if (*restore != nullptr)
         {
             // Pending restore, cancel it and use the same state.
@@ -113,7 +107,7 @@ namespace jw::dpmi
             while (in_use(free) and free != context_storage.end()) ++free;
         }
         ++state->save_count;
-        update_cr0_impl(*restore);
+        update_cr0();
     }
 
     fpu_context::~fpu_context()
@@ -123,6 +117,7 @@ namespace jw::dpmi
         --state->save_count;
         if (state->saved)
         {
+            auto** restore = restore_ptr();
             if (*restore != nullptr)
             {
                 // Cancel pending restore.
@@ -134,7 +129,7 @@ namespace jw::dpmi
             ++state->restore_count;
         }
         else try_free(state);
-        update_cr0_impl(*restore);
+        update_cr0();
     }
 
     fpu_registers* fpu_context::get()

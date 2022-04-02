@@ -11,7 +11,7 @@
 #include <functional>
 #include <memory>
 #include <deque>
-#include <map>
+#include <set>
 #include <jw/dpmi/fpu.h>
 #include <jw/dpmi/irq_check.h>
 #include <jw/dpmi/alloc.h>
@@ -72,6 +72,7 @@ namespace jw::detail
         void suspend() noexcept { suspended = true; }
         void resume() noexcept { suspended = false; }
         void abort() noexcept { aborted = true; }
+        void detach() noexcept { detached = true; }
         auto get_state() const noexcept { return state; }
         bool is_aborted() const noexcept { return aborted; }
         bool is_suspended() const noexcept { return suspended; }
@@ -96,13 +97,13 @@ namespace jw::detail
             memres.deallocate(function.data(), function.size() + stack.size());
         }
 
-    private:
         thread();
 
         template <typename F, typename function_t = std::remove_cvref_t<F>>
         thread(F&& func, std::size_t stack_bytes)
             : thread { allocate<function_t>(stack_bytes), std::forward<F>(func) } { }
 
+    private:
         template <typename F, typename function_t = std::remove_cvref_t<F>>
         thread(std::span<std::byte> span, F&& func);
 
@@ -140,6 +141,7 @@ namespace jw::detail
         thread_state state { starting };
         bool suspended { false };
         bool aborted { false };
+        bool detached { false };
 
         std::deque<jw::function<void(), 4>, thread_allocator<jw::function<void(), 4>>> invoke_list;
         std::deque<jw::function<void(), 4>> atexit_list { };
@@ -149,7 +151,9 @@ namespace jw::detail
 #       endif
     };
 
-    using thread_ptr = std::shared_ptr<thread>;
+    constexpr std::strong_ordering operator<=>(const thread& a, const thread& b) noexcept { return a.id <=> b.id; }
+    constexpr std::strong_ordering operator<=>(const thread& a, thread_id b) noexcept { return a.id <=> b; }
+    constexpr std::strong_ordering operator<=>(thread_id a, const thread& b) noexcept { return a <=> b.id; }
 
     struct scheduler
     {
@@ -176,10 +180,9 @@ namespace jw::detail
 #       endif
 
     private:
-        using map_t = std::map<thread_id, thread_ptr, std::less<thread_id>, thread_allocator<std::pair<const thread_id, thread_ptr>>>;
+        using set_type = std::set<thread, std::less<void>, thread_allocator<thread>>;
         template<typename F>
-        static thread_ptr create_thread(F&& func, std::size_t stack_size = config::thread_default_stack_size);
-        static void start_thread(const thread_ptr&);
+        static thread* create_thread(F&& func, std::size_t stack_size);
         static void atexit(thread*);
 
         [[gnu::hot]]
@@ -198,9 +201,8 @@ namespace jw::detail
         static void kill_all();
 
         inline static constinit std::optional<dpmi::locked_pool_resource<true>> memres { std::nullopt };
-        inline static constinit std::optional<map_t> threads { std::nullopt };
-        inline static constinit std::optional<map_t::iterator> iterator { std::nullopt };
-        inline static constinit thread_ptr main_thread { nullptr };
+        inline static constinit std::optional<set_type> threads { std::nullopt };
+        inline static constinit std::optional<set_type::iterator> iterator { std::nullopt };
         inline static constinit bool terminating { false };
     };
 
@@ -216,21 +218,21 @@ namespace jw::detail
 
     inline bool scheduler::is_current_thread(const thread* t) noexcept { return current_thread() == t; }
     inline bool scheduler::is_current_thread(thread_id id) noexcept { return current_thread_id() == id; }
-    inline thread* scheduler::current_thread() noexcept { return (*iterator)->second.get(); }
-    inline thread_id scheduler::current_thread_id() noexcept { return (*iterator)->first; }
+    inline thread* scheduler::current_thread() noexcept { return const_cast<thread*>(&**iterator); }
+    inline thread_id scheduler::current_thread_id() noexcept { return (*iterator)->id; }
 
     inline thread* scheduler::get_thread(thread_id id) noexcept
     {
         auto it = threads->find(id);
         if (it == threads->end()) return nullptr;
-        return it->second.get();
+        return const_cast<thread*>(&*it);
     }
 
     template<typename F>
     inline void scheduler::invoke_main(F&& function)
     {
         if (current_thread_id() == thread::main_thread_id and not dpmi::in_irq_context()) std::forward<F>(function)();
-        else main_thread->invoke(std::forward<F>(function));
+        else const_cast<thread&>(*threads->begin()).invoke(std::forward<F>(function));
     }
 
     template<typename F>
@@ -240,21 +242,19 @@ namespace jw::detail
         {
             auto next = *iterator;
             if (++next == threads->end()) next = threads->begin();
-            next->second->invoke(std::forward<F>(function));
+            const_cast<thread&>(*next).invoke(std::forward<F>(function));
         }
         else if (dpmi::in_irq_context()) current_thread()->invoke(std::forward<F>(function));
         else std::forward<F>(function)();
     }
 
     template<typename F>
-    inline thread_ptr scheduler::create_thread(F&& func, std::size_t stack_size)
+    inline thread* scheduler::create_thread(F&& func, std::size_t stack_size)
     {
-        thread_allocator<thread> alloc { memory_resource() };
-        allocator_delete<thread_allocator<thread>> deleter { alloc };
-        auto* p = alloc.allocate(1);
-        try { p = new (p) thread { std::forward<F>(func), stack_size }; }
-        catch (...) { alloc.deallocate(p, 1); throw; }
-        return { p, deleter, alloc };
+        debug::trap_mask dont_trace_here { };
+        dpmi::interrupt_mask no_interrupts_please { };
+        auto i = threads->emplace_hint(threads->end(), std::forward<F>(func), stack_size);
+        return const_cast<thread*>(&*i);
     }
 
     inline thread::thread()

@@ -161,6 +161,5 @@ namespace jw::dpmi
         static detail::fpu_state** restore_ptr() noexcept;
 
         detail::fpu_state* state;
-        detail::fpu_state** const restore;
     };
 }

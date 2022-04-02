@@ -210,9 +210,9 @@ namespace jw
                     if (jw::detail::scheduler::get_thread(i->first) == nullptr) i = threads.erase(i);
                     else ++i;
                 }
-                for (auto&& t : jw::detail::scheduler::all_threads())
+                for (auto& t : jw::detail::scheduler::all_threads())
                 {
-                    threads[t.first].thread = t.second.get();
+                    threads[t.id].thread = const_cast<jw::detail::thread*>(&t);
                 }
                 current_thread_id = jw::detail::scheduler::current_thread_id();
                 threads[current_thread_id].thread = jw::detail::scheduler::current_thread();
