@@ -177,25 +177,37 @@ namespace jw::dpmi
     struct exception_handler
     {
         template<typename F>
-        exception_handler(exception_num n, F&& f)
-            : trampoline { detail::exception_trampoline::create(n, std::forward<F>(f)) }
-        { }
+        exception_handler(exception_num n, const F& f)
+            : pm { detail::exception_trampoline::create(n, f, false) }
+            , rm { nullptr }
+        {
+            if (pm->is_dpmi10()) try
+            {
+                rm = detail::exception_trampoline::create(n, f, true);
+            }
+            catch (const dpmi_error&) { /* ignore */ }
+        }
 
         ~exception_handler()
         {
-            if (trampoline == nullptr) return;
-            detail::exception_trampoline::destroy(trampoline);
+            if (pm == nullptr) return;
+            detail::exception_trampoline::destroy(pm);
+            if (rm == nullptr) return;
+            detail::exception_trampoline::destroy(rm);
         }
 
         exception_handler(exception_handler&& other)
-            : trampoline { other.trampoline }
+            : pm { other.pm }
+            , rm { other.rm }
         {
-            other.trampoline = nullptr;
+            other.pm = nullptr;
+            other.rm = nullptr;
         }
 
         exception_handler& operator=(exception_handler&& other)
         {
-            std::swap(trampoline, other.trampoline);
+            std::swap(pm, other.pm);
+            std::swap(rm, other.rm);
             return *this;
         }
 
@@ -203,7 +215,8 @@ namespace jw::dpmi
         exception_handler& operator=(const exception_handler&) = delete;
 
     private:
-        detail::exception_trampoline* trampoline;
+        detail::exception_trampoline* pm;
+        detail::exception_trampoline* rm;
     };
 
     struct cpu_category : public std::error_category

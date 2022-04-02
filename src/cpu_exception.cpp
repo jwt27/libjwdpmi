@@ -211,7 +211,10 @@ namespace jw::dpmi::detail
         {
             last[data->num] = data->prev;
             far_ptr32 chain_to { chain_to_segment, chain_to_offset };
-            detail::cpu_exception_handlers::set_pm_handler(data->num, chain_to);
+            if (data->realmode)
+                detail::cpu_exception_handlers::set_rm_handler(data->num, chain_to);
+            else
+                detail::cpu_exception_handlers::set_pm_handler(data->num, chain_to);
         }
         data->~exception_handler_data();
         data_alloc.deallocate(data, 1);
@@ -293,15 +296,19 @@ namespace jw::dpmi::detail
         jw::terminate();
     }
 
+    template<exception_num N>
+    static bool default_exception_handler(const exception_info& i)
+    {
+        if (i.frame->flags.v86_mode) return false;
+        if constexpr (config::enable_throwing_from_cpu_exceptions)
+            throw specific_cpu_exception<N> { i };
+        return false;
+    }
+
     template <exception_num N, exception_num... Next>
     static void make_throwers()
     {
-        exception_throwers[N].emplace(N, [](const exception_info& i) -> bool
-        {
-            if constexpr (config::enable_throwing_from_cpu_exceptions)
-                throw specific_cpu_exception<N> { i };
-            return false;
-        });
+        exception_throwers[N].emplace(N, [](const exception_info& i) { return default_exception_handler<N>(i); });
         if constexpr (sizeof...(Next) > 0) make_throwers<Next...>();
     }
 
