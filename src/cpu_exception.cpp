@@ -296,12 +296,23 @@ namespace jw::dpmi::detail
         jw::terminate();
     }
 
-    template<exception_num N>
+    template <exception_num N>
     static bool default_exception_handler(const exception_info& i)
     {
+        if constexpr (N == exception_num::double_fault or
+                      N == exception_num::machine_check)
+        {
+            i.frame->print();
+            i.registers->print();
+            fmt::print(stderr, "{}\n", cpu_category { }.message(N));
+            halt();
+        }
+
         if (i.frame->flags.v86_mode) return false;
+
         if constexpr (config::enable_throwing_from_cpu_exceptions)
             throw specific_cpu_exception<N> { i };
+
         return false;
     }
 
