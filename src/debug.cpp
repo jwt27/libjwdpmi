@@ -92,8 +92,8 @@ namespace jw
             bool replied { false };
 
             struct thread_info;
-            using thread_id = jw::detail::scheduler::thread_id;
-            constexpr thread_id main_thread_id = jw::detail::scheduler::main_thread_id;
+            using thread_id = jw::detail::thread_id;
+            constexpr thread_id main_thread_id = jw::detail::thread::main_thread_id;
             constexpr thread_id all_threads_id { 0 };
             thread_id current_thread_id { 1 };
             thread_id query_thread_id { 1 };

@@ -145,7 +145,7 @@ namespace jw::detail
         std::deque<jw::function<void(), 4>> atexit_list { };
 
 #       ifndef NDEBUG
-        std::pmr::string name { "anonymous thread", scheduler::memory_resource() };
+        std::pmr::string name;
 #       endif
     };
 
@@ -169,10 +169,10 @@ namespace jw::detail
         template<typename F>
         static void invoke_next(F&& function);
 
-        static auto* memory_resource() noexcept { return memres; }
+        static auto* memory_resource() noexcept { return &*memres; }
 
 #       ifndef NDEBUG
-        static const auto& all_threads() { return instance->threads; }
+        static const auto& all_threads() { return *threads; }
 #       endif
 
     private:
@@ -194,19 +194,14 @@ namespace jw::detail
         [[gnu::force_align_arg_pointer, noreturn]]
         static void run_thread() noexcept;
 
-        map_t threads { memres };
-        map_t::iterator iterator;
-        thread_ptr main_thread;
-        bool terminating { false };
-
         static void setup();
         static void kill_all();
-        scheduler();
 
-        inline static constinit dpmi::locked_pool_resource<true>* memres { nullptr };
-        inline static constinit scheduler* instance { nullptr };
-
-        struct dtor { ~dtor(); } static inline destructor;
+        inline static constinit std::optional<dpmi::locked_pool_resource<true>> memres { std::nullopt };
+        inline static constinit std::optional<map_t> threads { std::nullopt };
+        inline static constinit std::optional<map_t::iterator> iterator { std::nullopt };
+        inline static constinit thread_ptr main_thread { nullptr };
+        inline static constinit bool terminating { false };
     };
 
     struct abort_thread
@@ -221,14 +216,13 @@ namespace jw::detail
 
     inline bool scheduler::is_current_thread(const thread* t) noexcept { return current_thread() == t; }
     inline bool scheduler::is_current_thread(thread_id id) noexcept { return current_thread_id() == id; }
-    inline thread* scheduler::current_thread() noexcept { return instance->iterator->second.get(); }
-    inline thread_id scheduler::current_thread_id() noexcept { return instance->iterator->first; }
+    inline thread* scheduler::current_thread() noexcept { return (*iterator)->second.get(); }
+    inline thread_id scheduler::current_thread_id() noexcept { return (*iterator)->first; }
 
     inline thread* scheduler::get_thread(thread_id id) noexcept
     {
-        auto* const i = instance;
-        auto it = i->threads.find(id);
-        if (it == i->threads.end()) return nullptr;
+        auto it = threads->find(id);
+        if (it == threads->end()) return nullptr;
         return it->second.get();
     }
 
@@ -236,17 +230,16 @@ namespace jw::detail
     inline void scheduler::invoke_main(F&& function)
     {
         if (current_thread_id() == thread::main_thread_id and not dpmi::in_irq_context()) std::forward<F>(function)();
-        else instance->main_thread->invoke(std::forward<F>(function));
+        else main_thread->invoke(std::forward<F>(function));
     }
 
     template<typename F>
     inline void scheduler::invoke_next(F&& function)
     {
-        auto* const i = instance;
-        if (not i->threads.empty())
+        if (not threads->empty())
         {
-            auto next = i->iterator;
-            if (++next == i->threads.end()) next = i->threads.begin();
+            auto next = *iterator;
+            if (++next == threads->end()) next = threads->begin();
             next->second->invoke(std::forward<F>(function));
         }
         else if (dpmi::in_irq_context()) current_thread()->invoke(std::forward<F>(function));
@@ -264,7 +257,12 @@ namespace jw::detail
         return { p, deleter, alloc };
     }
 
-    inline thread::thread() : invoke_list { scheduler::memory_resource() } { }
+    inline thread::thread()
+        : invoke_list { scheduler::memory_resource() }
+#       ifndef NDEBUG
+        , name { scheduler::memory_resource() }
+#       endif
+    { }
 
     template <typename F, typename function_t>
     inline thread::thread(std::span<std::byte> span, F&& func)
@@ -273,6 +271,9 @@ namespace jw::detail
         , destroy { do_destroy<function_t> }
         , stack { span.last(span.size() - sizeof(function_t)) }
         , invoke_list { scheduler::memory_resource() }
+#       ifndef NDEBUG
+        , name { "anonymous thread", scheduler::memory_resource() }
+#       endif
     {
         new(function.data()) function_t { std::forward<F>(func) };
     }

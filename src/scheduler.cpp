@@ -31,17 +31,19 @@ namespace jw::detail
 {
     static constinit std::optional<dpmi::realmode_interrupt_handler> int2f_handler { std::nullopt };
 
-    scheduler::scheduler()
+    void scheduler::setup()
     {
-        thread_allocator<thread> alloc { memres };
+        memres.emplace(64_KB);
+        thread_allocator<thread> alloc { &*memres };
         allocator_delete<thread_allocator<thread>> deleter { alloc };
         auto* const p = new (alloc.allocate(1)) thread { };
         main_thread = std::shared_ptr<thread> { p, deleter, alloc };
         p->state = thread::running;
         p->set_name("Main thread");
         debug::throw_assert(p->id == thread::main_thread_id);
-        threads.emplace(p->id, main_thread);
-        iterator = threads.begin();
+        threads.emplace(&*memres);
+        threads->emplace(p->id, main_thread);
+        iterator.emplace(threads->begin());
 
         int2f_handler.emplace(0x2f, [](dpmi::realmode_registers* reg, dpmi::far_ptr32)
         {
@@ -57,31 +59,16 @@ namespace jw::detail
 #       endif
     }
 
-    scheduler::dtor::~dtor()
-    {
-        thread_allocator<scheduler> alloc { memres };
-        alloc.delete_object(instance);
-        delete memres;
-    }
-
-    void scheduler::setup()
-    {
-        memres = new dpmi::locked_pool_resource<true> { 64_KB };
-        thread_allocator<scheduler> alloc { memres };
-        instance = new (alloc.allocate(1)) scheduler { };
-    }
-
     void scheduler::kill_all()
     {
         int2f_handler.reset();
-        auto* const i = instance;
-        atexit(i->main_thread.get());
-        if (i->threads.size() == 1) [[likely]] return;
+        atexit(main_thread.get());
+        if (threads->size() == 1) [[likely]] return;
         fmt::print(stderr, "Warning: exiting with active threads.\n");
-        auto thread_queue_copy = i->threads;
+        auto thread_queue_copy = *threads;
         thread_queue_copy.erase(thread::main_thread_id);
         for (auto& t : thread_queue_copy) t.second->abort();
-        i->main_thread->state = thread::running;
+        main_thread->state = thread::running;
         for (auto& t : thread_queue_copy)
         {
             while (t.second->active())
@@ -127,7 +114,6 @@ namespace jw::detail
         if (dpmi::in_irq_context()) [[unlikely]] return;
 
         dpmi::interrupt_unmask enable_interrupts { };
-        auto* const i = instance;
         auto* const ct = current_thread();
 
         debug::break_with_signal(debug::detail::thread_switched);
@@ -140,11 +126,11 @@ namespace jw::detail
         dpmi::fpu_context::update_cr0();
 
 #       ifndef NDEBUG
-        if (ct->id != main_thread_id and *reinterpret_cast<std::uint32_t*>(ct->stack.data()) != 0xDEADBEEF) [[unlikely]]
+        if (ct->id != thread::main_thread_id and *reinterpret_cast<std::uint32_t*>(ct->stack.data()) != 0xDEADBEEF) [[unlikely]]
             throw std::runtime_error { "Stack overflow!" };
 #       endif
 
-        if (i->terminating) [[unlikely]]
+        if (terminating) [[unlikely]]
             if (std::uncaught_exceptions() == 0)
                 terminate();
 
@@ -169,19 +155,17 @@ namespace jw::detail
         if (t->state != thread::starting) return;
         debug::trap_mask dont_trace_here { };
         dpmi::interrupt_mask no_interrupts_please { };
-        auto* const i = instance;
-        i->threads.emplace_hint(i->threads.end(), t->id, t);
+        threads->emplace_hint(threads->end(), t->id, t);
     }
 
     // The actual thread.
     void scheduler::run_thread() noexcept
     {
-        auto* const i = instance;
         auto* const t = current_thread();
         t->state = thread::running;
         try { (*t)(); }
         catch (const abort_thread& e) { e.defuse(); }
-        catch (const terminate_exception& e) { i->terminating = true; e.defuse(); }
+        catch (const terminate_exception& e) { terminating = true; e.defuse(); }
         catch (...)
         {
             fmt::print(stderr, FMT_STRING("caught exception from thread {:d}"), t->id);
@@ -191,7 +175,7 @@ namespace jw::detail
             fmt::print(stderr, "\n");
             try { throw; }
             catch (std::exception& e) { print_exception(e); }
-            i->terminating = true;
+            terminating = true;
         }
         t->state = thread::finishing;
         atexit(t);
@@ -205,9 +189,8 @@ namespace jw::detail
     // Select a new current_thread.
     thread_context* scheduler::switch_thread()
     {
-        auto* const i = instance;
-        auto& it = i->iterator;
-        thread* ct = it->second.get();
+        auto& it = iterator;
+        thread* ct = (*it)->second.get();
 
         ct->eh_globals = get_eh_globals();
 
@@ -215,11 +198,11 @@ namespace jw::detail
         {
             {
                 dpmi::interrupt_mask no_interrupts_please { };
-                if (ct->active()) [[likely]] ++it;
-                else it = i->threads.erase(it);
-                if (it == i->threads.end()) it = i->threads.begin();
+                if (ct->active()) [[likely]] ++*it;
+                else *it = threads->erase(*it);
+                if (*it == threads->end()) *it = threads->begin();
             }
-            ct = it->second.get();
+            ct = (*it)->second.get();
 
             if (ct->state == thread::starting) [[unlikely]]     // new thread, initialize new context on stack
             {
@@ -227,12 +210,12 @@ namespace jw::detail
                 *reinterpret_cast<std::uint32_t*>(ct->stack.data()) = 0xDEADBEEF;   // stack overflow protection
 #               endif
                 void* const esp = (ct->stack.data() + ct->stack.size_bytes() - 4) - sizeof(thread_context);
-                ct->context = new (esp) thread_context { *i->main_thread->context };    // clone context from main thread
+                ct->context = new (esp) thread_context { *main_thread->context };    // clone context from main thread
                 ct->context->return_address = reinterpret_cast<std::uintptr_t>(run_thread);
             }
 
             if (not ct->suspended) [[likely]] break;
-            if (n > i->threads.size())
+            if (n > threads->size())
             {
                 debug::break_with_signal(debug::detail::all_threads_suspended);
                 n = 0;
@@ -245,12 +228,11 @@ namespace jw::detail
 
     void scheduler::atexit(thread* t)
     {
-        auto* const i = instance;
         for (const auto& f : t->atexit_list)
         {
-            if (i->terminating) break;
+            if (terminating) break;
             try { f(); }
-            catch (const terminate_exception& e) { i->terminating = true; e.defuse(); }
+            catch (const terminate_exception& e) { terminating = true; e.defuse(); }
             catch (...)
             {
                 fmt::print(stderr, FMT_STRING("caught exception while processing atexit handlers on thread {:d}"), t->id);
@@ -260,7 +242,7 @@ namespace jw::detail
                 fmt::print(stderr, "\n");
                 try { throw; }
                 catch (std::exception& e) { print_exception(e); }
-                i->terminating = true;
+                terminating = true;
             }
         }
         t->atexit_list.clear();
