@@ -38,7 +38,6 @@ namespace jw::dpmi::detail
         interrupt_id_data* const next;
         ack acknowledged { type == interrupt_type::irq ? ack::no : ack::yes };
         jw::detail::jw_cxa_eh_globals eh_globals;
-        bool has_fpu_context { false };
         fpu_context fpu;
 
     protected:
