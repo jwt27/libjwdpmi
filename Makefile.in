@@ -34,9 +34,10 @@ libjwdpmi.a: $(OBJ)
 src/cpu_exception.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
 src/fpu.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
 src/irq.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
-src/ring0.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
-src/memory.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
 src/main.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
+src/memory.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
+src/ring0.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
+src/scheduler.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
 src/debug.% : override CXXFLAGS += -O3
 
 %.asm: %.cpp

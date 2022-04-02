@@ -41,10 +41,17 @@ namespace jw::dpmi::detail
     [[gnu::cdecl, gnu::hot]]
     static bool handle_exception(__seg_fs raw_exception_frame* frame) noexcept
     {
-        auto* data = frame->data;
+        auto* const data = frame->data;
+
+        if (data->num == exception_num::device_not_available or
+            data->num == exception_num::invalid_opcode)
+        {
+            if (fpu_context::try_context_switch())
+                return true;
+        }
+
         auto* const f = data->is_dpmi10 ? &frame->frame_10 : &frame->frame_09;
         interrupt_id id { data->num, interrupt_type::exception };
-        if (id.fpu_context_switched) return true;
 
         const exception_info i { &frame->reg, f, data->is_dpmi10 };
 
@@ -248,6 +255,7 @@ namespace jw::dpmi::detail
             redirect_allocator alloc { &*trampoline_memres };
             std::allocator_traits<redirect_allocator>::destroy(alloc, self);
             std::allocator_traits<redirect_allocator>::deallocate(alloc, self, 1);
+            fpu_context fpu { };
             asm ("push %0; popf" : : "rm" (flags) : "cc");
             asm ("mov ss, %k0; nop" : : "r" (main_ds));
             f();

@@ -92,8 +92,8 @@ namespace jw
             bool replied { false };
 
             struct thread_info;
-            using thread_id = jw::detail::scheduler::thread_id;
-            constexpr thread_id main_thread_id = jw::detail::scheduler::main_thread_id;
+            using thread_id = jw::detail::thread_id;
+            constexpr thread_id main_thread_id = jw::detail::thread::main_thread_id;
             constexpr thread_id all_threads_id { 0 };
             thread_id current_thread_id { 1 };
             thread_id query_thread_id { 1 };
@@ -210,9 +210,9 @@ namespace jw
                     if (jw::detail::scheduler::get_thread(i->first) == nullptr) i = threads.erase(i);
                     else ++i;
                 }
-                for (auto&& t : jw::detail::scheduler::all_threads())
+                for (auto& t : jw::detail::scheduler::all_threads())
                 {
-                    threads[t.first].thread = t.second.get();
+                    threads[t.id].thread = const_cast<jw::detail::thread*>(&t);
                 }
                 current_thread_id = jw::detail::scheduler::current_thread_id();
                 threads[current_thread_id].thread = jw::detail::scheduler::current_thread();
@@ -676,7 +676,7 @@ namespace jw
                     case eip: encode(out, &f->fault_address.offset); return;
                     default:
                         if (reg > reg_max) return;
-                        auto* fpu = interrupt_id::last_fpu_context();
+                        auto* fpu = interrupt_id::get()->fpu.get();
                         switch (reg)
                         {
                             case st0: case st1: case st2: case st3: case st4: case st5: case st6: case st7:
@@ -758,7 +758,7 @@ namespace jw
                     case fs: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->fs, 2); } return false;
                     case gs: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->gs, 2); } return false;
                     default:
-                        auto* fpu = interrupt_id::last_fpu_context();
+                        auto* fpu = interrupt_id::get()->fpu.get();
                         switch (reg)
                         {
                         case st0: case st1: case st2: case st3: case st4: case st5: case st6: case st7:

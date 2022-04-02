@@ -31,17 +31,18 @@ namespace jw::detail
 {
     static constinit std::optional<dpmi::realmode_interrupt_handler> int2f_handler { std::nullopt };
 
-    scheduler::scheduler()
+    void scheduler::setup()
     {
-        allocator<thread> alloc { memres };
-        allocator_delete<allocator<thread>> deleter { alloc };
-        auto* const p = new (alloc.allocate(1)) thread { };
-        main_thread = std::shared_ptr<thread> { p, deleter, alloc };
-        p->state = thread::running;
-        p->set_name("Main thread");
-        debug::throw_assert(p->id == main_thread_id);
-        threads.emplace(p->id, main_thread);
-        iterator = threads.begin();
+        memres.emplace(64_KB);
+        thread_allocator<thread> alloc { memory_resource() };
+        threads.emplace(memory_resource());
+
+        thread& p = const_cast<thread&>(*threads->emplace().first);
+        p.state = thread::running;
+        p.set_name("Main thread");
+        debug::throw_assert(p.id == thread::main_thread_id);
+
+        iterator.emplace(threads->begin());
 
         int2f_handler.emplace(0x2f, [](dpmi::realmode_registers* reg, __seg_fs void*)
         {
@@ -57,38 +58,32 @@ namespace jw::detail
 #       endif
     }
 
-    scheduler::dtor::~dtor()
-    {
-        allocator<scheduler> alloc { memres };
-        alloc.delete_object(instance);
-        delete memres;
-    }
-
-    void scheduler::setup()
-    {
-        memres = new dpmi::locked_pool_resource<true> { 64_KB };
-        allocator<scheduler> alloc { memres };
-        instance = new (alloc.allocate(1)) scheduler { };
-    }
-
     void scheduler::kill_all()
     {
         int2f_handler.reset();
-        auto* const i = instance;
-        atexit(i->main_thread.get());
-        if (i->threads.size() == 1) [[likely]] return;
+        auto* main = get_thread(thread::main_thread_id);
+        atexit(main);
+        if (threads->size() == 1) [[likely]] return;
         fmt::print(stderr, "Warning: exiting with active threads.\n");
-        auto thread_queue_copy = i->threads;
-        thread_queue_copy.erase(main_thread_id);
-        for (auto& t : thread_queue_copy) t.second->abort();
-        i->main_thread->state = thread::running;
-        for (auto& t : thread_queue_copy)
+        std::vector<thread_id> ids;
+        ids.reserve(threads->size());
+        for (auto& ct : *threads)
         {
-            while (t.second->active())
+            if (ct.id == thread::main_thread_id) continue;
+            ids.push_back(ct.id);
+            auto& t = const_cast<thread&>(ct);
+            t.abort();
+        }
+        main->state = thread::running;
+        for (auto id : ids)
+        {
+            thread* t;
+            do
             {
                 try { this_thread::yield(); }
                 catch (const jw::terminate_exception& e) { e.defuse(); }
-            }
+                t = get_thread(id);
+            } while (t != nullptr and t->active());
         }
     }
 
@@ -127,7 +122,6 @@ namespace jw::detail
         if (dpmi::in_irq_context()) [[unlikely]] return;
 
         dpmi::interrupt_unmask enable_interrupts { };
-        auto* const i = instance;
         auto* const ct = current_thread();
 
         debug::break_with_signal(debug::detail::thread_switched);
@@ -137,12 +131,14 @@ namespace jw::detail
             context_switch(&ct->context);
         }
 
+        dpmi::fpu_context::update_cr0();
+
 #       ifndef NDEBUG
-        if (ct->id != main_thread_id and *reinterpret_cast<std::uint32_t*>(ct->stack.data()) != 0xDEADBEEF) [[unlikely]]
+        if (ct->id != thread::main_thread_id and *reinterpret_cast<std::uint32_t*>(ct->stack.data()) != 0xDEADBEEF) [[unlikely]]
             throw std::runtime_error { "Stack overflow!" };
 #       endif
 
-        if (i->terminating) [[unlikely]]
+        if (terminating) [[unlikely]]
             if (std::uncaught_exceptions() == 0)
                 terminate();
 
@@ -162,24 +158,14 @@ namespace jw::detail
                 throw abort_thread { };
     }
 
-    void scheduler::start_thread(const thread_ptr& t)
-    {
-        if (t->state != thread::starting) return;
-        debug::trap_mask dont_trace_here { };
-        dpmi::interrupt_mask no_interrupts_please { };
-        auto* const i = instance;
-        i->threads.emplace_hint(i->threads.end(), t->id, t);
-    }
-
     // The actual thread.
     void scheduler::run_thread() noexcept
     {
-        auto* const i = instance;
         auto* const t = current_thread();
         t->state = thread::running;
         try { (*t)(); }
         catch (const abort_thread& e) { e.defuse(); }
-        catch (const terminate_exception& e) { i->terminating = true; e.defuse(); }
+        catch (const terminate_exception& e) { terminating = true; e.defuse(); }
         catch (...)
         {
             fmt::print(stderr, FMT_STRING("caught exception from thread {:d}"), t->id);
@@ -189,7 +175,7 @@ namespace jw::detail
             fmt::print(stderr, "\n");
             try { throw; }
             catch (std::exception& e) { print_exception(e); }
-            i->terminating = true;
+            terminating = true;
         }
         t->state = thread::finishing;
         atexit(t);
@@ -203,9 +189,8 @@ namespace jw::detail
     // Select a new current_thread.
     thread_context* scheduler::switch_thread()
     {
-        auto* const i = instance;
-        auto& it = i->iterator;
-        thread* ct = it->second.get();
+        auto& it = iterator;
+        thread* ct = current_thread();
 
         ct->eh_globals = get_eh_globals();
 
@@ -213,11 +198,11 @@ namespace jw::detail
         {
             {
                 dpmi::interrupt_mask no_interrupts_please { };
-                if (ct->active()) [[likely]] ++it;
-                else it = i->threads.erase(it);
-                if (it == i->threads.end()) it = i->threads.begin();
+                if (not ct->detached or ct->active()) [[likely]] ++*it;
+                else *it = threads->erase(*it);
+                if (*it == threads->end()) *it = threads->begin();
             }
-            ct = it->second.get();
+            ct = current_thread();
 
             if (ct->state == thread::starting) [[unlikely]]     // new thread, initialize new context on stack
             {
@@ -225,12 +210,12 @@ namespace jw::detail
                 *reinterpret_cast<std::uint32_t*>(ct->stack.data()) = 0xDEADBEEF;   // stack overflow protection
 #               endif
                 void* const esp = (ct->stack.data() + ct->stack.size_bytes() - 4) - sizeof(thread_context);
-                ct->context = new (esp) thread_context { *i->main_thread->context };    // clone context from main thread
+                ct->context = new (esp) thread_context { *threads->begin()->context };    // clone context from main thread
                 ct->context->return_address = reinterpret_cast<std::uintptr_t>(run_thread);
             }
 
-            if (not ct->suspended) [[likely]] break;
-            if (n > i->threads.size())
+            if (not ct->suspended and ct->active()) [[likely]] break;
+            if (n > threads->size())
             {
                 debug::break_with_signal(debug::detail::all_threads_suspended);
                 n = 0;
@@ -243,12 +228,11 @@ namespace jw::detail
 
     void scheduler::atexit(thread* t)
     {
-        auto* const i = instance;
         for (const auto& f : t->atexit_list)
         {
-            if (i->terminating) break;
+            if (terminating) break;
             try { f(); }
-            catch (const terminate_exception& e) { i->terminating = true; e.defuse(); }
+            catch (const terminate_exception& e) { terminating = true; e.defuse(); }
             catch (...)
             {
                 fmt::print(stderr, FMT_STRING("caught exception while processing atexit handlers on thread {:d}"), t->id);
@@ -258,7 +242,7 @@ namespace jw::detail
                 fmt::print(stderr, "\n");
                 try { throw; }
                 catch (std::exception& e) { print_exception(e); }
-                i->terminating = true;
+                terminating = true;
             }
         }
         t->atexit_list.clear();

@@ -156,14 +156,14 @@ namespace jw::dpmi::detail
             try { throw; }
             catch (const std::exception& e) { print_exception(e); }
             catch (...) { }
-            do { asm("cli; hlt"); } while (true);
+            halt();
         }
 
 #       ifndef NDEBUG
         if (in_service(i))
         {
             fmt::print(stderr, "no EOI for IRQ {:d}\n", i);
-            do { asm("cli; hlt"); } while (true);
+            halt();
         }
 #       endif
 

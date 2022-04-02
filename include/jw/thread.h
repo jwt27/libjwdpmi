@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
@@ -22,7 +23,7 @@ namespace jw
 
     struct thread
     {
-        using id = detail::scheduler::thread_id;
+        using id = detail::thread_id;
         using native_handle_type = detail::thread*;
 
         thread() noexcept = default;
@@ -32,10 +33,7 @@ namespace jw
 
         template<typename F, typename... A> requires std::invocable<std::decay_t<F>, std::decay_t<A>...>
         explicit thread(std::size_t stack_size, F&& f, A&&... args)
-            : ptr { create(stack_size, std::forward<F>(f), std::forward<A>(args)...) }
-        {
-            detail::scheduler::start_thread(ptr);
-        }
+            : ptr { create(stack_size, std::forward<F>(f), std::forward<A>(args)...) } { }
 
         ~thread() noexcept(false) { if (ptr) terminate(); }
 
@@ -46,15 +44,16 @@ namespace jw
         {
             if (ptr) terminate();
             ptr = std::move(other.ptr);
+            other.ptr = nullptr;
             return *this;
         }
 
         void swap(thread& other) noexcept { using std::swap; swap(ptr, other.ptr); };
-        [[nodiscard]] bool joinable() const noexcept { return static_cast<bool>(ptr); }
+        [[nodiscard]] bool joinable() const noexcept { return ptr != nullptr; }
         void join();
-        void detach() { ptr.reset(); }
+        void detach() { ptr->detach(); ptr = nullptr; }
         [[nodiscard]] id get_id() const noexcept { return ptr ? ptr->id : 0; };
-        [[nodiscard]] native_handle_type native_handle() { return ptr.get(); };
+        [[nodiscard]] native_handle_type native_handle() { return ptr; };
 
         void abort() { ptr->abort(); };
         [[nodiscard]] bool active() const noexcept { return ptr and ptr->active(); }
@@ -70,9 +69,9 @@ namespace jw
 
     private:
         template<typename F, typename... A>
-        detail::thread_ptr create(std::size_t, F&&, A&&...);
+        detail::thread* create(std::size_t, F&&, A&&...);
 
-        detail::thread_ptr ptr;
+        detail::thread* ptr;
     };
 
     inline void swap(thread& a, thread& b) noexcept { a.swap(b); }
@@ -211,12 +210,12 @@ namespace jw
     {
         if (not ptr) throw std::system_error { std::make_error_code(std::errc::no_such_process) };
         if (get_id() == detail::scheduler::current_thread_id()) throw deadlock { };
-        this_thread::yield_while([p = ptr.get()] { return p->active(); });
-        ptr.reset();
+        this_thread::yield_while([p = ptr] { return p->active(); });
+        detach();
     }
 
     template<typename F, typename... A>
-    inline detail::thread_ptr thread::create(std::size_t stack_size, F&& func, A&&... args)
+    inline detail::thread* thread::create(std::size_t stack_size, F&& func, A&&... args)
     {
         auto wrapper = callable_tuple { std::forward<F>(func), std::forward<A>(args)... };
         return detail::scheduler::create_thread(std::move(wrapper), stack_size);

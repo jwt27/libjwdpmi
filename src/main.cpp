@@ -66,7 +66,7 @@ namespace jw
         }
         else if (terminated > 2)
         {
-            do { asm("cli; hlt"); } while (true);
+            halt();
         }
         dpmi::ring0_privilege::force_leave();
         debug::break_with_signal(SIGTERM);
@@ -93,14 +93,13 @@ namespace jw
             fmt::print(stderr, "Currently servicing ");
             switch (id->type)
             {
-            case interrupt_type::realmode:
-            case interrupt_type::realmode_irq:  fmt::print(stderr, "real-mode callback"); break;
+            case interrupt_type::realmode_irq:  fmt::print(stderr, "real-mode IRQ callback"); break;
             case interrupt_type::exception:     fmt::print(stderr, "CPU exception 0x{:0>2x}", id->num); break;
             case interrupt_type::irq:           fmt::print(stderr, "IRQ 0x{:0>2x}", id->num); break;
             case interrupt_type::none:          fmt::print(stderr, "no interrupt (?)"); break;
             }
             fmt::print(stderr, ", unable to terminate.\n");
-            do { asm("cli; hlt"); } while (true);
+            halt();
         }
 
         std::_Exit(-1);
@@ -188,6 +187,8 @@ namespace jw
             main_cs = get_cs();
             main_ds = get_ds();
 
+            jw::detail::scheduler::setup();
+
             interrupt_id::setup();
             setup_exception_handling();
 
@@ -212,8 +213,6 @@ namespace jw
                 // For now, assume that the dpmi server already enabled these bits (HDPMI does this).
                 // If not, then we'll soon crash with an invalid opcode on the first SSE instruction.
             }
-
-            jw::detail::scheduler::setup();
         }
 
         ~init() noexcept
