@@ -24,11 +24,26 @@ namespace jw::dpmi
             "int 0x31;"
             : "=@ccc" (c)
             , "=a" (error)
-            : "a" (0x0E01)
+            : "a" (std::uint16_t { 0x0E01 })
             , "b" (bl)
             : "cc");
         if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
         cr0_em = em;
+    }
+
+    static void update_cr0_impl(detail::fpu_state* restore)
+    {
+        const bool do_save = save != nullptr;
+        const bool do_restore = restore != nullptr;
+        const bool new_em = do_save | do_restore;
+
+        if (new_em == cr0_em) return;
+        set_cr0_em(new_em);
+    }
+
+    void fpu_context::update_cr0()
+    {
+        update_cr0_impl(*restore_ptr());
     }
 
     static bool in_use(detail::fpu_state* p)
@@ -98,7 +113,7 @@ namespace jw::dpmi
             while (in_use(free) and free != context_storage.end()) ++free;
         }
         ++state->save_count;
-        update_cr0();
+        update_cr0_impl(*restore);
     }
 
     fpu_context::~fpu_context()
@@ -119,7 +134,7 @@ namespace jw::dpmi
             ++state->restore_count;
         }
         else try_free(state);
-        update_cr0();
+        update_cr0_impl(*restore);
     }
 
     fpu_registers* fpu_context::get()
@@ -127,16 +142,6 @@ namespace jw::dpmi
         if (save == state) // force a context switch
             asm volatile ("fnop; fwait" : : : "memory");
         return &state->regs;
-    }
-
-    void fpu_context::update_cr0()
-    {
-        const bool do_save = save != nullptr;
-        const bool do_restore = *restore_ptr() != nullptr;
-        const bool new_em = do_save | do_restore;
-
-        if (new_em == cr0_em) return;
-        set_cr0_em(new_em);
     }
 
     bool fpu_context::try_context_switch() noexcept
