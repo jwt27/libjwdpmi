@@ -48,7 +48,9 @@ namespace jw::dpmi
 
     static void try_free(detail::fpu_state* p)
     {
-        if (not in_use(p) and p < free) free = p;
+        if (in_use(p)) return;
+        p->next_free = free;
+        free = p;
     }
 
     detail::fpu_state** fpu_context::restore_ptr() noexcept
@@ -80,6 +82,10 @@ namespace jw::dpmi
             add esp, 4
         )");
 #       endif
+
+        for (auto& i : context_storage)
+            i.next_free = &i + 1;
+        context_storage.rbegin()->next_free = nullptr;
     }
 
     fpu_context::fpu_context()
@@ -100,11 +106,11 @@ namespace jw::dpmi
         else
         {
             // Allocate new state.
-            if (free == context_storage.end()) throw std::runtime_error { "FPU context storage exhausted" };
-            state = free++;
+            if (free == nullptr) throw std::runtime_error { "FPU context storage exhausted" };
+            state = free;
+            free = state->next_free;
             state->saved = false;
             save = state;
-            while (in_use(free) and free != context_storage.end()) ++free;
         }
         ++state->save_count;
         update_cr0();
