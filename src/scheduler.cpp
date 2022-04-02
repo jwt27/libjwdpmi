@@ -33,13 +33,13 @@ namespace jw::detail
 
     scheduler::scheduler()
     {
-        allocator<thread> alloc { memres };
-        allocator_delete<allocator<thread>> deleter { alloc };
+        thread_allocator<thread> alloc { memres };
+        allocator_delete<thread_allocator<thread>> deleter { alloc };
         auto* const p = new (alloc.allocate(1)) thread { };
         main_thread = std::shared_ptr<thread> { p, deleter, alloc };
         p->state = thread::running;
         p->set_name("Main thread");
-        debug::throw_assert(p->id == main_thread_id);
+        debug::throw_assert(p->id == thread::main_thread_id);
         threads.emplace(p->id, main_thread);
         iterator = threads.begin();
 
@@ -59,7 +59,7 @@ namespace jw::detail
 
     scheduler::dtor::~dtor()
     {
-        allocator<scheduler> alloc { memres };
+        thread_allocator<scheduler> alloc { memres };
         alloc.delete_object(instance);
         delete memres;
     }
@@ -67,7 +67,7 @@ namespace jw::detail
     void scheduler::setup()
     {
         memres = new dpmi::locked_pool_resource<true> { 64_KB };
-        allocator<scheduler> alloc { memres };
+        thread_allocator<scheduler> alloc { memres };
         instance = new (alloc.allocate(1)) scheduler { };
     }
 
@@ -79,7 +79,7 @@ namespace jw::detail
         if (i->threads.size() == 1) [[likely]] return;
         fmt::print(stderr, "Warning: exiting with active threads.\n");
         auto thread_queue_copy = i->threads;
-        thread_queue_copy.erase(main_thread_id);
+        thread_queue_copy.erase(thread::main_thread_id);
         for (auto& t : thread_queue_copy) t.second->abort();
         i->main_thread->state = thread::running;
         for (auto& t : thread_queue_copy)

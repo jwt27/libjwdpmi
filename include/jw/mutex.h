@@ -45,7 +45,7 @@ namespace jw
 
     class recursive_mutex
     {
-        using thread_id = detail::scheduler::thread_id;
+        using thread_id = detail::thread_id;
         using irq_id = std::uint64_t;
         std::variant<std::nullptr_t, thread_id, irq_id> owner { nullptr };
         std::atomic<std::uint32_t> lock_count { 0 };

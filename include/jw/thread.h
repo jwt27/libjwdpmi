@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
@@ -22,7 +23,7 @@ namespace jw
 
     struct thread
     {
-        using id = detail::scheduler::thread_id;
+        using id = detail::thread_id;
         using native_handle_type = detail::thread*;
 
         thread() noexcept = default;
