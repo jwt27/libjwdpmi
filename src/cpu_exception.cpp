@@ -251,8 +251,8 @@ namespace jw::dpmi::detail
             redirect_trampoline* self;
             const std::uint8_t jmp_rel32 { 0xe9 };
             std::ptrdiff_t stage2_offset;
+            void (*func)();
         };
-        void (*func)();
 
         [[gnu::naked]]
         static void stage2()
