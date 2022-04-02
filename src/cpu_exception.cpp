@@ -27,7 +27,7 @@ namespace jw::dpmi::detail
     static constinit std::array<std::byte, 8_KB> trampoline_pool;
     static constinit std::optional<basic_pool_resource> trampoline_memres { std::nullopt };
     static constinit std::optional<sso_vector<std::exception_ptr, 3>> pending_exceptions { std::nullopt };
-    static constinit std::array<std::optional<exception_handler>, 0x1f> exception_throwers { };
+    static constinit std::array<std::optional<exception_handler>, 0x1f> exception_handlers { };
     alignas (0x10) static constinit std::array<std::byte, config::exception_stack_size> exception_stack;
 
     [[noreturn]]
@@ -317,10 +317,10 @@ namespace jw::dpmi::detail
     }
 
     template <exception_num N, exception_num... Next>
-    static void make_throwers()
+    static void install_handlers()
     {
-        exception_throwers[N].emplace(N, [](const exception_info& i) { return default_exception_handler<N>(i); });
-        if constexpr (sizeof...(Next) > 0) make_throwers<Next...>();
+        exception_handlers[N].emplace(N, [](const exception_info& i) { return default_exception_handler<N>(i); });
+        if constexpr (sizeof...(Next) > 0) install_handlers<Next...>();
     }
 
     void setup_exception_handling()
@@ -334,10 +334,34 @@ namespace jw::dpmi::detail
 
         pending_exceptions.emplace();
 
-        make_throwers<0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-                      0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e>();
+        install_handlers<exception_num::invalid_opcode,
+                         exception_num::device_not_available,
+                         exception_num::general_protection_fault>();
 
-        try { make_throwers<0x10, 0x11, 0x12, 0x13, 0x14, 0x1e>(); }
+        if constexpr (not config::enable_throwing_from_cpu_exceptions) return;
+
+        install_handlers<exception_num::divide_error,
+                         exception_num::trap,
+                         exception_num::non_maskable_interrupt,
+                         exception_num::breakpoint,
+                         exception_num::overflow,
+                         exception_num::bound_range_exceeded,
+                         exception_num::double_fault,
+                         exception_num::x87_segment_not_present,
+                         exception_num::invalid_tss,
+                         exception_num::segment_not_present,
+                         exception_num::stack_segment_fault,
+                         exception_num::page_fault>();
+
+        try
+        {
+            install_handlers<exception_num::x87_exception,
+                             exception_num::alignment_check,
+                             exception_num::machine_check,
+                             exception_num::sse_exception,
+                             exception_num::virtualization_exception,
+                             exception_num::security_exception>();
+        }
         catch (const dpmi_error&) { /* ignore */ }
     }
 }
