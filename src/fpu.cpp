@@ -134,7 +134,13 @@ namespace jw::dpmi
             *restore = state;
             ++state->restore_count;
         }
-        else try_free(state);
+        else if (state->save_count == 0)
+        {
+            // Cancel pending save.
+            if (save == state) save = nullptr;
+            assume(state->restore_count == 0);
+            try_free(state);
+        }
         update_cr0();
     }
 
