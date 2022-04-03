@@ -114,33 +114,40 @@ namespace jw::dpmi::detail
     struct exception_handler_data
     {
         function<exception_handler_sig> func;
-        exception_num num;
+        const exception_num num;
         exception_trampoline* next { nullptr };
         exception_trampoline* prev;
         bool is_dpmi10;
+        const bool realmode;
 
     private:
         friend struct exception_trampoline;
 
         template <typename F>
-        exception_handler_data(exception_num n, F&& f)
+        exception_handler_data(exception_num n, F&& f, bool rm)
             : func { std::forward<F>(f) }
-            , num { n } { }
+            , num { n }
+            , realmode { rm } { }
     };
 
     struct exception_trampoline
     {
         template<typename F>
-        static exception_trampoline* create(exception_num n, F&& f)
+        static exception_trampoline* create(exception_num n, F&& f, bool rm)
         {
             auto* const p = allocate();
-            return new (p) exception_trampoline { n, std::forward<F>(f) };
+            return new (p) exception_trampoline { n, std::forward<F>(f), rm };
         }
 
         static void destroy(exception_trampoline* p)
         {
             p->~exception_trampoline();
             deallocate(p);
+        }
+
+        bool is_dpmi10() const noexcept
+        {
+            return data->is_dpmi10;
         }
 
     private:
@@ -152,10 +159,10 @@ namespace jw::dpmi::detail
         std::ptrdiff_t find_entry_point(bool) const noexcept;
 
         template<typename F>
-        exception_trampoline(exception_num n, F&& f)
+        exception_trampoline(exception_num n, F&& f, bool rm)
             : data { data_alloc.allocate(1) }
         {
-            data = new (data) exception_handler_data { n, std::forward<F>(f) };
+            data = new (data) exception_handler_data { n, std::forward<F>(f), rm };
             data->prev = last[n];
             if (data->prev != nullptr) data->prev->data->next = this;
             last[n] = this;
@@ -166,7 +173,12 @@ namespace jw::dpmi::detail
 
             interrupt_mask no_irqs { };
             const auto p = reinterpret_cast<std::uintptr_t>(&push0_imm32);
-            data->is_dpmi10 = detail::cpu_exception_handlers::set_pm_handler(n, { get_cs(), p });
+            if (rm)
+            {
+                data->is_dpmi10 = true;
+                detail::cpu_exception_handlers::set_rm_handler(n, { get_cs(), p });
+            }
+            else data->is_dpmi10 = detail::cpu_exception_handlers::set_pm_handler(n, { get_cs(), p });
             entry_point = find_entry_point(data->is_dpmi10);
         }
 

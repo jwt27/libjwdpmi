@@ -18,17 +18,35 @@
 
 namespace jw::dpmi::detail
 {
-    struct redirect_trampoline;
+    union trampoline_block
+    {
+        trampoline_block* next_free;
+        std::aligned_storage_t<sizeof(exception_trampoline), alignof(exception_trampoline)> data;
+    };
 
-    using trampoline_allocator = monomorphic_allocator<basic_pool_resource, exception_trampoline>;
-    using redirect_allocator = monomorphic_allocator<basic_pool_resource, redirect_trampoline>;
-
-    [[gnu::section(".text.hot")]] alignas (exception_trampoline)
-    static constinit std::array<std::byte, 8_KB> trampoline_pool;
-    static constinit std::optional<basic_pool_resource> trampoline_memres { std::nullopt };
+    [[gnu::section(".text.hot")]]
+    static constinit std::array<trampoline_block, 128> trampoline_pool;
+    static constinit trampoline_block* free_list { nullptr };
     static constinit std::optional<sso_vector<std::exception_ptr, 3>> pending_exceptions { std::nullopt };
-    static constinit std::array<std::optional<exception_handler>, 0x1f> exception_throwers { };
+    static constinit std::array<std::optional<exception_handler>, 0x1f> exception_handlers { };
     alignas (0x10) static constinit std::array<std::byte, config::exception_stack_size> exception_stack;
+
+    template<typename T>
+    static T* allocate_trampoline()
+    {
+        auto* const p = free_list;
+        if (p == nullptr) throw std::runtime_error { "Trampoline pool exhausted" };
+        free_list = p->next_free;
+        return reinterpret_cast<T*>(p);
+    }
+
+    template<typename T>
+    static void deallocate_trampoline(T* t) noexcept
+    {
+        auto* const p = reinterpret_cast<trampoline_block*>(t);
+        p->next_free = free_list;
+        free_list = p;
+    }
 
     [[noreturn]]
     static void rethrow_cpu_exception()
@@ -164,14 +182,12 @@ namespace jw::dpmi::detail
 
     exception_trampoline* exception_trampoline::allocate()
     {
-        trampoline_allocator alloc { &*trampoline_memres };
-        return std::allocator_traits<trampoline_allocator>::allocate(alloc, 1);
+        return allocate_trampoline<exception_trampoline>();
     }
 
-    void exception_trampoline::deallocate(exception_trampoline* p)
+    void exception_trampoline::deallocate(exception_trampoline* t)
     {
-        trampoline_allocator alloc { &*trampoline_memres };
-        std::allocator_traits<trampoline_allocator>::deallocate(alloc, p, 1);
+        deallocate_trampoline(t);
     }
 
     exception_trampoline::~exception_trampoline()
@@ -186,7 +202,10 @@ namespace jw::dpmi::detail
         {
             last[data->num] = data->prev;
             far_ptr32 chain_to { chain_to_segment, chain_to_offset };
-            detail::cpu_exception_handlers::set_pm_handler(data->num, chain_to);
+            if (data->realmode)
+                detail::cpu_exception_handlers::set_rm_handler(data->num, chain_to);
+            else
+                detail::cpu_exception_handlers::set_pm_handler(data->num, chain_to);
         }
         data->~exception_handler_data();
         data_alloc.deallocate(data, 1);
@@ -225,8 +244,8 @@ namespace jw::dpmi::detail
             redirect_trampoline* self;
             const std::uint8_t jmp_rel32 { 0xe9 };
             std::ptrdiff_t stage2_offset;
+            void (*func)();
         };
-        void (*func)();
 
         [[gnu::naked]]
         static void stage2()
@@ -252,9 +271,8 @@ namespace jw::dpmi::detail
         static void stage3(redirect_trampoline* self, cpu_flags flags)
         {
             auto f = self->func;
-            redirect_allocator alloc { &*trampoline_memres };
-            std::allocator_traits<redirect_allocator>::destroy(alloc, self);
-            std::allocator_traits<redirect_allocator>::deallocate(alloc, self, 1);
+            self->~redirect_trampoline();
+            deallocate_trampoline(self);
             fpu_context fpu { };
             asm ("push %0; popf" : : "rm" (flags) : "cc");
             asm ("mov ss, %k0; nop" : : "r" (main_ds));
@@ -262,21 +280,39 @@ namespace jw::dpmi::detail
         }
     };
 
+    static_assert(sizeof(redirect_trampoline) == sizeof(exception_trampoline));
+    static_assert(alignof(redirect_trampoline) == alignof(exception_trampoline));
+
     void kill()
     {
         jw::terminate();
     }
 
-    template <exception_num N, exception_num... Next>
-    static void make_throwers()
+    template <exception_num N>
+    static bool default_exception_handler(const exception_info& i)
     {
-        exception_throwers[N].emplace(N, [](const exception_info& i) -> bool
+        if constexpr (N == exception_num::double_fault or
+                      N == exception_num::machine_check)
         {
-            if constexpr (config::enable_throwing_from_cpu_exceptions)
-                throw specific_cpu_exception<N> { i };
-            return false;
-        });
-        if constexpr (sizeof...(Next) > 0) make_throwers<Next...>();
+            i.frame->print();
+            i.registers->print();
+            fmt::print(stderr, "{}\n", cpu_category { }.message(N));
+            halt();
+        }
+
+        if (i.frame->flags.v86_mode) return false;
+
+        if constexpr (config::enable_throwing_from_cpu_exceptions)
+            throw specific_cpu_exception<N> { i };
+
+        return false;
+    }
+
+    template <exception_num N, exception_num... Next>
+    static void install_handlers()
+    {
+        exception_handlers[N].emplace(N, [](const exception_info& i) { return default_exception_handler<N>(i); });
+        if constexpr (sizeof...(Next) > 0) install_handlers<Next...>();
     }
 
     void setup_exception_handling()
@@ -285,15 +321,41 @@ namespace jw::dpmi::detail
         if (done) return;
         done = true;
 
-        trampoline_memres.emplace(trampoline_pool);
+        for (auto& i : trampoline_pool) i.next_free = &i + 1;
+        trampoline_pool.rbegin()->next_free = nullptr;
+        free_list = trampoline_pool.begin();
         *reinterpret_cast<std::uint32_t*>(exception_stack.data()) = 0xdeadbeef;
 
         pending_exceptions.emplace();
 
-        make_throwers<0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-                      0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e>();
+        install_handlers<exception_num::invalid_opcode,
+                         exception_num::device_not_available,
+                         exception_num::general_protection_fault>();
 
-        try { make_throwers<0x10, 0x11, 0x12, 0x13, 0x14, 0x1e>(); }
+        if constexpr (not config::enable_throwing_from_cpu_exceptions) return;
+
+        install_handlers<exception_num::divide_error,
+                         exception_num::trap,
+                         exception_num::non_maskable_interrupt,
+                         exception_num::breakpoint,
+                         exception_num::overflow,
+                         exception_num::bound_range_exceeded,
+                         exception_num::double_fault,
+                         exception_num::x87_segment_not_present,
+                         exception_num::invalid_tss,
+                         exception_num::segment_not_present,
+                         exception_num::stack_segment_fault,
+                         exception_num::page_fault>();
+
+        try
+        {
+            install_handlers<exception_num::x87_exception,
+                             exception_num::alignment_check,
+                             exception_num::machine_check,
+                             exception_num::sse_exception,
+                             exception_num::virtualization_exception,
+                             exception_num::security_exception>();
+        }
         catch (const dpmi_error&) { /* ignore */ }
     }
 }
@@ -305,14 +367,12 @@ namespace jw::dpmi
         if (info.frame->info_bits.redirect_elsewhere) throw already_redirected { };
 
         using namespace ::jw::dpmi::detail;
-
         std::uintptr_t ret = info.frame->fault_address.offset;
         cpu_flags flags;
         far_copy(&flags, &info.frame->flags);
 
-        redirect_allocator alloc { &*trampoline_memres };
-        auto* const p = std::allocator_traits<redirect_allocator>::allocate(alloc, 1);
-        std::allocator_traits<redirect_allocator>::construct(alloc, p, ret, flags, func);
+        auto* const p = allocate_trampoline<redirect_trampoline>();
+        new (p) redirect_trampoline { ret, flags, func };
 
         info.frame->stack.segment = safe_ds;
         info.frame->flags.interrupts_enabled = false;

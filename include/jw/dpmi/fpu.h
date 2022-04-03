@@ -112,6 +112,7 @@ namespace jw::dpmi::detail
         static constexpr std::size_t offset = sizeof(fpu_registers);
 #       endif
         fpu_registers regs;
+        fpu_state* next_free;
         struct
         {
             std::array<std::byte, offset> data;
