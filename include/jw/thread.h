@@ -210,8 +210,9 @@ namespace jw
     {
         if (not ptr) throw std::system_error { std::make_error_code(std::errc::no_such_process) };
         if (get_id() == detail::scheduler::current_thread_id()) throw deadlock { };
-        this_thread::yield_while([p = ptr] { return p->active(); });
+        auto id = ptr->id;
         detach();
+        this_thread::yield_while([id] { return detail::scheduler::get_thread(id) != nullptr; });
     }
 
     template<typename F, typename... A>
