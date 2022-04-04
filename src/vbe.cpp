@@ -48,12 +48,12 @@ namespace jw
                 push gs
                 push ebp
                 mov ebp, esp
-                mov si, ss
+                mov esi, ss
                 lss esp, fword ptr cs:[%0]
-                push si
+                push esi
                 call fword ptr cs:[%1]
-                pop si
-                mov ss, si
+                pop esi
+                mov ss, esi
                 mov esp, ebp
                 pop ebp
                 pop gs
