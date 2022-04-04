@@ -193,6 +193,7 @@ namespace jw::detail
         thread* ct = current_thread();
 
         ct->eh_globals = get_eh_globals();
+        ct->errno = errno;
 
         for(std::size_t n = 0; ; ++n)
         {
@@ -222,6 +223,7 @@ namespace jw::detail
             }
         }
         set_eh_globals(ct->eh_globals);
+        errno = ct->errno;
 
         return ct->context;
     }
