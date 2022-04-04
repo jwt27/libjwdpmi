@@ -48,7 +48,10 @@ namespace jw
 
     void print_exception(const std::exception& e, int level) noexcept
     {
-        fmt::print(stderr, "Exception {:d}: {}\n", level, e.what());
+        if (level == 0)
+            fmt::print(stderr, "Exception: {}\n", e.what());
+        else
+            fmt::print(stderr, "Nested exception {:d}: {}\n", level, e.what());
         if (auto* cpu_ex = dynamic_cast<const dpmi::cpu_exception*>(&e)) cpu_ex->print();
         try { std::rethrow_if_nested(e); }
         catch (const std::exception& e) { print_exception(e, level + 1); }
