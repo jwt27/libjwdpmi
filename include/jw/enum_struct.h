@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
@@ -30,15 +31,14 @@ namespace jw
     };
 }
 
-#define ENUM_STRUCT_SPECIALIZE_STD_HASH(T)                                          \
-namespace std                                                                       \
-{                                                                                   \
-    template<>                                                                      \
-    struct hash<T>                                                                  \
-    {                                                                               \
-        std::size_t operator()(const T& arg) const noexcept                         \
-        {                                                                           \
-            return std::hash<T::underlying_type>()(arg.value);                      \
-        }                                                                           \
-    };                                                                              \
+namespace std
+{
+    template <typename T> requires (std::is_base_of_v<jw::enum_struct<typename T::underlying_type>, T>)
+    struct hash<T>
+    {
+        std::size_t operator()(const T& arg) const noexcept
+        {
+            return arg.hash_value();
+        }
+    };
 }
