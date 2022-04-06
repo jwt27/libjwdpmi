@@ -220,6 +220,9 @@ namespace jw::dpmi
         detail::exception_trampoline* rm;
     };
 
+    [[noreturn]]
+    void throw_cpu_exception(const exception_info&);
+
     struct cpu_category : public std::error_category
     {
         virtual const char* name() const noexcept override { return "CPU"; }
@@ -232,6 +235,16 @@ namespace jw::dpmi
         const dpmi10_exception_frame frame;
         const bool is_dpmi10_frame;
 
+        void print() const
+        {
+            if (is_dpmi10_frame) frame.print();
+            else static_cast<const dpmi09_exception_frame*>(&frame)->print();
+            registers.print();
+        }
+
+    protected:
+        friend void throw_cpu_exception(const exception_info&);
+
         cpu_exception(const exception_info& i)
             : cpu_exception { i.num, i } { }
 
@@ -242,14 +255,6 @@ namespace jw::dpmi
             : system_error { static_cast<int>(n), cpu_category { } }
             , registers { *r }, frame { init_frame(f, t) }, is_dpmi10_frame { t } { }
 
-        void print() const
-        {
-            if (is_dpmi10_frame) frame.print();
-            else static_cast<const dpmi09_exception_frame*>(&frame)->print();
-            registers.print();
-        }
-
-    private:
         static dpmi10_exception_frame init_frame(dpmi09_exception_frame* f, bool t) noexcept
         {
             if (t) return *static_cast<dpmi10_exception_frame*>(f);
@@ -258,8 +263,9 @@ namespace jw::dpmi
     };
 
     template<exception_num N>
-    struct specific_cpu_exception : public cpu_exception
+    class specific_cpu_exception : public cpu_exception
     {
+        friend void throw_cpu_exception(const exception_info&);
         specific_cpu_exception(const exception_info& i) : cpu_exception { N, i } { }
     };
 

@@ -328,7 +328,7 @@ namespace jw::dpmi::detail
         if (i.frame->flags.v86_mode) return false;
 
         if constexpr (config::enable_throwing_from_cpu_exceptions)
-            throw specific_cpu_exception<N> { i };
+            throw_cpu_exception(i);
 
         return false;
     }
@@ -399,6 +399,35 @@ namespace jw::dpmi
         info.frame->flags.interrupts_enabled = false;
         info.frame->fault_address.offset = p->code();
         info.frame->info_bits.redirect_elsewhere = true;
+    }
+
+    void throw_cpu_exception(const exception_info& info)
+    {
+        switch (info.num)
+        {
+        case 0x00: throw specific_cpu_exception<0x00> { info };
+        case 0x01: throw specific_cpu_exception<0x01> { info };
+        case 0x02: throw specific_cpu_exception<0x02> { info };
+        case 0x03: throw specific_cpu_exception<0x03> { info };
+        case 0x04: throw specific_cpu_exception<0x04> { info };
+        case 0x05: throw specific_cpu_exception<0x05> { info };
+        case 0x06: throw specific_cpu_exception<0x06> { info };
+        case 0x07: throw specific_cpu_exception<0x07> { info };
+        case 0x08: throw specific_cpu_exception<0x08> { info };
+        case 0x09: throw specific_cpu_exception<0x09> { info };
+        case 0x0a: throw specific_cpu_exception<0x0a> { info };
+        case 0x0b: throw specific_cpu_exception<0x0b> { info };
+        case 0x0c: throw specific_cpu_exception<0x0c> { info };
+        case 0x0d: throw specific_cpu_exception<0x0d> { info };
+        case 0x0e: throw specific_cpu_exception<0x0e> { info };
+        case 0x10: throw specific_cpu_exception<0x10> { info };
+        case 0x11: throw specific_cpu_exception<0x11> { info };
+        case 0x12: throw specific_cpu_exception<0x12> { info };
+        case 0x13: throw specific_cpu_exception<0x13> { info };
+        case 0x14: throw specific_cpu_exception<0x14> { info };
+        case 0x1e: throw specific_cpu_exception<0x1e> { info };
+        default: throw cpu_exception { info };
+        }
     }
 
     std::string cpu_category::message(int ev) const

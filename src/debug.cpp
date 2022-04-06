@@ -1295,7 +1295,9 @@ namespace jw
                     fmt::print(stderr, FMT_STRING("Can't debug this!  CS is neither 0x{:0>4x} nor 0x{:0>4x}.\n"
                                                   "{}\n"),
                                main_cs, ring0_cs,
-                               cpu_exception { info }.what());
+                               cpu_category { }.message(info.num));
+                    info.frame->print();
+                    info.registers->print();
                     return false;
                 }
 
@@ -1314,7 +1316,7 @@ namespace jw
                         static_cast<dpmi10_exception_frame*>(f)->print();
                         r->print();
                     }
-                    throw cpu_exception { info };
+                    throw_cpu_exception(info);
                 }
 
                 try
