@@ -114,15 +114,6 @@ namespace jw::dpmi
 
     using exception_frame = dpmi09_exception_frame; // can be static_cast to dpmi10_exception_frame type
 
-    struct exception_info
-    {
-        cpu_registers* registers;
-        exception_frame* frame;
-        bool is_dpmi10_frame;
-    };
-
-    using exception_handler_sig = bool(const exception_info&);
-
     struct exception_num : public enum_struct<std::uint32_t>
     {
         using E = enum_struct<std::uint32_t>;
@@ -154,6 +145,16 @@ namespace jw::dpmi
         using E::E;
         using E::operator=;
     };
+
+    struct exception_info
+    {
+        exception_num num;
+        cpu_registers* registers;
+        exception_frame* frame;
+        bool is_dpmi10_frame;
+    };
+
+    using exception_handler_sig = bool(const exception_info&);
 
     // Thrown when redirect_exception is called twice on the same exception frame.
     struct already_redirected : std::runtime_error
@@ -230,6 +231,9 @@ namespace jw::dpmi
         const cpu_registers registers;
         const dpmi10_exception_frame frame;
         const bool is_dpmi10_frame;
+
+        cpu_exception(const exception_info& i)
+            : cpu_exception { i.num, i } { }
 
         cpu_exception(exception_num n, const exception_info& i)
             : cpu_exception { n, i.registers, i.frame, i.is_dpmi10_frame } { }

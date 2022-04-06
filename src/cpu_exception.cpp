@@ -71,12 +71,12 @@ namespace jw::dpmi::detail
         auto* const f = data->is_dpmi10 ? &frame->frame_10 : &frame->frame_09;
         interrupt_id id { data->num, interrupt_type::exception };
 
-        const exception_info i { &frame->reg, f, data->is_dpmi10 };
+        const exception_info info { data->num, &frame->reg, f, data->is_dpmi10 };
 
         bool success = false;
         try
         {
-            success = data->func(i);
+            success = data->func(info);
         }
         catch (...)
         {
@@ -90,7 +90,7 @@ namespace jw::dpmi::detail
             if (can_throw)
             {
                 pending_exceptions->emplace_back(std::current_exception());
-                redirect_exception(i, detail::rethrow_cpu_exception);
+                redirect_exception(info, detail::rethrow_cpu_exception);
                 success = true;
             }
             else if (can_redirect)
@@ -104,7 +104,7 @@ namespace jw::dpmi::detail
                     catch (const std::exception& e) { print_exception(e); }
                     catch (...) { }
                 }
-                redirect_exception(i, kill);
+                redirect_exception(info, kill);
                 success = true;
             }
             else std::terminate();
