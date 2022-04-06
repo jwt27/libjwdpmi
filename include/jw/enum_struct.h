@@ -17,16 +17,19 @@ namespace jw
     {
         using underlying_type = T;
 
-        constexpr enum_struct(T v) : value(v) { }
-        constexpr enum_struct() : value(0) { }
+        constexpr enum_struct(T v) noexcept : value(v) { }
 
-        constexpr operator T() const { return value; }
-        constexpr enum_struct& operator=(T v) { value = v; return *this; }
-        constexpr enum_struct& operator=(const enum_struct& v) { value = v.value; return *this; }
+        constexpr operator T() const noexcept { return value; }
+        constexpr enum_struct& operator=(T v) noexcept { value = v; return *this; }
+
+        constexpr enum_struct() noexcept = default;
+        constexpr enum_struct(enum_struct&&) noexcept = default;
+        constexpr enum_struct(const enum_struct&) noexcept = default;
+        constexpr enum_struct& operator=(enum_struct&&) noexcept = default;
+        constexpr enum_struct& operator=(const enum_struct&) noexcept = default;
 
         constexpr auto hash_value() const noexcept { return std::hash<T>()(value); }
 
-    //protected:
         T value;
     };
 }
