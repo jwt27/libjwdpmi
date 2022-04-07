@@ -26,8 +26,8 @@ namespace jw::dpmi::detail
         std::aligned_storage_t<sizeof(exception_trampoline), alignof(exception_trampoline)> data;
     };
 
-    [[gnu::section(".text.hot")]]
-    static constinit std::array<trampoline_block, 128> trampoline_pool;
+    [[gnu::section(".text.trampolines")]]
+    static constinit std::array<trampoline_block, 256> trampoline_pool;
     static constinit trampoline_block* free_list { nullptr };
     static constinit std::optional<sso_vector<std::exception_ptr, 3>> pending_exceptions { std::nullopt };
     static constinit std::array<std::optional<exception_handler>, 0x1f> exception_handlers { };

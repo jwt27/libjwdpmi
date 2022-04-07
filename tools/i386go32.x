@@ -16,6 +16,7 @@ SECTIONS
     *(.text.exit .text.exit.*)
     *(.text .gnu.linkonce.t.*)
     *(.text.hot .text.hot.*)
+    *(.text.trampolines .text.trampolines.*)
     *(.text.*)
     *(.const* .ro* .gnu.linkonce.r*)
     etext  =  . ; PROVIDE(_etext = .) ;
