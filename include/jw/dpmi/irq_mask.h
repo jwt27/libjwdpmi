@@ -10,6 +10,7 @@
 #include <atomic>
 #include <jw/io/ioport.h>
 #include <jw/dpmi/dpmi.h>
+#include <jw/dpmi/detail/selectors.h>
 #include "jwdpmi_config.h"
 
 namespace jw::dpmi::detail
@@ -82,6 +83,47 @@ namespace jw::dpmi
 
     // Enables the interrupt flag
     using interrupt_unmask = detail::interrupt_flag<true>;
+
+    struct async_signal_mask
+    {
+        async_signal_mask() noexcept
+        {
+            asm("mov %0, ss" : "=r" (ss));
+            asm("mov %0, ds" : "=r" (ds));
+            asm volatile
+            (R"(
+                mov ss, %k0
+                mov ds, %k0
+                mov es, %k0
+             )" :
+                : "r"  (detail::safe_ds),
+                  "rm" (ss),
+                  "rm" (ds)
+            );
+        }
+
+        ~async_signal_mask()
+        {
+            asm volatile
+            (R"(
+                mov ss, %k0
+                mov ds, %k1
+                mov es, %k1
+             )" :
+                : "r" (ss),
+                  "r" (ds)
+            );
+        }
+
+    private:
+        async_signal_mask(async_signal_mask&&) = delete;
+        async_signal_mask(const async_signal_mask&) = delete;
+        async_signal_mask& operator=(async_signal_mask&&) = delete;
+        async_signal_mask& operator=(const async_signal_mask&) = delete;
+
+        std::uint32_t ss;
+        std::uint32_t ds;
+    };
 
     // Masks one specific IRQ.
     // note: involves IO ports, so this may be slower than disabling interrupts altogether

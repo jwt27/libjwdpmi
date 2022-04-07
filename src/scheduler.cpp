@@ -189,6 +189,7 @@ namespace jw::detail
     // Select a new current_thread.
     thread_context* scheduler::switch_thread()
     {
+        dpmi::async_signal_mask disable_signals { };
         auto& it = iterator;
         thread* ct = current_thread();
 
