@@ -123,15 +123,6 @@ namespace jw::dpmi
 
     using exception_frame = dpmi09_exception_frame; // can be static_cast to dpmi10_exception_frame type
 
-    struct exception_info
-    {
-        __seg_fs cpu_registers* registers;
-        __seg_fs exception_frame* frame;
-        bool is_dpmi10_frame;
-    };
-
-    using exception_handler_sig = bool(const exception_info&);
-
     struct exception_num : public enum_struct<std::uint32_t>
     {
         using E = enum_struct<std::uint32_t>;
@@ -163,6 +154,16 @@ namespace jw::dpmi
         using E::E;
         using E::operator=;
     };
+
+    struct exception_info
+    {
+        exception_num num;
+        __seg_fs cpu_registers* registers;
+        __seg_fs exception_frame* frame;
+        bool is_dpmi10_frame;
+    };
+
+    using exception_handler_sig = bool(const exception_info&);
 
     // Thrown when redirect_exception is called twice on the same exception frame.
     struct already_redirected : std::runtime_error
@@ -228,6 +229,9 @@ namespace jw::dpmi
         detail::exception_trampoline* rm;
     };
 
+    [[noreturn]]
+    void throw_cpu_exception(const exception_info&);
+
     struct cpu_category : public std::error_category
     {
         virtual const char* name() const noexcept override { return "CPU"; }
@@ -239,6 +243,19 @@ namespace jw::dpmi
         cpu_registers registers;
         dpmi10_exception_frame frame;
         const bool is_dpmi10_frame;
+
+        void print() const
+        {
+            if (is_dpmi10_frame) frame.print();
+            else static_cast<const dpmi09_exception_frame*>(&frame)->print();
+            registers.print();
+        }
+
+    protected:
+        friend void throw_cpu_exception(const exception_info&);
+
+        cpu_exception(const exception_info& i)
+            : cpu_exception { i.num, i } { }
 
         cpu_exception(exception_num n, const exception_info& i)
             : cpu_exception { n, i.registers, i.frame, i.is_dpmi10_frame } { }
@@ -253,18 +270,12 @@ namespace jw::dpmi
             if (t) far_copy(&frame, static_cast<copy_address_space_t<const dpmi10_exception_frame, F>*>(f));
             else far_copy(&frame, f);
         }
-
-        void print() const
-        {
-            if (is_dpmi10_frame) frame.print();
-            else static_cast<const dpmi09_exception_frame*>(&frame)->print();
-            registers.print();
-        }
     };
 
     template<exception_num N>
-    struct specific_cpu_exception : public cpu_exception
+    class specific_cpu_exception : public cpu_exception
     {
+        friend void throw_cpu_exception(const exception_info&);
         specific_cpu_exception(const exception_info& i) : cpu_exception { N, i } { }
     };
 

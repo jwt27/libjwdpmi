@@ -137,6 +137,7 @@ namespace jw::detail
         const std::span<std::byte> stack;
         thread_context* context; // points to esp during context switch
         jw_cxa_eh_globals eh_globals { };
+        int errno { 0 };
         dpmi::detail::fpu_state* restore { nullptr };
         thread_state state { starting };
         bool suspended { false };

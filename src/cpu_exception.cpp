@@ -8,11 +8,13 @@
 
 #include <jw/main.h>
 #include <jw/dpmi/cpu_exception.h>
+#include <jw/dpmi/async_signal.h>
 #include <jw/debug/debug.h>
 #include <jw/dpmi/detail/interrupt_id.h>
 #include <jw/dpmi/detail/selectors.h>
 #include <jw/dpmi/ring0.h>
 #include <jw/sso_vector.h>
+#include <sys/nearptr.h>
 #include <cstring>
 #include <vector>
 
@@ -24,11 +26,13 @@ namespace jw::dpmi::detail
         std::aligned_storage_t<sizeof(exception_trampoline), alignof(exception_trampoline)> data;
     };
 
-    [[gnu::section(".text.hot")]]
-    static constinit std::array<trampoline_block, 128> trampoline_pool;
+    [[gnu::section(".text.trampolines")]]
+    static constinit std::array<trampoline_block, 256> trampoline_pool;
     static constinit trampoline_block* free_list { nullptr };
     static constinit std::optional<sso_vector<std::exception_ptr, 3>> pending_exceptions { std::nullopt };
     static constinit std::array<std::optional<exception_handler>, 0x1f> exception_handlers { };
+    static constinit std::bitset<async_signal::max_signals> available_signals { ~ std::uint64_t { 0 } };
+    static constinit std::bitset<async_signal::max_signals> pending_signals { 0 };
     alignas (0x10) static constinit std::array<std::byte, config::exception_stack_size> exception_stack;
 
     template<typename T>
@@ -56,6 +60,26 @@ namespace jw::dpmi::detail
         std::rethrow_exception(e);
     }
 
+    bool handle_async_signal(const exception_info& info)
+    {
+        if (info.num != exception_num::general_protection_fault and
+            info.num != exception_num::stack_segment_fault) return false;
+        std::size_t limit;
+        asm ("lsl %0, %k1" : "=r" (limit) : "m" (main_ds));
+        if (limit != 0xfff) return false;
+
+        auto id = pending_signals._Find_first();
+        if (id != pending_signals.size())
+        {
+            pending_signals[id] = false;
+            auto& slot = async_signal::slots[id];
+            if (slot.valid()) slot(info);
+        }
+        if (pending_signals.none())
+            descriptor::set_limit(main_ds, __djgpp_selector_limit);
+        return true;
+    }
+
     [[gnu::cdecl, gnu::hot]]
     static bool handle_exception(__seg_fs raw_exception_frame* frame) noexcept
     {
@@ -71,12 +95,15 @@ namespace jw::dpmi::detail
         auto* const f = data->is_dpmi10 ? &frame->frame_10 : &frame->frame_09;
         interrupt_id id { data->num, interrupt_type::exception };
 
-        const exception_info i { &frame->reg, f, data->is_dpmi10 };
+        const exception_info info { data->num, &frame->reg, f, data->is_dpmi10 };
 
         bool success = false;
         try
         {
-            success = data->func(i);
+            if (handle_async_signal(info))
+                success = true;
+            else
+                success = data->func(info);
         }
         catch (...)
         {
@@ -90,7 +117,7 @@ namespace jw::dpmi::detail
             if (can_throw)
             {
                 pending_exceptions->emplace_back(std::current_exception());
-                redirect_exception(i, detail::rethrow_cpu_exception);
+                redirect_exception(info, detail::rethrow_cpu_exception);
                 success = true;
             }
             else if (can_redirect)
@@ -104,7 +131,7 @@ namespace jw::dpmi::detail
                     catch (const std::exception& e) { print_exception(e); }
                     catch (...) { }
                 }
-                redirect_exception(i, kill);
+                redirect_exception(info, kill);
                 success = true;
             }
             else std::terminate();
@@ -213,9 +240,10 @@ namespace jw::dpmi::detail
 
     struct redirect_trampoline
     {
-        redirect_trampoline(std::uintptr_t ret, cpu_flags fl, void (*f)())
+        redirect_trampoline(std::uintptr_t ret, cpu_flags fl, selector ss, void (*f)())
             : return_address { ret }
             , flags { fl }
+            , ss { ss }
             , self { this }
             , stage2_offset { find_stage2() }
             , func { f }
@@ -241,6 +269,8 @@ namespace jw::dpmi::detail
             const std::uint8_t push1_imm32 { 0x68 };
             cpu_flags flags;
             const std::uint8_t push2_imm32 { 0x68 };
+            std::uint32_t ss;
+            const std::uint8_t push3_imm32 { 0x68 };
             redirect_trampoline* self;
             const std::uint8_t jmp_rel32 { 0xe9 };
             std::ptrdiff_t stage2_offset;
@@ -253,13 +283,19 @@ namespace jw::dpmi::detail
             asm
             (R"(
             .cfi_signal_frame
-            .cfi_def_cfa esp, 0x0c
+            .cfi_def_cfa esp, 0x10
             .cfi_offset eflags, -0x08
+            .cfi_offset ss, -0x0c
+                push ss
+            .cfi_def_cfa_offset 0x14
+                push ss
+            .cfi_def_cfa_offset 0x18
+                pop ds
+            .cfi_def_cfa_offset 0x14
+                pop es
+            .cfi_def_cfa_offset 0x10
                 call %0
-                add esp, 4
-            .cfi_def_cfa_offset 0x08
-                popf
-            .cfi_restore eflags
+                add esp, 0x0c
             .cfi_def_cfa_offset 0x04
                 ret
              )" :
@@ -268,14 +304,20 @@ namespace jw::dpmi::detail
         }
 
         [[gnu::no_caller_saved_registers, gnu::force_align_arg_pointer, gnu::cdecl]]
-        static void stage3(redirect_trampoline* self, cpu_flags flags)
+        static void stage3(redirect_trampoline* self, std::uint32_t ss, cpu_flags flags)
         {
             auto f = self->func;
             self->~redirect_trampoline();
             deallocate_trampoline(self);
             fpu_context fpu { };
-            asm ("push %0; popf" : : "rm" (flags) : "cc");
-            asm ("mov ss, %k0; nop" : : "r" (main_ds));
+            asm volatile ("push %0; popf" : : "rm" (flags) : "cc");
+            asm volatile
+            (R"(
+                mov ss, %k0
+                mov ds, %k1
+                mov es, %k1
+             )" : : "r" (ss), "r" (main_ds)
+            );
             f();
         }
     };
@@ -303,7 +345,7 @@ namespace jw::dpmi::detail
         if (i.frame->flags.v86_mode) return false;
 
         if constexpr (config::enable_throwing_from_cpu_exceptions)
-            throw specific_cpu_exception<N> { i };
+            throw_cpu_exception(i);
 
         return false;
     }
@@ -366,18 +408,67 @@ namespace jw::dpmi
     {
         if (info.frame->info_bits.redirect_elsewhere) throw already_redirected { };
 
-        using namespace ::jw::dpmi::detail;
-        std::uintptr_t ret = info.frame->fault_address.offset;
+        const std::uintptr_t ret = info.frame->fault_address.offset;
+        const selector ss = info.frame->stack.segment;
         cpu_flags flags;
         far_copy(&flags, &info.frame->flags);
 
+        using namespace ::jw::dpmi::detail;
         auto* const p = allocate_trampoline<redirect_trampoline>();
-        new (p) redirect_trampoline { ret, flags, func };
+        new (p) redirect_trampoline { ret, flags, ss, func };
 
         info.frame->stack.segment = safe_ds;
         info.frame->flags.interrupts_enabled = false;
         info.frame->fault_address.offset = p->code();
         info.frame->info_bits.redirect_elsewhere = true;
+    }
+
+    void async_signal::raise(id_type i)
+    {
+        detail::pending_signals[i] = true;
+        descriptor::set_limit(detail::main_ds, 0xfff);
+    }
+
+    async_signal::id_type async_signal::allocate_id()
+    {
+        auto i = detail::available_signals._Find_first();
+        if (i == detail::available_signals.size()) throw std::runtime_error { "No more async_signal IDs available" };
+        detail::available_signals[i] = false;
+        return i;
+    }
+
+    async_signal::~async_signal()
+    {
+        detail::available_signals[id] = true;
+    }
+
+    void throw_cpu_exception(const exception_info& info)
+    {
+        switch (info.num)
+        {
+        case 0x00: throw specific_cpu_exception<0x00> { info };
+        case 0x01: throw specific_cpu_exception<0x01> { info };
+        case 0x02: throw specific_cpu_exception<0x02> { info };
+        case 0x03: throw specific_cpu_exception<0x03> { info };
+        case 0x04: throw specific_cpu_exception<0x04> { info };
+        case 0x05: throw specific_cpu_exception<0x05> { info };
+        case 0x06: throw specific_cpu_exception<0x06> { info };
+        case 0x07: throw specific_cpu_exception<0x07> { info };
+        case 0x08: throw specific_cpu_exception<0x08> { info };
+        case 0x09: throw specific_cpu_exception<0x09> { info };
+        case 0x0a: throw specific_cpu_exception<0x0a> { info };
+        case 0x0b: throw specific_cpu_exception<0x0b> { info };
+        case 0x0c: throw specific_cpu_exception<0x0c> { info };
+        case 0x0d: throw specific_cpu_exception<0x0d> { info };
+        case 0x0e: throw specific_cpu_exception<0x0e> { info };
+        case 0x10: throw specific_cpu_exception<0x10> { info };
+        case 0x11: throw specific_cpu_exception<0x11> { info };
+        case 0x12: throw specific_cpu_exception<0x12> { info };
+        case 0x13: throw specific_cpu_exception<0x13> { info };
+        case 0x14: throw specific_cpu_exception<0x14> { info };
+        case 0x1e: throw specific_cpu_exception<0x1e> { info };
+        default: throw cpu_exception { info };
+        }
     }
 
     std::string cpu_category::message(int ev) const

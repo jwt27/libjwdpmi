@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
@@ -16,29 +17,31 @@ namespace jw
     {
         using underlying_type = T;
 
-        constexpr enum_struct(T v) : value(v) { }
-        constexpr enum_struct() : value(0) { }
+        constexpr enum_struct(T v) noexcept : value(v) { }
 
-        constexpr operator T() const { return value; }
-        constexpr enum_struct& operator=(T v) { value = v; return *this; }
-        constexpr enum_struct& operator=(const enum_struct& v) { value = v.value; return *this; }
+        constexpr operator T() const noexcept { return value; }
+        constexpr enum_struct& operator=(T v) noexcept { value = v; return *this; }
+
+        constexpr enum_struct() noexcept = default;
+        constexpr enum_struct(enum_struct&&) noexcept = default;
+        constexpr enum_struct(const enum_struct&) noexcept = default;
+        constexpr enum_struct& operator=(enum_struct&&) noexcept = default;
+        constexpr enum_struct& operator=(const enum_struct&) noexcept = default;
 
         constexpr auto hash_value() const noexcept { return std::hash<T>()(value); }
 
-    //protected:
         T value;
     };
 }
 
-#define ENUM_STRUCT_SPECIALIZE_STD_HASH(T)                                          \
-namespace std                                                                       \
-{                                                                                   \
-    template<>                                                                      \
-    struct hash<T>                                                                  \
-    {                                                                               \
-        std::size_t operator()(const T& arg) const noexcept                         \
-        {                                                                           \
-            return std::hash<T::underlying_type>()(arg.value);                      \
-        }                                                                           \
-    };                                                                              \
+namespace std
+{
+    template <typename T> requires (std::is_base_of_v<jw::enum_struct<typename T::underlying_type>, T>)
+    struct hash<T>
+    {
+        std::size_t operator()(const T& arg) const noexcept
+        {
+            return arg.hash_value();
+        }
+    };
 }

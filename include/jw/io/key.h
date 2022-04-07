@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
@@ -102,6 +103,3 @@ namespace jw
         using key_state_pair = std::pair<key, key_state>;
     }
 }
-
-ENUM_STRUCT_SPECIALIZE_STD_HASH(jw::io::key)
-ENUM_STRUCT_SPECIALIZE_STD_HASH(jw::io::key_state)
