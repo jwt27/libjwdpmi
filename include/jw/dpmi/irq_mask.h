@@ -7,159 +7,155 @@
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
-#include <unordered_map>
 #include <atomic>
 #include <jw/io/ioport.h>
 #include <jw/dpmi/dpmi.h>
 #include "jwdpmi_config.h"
 
-namespace jw
+namespace jw::dpmi
 {
-    namespace dpmi
-    {
-        using int_vector = std::uint8_t;
-        using irq_level = std::uint8_t;
+    using int_vector = std::uint8_t;
+    using irq_level = std::uint8_t;
 
-        inline bool interrupts_enabled() noexcept
+    inline bool interrupts_enabled() noexcept
+    {
+        if constexpr (config::support_virtual_interrupt_flag)
         {
-            if constexpr (config::support_virtual_interrupt_flag)
+            std::uint16_t ax = 0x0902;
+            asm ("int 0x31" : "+a" (ax) :: "cc");
+            return ax & 1;
+        }
+        else return cpu_flags::current().interrupts_enabled;
+    }
+
+    template<bool enable>
+    struct interrupt_flag
+    {
+        interrupt_flag() noexcept : prev_state { get_and_set() } { }
+        ~interrupt_flag() { restore(); }
+
+        interrupt_flag(const interrupt_flag&) = delete;
+        interrupt_flag(interrupt_flag&&) = delete;
+        interrupt_flag& operator=(const interrupt_flag&) = delete;
+        interrupt_flag& operator=(interrupt_flag&&) = delete;
+
+    private:
+        constexpr static bool use_dpmi = config::support_virtual_interrupt_flag;
+
+        static std::uint32_t get_and_set()
+        {
+            if constexpr (use_dpmi)
             {
-                std::uint16_t ax = 0x0902;
-                asm ("int 0x31" : "+a" (ax) :: "cc");
-                return ax & 1;
+                std::uint16_t ax = 0x0900 | enable;
+                asm volatile ("int 0x31" : "+a" (ax) :: "cc");
+                return ax;
             }
-            else return cpu_flags::current().interrupts_enabled;
+            else
+            {
+                std::uint32_t flags;
+                if constexpr (enable)
+                    asm volatile ("pushfd; sti; pop %0" : "=rm" (flags));
+                else
+                    asm volatile ("pushfd; cli; pop %0" : "=rm" (flags));
+                return flags;
+            }
         }
 
-        template<bool enable>
-        struct interrupt_flag
+        void restore()
         {
-            interrupt_flag() noexcept : prev_state { get_and_set() } { }
-            ~interrupt_flag() { restore(); }
+            if constexpr (use_dpmi)
+                asm volatile ("int 0x31" :: "a" (prev_state) : "cc");
+            else
+                asm volatile ("push %0; popfd" :: "rm" (prev_state) : "cc");
+        }
 
-            interrupt_flag(const interrupt_flag&) = delete;
-            interrupt_flag(interrupt_flag&&) = delete;
-            interrupt_flag& operator=(const interrupt_flag&) = delete;
-            interrupt_flag& operator=(interrupt_flag&&) = delete;
+        const std::uint32_t prev_state;
+    };
 
-        private:
-            constexpr static bool use_dpmi = config::support_virtual_interrupt_flag;
+    // Disables the interrupt flag
+    using interrupt_mask = interrupt_flag<false>;
 
-            static std::uint32_t get_and_set()
-            {
-                if constexpr (use_dpmi)
-                {
-                    std::uint16_t ax = 0x0900 | enable;
-                    asm volatile ("int 0x31" : "+a" (ax) :: "cc");
-                    return ax;
-                }
-                else
-                {
-                    std::uint32_t flags;
-                    if constexpr (enable)
-                        asm volatile ("pushfd; sti; pop %0" : "=rm" (flags));
-                    else
-                        asm volatile ("pushfd; cli; pop %0" : "=rm" (flags));
-                    return flags;
-                }
-            }
+    // Enables the interrupt flag
+    using interrupt_unmask = interrupt_flag<true>;
 
-            void restore()
-            {
-                if constexpr (use_dpmi)
-                    asm volatile ("int 0x31" :: "a" (prev_state) : "cc");
-                else
-                    asm volatile ("push %0; popfd" :: "rm" (prev_state) : "cc");
-            }
+    // Masks one specific IRQ.
+    // note: involves IO ports, so this may be slower than disabling interrupts altogether
+    class irq_mask
+    {
+    public:
+        irq_mask(irq_level _irq) noexcept : irq(_irq) { cli(); }
+        ~irq_mask() { sti(); }
 
-            const std::uint32_t prev_state;
-        };
+        irq_mask(const irq_mask&) = delete;
+        irq_mask(irq_mask&&) = delete;
+        irq_mask& operator=(const irq_mask&) = delete;
+        irq_mask& operator=(irq_mask&&) = delete;
 
-        // Disables the interrupt flag
-        using interrupt_mask = interrupt_flag<false>;
-
-        // Enables the interrupt flag
-        using interrupt_unmask = interrupt_flag<true>;
-
-        // Masks one specific IRQ.
-        // note: involves IO ports, so this may be slower than disabling interrupts altogether
-        class irq_mask
+        static void unmask(irq_level irq) noexcept // TODO: raii unmask
         {
-        public:
-            irq_mask(irq_level _irq) noexcept : irq(_irq) { cli(); }
-            ~irq_mask() { sti(); }
-
-            irq_mask(const irq_mask&) = delete;
-            irq_mask(irq_mask&&) = delete;
-            irq_mask& operator=(const irq_mask&) = delete;
-            irq_mask& operator=(irq_mask&&) = delete;
-
-            static void unmask(irq_level irq) noexcept // TODO: raii unmask
+            auto& m = map[irq];
+            auto c = m.count.load() & ~(1UL << 31);
+            if (c > 0)
             {
-                auto& m = map[irq];
-                auto c = m.count.load() & ~(1UL << 31);
-                if (c > 0)
-                {
-                    m.count.store(c);
-                }
-                else
-                {
-                    auto [mask, port] = mp(irq);
-                    port.write(port.read() & ~mask);
-                }
-            }
-
-            static bool enabled(irq_level irq) noexcept
-            {
-                if ((map[irq].count.load() & ~(1UL << 31)) > 0) return false;
-
-                auto [mask, port] = mp(irq);
-                return port.read() & mask;
-            }
-
-        private:
-            void cli() noexcept
-            {
-                auto [mask, port] = mp(irq);
-                byte current = port.read();
-                port.write(current | mask);
-
-                auto& m = map[irq];
-                auto c = m.count.load();
-                if ((c & ~(1UL << 31)) == 0) c = ((current & mask) != 0) << 31;
-                m.count.store(c + 1);
-            }
-
-            void sti() noexcept
-            {
-                auto& m = map[irq];
-                auto c = m.count.load() - 1;
                 m.count.store(c);
-                if (c == 0)
-                {
-                    auto [mask, port] = mp(irq);
-                    port.write(port.read() & ~mask);
-                }
             }
-
-            static constexpr std::tuple<byte, io::io_port<byte>&> mp(irq_level irq)
+            else
             {
-                byte mask = 1 << (irq % 8);
-                auto& port = irq < 8 ? pic0_data : pic1_data;
-                return { mask, port };
+                auto [mask, port] = mp(irq);
+                port.write(port.read() & ~mask);
             }
+        }
 
-            static inline constinit io::io_port<byte> pic0_data { 0x21 };
-            static inline constinit io::io_port<byte> pic1_data { 0xA1 };
+        static bool enabled(irq_level irq) noexcept
+        {
+            if ((map[irq].count.load() & ~(1UL << 31)) > 0) return false;
 
-            struct mask_counter
+            auto [mask, port] = mp(irq);
+            return port.read() & mask;
+        }
+
+    private:
+        void cli() noexcept
+        {
+            auto [mask, port] = mp(irq);
+            byte current = port.read();
+            port.write(current | mask);
+
+            auto& m = map[irq];
+            auto c = m.count.load();
+            if ((c & ~(1UL << 31)) == 0) c = ((current & mask) != 0) << 31;
+            m.count.store(c + 1);
+        }
+
+        void sti() noexcept
+        {
+            auto& m = map[irq];
+            auto c = m.count.load() - 1;
+            m.count.store(c);
+            if (c == 0)
             {
-                std::atomic<std::uint32_t> count { 0 };   // MSB is initial state (unset if irq enabled)
-                constexpr mask_counter() noexcept { }
-            };
-            static inline std::array<mask_counter, 16> map { };
+                auto [mask, port] = mp(irq);
+                port.write(port.read() & ~mask);
+            }
+        }
 
-            irq_level irq;
+        static constexpr std::tuple<byte, io::io_port<byte>&> mp(irq_level irq)
+        {
+            byte mask = 1 << (irq % 8);
+            auto& port = irq < 8 ? pic0_data : pic1_data;
+            return { mask, port };
+        }
+
+        static inline constinit io::io_port<byte> pic0_data { 0x21 };
+        static inline constinit io::io_port<byte> pic1_data { 0xA1 };
+
+        struct mask_counter
+        {
+            std::atomic<std::uint32_t> count { 0 };   // MSB is initial state (unset if irq enabled)
+            constexpr mask_counter() noexcept { }
         };
-    }
+        static inline std::array<mask_counter, 16> map { };
+
+        irq_level irq;
+    };
 }
