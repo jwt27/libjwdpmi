@@ -12,21 +12,9 @@
 #include <jw/dpmi/dpmi.h>
 #include "jwdpmi_config.h"
 
-namespace jw::dpmi
+namespace jw::dpmi::detail
 {
-    using int_vector = std::uint8_t;
-    using irq_level = std::uint8_t;
 
-    inline bool interrupts_enabled() noexcept
-    {
-        if constexpr (config::support_virtual_interrupt_flag)
-        {
-            std::uint16_t ax = 0x0902;
-            asm ("int 0x31" : "+a" (ax) :: "cc");
-            return ax & 1;
-        }
-        else return cpu_flags::current().interrupts_enabled;
-    }
 
     template<bool enable>
     struct interrupt_flag
@@ -71,12 +59,29 @@ namespace jw::dpmi
 
         const std::uint32_t prev_state;
     };
+}
+
+namespace jw::dpmi
+{
+    using int_vector = std::uint8_t;
+    using irq_level = std::uint8_t;
+
+    inline bool interrupts_enabled() noexcept
+    {
+        if constexpr (config::support_virtual_interrupt_flag)
+        {
+            std::uint16_t ax = 0x0902;
+            asm ("int 0x31" : "+a" (ax) :: "cc");
+            return ax & 1;
+        }
+        else return cpu_flags::current().interrupts_enabled;
+    }
 
     // Disables the interrupt flag
-    using interrupt_mask = interrupt_flag<false>;
+    using interrupt_mask = detail::interrupt_flag<false>;
 
     // Enables the interrupt flag
-    using interrupt_unmask = interrupt_flag<true>;
+    using interrupt_unmask = detail::interrupt_flag<true>;
 
     // Masks one specific IRQ.
     // note: involves IO ports, so this may be slower than disabling interrupts altogether
