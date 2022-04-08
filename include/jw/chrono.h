@@ -34,9 +34,11 @@ namespace jw
             return tsc;
         }
 
-        enum class tsc_reference
+        enum class timer_irq
         {
-            none, rtc, pit
+            none = -1,
+            pit = 0,
+            rtc = 8
         };
 
         struct setup
@@ -50,7 +52,7 @@ namespace jw
 
             static void setup_pit(bool enable, std::uint32_t freq_divisor = 0x10000);   // default: 18.2Hz
             static void setup_rtc(bool enable, std::uint8_t freq_shift = 10);           // default: 64Hz
-            static void setup_tsc(std::size_t num_samples, tsc_reference ref = tsc_reference::none);    // num_samples must be a power of two
+            static void setup_tsc(std::size_t num_samples, timer_irq ref = timer_irq::none);    // num_samples must be a power of two
 
         private:
             static inline std::atomic<std::uint32_t> tsc_ticks_per_irq { 0 };
@@ -70,7 +72,7 @@ namespace jw
             static void reset_rtc();
             static void reset_tsc();
 
-            static inline tsc_reference tsc_ref { tsc_reference::none };
+            static inline timer_irq tsc_ref { timer_irq::none };
 
             static inline constexpr io::out_port<byte> rtc_index { 0x70 };
             static inline constexpr io::io_port<byte> rtc_data { 0x71 };
@@ -131,8 +133,8 @@ namespace jw
                 double ns;
                 switch (setup::tsc_ref)
                 {
-                case tsc_reference::pit: ns = setup::ns_per_pit_tick; break;
-                case tsc_reference::rtc: ns = setup::ns_per_rtc_tick; break;
+                case timer_irq::pit: ns = setup::ns_per_pit_tick; break;
+                case timer_irq::rtc: ns = setup::ns_per_rtc_tick; break;
                 default: [[unlikely]] return duration::min();
                 }
                 ns *= count;
