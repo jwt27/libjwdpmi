@@ -17,6 +17,7 @@
 #include <sys/nearptr.h>
 #include <cstring>
 #include <vector>
+#include <bitset>
 
 namespace jw::dpmi::detail
 {
