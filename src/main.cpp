@@ -190,9 +190,29 @@ namespace jw
             main_cs = get_cs();
             main_ds = get_ds();
 
-            jw::detail::scheduler::setup();
+            asm
+            (R"(
+                fnclex
+                fninit
+                sub esp, 4
+                fnstcw [esp]
+                or byte ptr [esp], 0xBF     # mask all FPU exceptions
+                fldcw [esp]
+                add esp, 4
+            )");
+#           ifdef HAVE__SSE__
+            asm
+            (R"(
+                sub esp, 4
+                stmxcsr [esp]
+                or word ptr [esp], 0x1F80
+                ldmxcsr [esp]
+                add esp, 4
+            )");
+#           endif
 
             interrupt_id::setup();
+            jw::detail::scheduler::setup();
             setup_exception_handling();
 
             // Try setting control registers first in ring 3.  If we have no ring0 access, the

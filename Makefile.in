@@ -6,7 +6,7 @@ CXXFLAGS_NOFPU := -mgeneral-regs-only
 SRC := debug.cpp chrono.cpp cpuid.cpp dpmi_error.cpp key.cpp keyboard.cpp
 SRC += keyboard_streambuf.cpp mpu401.cpp opl.cpp pci.cpp ps2_interface.cpp
 SRC += realmode.cpp rs232.cpp scancode.cpp scheduler.cpp vbe.cpp vga.cpp
-SRC += cpu_exception.cpp fpu.cpp irq.cpp memory.cpp ring0.cpp main.cpp
+SRC += cpu_exception.cpp irq.cpp memory.cpp ring0.cpp main.cpp
 SRC := $(addprefix src/,$(SRC))
 
 OBJ := $(SRC:%.cpp=%.o)
@@ -32,7 +32,6 @@ libjwdpmi.a: $(OBJ)
 	$(AR) scru $@ $^
 
 src/cpu_exception.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
-src/fpu.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
 src/irq.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
 src/main.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
 src/memory.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)

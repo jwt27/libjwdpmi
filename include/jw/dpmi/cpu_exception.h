@@ -21,7 +21,6 @@
 #include <jw/dpmi/dpmi.h>
 #include <jw/dpmi/alloc.h>
 #include <jw/dpmi/irq_check.h>
-#include <jw/dpmi/fpu.h>
 #include <jw/function.h>
 #include "jwdpmi_config.h"
 

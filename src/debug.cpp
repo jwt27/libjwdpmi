@@ -676,7 +676,7 @@ namespace jw
                     case eip: encode(out, &f->fault_address.offset); return;
                     default:
                         if (reg > reg_max) return;
-                        auto* fpu = interrupt_id::get()->fpu.get();
+                        auto* fpu = &interrupt_id::get()->fpu;
                         switch (reg)
                         {
                             case st0: case st1: case st2: case st3: case st4: case st5: case st6: case st7:
@@ -758,7 +758,7 @@ namespace jw
                     case fs: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->fs, 2); } return false;
                     case gs: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->gs, 2); } return false;
                     default:
-                        auto* fpu = interrupt_id::get()->fpu.get();
+                        auto* fpu = &interrupt_id::get()->fpu;
                         switch (reg)
                         {
                         case st0: case st1: case st2: case st3: case st4: case st5: case st6: case st7:

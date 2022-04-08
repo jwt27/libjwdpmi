@@ -99,68 +99,12 @@ namespace jw::dpmi
     using fpu_registers = fsave_data;
 #   endif
 
-}
-
-namespace jw::dpmi::detail
-{
-    // Used by fpu_context, see below.
-    union fpu_state
-    {
-#       ifdef HAVE__SSE__
-        static constexpr std::size_t offset = offsetof(fpu_registers, unused);
-#       else
-        static constexpr std::size_t offset = sizeof(fpu_registers);
-#       endif
-        fpu_registers regs;
-        fpu_state* next_free;
-        struct
-        {
-            std::array<std::byte, offset> data;
-            unsigned save_count { 0 };
-            unsigned restore_count { 0 };
-            bool saved;
-        };
-    };
-
-#   ifdef HAVE__SSE__
-    static_assert(sizeof(fpu_state) == sizeof(fpu_registers));
-    static_assert(offsetof(fpu_state, save_count) == fpu_state::offset);
-#   else
-    static_assert(offsetof(fpu_state, save_count) == sizeof(fpu_registers));
-#   endif
-
-    struct interrupt_id_data;
-}
-
-namespace jw::dpmi
-{
-    // Ensures that, on destruction, the FPU is left in exactly the same
-    // state as it was on contruction.  But, since FPU context switching is
-    // an expensive operation, this class will try its hardest to avoid
-    // actually doing that.  A context switch is only performed when
-    // absolutely necessary.
+    // Saves the FPU registers and restores them on destruction.
     struct fpu_context
     {
-        [[gnu::hot]] fpu_context();
-        [[gnu::hot]] ~fpu_context();
+        fpu_context() { registers.save(); };
+        ~fpu_context() { registers.restore(); }
 
-        // Access the saved state.  Used by the debugger.
-        fpu_registers* get();
-
-        // Used by scheduler.  No need to call this manually.
-        [[gnu::hot]] static void update_cr0();
-
-        // Used by exception handler.
-        [[gnu::hot]] static bool try_context_switch() noexcept;
-
-    private:
-        friend struct jw::dpmi::detail::interrupt_id_data;
-
-        struct init_tag { } static inline init;
-        fpu_context(init_tag);
-
-        static detail::fpu_state** restore_ptr() noexcept;
-
-        detail::fpu_state* state;
+        fpu_registers registers;
     };
 }

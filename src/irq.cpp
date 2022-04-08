@@ -13,7 +13,6 @@
 #include <jw/main.h>
 #include <jw/thread.h>
 #include <jw/dpmi/irq_handler.h>
-#include <jw/dpmi/fpu.h>
 #include <jw/dpmi/detail/selectors.h>
 #include <jw/alloc.h>
 

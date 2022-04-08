@@ -85,14 +85,6 @@ namespace jw::dpmi::detail
     static bool handle_exception(raw_exception_frame* frame) noexcept
     {
         auto* const data = frame->data;
-
-        if (data->num == exception_num::device_not_available or
-            data->num == exception_num::invalid_opcode)
-        {
-            if (fpu_context::try_context_switch())
-                return true;
-        }
-
         auto* const f = data->is_dpmi10 ? &frame->frame_10 : &frame->frame_09;
         interrupt_id id { data->num, interrupt_type::exception };
 
@@ -396,9 +388,7 @@ namespace jw::dpmi::detail
 
         pending_exceptions.emplace();
 
-        install_handlers<exception_num::invalid_opcode,
-                         exception_num::device_not_available,
-                         exception_num::general_protection_fault>();
+        install_handlers<exception_num::general_protection_fault>();
 
         if constexpr (not config::enable_throwing_from_cpu_exceptions) return;
 
@@ -408,6 +398,8 @@ namespace jw::dpmi::detail
                          exception_num::breakpoint,
                          exception_num::overflow,
                          exception_num::bound_range_exceeded,
+                         exception_num::invalid_opcode,
+                         exception_num::device_not_available,
                          exception_num::double_fault,
                          exception_num::x87_segment_not_present,
                          exception_num::invalid_tss,
