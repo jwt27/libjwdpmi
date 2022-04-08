@@ -388,7 +388,8 @@ namespace jw::dpmi::detail
 
         pending_exceptions.emplace();
 
-        install_handlers<exception_num::general_protection_fault>();
+        install_handlers<exception_num::general_protection_fault,
+                         exception_num::stack_segment_fault>();
 
         if constexpr (not config::enable_throwing_from_cpu_exceptions) return;
 
@@ -404,7 +405,6 @@ namespace jw::dpmi::detail
                          exception_num::x87_segment_not_present,
                          exception_num::invalid_tss,
                          exception_num::segment_not_present,
-                         exception_num::stack_segment_fault,
                          exception_num::page_fault>();
 
         try
