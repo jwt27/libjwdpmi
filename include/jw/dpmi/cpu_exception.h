@@ -152,17 +152,12 @@ namespace jw::dpmi
 
     using exception_handler_sig = bool(const exception_info&);
 
-    // Thrown when redirect_exception is called twice on the same exception frame.
-    struct already_redirected : std::runtime_error
-    {
-        already_redirected() : std::runtime_error { "Exception already redirected" } { }
-    };
-
     // Redirect to the given function on return from an exception handler.
     // Constructs a call frame on the stack so that execution resumes at the
     // fault location when this function returns.  All registers (including
     // FPU and flags) are preserved.
-    void redirect_exception(const exception_info& info, void(*)());
+    // Returns false if redirection from this exception frame is not possible.
+    bool redirect_exception(const exception_info& info, void(*)());
 }
 
 #pragma GCC diagnostic pop

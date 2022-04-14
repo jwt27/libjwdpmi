@@ -100,23 +100,16 @@ namespace jw::dpmi::detail
         }
         catch (...)
         {
-            const auto base = descriptor::get_base(get_cs());
-            const bool can_redirect = not f->flags.v86_mode and
-                                      not f->info_bits.redirect_elsewhere and
-                                      descriptor::get_base(f->fault_address.segment) == base and
-                                      descriptor::get_base(f->stack.segment) == base;
-            const bool can_throw = config::enable_throwing_from_cpu_exceptions and can_redirect;
-
-            if (can_throw)
+            if (config::enable_throwing_from_cpu_exceptions and
+                redirect_exception(info, detail::rethrow_cpu_exception))
             {
                 pending_exceptions->emplace_back(std::current_exception());
-                redirect_exception(info, detail::rethrow_cpu_exception);
                 success = true;
             }
-            else if (can_redirect)
+            else
             {
                 try { throw; }
-                catch (const cpu_exception& e) { e.print(); }
+                catch (const cpu_exception& e) { print_exception(e); }
                 catch (...)
                 {
                     fmt::print(stderr, "Caught exception while handling CPU exception 0x{:0>2x}\n", data->num.value);
@@ -124,10 +117,9 @@ namespace jw::dpmi::detail
                     catch (const std::exception& e) { print_exception(e); }
                     catch (...) { }
                 }
-                redirect_exception(info, kill);
-                success = true;
+                if (redirect_exception(info, kill)) success = true;
+                else std::terminate();
             }
-            else std::terminate();
         }
 
 #       ifndef NDEBUG
@@ -361,9 +353,19 @@ namespace jw::dpmi::detail
 
         if constexpr (not config::enable_throwing_from_cpu_exceptions) return false;
 
-        if (i.frame->flags.v86_mode) return false;
-
-        throw_cpu_exception(i);
+        if (redirect_exception(i, rethrow_cpu_exception)) [[likely]]
+        {
+            try
+            {
+                throw_cpu_exception(i);
+            }
+            catch (...)
+            {
+                pending_exceptions->emplace_back(std::current_exception());
+            }
+            return true;
+        }
+        else return false;
     }
 
     void setup_exception_handling()
@@ -419,9 +421,11 @@ namespace jw::dpmi::detail
 
 namespace jw::dpmi
 {
-    void redirect_exception(const exception_info& info, void(*func)())
+    bool redirect_exception(const exception_info& info, void(*func)())
     {
-        if (info.frame->info_bits.redirect_elsewhere) throw already_redirected { };
+        if (info.frame->info_bits.redirect_elsewhere or
+            info.frame->fault_address.segment != detail::main_cs or
+            info.frame->flags.v86_mode) return false;
 
         const std::uintptr_t ret = info.frame->fault_address.offset;
         const cpu_flags flags = info.frame->flags;
@@ -435,6 +439,7 @@ namespace jw::dpmi
         info.frame->flags.interrupts_enabled = false;
         info.frame->fault_address.offset = p->code();
         info.frame->info_bits.redirect_elsewhere = true;
+        return true;
     }
 
     void async_signal::raise(id_type i)
