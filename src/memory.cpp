@@ -395,7 +395,7 @@ namespace jw::dpmi
     {
         throw_if_irq();
         if (handle != null_handle) deallocate();
-        split_uint32_t new_size { size };
+        split_uint32_t new_size { size() };
         split_uint32_t new_addr, new_handle;
         dpmi_error_code error;
         bool c;
@@ -437,7 +437,7 @@ namespace jw::dpmi
                 , "=S" (new_handle)
                 : "a" (0x0504)
                 , "b" (desired_address)
-                , "c" (size)
+                , "c" (size())
                 , "d" (static_cast<std::uint32_t>(committed))
                 : "memory");
             if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
@@ -472,7 +472,7 @@ namespace jw::dpmi
         } while (!is_valid_address(new_addr));
         handle = new_handle;
         addr = new_addr;
-        size = new_size;
+        bytes = new_size;
     }
 
     void memory_base::new_resize(std::size_t num_bytes, bool committed)
@@ -498,13 +498,14 @@ namespace jw::dpmi
         } while (!is_valid_address(new_addr));
         handle = new_handle;
         addr = new_addr;
+        bytes = num_bytes;
     }
 
     void device_memory_base::old_alloc(std::uintptr_t physical_address)
     {
         throw_if_irq();
         split_uint32_t new_addr;
-        split_uint32_t new_size { size };
+        split_uint32_t new_size { size() };
         split_uint32_t phys { physical_address };
         dpmi_error_code error;
         bool c;
@@ -528,11 +529,11 @@ namespace jw::dpmi
     {
         auto addr_start = round_down_to_page_size(physical_address);
         auto offset = physical_address - addr_start;
-        auto pages = round_up_to_page_size(size) / page_size;
+        auto pages = round_up_to_page_size(size()) / page_size;
         auto offset_in_block = round_up_to_page_size(addr) - addr;
         offset += offset_in_block;
         addr += offset;
-        size -= offset;
+        bytes -= offset;
         dpmi_error_code error;
         bool c;
         asm volatile(
@@ -552,10 +553,10 @@ namespace jw::dpmi
     {
         auto addr_start = round_down_to_page_size(dos_physical_address);
         offset = dos_physical_address - addr_start;
-        auto pages = round_up_to_page_size(size) / page_size;
+        auto pages = round_up_to_page_size(size()) / page_size;
         auto offset_in_block = round_up_to_page_size(addr) - addr;
         addr += offset + offset_in_block;
-        size -= offset + offset_in_block;
+        bytes -= offset + offset_in_block;
         dpmi_error_code error;
         bool c;
         asm volatile(
@@ -635,6 +636,6 @@ namespace jw::dpmi
             , "d" (dos_handle)
             : "memory");
         if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
-        size = num_bytes;
+        bytes = num_bytes;
     }
 }

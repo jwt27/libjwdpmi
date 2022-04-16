@@ -269,7 +269,7 @@ namespace jw
                 pmid->b000_selector = b000->get_selector();
                 pmid->b800_selector = b800->get_selector();
 
-                video_bios_code = { video_bios->get_address(), bios_size };
+                video_bios_code = { video_bios->address(), bios_size };
                 video_bios->get_descriptor().lock()->set_access_rights(ar);
                 ar = ldt_access_rights { get_cs() };
                 ar.is_32_bit = false;
@@ -280,7 +280,7 @@ namespace jw
                 ar = ldt_access_rights { get_ss() };
                 ar.is_32_bit = false;
                 vbe3_stack->get_descriptor().lock()->set_access_rights(ar);
-                vbe3_stack_ptr = { vbe3_stack->get_selector(), (vbe3_stack->get_size() - 0x10) & -0x10 };
+                vbe3_stack_ptr = { vbe3_stack->get_selector(), (vbe3_stack->size() - 0x10) & -0x10 };
                 vbe3_entry_point = { video_bios_code.get_selector(), pmid->init_entry_point };
 
                 asm volatile("call vbe3" ::: "eax", "ebx", "ecx", "edx", "esi", "edi", "cc");

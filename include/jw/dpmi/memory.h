@@ -315,8 +315,8 @@ namespace jw::dpmi
 
     struct linear_memory
     {
-        std::uintptr_t get_address() const noexcept { return addr; }
-        virtual std::size_t get_size() const noexcept { return size; }
+        std::uintptr_t address() const noexcept { return addr; }
+        virtual std::size_t size() const noexcept { return bytes; }
 
         template <typename T>
         T* near_pointer() const { return linear_to_near<T>(addr); }
@@ -331,21 +331,21 @@ namespace jw::dpmi
         constexpr linear_memory() = default;
 
         linear_memory(std::uintptr_t address, std::size_t num_bytes) noexcept
-            : addr(address), size(num_bytes) { }
+            : addr(address), bytes(num_bytes) { }
 
         linear_memory(std::shared_ptr<descriptor> l) noexcept
-            : ldt(l), addr(ldt->get_base()), size((ldt->get_limit() + 1) * (ldt->segment.is_page_granular ? page_size : 0)) { }
+            : ldt(l), addr(ldt->get_base()), bytes((ldt->get_limit() + 1) * (ldt->segment.is_page_granular ? page_size : 0)) { }
 
         linear_memory(const linear_memory&) noexcept = default;
         linear_memory& operator=(const linear_memory&) noexcept = default;
         linear_memory(linear_memory&& m) noexcept = default;
         linear_memory& operator=(linear_memory&& m) noexcept = default;
 
-        //DPMI 0.9 AX=0600
-        void lock_memory()
+        // DPMI 0.9 AX=0600
+        void lock()
         {
             dpmi_error_code error;
-            split_uint32_t _addr = addr, _size = size;
+            split_uint32_t _addr = addr, _size = bytes;
             bool c;
 
             asm volatile(
@@ -360,11 +360,11 @@ namespace jw::dpmi
             if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
         }
 
-        //DPMI 0.9 AX=0601
-        void unlock_memory()
+        // DPMI 0.9 AX=0601
+        void unlock()
         {
             dpmi_error_code error;
-            split_uint32_t _addr = addr, _size = size;
+            split_uint32_t _addr = addr, _size = bytes;
             bool c;
 
             asm volatile(
@@ -381,7 +381,7 @@ namespace jw::dpmi
 
         virtual std::weak_ptr<descriptor> get_descriptor()
         {
-            if (not ldt) ldt = std::make_shared<descriptor>(descriptor::create_segment(addr, size));
+            if (not ldt) ldt = std::make_shared<descriptor>(descriptor::create_segment(addr, bytes));
             return ldt;
         }
 
@@ -395,7 +395,7 @@ namespace jw::dpmi
     protected:
         std::shared_ptr<descriptor> ldt;
         std::uintptr_t addr;
-        std::size_t size;
+        std::size_t bytes;
     };
 
     struct device_memory_base;
@@ -434,7 +434,7 @@ namespace jw::dpmi
         memory_base& operator=(memory_base&& m) noexcept
         {
             std::swap(handle, m.handle);
-            std::swap(size, m.size);
+            std::swap(bytes, m.bytes);
             std::swap(addr, m.addr);
             return *this;
         }
@@ -544,7 +544,7 @@ namespace jw::dpmi
         {
             if (address <= descriptor::get_base(get_ds())) return false;
             //if (get_selector_limit() < linear_to_near(address + size)) set_selector_limit(get_ds(), address + size);
-            while (descriptor::get_limit(get_ds()) < static_cast<std::uintptr_t>(linear_to_near(address + size)))
+            while (descriptor::get_limit(get_ds()) < static_cast<std::uintptr_t>(linear_to_near(address + size())))
                 descriptor::set_limit(get_ds(), descriptor::get_limit(get_ds()) * 2);
             return true;
         }
@@ -817,7 +817,7 @@ namespace jw::dpmi
 
         template<typename... Args>
         void resize(std::size_t num_elements, Args&&... args) { base::resize(num_elements * sizeof(T), std::forward<Args>(args)...); }
-        virtual std::size_t get_size() const noexcept override { return base::get_size() / sizeof(T); }
+        virtual std::size_t size() const noexcept override { return base::size() / sizeof(T); }
     };
 
     template <typename T = byte> using memory = memory_t<T, memory_base>;

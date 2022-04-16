@@ -41,14 +41,14 @@ namespace jw
                 void lock()
                 {
                     if (locked) [[unlikely]] return;
-                    mem.lock_memory();
+                    mem.lock();
                     locked = true;
                 }
 
                 void unlock()
                 {
                     if (not locked) [[unlikely]] return;
-                    mem.unlock_memory();
+                    mem.unlock();
                     locked = false;
                 }
 
