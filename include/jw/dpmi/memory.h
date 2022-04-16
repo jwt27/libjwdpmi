@@ -9,6 +9,7 @@
 #pragma once
 #include <limits>
 #include <memory_resource>
+#include <sys/nearptr.h>
 #include <jw/dpmi/dpmi.h>
 #include "jwdpmi_config.h"
 
@@ -268,24 +269,46 @@ namespace jw::dpmi
         return num_paragraphs << 4;
     }
 
-    inline std::intptr_t linear_to_near(std::uintptr_t address, selector sel = get_ds())
+    inline std::intptr_t linear_to_near(std::uintptr_t address)
+    {
+        return address - __djgpp_base_address;
+    }
+
+    inline std::intptr_t linear_to_near(std::uintptr_t address, selector sel)
     {
         return address - descriptor::get_base(sel);
     }
 
     template <typename T>
-    inline T* linear_to_near(std::uintptr_t address, selector sel = get_ds())
+    inline T* linear_to_near(std::uintptr_t address)
+    {
+        return reinterpret_cast<T*>(linear_to_near(address));
+    }
+
+    template <typename T>
+    inline T* linear_to_near(std::uintptr_t address, selector sel)
     {
         return reinterpret_cast<T*>(linear_to_near(address, sel));
     }
 
-    inline std::uintptr_t near_to_linear(std::uintptr_t address, selector sel = get_ds())
+    inline std::uintptr_t near_to_linear(std::uintptr_t address)
+    {
+        return address + __djgpp_base_address;
+    }
+
+    inline std::uintptr_t near_to_linear(std::uintptr_t address, selector sel)
     {
         return address + descriptor::get_base(sel);
     }
 
     template <typename T>
-    inline std::uintptr_t near_to_linear(T* address, selector sel = get_ds())
+    inline std::uintptr_t near_to_linear(T* address)
+    {
+        return near_to_linear(reinterpret_cast<std::uintptr_t>(address));
+    }
+
+    template <typename T>
+    inline std::uintptr_t near_to_linear(T* address, selector sel)
     {
         return near_to_linear(reinterpret_cast<std::uintptr_t>(address), sel);
     }
@@ -296,25 +319,16 @@ namespace jw::dpmi
         virtual std::size_t get_size() const noexcept { return size; }
 
         template <typename T>
-        T* get_ptr(selector sel = get_ds())
-        {
-            return linear_to_near<T>(addr, sel);
-        }
+        T* near_pointer() const { return linear_to_near<T>(addr); }
 
         template <typename T>
-        const T* get_ptr(selector sel = get_ds()) const
-        {
-            return get_ptr<const T>(sel);
-        }
+        T* near_pointer(selector sel) const { return linear_to_near<T>(addr, sel); }
 
-        linear_memory() : linear_memory(0, 0) { }
+        template<typename T>
+        static linear_memory from_pointer(const T* ptr, std::size_t n) { return linear_memory { dpmi::near_to_linear(ptr), n * sizeof(T) }; }
+        static linear_memory from_pointer(const void* ptr, std::size_t n) { return linear_memory { dpmi::near_to_linear(ptr), n }; }
 
-        template<typename T, std::enable_if_t<!std::is_void<T>::value, bool> = { }>
-        linear_memory(selector seg, const T* ptr, std::size_t num_elements = 1)
-            : linear_memory(dpmi::near_to_linear(ptr, seg), num_elements * sizeof(T)) { }
-
-        linear_memory(selector seg, const void* ptr, std::size_t num_bytes)
-            : linear_memory(dpmi::near_to_linear(ptr, seg), num_bytes) { }
+        constexpr linear_memory() = default;
 
         linear_memory(std::uintptr_t address, std::size_t num_bytes) noexcept
             : addr(address), size(num_bytes) { }
@@ -458,12 +472,12 @@ namespace jw::dpmi
             {
                 if (in_use) throw std::bad_alloc { };
                 in_use = true;
-                return mem->get_ptr<void>();
+                return mem->near_pointer<void>();
             }
 
             virtual void do_deallocate(void* p, std::size_t, std::size_t) noexcept override
             {
-                if (mem->get_ptr<void>() == p) in_use = false;
+                if (mem->near_pointer<void>() == p) in_use = false;
             }
 
             virtual bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override
@@ -791,15 +805,15 @@ namespace jw::dpmi
         template<typename... Args>
         memory_t(std::size_t num_elements, Args&&... args) : base(num_elements * sizeof(T), std::forward<Args>(args)...) { }
 
-        auto* get_ptr(selector sel = get_ds()) { return base::template get_ptr<T>(sel); }
-        auto* operator->() noexcept { return get_ptr(); }
-        auto& operator*() noexcept { return *get_ptr(); }
-        auto& operator[](std::ptrdiff_t i) noexcept { return *(get_ptr() + i); }
+        auto* near_pointer(selector sel = get_ds()) { return base::template near_pointer<T>(sel); }
+        auto* operator->() noexcept { return near_pointer(); }
+        auto& operator*() noexcept { return *near_pointer(); }
+        auto& operator[](std::ptrdiff_t i) noexcept { return *(near_pointer() + i); }
 
-        const auto* get_ptr(selector sel = get_ds()) const { return base::template get_ptr<T>(sel); }
-        const auto* operator->() const noexcept { return get_ptr(); }
-        const auto& operator*() const noexcept { return *get_ptr(); }
-        const auto& operator[](std::ptrdiff_t i) const noexcept { return *(get_ptr() + i); }
+        const auto* near_pointer(selector sel = get_ds()) const { return base::template near_pointer<T>(sel); }
+        const auto* operator->() const noexcept { return near_pointer(); }
+        const auto& operator*() const noexcept { return *near_pointer(); }
+        const auto& operator[](std::ptrdiff_t i) const noexcept { return *(near_pointer() + i); }
 
         template<typename... Args>
         void resize(std::size_t num_elements, Args&&... args) { base::resize(num_elements * sizeof(T), std::forward<Args>(args)...); }

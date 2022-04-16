@@ -111,7 +111,7 @@ namespace jw
                 if (mode_info->attr.is_supported) modes[num] = *mode_info;
             };
 
-            for (auto* mode_ptr = mode_list.get_ptr(); *mode_ptr != 0xffff; ++mode_ptr)
+            for (auto* mode_ptr = mode_list.near_pointer(); *mode_ptr != 0xffff; ++mode_ptr)
                 get_mode(*mode_ptr);
 
             for (auto n = 0; n < 0x7f; ++n)
@@ -133,7 +133,7 @@ namespace jw
         {
             if (info.vbe_signature == "VESA") return;
             dpmi::dos_memory<detail::raw_vbe_info> raw_info { 1 };
-            auto* ptr = raw_info.get_ptr();
+            auto* ptr = raw_info.near_pointer();
 
             dpmi::realmode_registers reg { };
             reg.ax = 0x4f00;
@@ -149,7 +149,7 @@ namespace jw
             info.total_memory = ptr->total_memory;
             {
                 dpmi::mapped_dos_memory<char> str { 256, ptr->oem_string };
-                info.oem_string = str.get_ptr();
+                info.oem_string = str.near_pointer();
             }
             populate_mode_list(ptr->video_mode_list);
         }
@@ -158,7 +158,7 @@ namespace jw
         {
             if (info.vbe_signature == "VESA") return;
             dpmi::dos_memory<detail::raw_vbe_info> raw_info { 1 };
-            auto* ptr = raw_info.get_ptr();
+            auto* ptr = raw_info.near_pointer();
             std::copy_n("VBE2", 4, ptr->vbe_signature);
 
             dpmi::realmode_registers reg { };
@@ -178,19 +178,19 @@ namespace jw
             std::copy_n(ptr->oem_data, 256, info.oem_data.data());
             {
                 dpmi::mapped_dos_memory<char> str { 256, ptr->oem_string };
-                info.oem_string = str.get_ptr();
+                info.oem_string = str.near_pointer();
             }
             {
                 dpmi::mapped_dos_memory<char> str { 256, ptr->oem_vendor_name };
-                info.oem_vendor_name = str.get_ptr();
+                info.oem_vendor_name = str.near_pointer();
             }
             {
                 dpmi::mapped_dos_memory<char> str { 256, ptr->oem_product_name };
-                info.oem_product_name = str.get_ptr();
+                info.oem_product_name = str.near_pointer();
             }
             {
                 dpmi::mapped_dos_memory<char> str { 256, ptr->oem_product_version };
-                info.oem_product_version = str.get_ptr();
+                info.oem_product_version = str.near_pointer();
             }
             populate_mode_list(ptr->video_mode_list);
 
@@ -201,7 +201,7 @@ namespace jw
             reg.call_int(0x10);
             check_error(reg.ax, __PRETTY_FUNCTION__);
             dpmi::mapped_dos_memory<byte> pm_table { reg.cx, dpmi::far_ptr16 { reg.es, reg.di } };
-            byte* pm_table_ptr = pm_table.get_ptr();
+            byte* pm_table_ptr = pm_table.near_pointer();
             vbe2_pm_interface.assign(pm_table_ptr, pm_table_ptr + reg.cx);
             auto cs_limit = reinterpret_cast<std::size_t>(vbe2_pm_interface.data() + reg.cx);
             if (dpmi::descriptor::get_limit(dpmi::get_cs()) < cs_limit)
@@ -242,12 +242,12 @@ namespace jw
                 std::size_t bios_size;
                 {
                     mapped_dos_memory<byte> video_bios_ptr { 128_KB, far_ptr16 { 0xC000, 0 } };
-                    byte* ptr = video_bios_ptr.get_ptr();
+                    byte* ptr = video_bios_ptr.near_pointer();
                     bios_size = *(ptr + 2) * 512;
                     video_bios.emplace(bios_size);
-                    std::copy_n(ptr, bios_size, video_bios->get_ptr());
+                    std::copy_n(ptr, bios_size, video_bios->near_pointer());
                 }
-                char* search_ptr = reinterpret_cast<char*>(video_bios->get_ptr());
+                char* search_ptr = reinterpret_cast<char*>(video_bios->near_pointer());
                 const char* search_value = "PMID";
                 search_ptr = std::search(search_ptr, search_ptr + bios_size, search_value, search_value + 4);
                 if (std::strncmp(search_ptr, search_value, 4) != 0) return;
@@ -256,7 +256,7 @@ namespace jw
                 pmid->in_protected_mode = true;
 
                 bios_data_area.emplace(4_KB);
-                std::fill_n(bios_data_area->get_ptr(), 4_KB, 0);
+                std::fill_n(bios_data_area->near_pointer(), 4_KB, 0);
                 pmid->bda_selector = bios_data_area->get_selector();
                 ldt_access_rights ar { get_ds() };
                 ar.is_32_bit = false;
@@ -622,12 +622,12 @@ namespace jw
                 if (dac_bits < 8)
                 {
                     for (std::size_t i = 0; i < size; ++i)
-                        new(reinterpret_cast<pxvga*>(dos_data.get_ptr() + i)) pxvga { begin[i] };
+                        new(reinterpret_cast<pxvga*>(dos_data.near_pointer() + i)) pxvga { begin[i] };
                 }
                 else
                 {
                     for (std::size_t i = 0; i < size; ++i)
-                        new(dos_data.get_ptr() + i) px32n { std::move(begin[i]) };
+                        new(dos_data.near_pointer() + i) px32n { std::move(begin[i]) };
                 }
 
                 dpmi::realmode_registers reg { };
@@ -646,29 +646,23 @@ namespace jw
         {
             if (not vbe3_pm) return vbe2::set_palette(begin, end, first, wait_for_vsync);
 
-            std::unique_ptr<std::vector<pxvga>> copy;
+            std::optional<std::vector<pxvga>> copy;
             const byte* ptr = reinterpret_cast<const byte*>(begin);
             if (dac_bits < 8)
             {
-                copy = std::make_unique<std::vector<pxvga>>(begin, end);
+                copy.emplace(begin, end);
                 ptr = reinterpret_cast<const byte*>(copy->data());
             }
 
-            dpmi::linear_memory data_mem { dpmi::get_ds(), reinterpret_cast<const px32n*>(ptr),  static_cast<std::size_t>(end - begin) };
-            std::uint16_t ax;
+            std::uint16_t ax { 0x4f09 };
             force_frame_pointer();
             asm volatile(
-                "push es;"
-                "mov es, %w1;"
-                "call vbe3;"
-                "pop es;"
-                : "=a" (ax)
-                : "rm" (data_mem.get_selector())
-                , "a" (0x4f09)
-                , "b" (wait_for_vsync ? 0x80 : 0)
+                "call vbe3"
+                : "+a" (ax)
+                : "b" (wait_for_vsync ? 0x80 : 0)
                 , "c" (std::min(end - begin, std::ptrdiff_t { 256 }))
                 , "d" (first)
-                , "D" (0)
+                , "D" (ptr)
                 : "esi", "cc");
             check_error(ax, __PRETTY_FUNCTION__);
         }
@@ -691,7 +685,7 @@ namespace jw
 
             std::vector<px32n> result;
             result.reserve(256);
-            auto* ptr = dos_data.get_ptr();
+            auto* ptr = dos_data.near_pointer();
             if (dac_bits < 8) for (auto i = 0; i < 256; ++i) result.push_back(*(reinterpret_cast<pxvga*>(ptr) + i));
             else for (auto i = 0; i < 256; ++i) result.push_back(ptr[i]);
             return result;
