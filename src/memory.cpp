@@ -111,6 +111,7 @@ namespace jw::dpmi
 
                 // Check if ldt access is possible
                 descriptor test { get_ds() };
+                [[maybe_unused]] volatile descriptor_data data = test.read();
             }
             catch (...)
             {
@@ -157,7 +158,7 @@ namespace jw::dpmi
     ldt_access_rights descriptor::get_access_rights() { return ldt_access_rights { sel.value }; }
 
     descriptor::descriptor(descriptor&& d) noexcept
-        : descriptor_data(static_cast<descriptor_data>(d)), sel(d.sel), no_alloc(d.no_alloc)
+        : sel(d.sel), no_alloc(d.no_alloc)
     {
         d.no_alloc = true;
     }
@@ -169,45 +170,36 @@ namespace jw::dpmi
         return *this;
     }
 
-    descriptor& descriptor::operator=(const descriptor_data& d)
-    {
-        *static_cast<descriptor_data*>(this) = d;
-        write();
-        return *this;
-    }
-
     descriptor descriptor::create_segment(std::uintptr_t linear_base, std::size_t limit)
     {
-        descriptor ldt = clone_segment(get_ds());
+        descriptor ldt = clone_segment(detail::main_ds);
         ldt.set_base(linear_base);
         ldt.set_limit(limit);
-        ldt.read();
         return ldt;
     }
 
     descriptor descriptor::create_code_segment(std::uintptr_t linear_base, std::size_t limit)
     {
-        descriptor ldt = clone_segment(get_cs());
+        descriptor ldt = clone_segment(detail::main_cs);
         ldt.set_base(linear_base);
         ldt.set_limit(limit);
-        ldt.read();
         return ldt;
     }
 
     descriptor descriptor::clone_segment(selector s)
     {
         descriptor d { s };
+        auto data = d.read();
         d.allocate();
-        d.write();
+        d.write(data);
         return d;
     }
 
     descriptor descriptor::create_call_gate(selector code_seg, std::uintptr_t entry_point)
     {
         split_uint32_t entry { entry_point };
-        descriptor d { };
-        d.allocate();
-        auto& c = d.call_gate;
+        descriptor_data data { };
+        auto& c = data.call_gate;
         c.not_system_segment = false;
         c.privilege_level = 3;
         c.type = call_gate32;
@@ -216,7 +208,10 @@ namespace jw::dpmi
         c.offset_lo = entry.lo;
         c.offset_hi = entry.hi;
         c.stack_params = 0;
-        d.write();
+
+        descriptor d { };
+        d.allocate();
+        d.write(data);
         return d;
     }
 
@@ -226,58 +221,44 @@ namespace jw::dpmi
         catch(...) { }
     }
 
-    void descriptor::read() const
+    descriptor_data descriptor::read() const
     {
         auto ldt_access = direct_ldt_access();
         if (ldt_access != no) [[likely]]
-        {
-            static_cast<descriptor_data&>(*const_cast<descriptor*>(this)) = read_descriptor_direct(sel, ldt_access == ring0);
-        }
-        else
-        {
-            dpmi_error_code error;
-            bool c;
-            asm volatile(
-                "lea edi, %2;"
-                "push es;"
-                "push ds;"
-                "pop es;"
-                "int 0x31;"
-                "pop es;"
-                : "=@ccc" (c)
-                , "=a" (error)
-                , "=m" (*const_cast<descriptor*>(this))
-                : "a" (0x000b)
-                , "b" (sel)
-                : "edi", "memory");
-            if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
-        }
+            return read_descriptor_direct(sel, ldt_access == ring0);
+
+        descriptor_data data;
+        dpmi_error_code error;
+        bool c;
+        asm volatile(
+            "lea edi, %2;"
+            "int 0x31;"
+            : "=@ccc" (c)
+            , "=a" (error)
+            , "=m" (data)
+            : "a" (0x000b)
+            , "b" (sel)
+            : "edi", "memory");
+        if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+        return data;
     }
 
-    void descriptor::write()
+    void descriptor::write(const descriptor_data& data)
     {
         auto ldt_access = direct_ldt_access();
         if (ldt_access != no) [[likely]]
-        {
-            write_descriptor_direct(sel, *this, ldt_access == ring0);
-        }
-        else
-        {
-            dpmi_error_code error;
-            bool c;
-            asm volatile(
-                "push es;"
-                "push ds;"
-                "pop es;"
-                "int 0x31;"
-                "pop es;"
-                : "=@ccc" (c)
-                , "=a" (error)
-                : "a" (0x000c)
-                , "b" (sel)
-                , "D" (static_cast<descriptor_data*>(this)));
-            if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
-        }
+            write_descriptor_direct(sel, data, ldt_access == ring0);
+
+        dpmi_error_code error;
+        bool c;
+        asm volatile(
+            "int 0x31"
+            : "=@ccc" (c)
+            , "=a" (error)
+            : "a" (0x000c)
+            , "b" (sel)
+            , "D" (&data));
+        if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
     }
 
     std::uintptr_t descriptor::get_base(selector seg)
@@ -318,10 +299,9 @@ namespace jw::dpmi
 
     std::size_t descriptor::get_limit() const
     {
-        split_uint32_t v { };
-        v.hi = segment.limit_hi;
-        v.lo = segment.limit_lo;
-        if (segment.is_page_granular) return v << 12 | ((1 << 12) - 1);
+        auto data = read();
+        auto v { data.segment.limit() };
+        if (data.segment.is_page_granular) return v << 12 | ((1 << 12) - 1);
         return v;
     }
 
@@ -332,7 +312,7 @@ namespace jw::dpmi
 
         std::size_t limit;
         bool z;
-        asm("lsl %1, %2;"
+        asm("lsl %1, %2"
             : "=@ccz" (z)
             , "=r" (limit)
             : "rm" (static_cast<std::uint32_t>(sel))

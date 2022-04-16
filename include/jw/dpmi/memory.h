@@ -11,6 +11,7 @@
 #include <memory_resource>
 #include <sys/nearptr.h>
 #include <jw/dpmi/dpmi.h>
+#include <jw/dpmi/detail/selectors.h>
 #include "jwdpmi_config.h"
 
 namespace jw::dpmi
@@ -119,85 +120,112 @@ namespace jw::dpmi
         std::uint16_t access_rights { 0x0010 };
     };
 
-    struct [[gnu::packed]] descriptor_data
+    union alignas(4) descriptor_data
     {
-        union
+        struct [[gnu::packed]]
         {
-            struct [[gnu::packed]]
+            std::uint16_t limit_lo;
+            std::uint16_t base_lo;
+            std::uint8_t base_hi_lo;
+            union
             {
-                std::uint16_t limit_lo;
-                std::uint16_t base_lo;
-                std::uint8_t base_hi_lo;
-                union
+                struct [[gnu::packed]]
                 {
-                    struct [[gnu::packed]]
-                    {
-                        bool has_been_accessed : 1;
-                        bool is_writable : 1;
-                        bool expands_downward : 1;
-                        bool is_code_segment : 1;
-                        bool not_system_segment : 1;
-                        unsigned privilege_level : 2;
-                        bool is_present : 1;
-                    } data_segment;
-                    struct [[gnu::packed]]
-                    {
-                        bool has_been_accessed : 1;
-                        bool is_readable : 1;
-                        bool is_conforming : 1;
-                        bool is_code_segment : 1;
-                        bool not_system_segment : 1;
-                        unsigned privilege_level : 2;
-                        bool is_present : 1;
-                    } code_segment;
-                    struct [[gnu::packed]]
-                    {
-                        bool has_been_accessed : 1;
-                        unsigned : 2;
-                        bool is_code_segment : 1;
-                        bool not_system_segment : 1;
-                        unsigned privilege_level : 2;
-                        bool is_present : 1;
-                    } any_segment;
-                };
-                unsigned limit_hi : 4;
-                bool available_for_system_use : 1;      // should be 0
-                unsigned : 1;                           // must be 0
-                bool is_32_bit : 1;
-                bool is_page_granular : 1;          // byte granular otherwise. note: this is automatically set by dpmi function set_selector_limit.
-                std::uint8_t base_hi_hi;
-            } segment;
+                    bool has_been_accessed : 1;
+                    bool is_writable : 1;
+                    bool expands_downward : 1;
+                    bool is_code_segment : 1;
+                    bool not_system_segment : 1;
+                    unsigned privilege_level : 2;
+                    bool is_present : 1;
+                } data_segment;
+                struct [[gnu::packed]]
+                {
+                    bool has_been_accessed : 1;
+                    bool is_readable : 1;
+                    bool is_conforming : 1;
+                    bool is_code_segment : 1;
+                    bool not_system_segment : 1;
+                    unsigned privilege_level : 2;
+                    bool is_present : 1;
+                } code_segment;
+                struct [[gnu::packed]]
+                {
+                    bool has_been_accessed : 1;
+                    unsigned : 2;
+                    bool is_code_segment : 1;
+                    bool not_system_segment : 1;
+                    unsigned privilege_level : 2;
+                    bool is_present : 1;
+                } any_segment;
+            };
+            unsigned limit_hi : 4;
+            bool available_for_system_use : 1;      // should be 0
+            unsigned : 1;                           // must be 0
+            bool is_32_bit : 1;
+            bool is_page_granular : 1;          // byte granular otherwise. note: this is automatically set by dpmi function set_selector_limit.
+            std::uint8_t base_hi_hi;
 
-            struct [[gnu::packed]]
+            constexpr std::uintptr_t base() const noexcept
             {
-                std::uint16_t offset_lo;
-                selector cs;
-                unsigned stack_params : 5;
-                unsigned : 3;
-                system_segment_type type : 4;
-                unsigned not_system_segment : 1;
-                unsigned privilege_level : 2;
-                unsigned is_present : 1;
-                std::uint16_t offset_hi;
-            } call_gate;
-        };
+                return split_uint32_t { base_lo, split_uint16_t { base_hi_lo, base_hi_hi } };
+            }
+
+            constexpr void base(std::uintptr_t b) noexcept
+            {
+                split_uint32_t base { b };
+                base_lo = base.lo;
+                base_hi_lo = base.hi.lo;
+                base_hi_hi = base.hi.hi;
+            }
+
+            // Note: not adjusted for granularity!
+            constexpr std::size_t limit() const noexcept
+            {
+                return split_uint32_t { limit_lo, limit_hi };
+            }
+
+            // Note: not adjusted for granularity!
+            constexpr void limit(std::size_t l) noexcept
+            {
+                split_uint32_t lim { l };
+                limit_lo = lim.lo;
+                limit_hi = lim.hi;
+            }
+        } segment;
+
+        struct [[gnu::packed]]
+        {
+            std::uint16_t offset_lo;
+            selector cs;
+            unsigned stack_params : 5;
+            unsigned : 3;
+            system_segment_type type : 4;
+            unsigned not_system_segment : 1;
+            unsigned privilege_level : 2;
+            unsigned is_present : 1;
+            std::uint16_t offset_hi;
+        } call_gate;
     };
     static_assert(sizeof(descriptor_data) == 8);
 
-    struct [[gnu::packed]] alignas(8) descriptor : descriptor_data
+    // Represents a descriptor in the LDT or GDT.
+    // The static functions (create_segment, etc) allocate a new descriptor
+    // which is freed upon destruction.  When created via the constructor that
+    // takes a selector, this class does not take ownership of the descriptor.
+    struct descriptor
     {
         // Does not allocate a new descriptor
-        descriptor(selector s) : sel(s) { read(); }
+        constexpr descriptor(selector s) noexcept : sel(s) { }
         ~descriptor();
 
         descriptor(const descriptor&) = delete;
-        descriptor(const descriptor_data&) = delete;
-        descriptor(descriptor_data&&) = delete;
         descriptor& operator=(const descriptor&) = delete;
 
-        descriptor(descriptor&& d) noexcept;
-        descriptor& operator=(descriptor&& d);
-        descriptor& operator=(const descriptor_data& d);
+        descriptor(descriptor&&) noexcept;
+        descriptor& operator=(descriptor&&);
+
+        descriptor& operator=(const descriptor_data& d) { write(d); return *this; }
 
         static descriptor create_segment(std::uintptr_t linear_base, std::size_t limit);
         static descriptor create_code_segment(std::uintptr_t linear_base, std::size_t limit);
@@ -205,33 +233,32 @@ namespace jw::dpmi
         static descriptor create_call_gate(selector code_seg, std::uintptr_t entry_point);
 
         auto get_selector() const noexcept { return sel; }
-        void set_base(std::uintptr_t b) { set_base(sel, b); read(); }
+        void set_base(std::uintptr_t b) { set_base(sel, b); }
         auto get_base() const { return get_base(sel); }
-        void set_limit(std::size_t l) { set_limit(sel, l); read(); }
+        void set_limit(std::size_t l) { set_limit(sel, l); }
         std::size_t get_limit() const;
         ldt_access_rights get_access_rights();
-        void set_access_rights(const ldt_access_rights& r) { r.set(sel); read(); }
+        void set_access_rights(const ldt_access_rights& r) { r.set(sel); }
         void set_selector_privilege(unsigned priv) { sel.privilege_level = priv; }
 
-        void read() const;
-        void write();
+        [[nodiscard]] descriptor_data read() const;
+        void write(const descriptor_data&);
 
         static std::uintptr_t get_base(selector seg);
         static void set_base(selector seg, std::uintptr_t linear_base);
         static std::size_t get_limit(selector sel);
         static void set_limit(selector sel, std::size_t limit);
 
+        enum direct_ldt_access_t { unknown, yes, no, ring0 };
+        static direct_ldt_access_t direct_ldt_access() noexcept;
+
     private:
-        descriptor() { }
+        constexpr descriptor() noexcept = default;
         void allocate();
         void deallocate();
 
         selector_bits sel;
         bool no_alloc { true };
-        enum direct_ldt_access_t { unknown, yes, no, ring0 };
-
-    public:
-        static direct_ldt_access_t direct_ldt_access() noexcept;
     };
 
     inline constexpr std::uintptr_t conventional_to_physical(std::uint16_t segment, std::uint16_t offset) noexcept
@@ -334,7 +361,12 @@ namespace jw::dpmi
             : addr(address), bytes(num_bytes) { }
 
         linear_memory(std::shared_ptr<descriptor> l) noexcept
-            : ldt(l), addr(ldt->get_base()), bytes((ldt->get_limit() + 1) * (ldt->segment.is_page_granular ? page_size : 0)) { }
+            : ldt { l }
+        {
+            auto data = ldt->read();
+            addr = data.segment.base();
+            bytes = data.segment.limit() * (data.segment.is_page_granular ? page_size : 0);
+        }
 
         linear_memory(const linear_memory&) noexcept = default;
         linear_memory& operator=(const linear_memory&) noexcept = default;

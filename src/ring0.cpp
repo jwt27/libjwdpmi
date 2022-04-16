@@ -18,19 +18,22 @@ namespace jw::dpmi
         try
         {
             cs = descriptor::clone_segment(detail::main_cs);
-            cs->segment.code_segment.privilege_level = 0;
+            auto data = cs->read();
+            data.segment.code_segment.privilege_level = 0;
             cs->set_selector_privilege(0);
             detail::ring0_cs = cs->get_selector();
-            cs->write();
+            cs->write(data);
             ss = descriptor::clone_segment(detail::safe_ds);
-            ss->segment.code_segment.privilege_level = 0;
+            data = ss->read();
+            data.segment.code_segment.privilege_level = 0;
             ss->set_selector_privilege(0);
             detail::ring0_ss = ss->get_selector();
-            ss->write();
+            ss->write(data);
             gate = descriptor::create_call_gate(detail::ring0_cs, reinterpret_cast<std::uintptr_t>(ring0_entry_point));
-            gate->call_gate.privilege_level = 3;
-            gate->call_gate.stack_params = 0;
-            gate->write();
+            data = gate->read();
+            data.call_gate.privilege_level = 3;
+            data.call_gate.stack_params = 0;
+            gate->write(data);
             entry.segment = gate->get_selector();
             ring0_accessible = yes;
         }
