@@ -75,7 +75,7 @@ namespace jw::dpmi
 
     inline std::size_t round_up_to_page_size(std::size_t num_bytes)
     {
-        return round_down_to_page_size(num_bytes) + ((num_bytes & (page_size - 1)) == 0 ? 0 : page_size);
+        return round_down_to_page_size(num_bytes + page_size - 1);
     }
 
     enum segment_type
@@ -283,7 +283,7 @@ namespace jw::dpmi
 
     inline constexpr std::size_t round_up_to_paragraph_size(std::size_t num_bytes) noexcept
     {
-        return round_down_to_paragraph_size(num_bytes) + ((num_bytes & 0x0f) == 0 ? 0 : 0x10);
+        return round_down_to_paragraph_size(num_bytes + 0x0f);
     }
 
     inline constexpr std::size_t bytes_to_paragraphs(std::size_t num_bytes) noexcept
@@ -340,6 +340,46 @@ namespace jw::dpmi
         return near_to_linear(reinterpret_cast<std::uintptr_t>(address), sel);
     }
 
+    struct bad_dos_alloc final : std::bad_alloc
+    {
+        bad_dos_alloc(std::size_t max) noexcept : bad_alloc { }, max_size { max } { }
+
+        // Largest available block size in bytes.
+        std::size_t max_size;
+
+        virtual const char* what() const noexcept override { return "Insufficient conventional memory"; }
+
+        virtual ~bad_dos_alloc() noexcept = default;
+        constexpr bad_dos_alloc(bad_dos_alloc&&) noexcept = default;
+        constexpr bad_dos_alloc(const bad_dos_alloc&) noexcept = default;
+        constexpr bad_dos_alloc& operator=(bad_dos_alloc&&) noexcept = default;
+        constexpr bad_dos_alloc& operator=(const bad_dos_alloc&) noexcept = default;
+    };
+
+    struct dos_alloc_result
+    {
+        // Conventional memory pointer.  This is always aligned to a 16-byte
+        // boundary, so pointer.offset always equals 0.
+        far_ptr16 pointer;
+
+        // Selector used to access allocated memory.  Doubles as a handle for
+        // free/resize operations.
+        selector handle;
+    };
+
+    // Allocate conventional memory.  Size is given in bytes, but is rounded
+    // up to paragraphs (16 bytes).
+    [[nodiscard]] dos_alloc_result dos_allocate(std::size_t);
+
+    // Resize conventional memory block in-place.
+    void dos_resize(selector, std::size_t);
+    inline void dos_resize(const dos_alloc_result& r, std::size_t n) { return dos_resize(r.handle, n); }
+
+    // Free conventional memory.
+    void dos_free(selector);
+    inline void dos_free(const dos_alloc_result& r) { return dos_free(r.handle); };
+
+    // Describes an existing linear memory region.  Does not own any memory.
     struct linear_memory
     {
         std::uintptr_t address() const noexcept { return addr; }
@@ -694,7 +734,7 @@ namespace jw::dpmi
         mapped_dos_memory_base& operator=(base&&) = delete;
 
         mapped_dos_memory_base(mapped_dos_memory_base&& m)
-            : base(static_cast<base&&>(m)), offset(m.offset), dos_handle(m.dos_handle), dos_addr(m.dos_addr) { m.dos_handle = null_dos_handle;  }
+            : base(static_cast<base&&>(m)), offset(m.offset), dos_handle(m.dos_handle), dos_addr(m.dos_addr) { m.dos_handle = 0; }
         mapped_dos_memory_base& operator=(mapped_dos_memory_base&& m)
         {
             base::operator=(static_cast<base&&>(m));
@@ -716,14 +756,14 @@ namespace jw::dpmi
 
         virtual std::weak_ptr<descriptor> get_descriptor() override
         {
-            if (dos_handle == null_dos_handle) alloc_selector();
+            if (dos_handle == 0) alloc_selector();
             if (!ldt) ldt = std::make_shared<descriptor>(dos_handle);
             return ldt;
         }
 
         virtual selector get_selector() override
         {
-            if (dos_handle == null_dos_handle) alloc_selector();
+            if (dos_handle == 0) alloc_selector();
             return dos_handle;
         }
 
@@ -732,8 +772,7 @@ namespace jw::dpmi
 
         static bool dos_map_supported;
         std::ptrdiff_t offset { 0 };
-        static constexpr selector null_dos_handle { std::numeric_limits<selector>::max() };
-        selector dos_handle { null_dos_handle }; // this is actually a PM selector.
+        selector dos_handle { 0 }; // this is actually a PM selector.
         far_ptr16 dos_addr;
 
         void allocate(std::uintptr_t dos_physical_address)
@@ -796,7 +835,7 @@ namespace jw::dpmi
             }
         }
 
-        virtual operator bool() const noexcept override { return dos_handle != null_dos_handle; };
+        virtual operator bool() const noexcept override { return dos_handle != 0; };
 
     protected:
         void allocate(std::size_t num_bytes)
@@ -816,7 +855,7 @@ namespace jw::dpmi
         virtual void deallocate() override
         {
             base::deallocate();
-            if (dos_handle == null_dos_handle) return;
+            if (dos_handle == 0) return;
             dos_dealloc();
         }
 

@@ -371,6 +371,69 @@ namespace jw::dpmi
         no_alloc = true;
     }
 
+    dos_alloc_result dos_allocate(std::size_t num_bytes)
+    {
+        throw_if_irq();
+        if (num_bytes > 0xffff0) throw std::invalid_argument { "Allocation exceeds 1MB" };
+        std::uint16_t ax = 0x0100;
+        std::uint16_t bx = bytes_to_paragraphs(num_bytes);
+        std::uint16_t dx;
+        bool c;
+        asm
+        (
+            "int 0x31"
+            : "=@ccc" (c), "+a" (ax), "+b" (bx), "=d" (dx)
+            :
+            :
+        );
+        if (c) [[unlikely]]
+        {
+            if (ax == dpmi_error_code::insufficient_memory)
+                throw bad_dos_alloc { static_cast<std::size_t>(bx) << 4 };
+            else
+                throw dpmi_error { ax, __PRETTY_FUNCTION__ };
+        }
+        return  { { ax, 0 }, dx };
+    }
+
+    void dos_resize(selector s, std::size_t num_bytes)
+    {
+        throw_if_irq();
+        if (num_bytes > 0xffff0) throw std::invalid_argument { "Allocation exceeds 1MB" };
+        std::uint16_t ax = 0x0102;
+        std::uint16_t bx = bytes_to_paragraphs(num_bytes);
+        bool c;
+        asm
+        (
+            "int 0x31"
+            : "=@ccc" (c), "+a" (ax), "+b" (bx)
+            : "d" (s)
+            :
+        );
+        if (c) [[unlikely]]
+        {
+            if (ax == dpmi_error_code::insufficient_memory)
+                throw bad_dos_alloc { static_cast<std::size_t>(bx) << 4 };
+            else
+                throw dpmi_error { ax, __PRETTY_FUNCTION__ };
+        }
+    }
+
+    void dos_free(selector s)
+    {
+        throw_if_irq();
+        std::uint16_t ax = 0x0101;
+        bool c;
+        asm volatile
+        (
+            "int 0x31"
+            : "=@ccc" (c), "+a" (ax)
+            : "d" (s)
+            :
+        );
+        if (c) throw dpmi_error { ax, __PRETTY_FUNCTION__ };
+    }
+
     void memory_base::old_alloc()
     {
         throw_if_irq();
@@ -567,55 +630,22 @@ namespace jw::dpmi
         dos_handle = sel;
     }
 
-    void dos_memory_base::dos_alloc(std::size_t num_bytes)
+    void dos_memory_base::dos_alloc(std::size_t n)
     {
-        throw_if_irq();
-        std::uint16_t new_handle;
-        far_ptr16 new_addr { };
-        bool c;
-        asm volatile(
-            "int 0x31"
-            : "=@ccc" (c)
-            , "=a" (new_addr.segment)
-            , "=d" (new_handle)
-            : "a" (0x0100)
-            , "b" (bytes_to_paragraphs(num_bytes))
-            : "memory");
-        if (c) throw dpmi_error(new_addr.segment, __PRETTY_FUNCTION__);
-        dos_handle = new_handle;
-        dos_addr = new_addr;
+        auto result = dpmi::dos_allocate(n);
+        dos_handle = result.handle;
+        dos_addr = result.pointer;
     }
 
     void dos_memory_base::dos_dealloc()
     {
-        throw_if_irq();
-        dpmi_error_code error;
-        bool c;
-        asm volatile(
-            "int 0x31"
-            : "=@ccc" (c)
-            , "=a" (error)
-            : "a" (0x0101)
-            , "d" (dos_handle)
-            : "memory");
-        if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
-        dos_handle = null_dos_handle;
+        dpmi::dos_free(dos_handle);
+        dos_handle = 0;
     }
 
-    void dos_memory_base::dos_resize(std::size_t num_bytes)
+    void dos_memory_base::dos_resize(std::size_t n)
     {
-        throw_if_irq();
-        dpmi_error_code error;
-        bool c;
-        asm volatile(
-            "int 0x31"
-            : "=@ccc" (c)
-            , "=a" (error)
-            : "a" (0x0102)
-            , "b" (bytes_to_paragraphs(num_bytes))
-            , "d" (dos_handle)
-            : "memory");
-        if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
-        bytes = num_bytes;
+        dpmi::dos_resize(dos_handle, n);
+        bytes = n;
     }
 }
