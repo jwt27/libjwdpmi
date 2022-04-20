@@ -132,11 +132,11 @@ namespace jw::dpmi
     {
         std::uint32_t r;
         bool z;
-        asm("lar %k1, %2;"
+        asm("lar %k1, %2"
             : "=@ccz" (z)
             , "=r" (r)
             : "rm" (static_cast<std::uint32_t>(sel)));
-        if (!z) throw dpmi_error(invalid_segment, __PRETTY_FUNCTION__);
+        if (not z) throw dpmi_error { invalid_selector, __PRETTY_FUNCTION__ };
         access_rights = r >> 8;
     }
 
@@ -317,7 +317,7 @@ namespace jw::dpmi
             , "=r" (limit)
             : "rm" (static_cast<std::uint32_t>(sel))
             : "cc");
-        if (!z) throw dpmi_error(invalid_segment, __PRETTY_FUNCTION__);
+        if (not z) throw dpmi_error { invalid_selector, __PRETTY_FUNCTION__ };
         return limit;
     }
 
