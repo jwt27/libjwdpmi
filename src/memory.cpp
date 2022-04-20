@@ -434,6 +434,24 @@ namespace jw::dpmi
         if (c) throw dpmi_error { ax, __PRETTY_FUNCTION__ };
     }
 
+    static bool is_valid_address(std::uintptr_t base, std::size_t limit)
+    {
+        // Discard blocks below base address.
+        if (base <= static_cast<std::uintptr_t>(__djgpp_base_address)) return false;
+
+        // Bump selector limit.
+        const std::size_t new_limit = round_up_to_page_size(base + limit) - 1;
+        if (static_cast<std::size_t>(__djgpp_selector_limit) < new_limit)
+        {
+            __djgpp_selector_limit = new_limit;
+            descriptor::set_limit(detail::safe_ds, new_limit);
+            descriptor::set_limit(detail::main_cs, new_limit);
+            if (descriptor::get_limit(detail::main_ds) != 0xfff)
+                descriptor::set_limit(detail::main_ds, new_limit);
+        }
+        return true;
+    }
+
     void memory_base::old_alloc()
     {
         throw_if_irq();
@@ -457,7 +475,7 @@ namespace jw::dpmi
                 , "c" (new_size.lo)
                 : "memory");
             if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
-        } while (!is_valid_address(new_addr));
+        } while (not is_valid_address(new_addr, size()));
         handle = new_handle;
         addr = new_addr;
     }
@@ -484,7 +502,7 @@ namespace jw::dpmi
                 , "d" (static_cast<std::uint32_t>(committed))
                 : "memory");
             if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
-        } while (!is_valid_address(new_addr));
+        } while (not is_valid_address(new_addr, size()));
         handle = new_handle;
         addr = new_addr;
     }
@@ -512,7 +530,7 @@ namespace jw::dpmi
                 , "c" (new_size.lo)
                 : "memory");
             if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
-        } while (!is_valid_address(new_addr));
+        } while (not is_valid_address(new_addr, num_bytes));
         handle = new_handle;
         addr = new_addr;
         bytes = new_size;
@@ -538,7 +556,7 @@ namespace jw::dpmi
                 , "d" (static_cast<std::uint32_t>(committed))
                 : "memory");
             if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
-        } while (!is_valid_address(new_addr));
+        } while (not is_valid_address(new_addr, num_bytes));
         handle = new_handle;
         addr = new_addr;
         bytes = num_bytes;

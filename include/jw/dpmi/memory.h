@@ -612,15 +612,6 @@ namespace jw::dpmi
             handle = null_handle;
         }
 
-        bool is_valid_address(std::uintptr_t address)
-        {
-            if (address <= descriptor::get_base(get_ds())) return false;
-            //if (get_selector_limit() < linear_to_near(address + size)) set_selector_limit(get_ds(), address + size);
-            while (descriptor::get_limit(get_ds()) < static_cast<std::uintptr_t>(linear_to_near(address + size())))
-                descriptor::set_limit(get_ds(), descriptor::get_limit(get_ds()) * 2);
-            return true;
-        }
-
         static bool new_alloc_supported;
         static constexpr std::uint32_t null_handle { std::numeric_limits<std::uint32_t>::max() };
         std::uint32_t handle { null_handle };
