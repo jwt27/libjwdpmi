@@ -61,7 +61,7 @@ namespace jw
             friend auto& operator<<(std::ostream& out, const realmode_registers& in) { return in.print(out); }
 
             // Call a real-mode interrupt
-            void call_int(int_vector interrupt) { call<0x0300>(interrupt); }
+            void call_int(std::uint8_t interrupt) { call<0x0300>(interrupt); }
 
             // Call a real-mode procedure which returns with RETF
             // Function address given by CS:IP fields
@@ -79,28 +79,23 @@ namespace jw
 
         private:
             template <std::uint16_t dpmi_function>
-            void call(int_vector interrupt)
+            void call(std::uint8_t interrupt)
             {
-                force_frame_pointer();
-                dpmi_error_code error;
+                std::uint16_t ax { dpmi_function };
                 bool c;
 
                 asm volatile
                 (R"(
-                    push es
-                    mov es, %w2
+                    lea edi, %2
                     int 0x31
-                    pop es
                  )" : "=@ccc" (c)
-                    , "=a" (error)
-                    : "rm" (get_ds())
-                    , "a" (dpmi_function)
-                    , "b" (interrupt)
-                    , "D" (this)
+                    , "+a" (ax)
+                    , "=m" (*this)
+                    : "b" (interrupt)
                     , "c" (0)
-                    : "memory"
+                    : "edi", "cc"
                 );
-                if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+                if (c) throw dpmi_error { ax, __PRETTY_FUNCTION__ };
             }
         };
 

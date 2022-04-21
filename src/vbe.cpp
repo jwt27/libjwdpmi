@@ -459,17 +459,17 @@ namespace jw
             force_frame_pointer();
             asm volatile(
                 "push es;"
-                "mov es, %w2;"
+                "mov es, %k2;"
                 "call %1;"
                 "pop es;"
                 : "=a" (ax)
                 : "rm" (vbe2_call_set_display_start)
-                , "rm" (mmio)
+                , "r" (mmio)
                 , "a" (0x4f07)
                 , "b" (wait_for_vsync ? 0x80 : 0)
                 , "c" (split_start.lo)
                 , "d" (split_start.hi)
-                : "edi", "esi", "cc");
+                : "cc");
         }
 
         void vbe3::set_display_start(vector2i pos, bool wait_for_vsync)
@@ -625,21 +625,17 @@ namespace jw
                 force_frame_pointer();
                 asm volatile(
                     "push ds;"
-                    "push es;"
-                    "push ds;"
-                    "pop es;"
-                    "mov ds, es:%w1;"
-                    "call es:%0;"
-                    "pop es;"
+                    "mov ds, %k1;"
+                    "call cs:%0;"
                     "pop ds;"
                     :: "m" (vbe2_call_set_palette)
-                    , "m" (mmio)
+                    , "r" (mmio)
                     , "a" (0x4f09)
                     , "b" (wait_for_vsync ? 0x80 : 0)
                     , "c" (size)
                     , "d" (first)
                     , "D" (ptr)
-                    : "esi", "cc");
+                    : "cc");
             }
             else
             {
