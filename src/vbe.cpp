@@ -270,7 +270,7 @@ namespace jw
                 video_bios->write(segdata);
                 pmid->data_selector = video_bios->get_selector();
 
-                video_bios_code.emplace(dpmi::descriptor::clone_segment(video_bios->get_selector()));
+                video_bios_code.emplace(dpmi::descriptor::create());
                 segdata.segment.code_segment.is_code_segment = true;
                 video_bios->write(segdata);
 

@@ -181,6 +181,7 @@ namespace jw::dpmi
 
         descriptor& operator=(const descriptor_data& d) { write(d); return *this; }
 
+        static descriptor create();
         static descriptor create_segment(std::uintptr_t linear_base, std::size_t limit);
         static descriptor create_code_segment(std::uintptr_t linear_base, std::size_t limit);
         static descriptor clone_segment(selector s);

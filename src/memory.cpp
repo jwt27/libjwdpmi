@@ -141,6 +141,13 @@ namespace jw::dpmi
         return *this;
     }
 
+    descriptor descriptor::create()
+    {
+        descriptor d;
+        d.allocate();
+        return d;
+    }
+
     descriptor descriptor::create_segment(std::uintptr_t linear_base, std::size_t limit)
     {
         descriptor ldt = clone_segment(detail::main_ds);
