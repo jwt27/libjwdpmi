@@ -725,6 +725,8 @@ namespace jw::dpmi
             base::allocate(conventional_to_physical(dos_addr));
         }
 
+        selector get_selector() const noexcept { return dos_handle; }
+
         virtual operator bool() const noexcept override { return dos_handle != 0; };
 
     protected:
