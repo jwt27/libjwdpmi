@@ -32,6 +32,14 @@ namespace jw
             return data;
         }
 
+        static auto& get_realmode_registers()
+        {
+            static dpmi::realmode_registers reg { };
+            reg.ss = reg.sp = 0;
+            reg.flags.interrupt = true;
+            return reg;
+        }
+
         static std::vector<byte> vbe2_pm_interface { };
         static std::optional<dpmi::device_memory<byte>> vbe2_mmio_memory;
         static std::optional<dpmi::descriptor> vbe2_mmio;
@@ -118,7 +126,7 @@ namespace jw
             auto get_mode = [&](std::uint16_t num)
             {
                 dos_data->mode = { };
-                dpmi::realmode_registers reg { };
+                auto& reg = get_realmode_registers();
                 reg.ax = 0x4f01;
                 reg.cx = num;
                 reg.es = dos_data.dos_pointer().segment;
@@ -152,7 +160,7 @@ namespace jw
             auto& dos_data = get_dos_data();
             auto* ptr = &dos_data->raw_vbe;
 
-            dpmi::realmode_registers reg { };
+            auto& reg = get_realmode_registers();
             reg.ax = 0x4f00;
             reg.es = dos_data.dos_pointer().segment;
             reg.di = dos_data.dos_pointer().offset;
@@ -178,7 +186,7 @@ namespace jw
             auto* ptr = &dos_data->raw_vbe;
             std::copy_n("VBE2", 4, ptr->vbe_signature);
 
-            dpmi::realmode_registers reg { };
+            auto& reg = get_realmode_registers();
             reg.ax = 0x4f00;
             reg.es = dos_data.dos_pointer().segment;
             reg.di = dos_data.dos_pointer().offset;
@@ -319,7 +327,7 @@ namespace jw
 
         void vbe::set_mode(vbe_mode m, const crtc_info*)
         {
-            dpmi::realmode_registers reg { };
+            auto& reg = get_realmode_registers();
             reg.ax = 0x4f02;
             reg.bx = m.raw_value;
             reg.call_int(0x10);
@@ -332,7 +340,7 @@ namespace jw
         void vbe3::set_mode(vbe_mode m, const crtc_info* crtc)
         {
             if (crtc == nullptr) m.use_custom_crtc_timings = false;
-            dpmi::realmode_registers reg { };
+            auto& reg = get_realmode_registers();
             reg.ax = 0x4f02;
             reg.bx = m.raw_value;
             if (m.use_custom_crtc_timings)
@@ -352,7 +360,7 @@ namespace jw
 
         std::tuple<std::size_t, std::size_t, std::size_t> vbe::set_scanline_length(std::size_t width, bool width_in_pixels)
         {
-            dpmi::realmode_registers reg { };
+            auto& reg = get_realmode_registers();
             reg.ax = 0x4f06;
             reg.bl = width_in_pixels ? 0 : 2;
             reg.cx = width;
@@ -385,7 +393,7 @@ namespace jw
 
         std::tuple<std::size_t, std::size_t, std::size_t> vbe::get_scanline_length()
         {
-            dpmi::realmode_registers reg { };
+            auto& reg = get_realmode_registers();
             reg.ax = 0x4f06;
             reg.bl = 1;
             reg.call_int(0x10);
@@ -398,7 +406,7 @@ namespace jw
 
         std::tuple<std::size_t, std::size_t, std::size_t> vbe::get_max_scanline_length()
         {
-            dpmi::realmode_registers reg { };
+            auto& reg = get_realmode_registers();
             reg.ax = 0x4f06;
             reg.bl = 3;
             reg.call_int(0x10);
@@ -428,7 +436,7 @@ namespace jw
 
         void vbe::set_display_start(vector2i pos, bool wait_for_vsync)
         {
-            dpmi::realmode_registers reg { };
+            auto& reg = get_realmode_registers();
             reg.ax = 0x4f07;
             reg.bx = wait_for_vsync ? 0x80 : 0;
             reg.cx = pos.x();
@@ -482,7 +490,7 @@ namespace jw
 
         vector2i vbe::get_display_start()
         {
-            dpmi::realmode_registers reg { };
+            auto& reg = get_realmode_registers();
             reg.ax = 0x4f07;
             reg.bx = 1;
             reg.call_int(0x10);
@@ -518,7 +526,7 @@ namespace jw
             }
             else
             {
-                dpmi::realmode_registers reg { };
+                auto& reg = get_realmode_registers();
                 reg.ax = 0x4f07;
                 reg.bx = 2;
                 reg.ecx = start;
@@ -550,7 +558,7 @@ namespace jw
             }
             else
             {
-                dpmi::realmode_registers reg { };
+                auto& reg = get_realmode_registers();
                 reg.ax = 0x4f07;
                 reg.bx = 4;
                 reg.call_int(0x10);
@@ -561,7 +569,7 @@ namespace jw
 
         std::uint8_t vbe::set_palette_format(std::uint8_t bits_per_channel)
         {
-            dpmi::realmode_registers reg { };
+            auto& reg = get_realmode_registers();
             reg.ax = 0x4f08;
             reg.bh = bits_per_channel;
             reg.call_int(0x10);
@@ -590,7 +598,7 @@ namespace jw
 
         std::uint8_t vbe::get_palette_format()
         {
-            dpmi::realmode_registers reg { };
+            auto& reg = get_realmode_registers();
             reg.ax = 0x4f08;
             reg.bx = 1;
             reg.call_int(0x10);
@@ -647,7 +655,7 @@ namespace jw
                         new(dos_data->palette.data() + i) px32n { std::move(begin[i]) };
                 }
 
-                dpmi::realmode_registers reg { };
+                auto& reg = get_realmode_registers();
                 reg.ax = 0x4f09;
                 reg.bx = wait_for_vsync ? 0x80 : 0;
                 reg.cx = size;
@@ -688,7 +696,7 @@ namespace jw
         {
             auto& dos_data = get_dos_data();
 
-            dpmi::realmode_registers reg { };
+            auto& reg = get_realmode_registers();
             reg.ax = 0x4f09;
             reg.bx = 1;
             reg.cx = 256;
@@ -727,7 +735,7 @@ namespace jw
             }
             else
             {
-                dpmi::realmode_registers reg { };
+                auto& reg = get_realmode_registers();
                 reg.ax = 0x4f0b;
                 reg.bl = 0;
                 reg.ecx = desired_clock;
