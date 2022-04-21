@@ -355,9 +355,6 @@ namespace jw::dpmi
         template <typename T>
         T* near_pointer() const { return linear_to_near<T>(addr); }
 
-        template <typename T>
-        T* near_pointer(selector sel) const { return linear_to_near<T>(addr, sel); }
-
         template<typename T>
         static linear_memory from_pointer(const T* ptr, std::size_t n) { return linear_memory { dpmi::near_to_linear(ptr), n * sizeof(T) }; }
         static linear_memory from_pointer(const void* ptr, std::size_t n) { return linear_memory { dpmi::near_to_linear(ptr), n }; }
@@ -806,8 +803,8 @@ namespace jw::dpmi
         void dos_resize(std::size_t num_bytes);
     };
 
-    template <typename T, typename base = memory_base>
-    struct memory_t : public base
+    template <typename T, typename base>
+    struct memory_t final : public base
     {
         // Constructor arguments for each memory class:
         // memory(std::size_t num_elements, bool committed = true)
@@ -817,12 +814,12 @@ namespace jw::dpmi
         template<typename... Args>
         memory_t(std::size_t num_elements, Args&&... args) : base(num_elements * sizeof(T), std::forward<Args>(args)...) { }
 
-        auto* near_pointer(selector sel = get_ds()) { return base::template near_pointer<T>(sel); }
+        auto* near_pointer() { return base::template near_pointer<T>(); }
         auto* operator->() noexcept { return near_pointer(); }
         auto& operator*() noexcept { return *near_pointer(); }
         auto& operator[](std::ptrdiff_t i) noexcept { return *(near_pointer() + i); }
 
-        const auto* near_pointer(selector sel = get_ds()) const { return base::template near_pointer<T>(sel); }
+        const auto* near_pointer() const { return base::template near_pointer<T>(); }
         const auto* operator->() const noexcept { return near_pointer(); }
         const auto& operator*() const noexcept { return *near_pointer(); }
         const auto& operator[](std::ptrdiff_t i) const noexcept { return *(near_pointer() + i); }
@@ -832,8 +829,8 @@ namespace jw::dpmi
         virtual std::size_t size() const noexcept override { return base::size() / sizeof(T); }
     };
 
-    template <typename T = byte> using memory = memory_t<T, memory_base>;
-    template <typename T = byte> using device_memory = memory_t<T, device_memory_base>;
-    template <typename T = byte> using mapped_dos_memory = memory_t<T, mapped_dos_memory_base>;
-    template <typename T = byte> using dos_memory = memory_t<T, dos_memory_base>;
+    template <typename T = std::byte> using memory = memory_t<T, memory_base>;
+    template <typename T = std::byte> using device_memory = memory_t<T, device_memory_base>;
+    template <typename T = std::byte> using mapped_dos_memory = memory_t<T, mapped_dos_memory_base>;
+    template <typename T = std::byte> using dos_memory = memory_t<T, dos_memory_base>;
 }
