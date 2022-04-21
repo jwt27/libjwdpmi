@@ -232,9 +232,9 @@ namespace jw::dpmi
         static descriptor clone_segment(selector s);
         static descriptor create_call_gate(selector code_seg, std::uintptr_t entry_point);
 
-        auto get_selector() const noexcept { return sel; }
+        selector get_selector() const noexcept { return sel; }
         void set_base(std::uintptr_t b) { set_base(sel, b); }
-        auto get_base() const { return get_base(sel); }
+        std::uintptr_t get_base() const { return get_base(sel); }
         void set_limit(std::size_t l) { set_limit(sel, l); }
         std::size_t get_limit() const;
         ldt_access_rights get_access_rights();
@@ -405,10 +405,9 @@ namespace jw::dpmi
         linear_memory(std::uintptr_t address, std::size_t num_bytes) noexcept
             : addr(address), bytes(num_bytes) { }
 
-        linear_memory(std::shared_ptr<descriptor> l) noexcept
-            : ldt { l }
+        linear_memory(const descriptor& d) noexcept
         {
-            auto data = ldt->read();
+            auto data = d.read();
             addr = data.segment.base();
             bytes = data.segment.limit() * (data.segment.is_page_granular ? page_size : 0);
         }
@@ -456,21 +455,14 @@ namespace jw::dpmi
             if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
         }
 
-        virtual std::weak_ptr<descriptor> get_descriptor()
+        [[nodiscard]] descriptor create_segment()
         {
-            if (not ldt) ldt = std::make_shared<descriptor>(descriptor::create_segment(addr, bytes));
-            return ldt;
-        }
-
-        virtual selector get_selector()
-        {
-            return get_descriptor().lock()->get_selector();
+            return descriptor::create_segment(addr, bytes);
         }
 
         virtual bool requires_new_selector() const noexcept { return descriptor::get_base(get_ds()) < addr; }
 
     protected:
-        std::shared_ptr<descriptor> ldt;
         std::uintptr_t addr;
         std::size_t bytes;
     };
@@ -730,11 +722,10 @@ namespace jw::dpmi
         mapped_dos_memory_base& operator=(base&&) = delete;
 
         mapped_dos_memory_base(mapped_dos_memory_base&& m)
-            : base(static_cast<base&&>(m)), offset(m.offset), dos_handle(m.dos_handle), dos_addr(m.dos_addr) { m.dos_handle = 0; }
+            : base(static_cast<base&&>(m)), offset(m.offset), dos_addr(m.dos_addr) { }
         mapped_dos_memory_base& operator=(mapped_dos_memory_base&& m)
         {
             base::operator=(static_cast<base&&>(m));
-            std::swap(dos_handle, m.dos_handle);
             std::swap(dos_addr, m.dos_addr);
             std::swap(offset, m.offset);
             return *this;
@@ -750,25 +741,11 @@ namespace jw::dpmi
             else return addr != null_handle;
         };
 
-        virtual std::weak_ptr<descriptor> get_descriptor() override
-        {
-            if (dos_handle == 0) alloc_selector();
-            if (!ldt) ldt = std::make_shared<descriptor>(dos_handle);
-            return ldt;
-        }
-
-        virtual selector get_selector() override
-        {
-            if (dos_handle == 0) alloc_selector();
-            return dos_handle;
-        }
-
     protected:
         mapped_dos_memory_base(no_alloc_tag, std::size_t num_bytes) : base(no_alloc_tag { }, round_up_to_page_size(num_bytes) + page_size) { }
 
         static bool dos_map_supported;
         std::ptrdiff_t offset { 0 };
-        selector dos_handle { 0 }; // this is actually a PM selector.
         far_ptr16 dos_addr;
 
         void allocate(std::uintptr_t dos_physical_address)
@@ -797,7 +774,6 @@ namespace jw::dpmi
 
     private:
         void new_alloc(std::uintptr_t dos_physical_address);
-        void alloc_selector();
     };
 
     struct dos_memory_base : public mapped_dos_memory_base
@@ -814,8 +790,13 @@ namespace jw::dpmi
         dos_memory_base(base&&) = delete;
         dos_memory_base& operator=(base&&) = delete;
 
-        dos_memory_base(dos_memory_base&& m) : base(static_cast<base&&>(m)) { }
-        dos_memory_base& operator=(dos_memory_base&& m) { base::operator=(static_cast<base&&>(m)); return *this; }
+        dos_memory_base(dos_memory_base&& m) : base(static_cast<base&&>(m)), dos_handle(m.dos_handle) { m.dos_handle = 0; }
+        dos_memory_base& operator=(dos_memory_base&& m)
+        {
+            base::operator=(static_cast<base&&>(m));
+            std::swap(dos_handle, m.dos_handle);
+            return *this;
+        }
 
         virtual void resize(std::size_t num_bytes, bool = true) override
         {
@@ -856,6 +837,8 @@ namespace jw::dpmi
         }
 
     private:
+        selector dos_handle { 0 };
+
         void dos_alloc(std::size_t num_bytes);
         void dos_dealloc();
         void dos_resize(std::size_t num_bytes);

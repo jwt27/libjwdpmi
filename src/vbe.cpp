@@ -19,18 +19,22 @@ namespace jw
     namespace video
     {
         static std::vector<byte> vbe2_pm_interface { };
-        static std::optional<dpmi::device_memory<byte>> vbe2_mmio;
+        static std::optional<dpmi::device_memory<byte>> vbe2_mmio_memory;
+        static std::optional<dpmi::descriptor> vbe2_mmio;
         static std::uintptr_t vbe2_call_set_window;
         static std::uintptr_t vbe2_call_set_display_start;
         static std::uintptr_t vbe2_call_set_palette;
         static bool vbe2_pm { false };
 
-        static std::optional<dpmi::memory<byte>> vbe3_stack;
-        static std::optional<dpmi::memory<byte>> video_bios;
-        static std::optional<dpmi::memory<byte>> bios_data_area;
+        static std::unique_ptr<std::byte[]> vbe3_stack_memory;
+        static std::unique_ptr<std::byte[]> video_bios_memory;
+        static std::unique_ptr<std::byte[]> fake_bda_memory;
+        static std::optional<dpmi::descriptor> vbe3_stack;
+        static std::optional<dpmi::descriptor> video_bios;
+        static std::optional<dpmi::descriptor> fake_bda;
         static detail::vbe3_pm_info* pmid { nullptr };
 
-        static dpmi::linear_memory video_bios_code;
+        static std::optional<dpmi::descriptor> video_bios_code;
         static dpmi::far_ptr32 vbe3_stack_ptr;
         static dpmi::far_ptr32 vbe3_entry_point;
         static bool vbe3_pm { false };
@@ -220,9 +224,8 @@ namespace jw
                     {
                         auto* addr = reinterpret_cast<std::uintptr_t*>(io_list);
                         auto* size = io_list + 2;
-                        vbe2_mmio.emplace(*size, *addr);
-                        auto ar = dpmi::ldt_access_rights { dpmi::get_ds() };
-                        vbe2_mmio->get_descriptor().lock()->set_access_rights(ar);
+                        vbe2_mmio_memory.emplace(*size, *addr);
+                        vbe2_mmio.emplace(vbe2_mmio_memory->create_segment());
                     }
                 }
             }
@@ -233,20 +236,20 @@ namespace jw
         {
             using namespace dpmi;
             vbe2::init();
-            if (info.vbe_version < 0x0300) throw not_supported { "VBE3+ not supported." };
+            if (info.vbe_version < 0x0300) throw not_supported { "VBE3 not supported." };
             if (vbe3_pm) return;
 
             try
             {
                 std::size_t bios_size;
                 {
-                    mapped_dos_memory<byte> video_bios_ptr { 128_KB, far_ptr16 { 0xC000, 0 } };
-                    byte* ptr = video_bios_ptr.near_pointer();
-                    bios_size = *(ptr + 2) * 512;
-                    video_bios.emplace(bios_size);
-                    std::copy_n(ptr, bios_size, video_bios->near_pointer());
+                    mapped_dos_memory<std::byte> video_bios_remap { 128_KB, far_ptr16 { 0xC000, 0 } };
+                    std::byte* ptr = video_bios_remap.near_pointer();
+                    bios_size = reinterpret_cast<std::uint8_t*>(ptr)[2] * 512;
+                    video_bios_memory.reset(new std::byte[bios_size]);
+                    std::copy_n(ptr, bios_size, video_bios_memory.get());
                 }
-                char* search_ptr = reinterpret_cast<char*>(video_bios->near_pointer());
+                char* search_ptr = reinterpret_cast<char*>(video_bios_memory.get());
                 const char* search_value = "PMID";
                 search_ptr = std::search(search_ptr, search_ptr + bios_size, search_value, search_value + 4);
                 if (std::strncmp(search_ptr, search_value, 4) != 0) return;
@@ -254,26 +257,30 @@ namespace jw
                 if (checksum8(*pmid) != 0) return;
                 pmid->in_protected_mode = true;
 
-                bios_data_area.emplace(4_KB);
-                std::fill_n(bios_data_area->near_pointer(), 4_KB, 0);
-                pmid->bda_selector = bios_data_area->get_selector();
-                ldt_access_rights ar { get_ds() };
-                ar.is_32_bit = false;
-                bios_data_area->get_descriptor().lock()->set_access_rights(ar);
+                fake_bda_memory.reset(new std::byte[1_KB] { });
+                fake_bda.emplace(dpmi::linear_memory::from_pointer(fake_bda_memory.get(), 1_KB).create_segment());
+                auto segdata = fake_bda->read();
+                segdata.segment.is_32_bit = false;
+                fake_bda->write(segdata);
+                pmid->bda_selector = fake_bda->get_selector();
 
-                video_bios_code = { video_bios->address(), bios_size };
-                video_bios->get_descriptor().lock()->set_access_rights(ar);
-                ar = ldt_access_rights { get_cs() };
-                ar.is_32_bit = false;
-                video_bios_code.get_descriptor().lock()->set_access_rights(ar);
+                video_bios.emplace(dpmi::linear_memory::from_pointer(video_bios_memory.get(), bios_size).create_segment());
+                segdata = video_bios->read();
+                segdata.segment.is_32_bit = false;
+                video_bios->write(segdata);
                 pmid->data_selector = video_bios->get_selector();
 
-                vbe3_stack.emplace(4_KB);
-                ar = ldt_access_rights { get_ss() };
-                ar.is_32_bit = false;
-                vbe3_stack->get_descriptor().lock()->set_access_rights(ar);
-                vbe3_stack_ptr = { vbe3_stack->get_selector(), (vbe3_stack->size() - 0x10) & -0x10 };
-                vbe3_entry_point = { video_bios_code.get_selector(), pmid->init_entry_point };
+                video_bios_code.emplace(dpmi::descriptor::clone_segment(video_bios->get_selector()));
+                segdata.segment.code_segment.is_code_segment = true;
+                video_bios->write(segdata);
+
+                vbe3_stack_memory.reset(new std::byte[4_KB]);
+                vbe3_stack.emplace(dpmi::linear_memory::from_pointer(vbe3_stack_memory.get(), bios_size).create_segment());
+                segdata = vbe3_stack->read();
+                segdata.segment.is_32_bit = false;
+                vbe3_stack->write(segdata);
+                vbe3_stack_ptr = { vbe3_stack->get_selector(), 4094 };
+                vbe3_entry_point = { video_bios_code->get_selector(), pmid->init_entry_point };
 
                 pmid->a000_selector = dpmi::dos_selector(0xa000);
                 pmid->b000_selector = dpmi::dos_selector(0xb000);
@@ -288,7 +295,10 @@ namespace jw
             {
                 vbe3_stack.reset();
                 video_bios.reset();
-                bios_data_area.reset();
+                fake_bda.reset();
+                vbe3_stack_memory.reset();
+                video_bios_memory.reset();
+                fake_bda_memory.reset();
                 throw;
             }
         }
