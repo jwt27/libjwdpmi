@@ -722,7 +722,7 @@ namespace jw
             check_error(ax, __PRETTY_FUNCTION__);
         }
 
-        std::vector<px32n> vbe2::get_palette()
+        std::array<px32n, 256> vbe2::get_palette()
         {
             auto& dos_data = get_dos_data();
 
@@ -735,11 +735,9 @@ namespace jw
             reg.di = dos_data.dos_pointer().offset;
             reg.call_int(0x10);
             if (info.vbe_version < 0x300) check_error(reg.ax, __PRETTY_FUNCTION__);
-            else try { check_error(reg.ax, __PRETTY_FUNCTION__); }
-            catch (const error&) { return vga::get_palette(); }
+            else if (reg.ax != 0x004f) return vga::get_palette();
 
-            std::vector<px32n> result;
-            result.resize(256);
+            std::array<px32n, 256> result;
             auto* ptr = dos_data->palette.data();
             if (dac_bits < 8) for (auto i = 0; i < 256; ++i) result[i] = reinterpret_cast<pxvga*>(ptr)[i];
             else for (auto i = 0; i < 256; ++i) result[i] = ptr[i];

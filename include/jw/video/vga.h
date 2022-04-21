@@ -1,9 +1,10 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
-#include <vector>
+#include <array>
 #include <jw/video/vbe_types.h>
 #include <jw/video/pixel.h>
 #include <jw/io/ioport.h>
@@ -25,7 +26,7 @@ namespace jw
                 set_palette(&*data.cbegin(), &*data.cend(), first, wait_for_vsync);
             }
 
-            virtual std::vector<px32n> get_palette();
+            virtual std::array<px32n, 256> get_palette();
 
         protected:
             static inline constexpr io::in_port<bool> dac_state { 0x3c7 };

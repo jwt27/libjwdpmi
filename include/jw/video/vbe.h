@@ -67,7 +67,7 @@ namespace jw
             using vbe::set_palette;
             virtual void set_display_start(vector2i pos, bool wait_for_vsync = false) override;
             virtual void set_palette(const px32n* begin, const px32n* end, std::size_t first = 0, bool wait_for_vsync = false) override;
-            virtual std::vector<px32n> get_palette() override;
+            virtual std::array<px32n, 256> get_palette() override;
 
         protected:
             friend vbe* get_vbe_interface();

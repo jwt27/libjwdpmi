@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
@@ -42,9 +43,9 @@ namespace jw
             }
         }
 
-        std::vector<px32n> vga::get_palette()
+        std::array<px32n, 256> vga::get_palette()
         {
-            std::vector<px32n> result { };
+            std::array<px32n, 256> result;
             dac_read_index.write(0);
             if (dac_bits == 8)
             {
@@ -53,7 +54,7 @@ namespace jw
                     auto r = dac_data.read();
                     auto g = dac_data.read();
                     auto b = dac_data.read();
-                    result.emplace_back(r, g, b);
+                    result[i] = { r, g, b };
                 }
             }
             else
@@ -63,7 +64,7 @@ namespace jw
                     auto r = dac_data.read();
                     auto g = dac_data.read();
                     auto b = dac_data.read();
-                    result.emplace_back(pxvga { r, g, b });
+                    result[i] = pxvga { r, g, b };
                 }
             }
             return result;
