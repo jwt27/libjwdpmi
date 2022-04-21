@@ -35,7 +35,7 @@ namespace jw
             using vga::set_palette;
             virtual void init();
             const vbe_info& get_vbe_info();
-            const std::map<std::uint_fast16_t,vbe_mode_info>& get_modes() { get_vbe_info(); return modes; }
+            const std::map<std::uint_fast16_t, vbe_mode_info>& get_modes();
             virtual void set_mode(vbe_mode m, const crtc_info* crtc = nullptr) override;
             virtual scanline_length set_scanline_length(std::size_t width, bool width_in_pixels = true);
             virtual scanline_length get_scanline_length();
@@ -46,26 +46,13 @@ namespace jw
             virtual bool get_scheduled_display_start_status();
             virtual std::uint8_t set_palette_format(std::uint8_t bits_per_channel);
             virtual std::uint8_t get_palette_format();
+            std::size_t get_lfb_size_in_pixels();
 
             std::size_t get_bits_per_pixel()
             {
                 auto r = get_scanline_length();
                 return r.bytes_per_scanline * 8 / r.pixels_per_scanline;
             }
-
-            std::size_t get_lfb_size_in_pixels()
-            {
-                auto r = get_scanline_length();
-                return r.pixels_per_scanline * mode_info->resolution_y * mode_info->linear_num_image_pages;
-            }
-
-        protected:
-            void populate_mode_list(dpmi::far_ptr16 list_ptr);
-
-            vbe_info info;
-            std::map<std::uint_fast16_t, vbe_mode_info> modes { };
-            vbe_mode mode;
-            vbe_mode_info* mode_info { nullptr };
         };
 
         struct vbe2 : public vbe

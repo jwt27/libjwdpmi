@@ -40,6 +40,11 @@ namespace jw
             return reg;
         }
 
+        static vbe_info info;
+        static std::map<std::uint_fast16_t, vbe_mode_info> modes { };
+        static vbe_mode mode;
+        static vbe_mode_info* mode_info { nullptr };
+
         static std::vector<byte> vbe2_pm_interface { };
         static std::optional<dpmi::device_memory<byte>> vbe2_mmio_memory;
         static std::optional<dpmi::descriptor> vbe2_mmio;
@@ -119,7 +124,7 @@ namespace jw
             throw vbe::error { msg };
         }
 
-        void vbe::populate_mode_list(dpmi::far_ptr16 list_ptr)
+        static void populate_mode_list(dpmi::far_ptr16 list_ptr)
         {
             dpmi::mapped_dos_memory<std::uint16_t> mode_list { 256, list_ptr };
             auto& dos_data = get_dos_data();
@@ -142,16 +147,28 @@ namespace jw
             for (auto n = 0; n < 0x7f; ++n)
             {
                 try { get_mode(n); }
-                catch (const error&) { }
+                catch (const vbe::error&) { }
             }
             try { get_mode(0x81ff); }
-            catch (const error&) { }
+            catch (const vbe::error&) { }
         }
 
         const vbe_info& vbe::get_vbe_info()
         {
             if (info.vbe_signature != "VESA") init();
             return info;
+        }
+
+        const std::map<std::uint_fast16_t, vbe_mode_info>& vbe::get_modes()
+        {
+            get_vbe_info();
+            return modes;
+        }
+
+        std::size_t vbe::get_lfb_size_in_pixels()
+        {
+            auto r = get_scanline_length();
+            return r.pixels_per_scanline * mode_info->resolution_y * mode_info->linear_num_image_pages;
         }
 
         void vbe::init()
