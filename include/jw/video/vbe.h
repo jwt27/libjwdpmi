@@ -17,6 +17,10 @@ namespace jw
 {
     namespace video
     {
+        struct vbe;
+
+        vbe* get_vbe_interface();
+
         struct scanline_length
         {
             std::size_t pixels_per_scanline;
@@ -33,7 +37,6 @@ namespace jw
             struct invalid_in_current_video_mode : public error { using error::error; };
 
             using vga::set_palette;
-            virtual void init();
             const vbe_info& get_vbe_info();
             const std::map<std::uint_fast16_t, vbe_mode_info>& get_modes();
             virtual void set_mode(vbe_mode m, const crtc_info* crtc = nullptr) override;
@@ -53,21 +56,27 @@ namespace jw
                 auto r = get_scanline_length();
                 return r.bytes_per_scanline * 8 / r.pixels_per_scanline;
             }
+
+        protected:
+            friend vbe* get_vbe_interface();
+            virtual bool init();
         };
 
         struct vbe2 : public vbe
         {
             using vbe::set_palette;
-            virtual void init() override;
             virtual void set_display_start(vector2i pos, bool wait_for_vsync = false) override;
             virtual void set_palette(const px32n* begin, const px32n* end, std::size_t first = 0, bool wait_for_vsync = false) override;
             virtual std::vector<px32n> get_palette() override;
+
+        protected:
+            friend vbe* get_vbe_interface();
+            virtual bool init() override;
         };
 
-        struct vbe3 : public vbe2
+        struct vbe3 final : public vbe2
         {
             using vbe2::set_palette;
-            virtual void init() override;
             virtual void set_mode(vbe_mode m, const crtc_info* crtc = nullptr) override;
             //virtual vbe_mode get_current_mode()
             //virtual save_state()
@@ -85,28 +94,10 @@ namespace jw
             virtual std::uint8_t set_palette_format(std::uint8_t bits_per_channel) override;
             virtual void set_palette(const px32n* begin, const px32n* end, std::size_t first = 0, bool wait_for_vsync = false) override;
             virtual std::uint32_t get_closest_pixel_clock(std::uint32_t desired_clock, std::uint16_t mode_num);
+
+        protected:
+            friend vbe* get_vbe_interface();
+            virtual bool init() override;
         };
-
-        inline std::unique_ptr<vbe> get_vbe_interface()
-        {
-            try
-            {
-                auto v = std::make_unique<vbe3>();
-                v->init();
-                return v;
-            }
-            catch (const vbe::not_supported&) { }
-            try
-            {
-                auto v = std::make_unique<vbe2>();
-                v->init();
-                return v;
-            }
-            catch (const vbe::not_supported&) { }
-
-            auto v = std::make_unique<vbe>();
-            v->init();
-            return v;
-        }
     }
 }

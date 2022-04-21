@@ -40,6 +40,7 @@ namespace jw
             return reg;
         }
 
+        static std::unique_ptr<vbe> vbe_interface;
         static vbe_info info;
         static std::map<std::uint_fast16_t, vbe_mode_info> modes { };
         static vbe_mode mode;
@@ -153,6 +154,28 @@ namespace jw
             catch (const vbe::error&) { }
         }
 
+        vbe* get_vbe_interface()
+        {
+            if (not vbe_interface) [[unlikely]]
+            {
+                vbe_interface.reset(new vbe3);
+                if (not vbe_interface->init())
+                {
+                    vbe_interface.reset(new vbe2);
+                    if (not vbe_interface->init())
+                    {
+                        vbe_interface.reset(new vbe);
+                        if (not vbe_interface->init())
+                        {
+                            vbe_interface.reset();
+                            throw vbe::not_supported { "VBE not supported" };
+                        }
+                    }
+                }
+            }
+            return vbe_interface.get();
+        }
+
         const vbe_info& vbe::get_vbe_info()
         {
             if (info.vbe_signature != "VESA") init();
@@ -171,9 +194,8 @@ namespace jw
             return r.pixels_per_scanline * mode_info->resolution_y * mode_info->linear_num_image_pages;
         }
 
-        void vbe::init()
+        bool vbe::init()
         {
-            if (info.vbe_signature == "VESA") return;
             auto& dos_data = get_dos_data();
             auto* ptr = &dos_data->raw_vbe;
 
@@ -182,6 +204,7 @@ namespace jw
             reg.es = dos_data.dos_pointer().segment;
             reg.di = dos_data.dos_pointer().offset;
             reg.call_int(0x10);
+            if (reg.al != 0xf4) return false;
             check_error(reg.ax, __PRETTY_FUNCTION__);
 
             info.vbe_signature.assign(ptr->vbe_signature, ptr->vbe_signature + 4);
@@ -194,11 +217,11 @@ namespace jw
                 info.oem_string = str.near_pointer();
             }
             populate_mode_list(ptr->video_mode_list);
+            return true;
         }
 
-        void vbe2::init()
+        bool vbe2::init()
         {
-            if (info.vbe_signature == "VESA") return;
             auto& dos_data = get_dos_data();
             auto* ptr = &dos_data->raw_vbe;
             std::copy_n("VBE2", 4, ptr->vbe_signature);
@@ -209,7 +232,8 @@ namespace jw
             reg.di = dos_data.dos_pointer().offset;
             reg.call_int(0x10);
             check_error(reg.ax, __PRETTY_FUNCTION__);
-            if (ptr->vbe_version < 0x0200) throw not_supported { "VBE2+ not supported." };
+            if (reg.al != 0xf4) return false;
+            if (ptr->vbe_version < 0x0200) return false;
 
             info.vbe_signature.assign(ptr->vbe_signature, ptr->vbe_signature + 4);
             info.vbe_version = ptr->vbe_version;
@@ -236,7 +260,7 @@ namespace jw
             }
             populate_mode_list(ptr->video_mode_list);
 
-            if (vbe2_pm) return;
+            if (vbe2_pm) return true;
             reg = { };
             reg.ax = 0x4f0a;
             reg.bl = 0;
@@ -269,14 +293,15 @@ namespace jw
                 }
             }
             vbe2_pm = true;
+            return true;
         }
 
-        void vbe3::init()
+        bool vbe3::init()
         {
             using namespace dpmi;
-            vbe2::init();
-            if (info.vbe_version < 0x0300) throw not_supported { "VBE3 not supported." };
-            if (vbe3_pm) return;
+            if (not vbe2::init()) return false;
+            if (info.vbe_version < 0x0300) return false;
+            if (vbe3_pm) return true;
 
             try
             {
@@ -291,9 +316,9 @@ namespace jw
                 char* search_ptr = reinterpret_cast<char*>(video_bios_memory.get());
                 const char* search_value = "PMID";
                 search_ptr = std::search(search_ptr, search_ptr + bios_size, search_value, search_value + 4);
-                if (std::strncmp(search_ptr, search_value, 4) != 0) return;
+                if (std::strncmp(search_ptr, search_value, 4) != 0) return true;
                 pmid = reinterpret_cast<detail::vbe3_pm_info*>(search_ptr);
-                if (checksum8(*pmid) != 0) return;
+                if (checksum8(*pmid) != 0) return true;
                 pmid->in_protected_mode = true;
 
                 fake_bda_memory.reset(new std::byte[1_KB] { });
@@ -340,6 +365,7 @@ namespace jw
                 fake_bda_memory.reset();
                 throw;
             }
+            return true;
         }
 
         void vbe::set_mode(vbe_mode m, const crtc_info*)
