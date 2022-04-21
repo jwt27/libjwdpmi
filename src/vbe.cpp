@@ -641,18 +641,17 @@ namespace jw
             return reg.bh;
         }
 
-        void vbe2::set_palette(const px32n* begin, const px32n* end, std::size_t first, bool wait_for_vsync)
+        void vbe2::set_palette(std::span<const px32n> pal, std::size_t first, bool wait_for_vsync)
         {
-            //return vga::set_palette(begin, end, first, wait_for_vsync);
-            auto size = std::min(static_cast<std::size_t>(end - begin), std::size_t { 256 });
+            const auto size = std::min(pal.size(), 256ul);
             if (vbe2_pm)
             {
-                std::unique_ptr<std::vector<pxvga>> copy;
-                const byte* ptr = reinterpret_cast<const byte*>(begin);
+                std::array<pxvga, 256> copy;
+                auto* ptr = static_cast<const void*>(pal.data());
                 if (dac_bits < 8)
                 {
-                    copy = std::make_unique<std::vector<pxvga>>(begin, end);
-                    ptr = reinterpret_cast<const byte*>(copy->data());
+                    for (unsigned i = 0; i < size; ++i) copy[i] = pal[i];
+                    ptr = static_cast<const void*>(copy.data());
                 }
 
                 dpmi::selector mmio = vbe2_mmio ? vbe2_mmio->get_selector() : dpmi::get_ds();
@@ -677,12 +676,12 @@ namespace jw
                 if (dac_bits < 8)
                 {
                     for (std::size_t i = 0; i < size; ++i)
-                        new(reinterpret_cast<pxvga*>(dos_data->palette.data() + i)) pxvga { begin[i] };
+                        new(reinterpret_cast<pxvga*>(dos_data->palette.data() + i)) pxvga { pal[i] };
                 }
                 else
                 {
                     for (std::size_t i = 0; i < size; ++i)
-                        new(dos_data->palette.data() + i) px32n { std::move(begin[i]) };
+                        new(dos_data->palette.data() + i) px32n { std::move(pal[i]) };
                 }
 
                 auto& reg = get_realmode_registers();
@@ -697,16 +696,17 @@ namespace jw
             }
         }
 
-        void vbe3::set_palette(const px32n* begin, const px32n* end, std::size_t first, bool wait_for_vsync)
+        void vbe3::set_palette(std::span<const px32n> pal, std::size_t first, bool wait_for_vsync)
         {
-            if (not vbe3_pm) return vbe2::set_palette(begin, end, first, wait_for_vsync);
+            if (not vbe3_pm) return vbe2::set_palette(pal, first, wait_for_vsync);
 
-            std::optional<std::vector<pxvga>> copy;
-            const byte* ptr = reinterpret_cast<const byte*>(begin);
+            const auto size = std::min(pal.size(), 256ul);
+            std::array<pxvga, 256> copy;
+            auto* ptr = static_cast<const void*>(pal.data());
             if (dac_bits < 8)
             {
-                copy.emplace(begin, end);
-                ptr = reinterpret_cast<const byte*>(copy->data());
+                for (unsigned i = 0; i < size; ++i) copy[i] = pal[i];
+                ptr = static_cast<const void*>(copy.data());
             }
 
             std::uint16_t ax { 0x4f09 };
@@ -715,7 +715,7 @@ namespace jw
                 "call vbe3"
                 : "+a" (ax)
                 : "b" (wait_for_vsync ? 0x80 : 0)
-                , "c" (std::min(end - begin, std::ptrdiff_t { 256 }))
+                , "c" (size)
                 , "d" (first)
                 , "D" (ptr)
                 : "esi", "cc");

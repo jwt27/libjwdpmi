@@ -36,7 +36,6 @@ namespace jw
             struct not_supported_in_current_hardware : public error { using error::error; };
             struct invalid_in_current_video_mode : public error { using error::error; };
 
-            using vga::set_palette;
             const vbe_info& get_vbe_info();
             const std::map<std::uint_fast16_t, vbe_mode_info>& get_modes();
             virtual void set_mode(vbe_mode m, const crtc_info* crtc = nullptr) override;
@@ -66,7 +65,7 @@ namespace jw
         {
             using vbe::set_palette;
             virtual void set_display_start(vector2i pos, bool wait_for_vsync = false) override;
-            virtual void set_palette(const px32n* begin, const px32n* end, std::size_t first = 0, bool wait_for_vsync = false) override;
+            virtual void set_palette(std::span<const px32n>, std::size_t first = 0, bool wait_for_vsync = false) override;
             virtual std::array<px32n, 256> get_palette() override;
 
         protected:
@@ -92,7 +91,7 @@ namespace jw
             //virtual void enable_stereo()
             //virtual void disable_stereo()
             virtual std::uint8_t set_palette_format(std::uint8_t bits_per_channel) override;
-            virtual void set_palette(const px32n* begin, const px32n* end, std::size_t first = 0, bool wait_for_vsync = false) override;
+            virtual void set_palette(std::span<const px32n>, std::size_t first = 0, bool wait_for_vsync = false) override;
             virtual std::uint32_t get_closest_pixel_clock(std::uint32_t desired_clock, std::uint16_t mode_num);
 
         protected:

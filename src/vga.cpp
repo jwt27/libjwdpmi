@@ -19,23 +19,23 @@ namespace jw
             reg.call_int(0x10);
         }
 
-        void vga::set_palette(const px32n* begin, const px32n* end, std::size_t first, bool)
+        void vga::set_palette(std::span<const px32n> pal, std::size_t first, bool)
         {
             dac_write_index.write(first);
             if (dac_bits == 8)
             {
-                for (auto i = begin; i < end; ++i)
+                for (const auto& i : pal)
                 {
-                    dac_data.write(i->r);
-                    dac_data.write(i->g);
-                    dac_data.write(i->b);
+                    dac_data.write(i.r);
+                    dac_data.write(i.g);
+                    dac_data.write(i.b);
                 }
             }
             else
             {
-                for (auto i = begin; i < end; ++i)
+                for (const auto& i : pal)
                 {
-                    auto p = static_cast<const pxvga>(*i);
+                    auto p = static_cast<const pxvga>(i);
                     dac_data.write(p.r);
                     dac_data.write(p.g);
                     dac_data.write(p.b);

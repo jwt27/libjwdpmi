@@ -5,6 +5,7 @@
 
 #pragma once
 #include <array>
+#include <span>
 #include <jw/video/vbe_types.h>
 #include <jw/video/pixel.h>
 #include <jw/io/ioport.h>
@@ -20,11 +21,7 @@ namespace jw
 
         struct vga : public vga_bios
         {
-            virtual void set_palette(const px32n* begin, const px32n* end, std::size_t first = 0, bool wait_for_vsync = false);
-            virtual void set_palette(const std::vector<px32n>& data, std::size_t first = 0, bool wait_for_vsync = false)
-            {
-                set_palette(&*data.cbegin(), &*data.cend(), first, wait_for_vsync);
-            }
+            virtual void set_palette(std::span<const px32n>, std::size_t first = 0, bool wait_for_vsync = false);
 
             virtual std::array<px32n, 256> get_palette();
 
