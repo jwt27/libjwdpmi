@@ -128,35 +128,6 @@ namespace jw::dpmi
         return have_access;
     }
 
-    ldt_access_rights::ldt_access_rights(selector sel)
-    {
-        std::uint32_t r;
-        bool z;
-        asm("lar %k1, %2"
-            : "=@ccz" (z)
-            , "=r" (r)
-            : "rm" (static_cast<std::uint32_t>(sel)));
-        if (not z) throw dpmi_error { invalid_selector, __PRETTY_FUNCTION__ };
-        access_rights = r >> 8;
-    }
-
-    void ldt_access_rights::set(selector sel) const
-    {
-        dpmi_error_code error;
-        bool c;
-        asm volatile(
-            "int 0x31"
-            : "=@ccc" (c)
-            , "=a" (error)
-            : "a" (0x0009)
-            , "b" (sel)
-            , "c" (access_rights)
-            : "memory");
-        if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
-    }
-
-    ldt_access_rights descriptor::get_access_rights() { return ldt_access_rights { sel.value }; }
-
     descriptor::descriptor(descriptor&& d) noexcept
         : sel(d.sel), no_alloc(d.no_alloc)
     {

@@ -68,56 +68,10 @@ namespace jw::dpmi
     };
     [[gnu::init_priority(101)]] inline const page_size_t page_size { std::integral_constant<bool, config::assume_4k_pages> { } };
 
-    inline std::size_t round_down_to_page_size(std::size_t num_bytes)
-    {
-        return num_bytes & -page_size;
-    }
-
-    inline std::size_t round_up_to_page_size(std::size_t num_bytes)
-    {
-        return round_down_to_page_size(num_bytes + page_size - 1);
-    }
-
-    enum segment_type
-    {
-        const_data_segment = 0b000,
-        data_segment = 0b001,
-        stack_segment = 0b011,
-        code_segment = 0b101,
-        conforming_code_segment = 0b111
-    };
-
     enum system_segment_type
     {
         call_gate16 = 0b0100,
         call_gate32 = 0b1100
-    };
-
-    union ldt_access_rights
-    {
-        struct[[gnu::packed]]
-        {
-            unsigned has_been_accessed : 1;
-            segment_type type : 3;
-            unsigned system_segment : 1;            // should be 1
-            unsigned privilege_level : 2;           // must be 3 for user space
-            unsigned is_present : 1;                // must be 1
-            unsigned : 4;
-            unsigned available_for_system_use : 1;  // should be 0
-            unsigned : 1;                           // must be 0
-            unsigned is_32_bit : 1;
-            unsigned is_page_granular : 1;          // byte granular otherwise. note: this is automatically set by dpmi function set_selector_limit.
-        };
-        ldt_access_rights() noexcept = default;
-        ldt_access_rights(selector sel);
-
-        void set(selector sel) const;
-
-        ldt_access_rights(auto ldt) : ldt_access_rights(ldt->get_selector()) { }
-        void set(auto ldt) { set(ldt->get_selector()); }
-
-    private:
-        std::uint16_t access_rights { 0x0010 };
     };
 
     union alignas(4) descriptor_data
@@ -237,8 +191,6 @@ namespace jw::dpmi
         std::uintptr_t get_base() const { return get_base(sel); }
         void set_limit(std::size_t l) { set_limit(sel, l); }
         std::size_t get_limit() const;
-        ldt_access_rights get_access_rights();
-        void set_access_rights(const ldt_access_rights& r) { r.set(sel); }
         void set_selector_privilege(unsigned priv) { sel.privilege_level = priv; }
 
         [[nodiscard]] descriptor_data read() const;
@@ -260,6 +212,16 @@ namespace jw::dpmi
         selector_bits sel;
         bool no_alloc { true };
     };
+
+    inline std::size_t round_down_to_page_size(std::size_t num_bytes)
+    {
+        return num_bytes & -page_size;
+    }
+
+    inline std::size_t round_up_to_page_size(std::size_t num_bytes)
+    {
+        return round_down_to_page_size(num_bytes + page_size - 1);
+    }
 
     inline constexpr std::uintptr_t conventional_to_physical(std::uint16_t segment, std::uint16_t offset) noexcept
     {
