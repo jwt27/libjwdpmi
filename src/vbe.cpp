@@ -25,7 +25,6 @@ namespace jw
         static std::uintptr_t vbe2_call_set_palette;
         static bool vbe2_pm { false };
 
-        static std::optional<dpmi::mapped_dos_memory<byte>> a000, b000, b800;
         static std::optional<dpmi::memory<byte>> vbe3_stack;
         static std::optional<dpmi::memory<byte>> video_bios;
         static std::optional<dpmi::memory<byte>> bios_data_area;
@@ -262,13 +261,6 @@ namespace jw
                 ar.is_32_bit = false;
                 bios_data_area->get_descriptor().lock()->set_access_rights(ar);
 
-                a000.emplace(64_KB, far_ptr16 { 0xA000, 0 });
-                b000.emplace(64_KB, far_ptr16 { 0xB000, 0 });
-                b800.emplace(32_KB, far_ptr16 { 0xB800, 0 });
-                pmid->a000_selector = a000->get_selector();
-                pmid->b000_selector = b000->get_selector();
-                pmid->b800_selector = b800->get_selector();
-
                 video_bios_code = { video_bios->address(), bios_size };
                 video_bios->get_descriptor().lock()->set_access_rights(ar);
                 ar = ldt_access_rights { get_cs() };
@@ -283,6 +275,10 @@ namespace jw
                 vbe3_stack_ptr = { vbe3_stack->get_selector(), (vbe3_stack->size() - 0x10) & -0x10 };
                 vbe3_entry_point = { video_bios_code.get_selector(), pmid->init_entry_point };
 
+                pmid->a000_selector = dpmi::dos_selector(0xa000);
+                pmid->b000_selector = dpmi::dos_selector(0xb000);
+                pmid->b800_selector = dpmi::dos_selector(0xb800);
+
                 asm volatile("call vbe3" ::: "eax", "ebx", "ecx", "edx", "esi", "edi", "cc");
 
                 vbe3_entry_point.offset = pmid->entry_point;
@@ -290,9 +286,6 @@ namespace jw
             }
             catch (...)
             {
-                a000.reset();
-                b000.reset();
-                b800.reset();
                 vbe3_stack.reset();
                 video_bios.reset();
                 bios_data_area.reset();

@@ -379,6 +379,11 @@ namespace jw::dpmi
     void dos_free(selector);
     inline void dos_free(const dos_alloc_result& r) { return dos_free(r.handle); };
 
+    // Allocate a selector for a 64KB segment in conventional memory.  Always
+    // returns the same selector, given the same segment.  This selector must
+    // never be modified or freed, so use sparingly.
+    [[nodiscard]] selector dos_selector(std::uint16_t);
+
     // Describes an existing linear memory region.  Does not own any memory.
     struct linear_memory
     {

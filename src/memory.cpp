@@ -434,6 +434,21 @@ namespace jw::dpmi
         if (c) throw dpmi_error { ax, __PRETTY_FUNCTION__ };
     }
 
+    selector dos_selector(std::uint16_t segment)
+    {
+        std::uint16_t ax = 0x0002;
+        bool c;
+        asm
+        (
+            "int 0x31"
+            : "=@ccc" (c), "+a" (ax)
+            : "b" (segment)
+            :
+        );
+        if (c) throw dpmi_error(ax, __PRETTY_FUNCTION__);
+        return ax;
+    }
+
     static bool is_valid_address(std::uintptr_t base, std::size_t limit)
     {
         // Discard blocks below base address.
