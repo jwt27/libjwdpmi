@@ -380,39 +380,35 @@ namespace jw::dpmi
         // DPMI 0.9 AX=0600
         void lock()
         {
-            dpmi_error_code error;
+            std::uint16_t ax { 0x0600 };
             split_uint32_t _addr = addr, _size = bytes;
             bool c;
 
-            asm volatile(
+            asm volatile
+            (
                 "int 0x31"
-                : "=@ccc" (c)
-                , "=a" (error)
-                : "a" (0x0600)
-                , "b" (_addr.hi)
-                , "c" (_addr.lo)
-                , "S" (_size.hi)
-                , "D" (_size.lo));
-            if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+                : "=@ccc" (c), "+a" (ax)
+                : "b" (_addr.hi), "c" (_addr.lo)
+                , "S" (_size.hi), "D" (_size.lo)
+            );
+            if (c) throw dpmi_error { ax, __PRETTY_FUNCTION__ };
         }
 
         // DPMI 0.9 AX=0601
         void unlock()
         {
-            dpmi_error_code error;
+            std::uint16_t ax { 0x0601 };
             split_uint32_t _addr = addr, _size = bytes;
             bool c;
 
-            asm volatile(
+            asm volatile
+            (
                 "int 0x31"
-                : "=@ccc" (c)
-                , "=a" (error)
-                : "a" (0x0601)
-                , "b" (_addr.hi)
-                , "c" (_addr.lo)
-                , "S" (_size.hi)
-                , "D" (_size.lo));
-            if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+                : "=@ccc" (c), "+a" (ax)
+                : "b" (_addr.hi), "c" (_addr.lo)
+                , "S" (_size.hi), "D" (_size.lo)
+            );
+            if (c) throw dpmi_error { ax, __PRETTY_FUNCTION__ };
         }
 
         [[nodiscard]] descriptor create_segment()
@@ -420,7 +416,11 @@ namespace jw::dpmi
             return descriptor::create_segment(addr, bytes);
         }
 
-        virtual bool requires_new_selector() const noexcept { return descriptor::get_base(get_ds()) < addr; }
+        bool near_pointer_accessible() const noexcept
+        {
+            return addr >= static_cast<std::uintptr_t>(__djgpp_base_address)
+                and addr + bytes <= static_cast<std::size_t>(__djgpp_base_address + __djgpp_selector_limit + 1);
+        }
 
     protected:
         std::uintptr_t addr;
@@ -482,8 +482,8 @@ namespace jw::dpmi
 
         virtual void resize(std::size_t num_bytes, bool committed = true)
         {
-            if (new_alloc_supported) new_resize(num_bytes, committed);
-            else old_resize(num_bytes);
+            if (dpmi10_alloc_supported) dpmi10_resize(num_bytes, committed);
+            else dpmi09_resize(num_bytes);
         }
 
         std::uint32_t get_handle() const noexcept { return handle; }
@@ -492,29 +492,26 @@ namespace jw::dpmi
 
     protected:
         memory_base(no_alloc_tag, const linear_memory& mem) noexcept : linear_memory(mem) { }
-        memory_base(no_alloc_tag, std::size_t num_bytes) noexcept : memory_base(no_alloc_tag { }, linear_memory { null_handle, num_bytes }) { }
+        memory_base(no_alloc_tag, std::size_t num_bytes) noexcept : memory_base(no_alloc_tag { }, linear_memory { 0, num_bytes }) { }
 
-        void allocate(bool committed = true, bool new_only = false, std::uintptr_t desired_address = 0)
+        void allocate(bool committed = true, std::uintptr_t desired_address = 0)
         {
             try
             {
-                if (new_alloc_supported) try
+                if (dpmi10_alloc_supported)
                 {
-                    new_alloc(committed, desired_address);
-                    return;
-                }
-                catch (const dpmi_error& e)
-                {
-                    switch (e.code().value())
+                    auto error = dpmi10_alloc(committed, desired_address);
+                    if (not error) return;
+                    switch (error->code().value())
                     {
-                    default: throw;
                     case unsupported_function:
                     case 0x0504:
-                        new_alloc_supported = false;
+                        dpmi10_alloc_supported = false;
+                        break;
+                    default: throw *error;
                     }
                 }
-                if (new_only) return;
-                old_alloc();
+                dpmi09_alloc();
             }
             catch (...)
             {
@@ -540,29 +537,31 @@ namespace jw::dpmi
             handle = null_handle;
         }
 
-        static bool new_alloc_supported;
+        static inline bool dpmi10_alloc_supported = true;
         static constexpr std::uint32_t null_handle { std::numeric_limits<std::uint32_t>::max() };
         std::uint32_t handle { null_handle };
 
     private:
-        void old_alloc();
-        void new_alloc(bool committed, std::uintptr_t desired_address);
-        void old_resize(std::size_t num_bytes);
-        void new_resize(std::size_t num_bytes, bool committed);
+        void dpmi09_alloc();
+        [[nodiscard]] std::optional<dpmi_error> dpmi10_alloc(bool committed, std::uintptr_t desired_address);
+        void dpmi09_resize(std::size_t num_bytes);
+        void dpmi10_resize(std::size_t num_bytes, bool committed);
     };
 
     struct device_memory_base : public memory_base
     {
         using base = memory_base;
 
-        // 'use_old_alloc' in this context means to use the DPMI 0.9 function 0800.
-        // This is useful because HDPMI does not set the cache-disable/write-through flags when
-        // using this function, but it does do so with the DPMI 1.0 function 0508. It's probably
-        // an oversight , but we can use this to preserve write-combining on framebuffer memory.
-        device_memory_base(std::size_t num_bytes, std::uintptr_t physical_address, bool use_old_alloc = false)
+        // 'use_dpmi09_alloc' in this context means to use the DPMI 0.9
+        // function 0800.  This is useful because HDPMI does not set the
+        // cache-disable/write-through flags when using this function, but it
+        // does do so with the DPMI 1.0 function 0508.  It's probably an
+        // oversight, but we can use this to preserve write-combining on
+        // framebuffer memory.
+        device_memory_base(std::size_t num_bytes, std::uintptr_t physical_address, bool use_dpmi09_alloc = false)
             : base(no_alloc_tag { }, round_up_to_page_size(num_bytes) + page_size)
         {
-            allocate(physical_address, use_old_alloc);
+            allocate(physical_address, use_dpmi09_alloc);
         }
 
         device_memory_base(const base&) = delete;
@@ -574,7 +573,6 @@ namespace jw::dpmi
         device_memory_base& operator=(device_memory_base&& m) { base::operator=(static_cast<base&&>(m)); return *this; }
 
         virtual void resize(std::size_t, bool = true) override { }
-        virtual bool requires_new_selector() const noexcept override { return !device_map_supported; }
         virtual operator bool() const noexcept override
         {
             if (device_map_supported) return base::operator bool();
@@ -582,32 +580,25 @@ namespace jw::dpmi
         };
 
     protected:
-        static bool device_map_supported;
+        static inline bool device_map_supported { true };
 
-        void allocate(std::uintptr_t physical_address, bool use_old_alloc)
+        void allocate(std::uintptr_t physical_address, bool use_dpmi09_alloc)
         {
-            try
+            if (not use_dpmi09_alloc)
             {
-                if (!use_old_alloc)
+                if (device_map_supported)
                 {
-                    if (device_map_supported)
-                    {
-                        capabilities c { };
-                        if (!c.supported || !c.flags.device_mapping) device_map_supported = false;
-                    }
-                    if (device_map_supported)
-                    {
-                        base::allocate(false, false);
-                        new_alloc(physical_address);
-                        return;
-                    }
+                    capabilities c { };
+                    if (not c.supported or not c.flags.device_mapping) device_map_supported = false;
                 }
-                old_alloc(physical_address);
+                if (device_map_supported)
+                {
+                    base::allocate(false);
+                    dpmi10_alloc(physical_address);
+                    return;
+                }
             }
-            catch (...)
-            {
-                std::throw_with_nested(std::bad_alloc { });
-            }
+            dpmi09_alloc(physical_address);
         }
 
         virtual void deallocate() override
@@ -631,8 +622,8 @@ namespace jw::dpmi
         }
 
     private:
-        void old_alloc(std::uintptr_t physical_address);
-        void new_alloc(std::uintptr_t physical_address);
+        void dpmi09_alloc(std::uintptr_t physical_address);
+        void dpmi10_alloc(std::uintptr_t physical_address);
     };
 
     struct mapped_dos_memory_base : public memory_base
@@ -662,8 +653,7 @@ namespace jw::dpmi
             return *this;
         }
 
-        virtual void resize(std::size_t, bool = true) override { }
-        virtual bool requires_new_selector() const noexcept override { return !dos_map_supported; }
+        virtual void resize(std::size_t, bool = true) override { throw dpmi_error { unsupported_function, __PRETTY_FUNCTION__ }; }
         auto get_dos_ptr() const noexcept { return dos_addr; }
         virtual std::ptrdiff_t get_offset_in_block() const noexcept override { return offset; }
         virtual operator bool() const noexcept override
@@ -675,36 +665,28 @@ namespace jw::dpmi
     protected:
         mapped_dos_memory_base(no_alloc_tag, std::size_t num_bytes) : base(no_alloc_tag { }, round_up_to_page_size(num_bytes) + page_size) { }
 
-        static bool dos_map_supported;
+        static inline bool dos_map_supported { true };
         std::ptrdiff_t offset { 0 };
         far_ptr16 dos_addr;
 
         void allocate(std::uintptr_t dos_physical_address)
-        {   // According to DPMI specs, this should be a linear address. This makes no sense however, and all dpmi hosts treat it as physical address.
-            try
+        {
+            if (dos_map_supported)
             {
-                if (dos_map_supported)
-                {
-                    capabilities c { };
-                    if (!c.supported || !c.flags.conventional_memory_mapping) dos_map_supported = false;
-                }
-                if (dos_map_supported)
-                {
-                    base::allocate(false, false);
-                    new_alloc(dos_physical_address);
-                    return;
-                }
-                //addr = dos_physical_address;    // Pretend it's a linear address anyway?
-                throw dpmi_error { unsupported_function, __PRETTY_FUNCTION__ }; // TODO: alternative solution if alloc fails
+                capabilities c { };
+                if (not c.supported or not c.flags.conventional_memory_mapping) dos_map_supported = false;
             }
-            catch (...)
+            if (dos_map_supported)
             {
-                std::throw_with_nested(std::bad_alloc { });
+                base::allocate(false);
+                alloc(dos_physical_address);
+                return;
             }
+            throw dpmi_error { unsupported_function, __PRETTY_FUNCTION__ };
         }
 
     private:
-        void new_alloc(std::uintptr_t dos_physical_address);
+        void alloc(std::uintptr_t dos_physical_address);
     };
 
     struct dos_memory_base : public mapped_dos_memory_base
@@ -713,7 +695,7 @@ namespace jw::dpmi
 
         dos_memory_base(std::size_t num_bytes) : base(no_alloc_tag { }, round_up_to_paragraph_size(num_bytes))
         {
-            allocate(num_bytes);
+            allocate();
         }
 
         dos_memory_base(const base&) = delete;
@@ -731,48 +713,35 @@ namespace jw::dpmi
 
         virtual void resize(std::size_t num_bytes, bool = true) override
         {
-            try
-            {
-                base::deallocate();
-                dos_resize(round_up_to_paragraph_size(num_bytes));
-                base::allocate(conventional_to_physical(dos_addr));
-            }
-            catch (...)
-            {
-                std::throw_with_nested(std::bad_alloc { });
-            }
+            base::deallocate();
+            num_bytes = round_up_to_paragraph_size(num_bytes);
+            dos_resize(dos_handle, num_bytes);
+            bytes = num_bytes;
+            base::allocate(conventional_to_physical(dos_addr));
         }
 
         virtual operator bool() const noexcept override { return dos_handle != 0; };
 
     protected:
-        void allocate(std::size_t num_bytes)
+        void allocate()
         {
-            try
-            {
-                deallocate();
-                dos_alloc(round_up_to_paragraph_size(num_bytes));
-                base::allocate(conventional_to_physical(dos_addr));
-            }
-            catch (...)
-            {
-                std::throw_with_nested(std::bad_alloc { });
-            }
+            deallocate();
+            auto result = dpmi::dos_allocate(bytes);
+            dos_handle = result.handle;
+            dos_addr = result.pointer;
+            base::allocate(conventional_to_physical(dos_addr));
         }
 
         virtual void deallocate() override
         {
             base::deallocate();
             if (dos_handle == 0) return;
-            dos_dealloc();
+            dos_free(dos_handle);
+            dos_handle = 0;
         }
 
     private:
         selector dos_handle { 0 };
-
-        void dos_alloc(std::size_t num_bytes);
-        void dos_dealloc();
-        void dos_resize(std::size_t num_bytes);
     };
 
     template <typename T, typename base>

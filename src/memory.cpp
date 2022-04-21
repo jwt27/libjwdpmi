@@ -13,10 +13,6 @@
 
 namespace jw::dpmi
 {
-    bool memory_base::new_alloc_supported { true };
-    bool device_memory_base::device_map_supported { true };
-    bool mapped_dos_memory_base::dos_map_supported { true };
-
     std::optional<descriptor> gdt, ldt;
 
     [[gnu::noipa]] descriptor_data read_descriptor_direct(selector_bits s, bool use_ring0)
@@ -445,141 +441,146 @@ namespace jw::dpmi
         return true;
     }
 
-    void memory_base::old_alloc()
+    void memory_base::dpmi09_alloc()
     {
         throw_if_irq();
         if (handle != null_handle) deallocate();
         split_uint32_t new_size { size() };
         split_uint32_t new_addr, new_handle;
-        dpmi_error_code error;
+        std::uint16_t ax { 0x0501 };
         bool c;
         do
         {
-            asm volatile(
+            asm volatile
+            (
                 "int 0x31"
                 : "=@ccc" (c)
-                , "=a" (error)
+                , "+a" (ax)
                 , "=b" (new_addr.hi)
                 , "=c" (new_addr.lo)
                 , "=S" (new_handle.hi)
                 , "=D" (new_handle.lo)
-                : "a" (0x0501)
-                , "b" (new_size.hi)
+                : "b" (new_size.hi)
                 , "c" (new_size.lo)
-                : "memory");
-            if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+                :
+            );
+            if (c) throw dpmi_error { ax, __PRETTY_FUNCTION__ };
         } while (not is_valid_address(new_addr, size()));
         handle = new_handle;
         addr = new_addr;
     }
 
-    void memory_base::new_alloc(bool committed, std::uintptr_t desired_address)
+    std::optional<dpmi_error> memory_base::dpmi10_alloc(bool committed, std::uintptr_t desired_address)
     {
         if (committed) throw_if_irq();
         if (handle != null_handle) deallocate();
         std::uint32_t new_handle;
         std::uintptr_t new_addr;
-        dpmi_error_code error;
+        std::uint16_t ax { 0x0504 };
         bool c;
         do
         {
-            asm volatile(
+            asm volatile
+            (
                 "int 0x31"
                 : "=@ccc" (c)
-                , "=a" (error)
+                , "+a" (ax)
                 , "=b" (new_addr)
                 , "=S" (new_handle)
-                : "a" (0x0504)
-                , "b" (desired_address)
-                , "c" (size())
+                : "b" (desired_address)
+                , "c" (bytes)
                 , "d" (static_cast<std::uint32_t>(committed))
-                : "memory");
-            if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+                :
+            );
+            if (c) return dpmi_error { ax, __PRETTY_FUNCTION__ };
         } while (not is_valid_address(new_addr, size()));
         handle = new_handle;
         addr = new_addr;
+        return std::nullopt;
     }
 
-    void memory_base::old_resize(std::size_t num_bytes)
+    void memory_base::dpmi09_resize(std::size_t num_bytes)
     {
         throw_if_irq();
         split_uint32_t new_size { num_bytes };
         split_uint32_t new_handle { handle };
         split_uint32_t new_addr;
-        dpmi_error_code error;
+        std::uint16_t ax { 0x0503 };
         bool c;
         do
         {
-            asm volatile(
+            asm volatile
+            (
                 "int 0x31"
                 : "=@ccc" (c)
-                , "=a" (error)
+                , "+a" (ax)
                 , "=b" (new_addr.hi)
                 , "=c" (new_addr.lo)
                 , "+S" (new_handle.hi)
                 , "+D" (new_handle.lo)
-                : "a" (0x0503)
-                , "b" (new_size.hi)
+                : "b" (new_size.hi)
                 , "c" (new_size.lo)
-                : "memory");
-            if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+                :
+            );
+            if (c) throw dpmi_error { ax, __PRETTY_FUNCTION__ };
         } while (not is_valid_address(new_addr, num_bytes));
         handle = new_handle;
         addr = new_addr;
         bytes = new_size;
     }
 
-    void memory_base::new_resize(std::size_t num_bytes, bool committed)
+    void memory_base::dpmi10_resize(std::size_t num_bytes, bool committed)
     {
         if (committed) throw_if_irq();
         std::uint32_t new_handle { handle };
         std::uintptr_t new_addr;
-        dpmi_error_code error;
+        std::uint16_t ax { 0x0505 };
         bool c;
         do
         {
-            asm volatile(
+            asm volatile
+            (
                 "int 0x31"
                 : "=@ccc" (c)
-                , "=a" (error)
+                , "+a" (ax)
                 , "=b" (new_addr)
                 , "+S" (new_handle)
-                : "a" (0x0505)
-                , "c" (num_bytes)
+                : "c" (num_bytes)
                 , "d" (static_cast<std::uint32_t>(committed))
-                : "memory");
-            if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+                :
+            );
+            if (c) throw dpmi_error { ax, __PRETTY_FUNCTION__ };
         } while (not is_valid_address(new_addr, num_bytes));
         handle = new_handle;
         addr = new_addr;
         bytes = num_bytes;
     }
 
-    void device_memory_base::old_alloc(std::uintptr_t physical_address)
+    void device_memory_base::dpmi09_alloc(std::uintptr_t physical_address)
     {
-        throw_if_irq();
         split_uint32_t new_addr;
         split_uint32_t new_size { size() };
         split_uint32_t phys { physical_address };
-        dpmi_error_code error;
+        std::uint16_t ax { 0x0800 };
         bool c;
-        asm volatile(
+        asm volatile
+        (
             "int 0x31"
             : "=@ccc" (c)
-            , "=a" (error)
+            , "+a" (ax)
             , "=b" (new_addr.hi)
             , "=c" (new_addr.lo)
-            : "a" (0x0800)
-            , "b" (phys.hi)
+            : "b" (phys.hi)
             , "c" (phys.lo)
             , "S" (new_size.hi)
             , "D" (new_size.lo)
-            : "memory");
-        if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+            :
+        );
+        if (c) throw dpmi_error { ax, __PRETTY_FUNCTION__ };
         addr = new_addr;
     }
 
-    void device_memory_base::new_alloc(std::uintptr_t physical_address)
+    void device_memory_base::dpmi10_alloc(std::uintptr_t physical_address)
     {
         auto addr_start = round_down_to_page_size(physical_address);
         auto offset = physical_address - addr_start;
@@ -588,22 +589,23 @@ namespace jw::dpmi
         offset += offset_in_block;
         addr += offset;
         bytes -= offset;
-        dpmi_error_code error;
+        std::uint16_t ax { 0x0508 };
         bool c;
-        asm volatile(
+        asm volatile
+        (
             "int 0x31"
             : "=@ccc" (c)
-            , "=a" (error)
-            : "a" (0x0508)
-            , "b" (offset_in_block)
+            , "+a" (ax)
+            : "b" (offset_in_block)
             , "c" (pages)
             , "d" (addr_start)
             , "S" (handle)
-            : "memory");
-        if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+            : "memory"
+        );
+        if (c) throw dpmi_error { ax, __PRETTY_FUNCTION__ };
     }
 
-    void mapped_dos_memory_base::new_alloc(std::uintptr_t dos_physical_address)
+    void mapped_dos_memory_base::alloc(std::uintptr_t dos_physical_address)
     {
         auto addr_start = round_down_to_page_size(dos_physical_address);
         offset = dos_physical_address - addr_start;
@@ -611,37 +613,19 @@ namespace jw::dpmi
         auto offset_in_block = round_up_to_page_size(addr) - addr;
         addr += offset + offset_in_block;
         bytes -= offset + offset_in_block;
-        dpmi_error_code error;
+        std::uint16_t ax { 0x0509 };
         bool c;
-        asm volatile(
+        asm volatile
+        (
             "int 0x31"
             : "=@ccc" (c)
-            , "=a" (error)
-            : "a" (0x0509)
-            , "b" (offset_in_block)
+            , "+a" (ax)
+            : "b" (offset_in_block)
             , "c" (pages)
             , "d" (addr_start)
             , "S" (handle)
-            : "memory");
-        if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
-    }
-
-    void dos_memory_base::dos_alloc(std::size_t n)
-    {
-        auto result = dpmi::dos_allocate(n);
-        dos_handle = result.handle;
-        dos_addr = result.pointer;
-    }
-
-    void dos_memory_base::dos_dealloc()
-    {
-        dpmi::dos_free(dos_handle);
-        dos_handle = 0;
-    }
-
-    void dos_memory_base::dos_resize(std::size_t n)
-    {
-        dpmi::dos_resize(dos_handle, n);
-        bytes = n;
+            : "memory"
+        );
+        if (c) throw dpmi_error { ax, __PRETTY_FUNCTION__ };
     }
 }
