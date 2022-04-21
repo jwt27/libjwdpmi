@@ -18,6 +18,20 @@ namespace jw
 {
     namespace video
     {
+        union dos_data_t
+        {
+            std::array<px32n, 256> palette;
+            vbe_mode_info mode;
+            crtc_info crtc;
+            detail::raw_vbe_info raw_vbe;
+        };
+
+        static auto& get_dos_data()
+        {
+            static dpmi::dos_memory<dos_data_t> data { 1 };
+            return data;
+        }
+
         static std::vector<byte> vbe2_pm_interface { };
         static std::optional<dpmi::device_memory<byte>> vbe2_mmio_memory;
         static std::optional<dpmi::descriptor> vbe2_mmio;
@@ -100,18 +114,18 @@ namespace jw
         void vbe::populate_mode_list(dpmi::far_ptr16 list_ptr)
         {
             dpmi::mapped_dos_memory<std::uint16_t> mode_list { 256, list_ptr };
-            dpmi::dos_memory<vbe_mode_info> mode_info { 1 };
+            auto& dos_data = get_dos_data();
             auto get_mode = [&](std::uint16_t num)
             {
-                *mode_info = { };
+                dos_data->mode = { };
                 dpmi::realmode_registers reg { };
                 reg.ax = 0x4f01;
                 reg.cx = num;
-                reg.es = mode_info.dos_pointer().segment;
-                reg.di = mode_info.dos_pointer().offset;
+                reg.es = dos_data.dos_pointer().segment;
+                reg.di = dos_data.dos_pointer().offset;
                 reg.call_int(0x10);
                 check_error(reg.ax, __PRETTY_FUNCTION__);
-                if (mode_info->attr.is_supported) modes[num] = *mode_info;
+                if (mode_info->attr.is_supported) modes[num] = dos_data->mode;
             };
 
             for (auto* mode_ptr = mode_list.near_pointer(); *mode_ptr != 0xffff; ++mode_ptr)
@@ -135,13 +149,13 @@ namespace jw
         void vbe::init()
         {
             if (info.vbe_signature == "VESA") return;
-            dpmi::dos_memory<detail::raw_vbe_info> raw_info { 1 };
-            auto* ptr = raw_info.near_pointer();
+            auto& dos_data = get_dos_data();
+            auto* ptr = &dos_data->raw_vbe;
 
             dpmi::realmode_registers reg { };
             reg.ax = 0x4f00;
-            reg.es = raw_info.dos_pointer().segment;
-            reg.di = raw_info.dos_pointer().offset;
+            reg.es = dos_data.dos_pointer().segment;
+            reg.di = dos_data.dos_pointer().offset;
             reg.call_int(0x10);
             check_error(reg.ax, __PRETTY_FUNCTION__);
 
@@ -160,14 +174,14 @@ namespace jw
         void vbe2::init()
         {
             if (info.vbe_signature == "VESA") return;
-            dpmi::dos_memory<detail::raw_vbe_info> raw_info { 1 };
-            auto* ptr = raw_info.near_pointer();
+            auto& dos_data = get_dos_data();
+            auto* ptr = &dos_data->raw_vbe;
             std::copy_n("VBE2", 4, ptr->vbe_signature);
 
             dpmi::realmode_registers reg { };
             reg.ax = 0x4f00;
-            reg.es = raw_info.dos_pointer().segment;
-            reg.di = raw_info.dos_pointer().offset;
+            reg.es = dos_data.dos_pointer().segment;
+            reg.di = dos_data.dos_pointer().offset;
             reg.call_int(0x10);
             check_error(reg.ax, __PRETTY_FUNCTION__);
             if (ptr->vbe_version < 0x0200) throw not_supported { "VBE2+ not supported." };
@@ -323,10 +337,10 @@ namespace jw
             reg.bx = m.raw_value;
             if (m.use_custom_crtc_timings)
             {
-                dpmi::dos_memory<crtc_info> crtc_ptr { 1 };
-                *crtc_ptr = *crtc;
-                reg.es = crtc_ptr.dos_pointer().segment;
-                reg.di = crtc_ptr.dos_pointer().offset;
+                auto& dos_data = get_dos_data();
+                dos_data->crtc = *crtc;
+                reg.es = dos_data.dos_pointer().segment;
+                reg.di = dos_data.dos_pointer().offset;
                 reg.call_int(0x10);
             }
             else reg.call_int(0x10);
@@ -621,16 +635,16 @@ namespace jw
             }
             else
             {
-                dpmi::dos_memory<px32n> dos_data { size };
+                auto& dos_data = get_dos_data();
                 if (dac_bits < 8)
                 {
                     for (std::size_t i = 0; i < size; ++i)
-                        new(reinterpret_cast<pxvga*>(dos_data.near_pointer() + i)) pxvga { begin[i] };
+                        new(reinterpret_cast<pxvga*>(dos_data->palette.data() + i)) pxvga { begin[i] };
                 }
                 else
                 {
                     for (std::size_t i = 0; i < size; ++i)
-                        new(dos_data.near_pointer() + i) px32n { std::move(begin[i]) };
+                        new(dos_data->palette.data() + i) px32n { std::move(begin[i]) };
                 }
 
                 dpmi::realmode_registers reg { };
@@ -672,7 +686,7 @@ namespace jw
 
         std::vector<px32n> vbe2::get_palette()
         {
-            dpmi::dos_memory<px32n> dos_data { 256 };
+            auto& dos_data = get_dos_data();
 
             dpmi::realmode_registers reg { };
             reg.ax = 0x4f09;
@@ -687,10 +701,10 @@ namespace jw
             catch (const error&) { return vga::get_palette(); }
 
             std::vector<px32n> result;
-            result.reserve(256);
-            auto* ptr = dos_data.near_pointer();
-            if (dac_bits < 8) for (auto i = 0; i < 256; ++i) result.push_back(*(reinterpret_cast<pxvga*>(ptr) + i));
-            else for (auto i = 0; i < 256; ++i) result.push_back(ptr[i]);
+            result.resize(256);
+            auto* ptr = dos_data->palette.data();
+            if (dac_bits < 8) for (auto i = 0; i < 256; ++i) result[i] = reinterpret_cast<pxvga*>(ptr)[i];
+            else for (auto i = 0; i < 256; ++i) result[i] = ptr[i];
             return result;
         }
 
