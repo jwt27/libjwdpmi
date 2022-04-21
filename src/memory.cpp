@@ -423,7 +423,7 @@ namespace jw::dpmi
         return ax;
     }
 
-    static bool is_valid_address(std::uintptr_t base, std::size_t limit)
+    static bool check_base_limit(std::uintptr_t base, std::size_t limit)
     {
         // Discard blocks below base address.
         if (base <= static_cast<std::uintptr_t>(__djgpp_base_address)) return false;
@@ -465,7 +465,7 @@ namespace jw::dpmi
                 :
             );
             if (c) throw dpmi_error { ax, __PRETTY_FUNCTION__ };
-        } while (not is_valid_address(new_addr, size()));
+        } while (not check_base_limit(new_addr, size()));
         handle = new_handle;
         addr = new_addr;
     }
@@ -493,7 +493,7 @@ namespace jw::dpmi
                 :
             );
             if (c) return dpmi_error { ax, __PRETTY_FUNCTION__ };
-        } while (not is_valid_address(new_addr, size()));
+        } while (not check_base_limit(new_addr, size()));
         handle = new_handle;
         addr = new_addr;
         return std::nullopt;
@@ -523,7 +523,7 @@ namespace jw::dpmi
                 :
             );
             if (c) throw dpmi_error { ax, __PRETTY_FUNCTION__ };
-        } while (not is_valid_address(new_addr, num_bytes));
+        } while (not check_base_limit(new_addr, num_bytes));
         handle = new_handle;
         addr = new_addr;
         bytes = new_size;
@@ -550,7 +550,7 @@ namespace jw::dpmi
                 :
             );
             if (c) throw dpmi_error { ax, __PRETTY_FUNCTION__ };
-        } while (not is_valid_address(new_addr, num_bytes));
+        } while (not check_base_limit(new_addr, num_bytes));
         handle = new_handle;
         addr = new_addr;
         bytes = num_bytes;
@@ -578,6 +578,7 @@ namespace jw::dpmi
         );
         if (c) throw dpmi_error { ax, __PRETTY_FUNCTION__ };
         addr = new_addr;
+        check_base_limit(addr, bytes);
     }
 
     void device_memory_base::dpmi10_alloc(std::uintptr_t physical_address)
