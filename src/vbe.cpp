@@ -107,8 +107,8 @@ namespace jw
                 dpmi::realmode_registers reg { };
                 reg.ax = 0x4f01;
                 reg.cx = num;
-                reg.es = mode_info.get_dos_ptr().segment;
-                reg.di = mode_info.get_dos_ptr().offset;
+                reg.es = mode_info.dos_pointer().segment;
+                reg.di = mode_info.dos_pointer().offset;
                 reg.call_int(0x10);
                 check_error(reg.ax, __PRETTY_FUNCTION__);
                 if (mode_info->attr.is_supported) modes[num] = *mode_info;
@@ -140,8 +140,8 @@ namespace jw
 
             dpmi::realmode_registers reg { };
             reg.ax = 0x4f00;
-            reg.es = raw_info.get_dos_ptr().segment;
-            reg.di = raw_info.get_dos_ptr().offset;
+            reg.es = raw_info.dos_pointer().segment;
+            reg.di = raw_info.dos_pointer().offset;
             reg.call_int(0x10);
             check_error(reg.ax, __PRETTY_FUNCTION__);
 
@@ -166,8 +166,8 @@ namespace jw
 
             dpmi::realmode_registers reg { };
             reg.ax = 0x4f00;
-            reg.es = raw_info.get_dos_ptr().segment;
-            reg.di = raw_info.get_dos_ptr().offset;
+            reg.es = raw_info.dos_pointer().segment;
+            reg.di = raw_info.dos_pointer().offset;
             reg.call_int(0x10);
             check_error(reg.ax, __PRETTY_FUNCTION__);
             if (ptr->vbe_version < 0x0200) throw not_supported { "VBE2+ not supported." };
@@ -325,8 +325,8 @@ namespace jw
             {
                 dpmi::dos_memory<crtc_info> crtc_ptr { 1 };
                 *crtc_ptr = *crtc;
-                reg.es = crtc_ptr.get_dos_ptr().segment;
-                reg.di = crtc_ptr.get_dos_ptr().offset;
+                reg.es = crtc_ptr.dos_pointer().segment;
+                reg.di = crtc_ptr.dos_pointer().offset;
                 reg.call_int(0x10);
             }
             else reg.call_int(0x10);
@@ -638,8 +638,8 @@ namespace jw
                 reg.bx = wait_for_vsync ? 0x80 : 0;
                 reg.cx = size;
                 reg.dx = first;
-                reg.es = dos_data.get_dos_ptr().segment;
-                reg.di = dos_data.get_dos_ptr().offset;
+                reg.es = dos_data.dos_pointer().segment;
+                reg.di = dos_data.dos_pointer().offset;
                 reg.call_int(0x10);
                 check_error(reg.ax, __PRETTY_FUNCTION__);
             }
@@ -679,8 +679,8 @@ namespace jw
             reg.bx = 1;
             reg.cx = 256;
             reg.dx = 0;
-            reg.es = dos_data.get_dos_ptr().segment;
-            reg.di = dos_data.get_dos_ptr().offset;
+            reg.es = dos_data.dos_pointer().segment;
+            reg.di = dos_data.dos_pointer().offset;
             reg.call_int(0x10);
             if (info.vbe_version < 0x300) check_error(reg.ax, __PRETTY_FUNCTION__);
             else try { check_error(reg.ax, __PRETTY_FUNCTION__); }

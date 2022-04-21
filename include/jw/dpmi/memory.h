@@ -659,7 +659,7 @@ namespace jw::dpmi
         }
 
         virtual void resize(std::size_t, bool = true) override { throw dpmi_error { unsupported_function, __PRETTY_FUNCTION__ }; }
-        auto get_dos_ptr() const noexcept { return dos_addr; }
+        auto dos_pointer() const noexcept { return dos_addr; }
         virtual std::ptrdiff_t get_offset_in_block() const noexcept override { return offset; }
         virtual operator bool() const noexcept override
         {
