@@ -450,9 +450,11 @@ namespace jw::dpmi
             }
             catch (...)
             {
+#               ifndef NDEBUG
                 fmt::print(stderr, "Warning: caught exception while deallocating memory!\n");
                 try { throw; }
                 catch (const std::exception& e) { fmt::print(stderr, "{}\n", e.what()); }
+#               endif
             }
         }
 
@@ -523,17 +525,18 @@ namespace jw::dpmi
         {
             if (handle == null_handle) return;
             split_uint32_t _handle { handle };
-            dpmi_error_code error;
-            bool c;
-            asm volatile(
+            std::uint16_t ax { 0x0502 };
+            [[maybe_unused]] bool c;
+            asm volatile
+            (
                 "int 0x31"
-                : "=@ccc" (c)
-                , "=a" (error)
-                : "a" (0x0502)
-                , "S" (_handle.hi)
-                , "D" (_handle.lo)
-                : "memory");
-            if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
+                : "=@ccc" (c), "+a" (ax)
+                : "S" (_handle.hi), "D" (_handle.lo)
+                :
+            );
+#           ifndef NDEBUG
+            if (c) throw dpmi_error { ax, __PRETTY_FUNCTION__ };
+#           endif
             handle = null_handle;
         }
 
@@ -611,13 +614,15 @@ namespace jw::dpmi
             else
             {
                 split_uint32_t old_addr { addr };
-                asm volatile(
+                asm volatile
+                (
                     "int 0x31"
-                    :: "a" (0x0801)
-                    , "b" (old_addr.hi)
-                    , "c" (old_addr.lo)
-                    : "memory");
-                // This is an optional dpmi 1.0 function. don't care if this fails.
+                    :
+                    : "a" (0x0801)
+                    , "b" (old_addr.hi), "c" (old_addr.lo)
+                    :
+                );
+                // This is an optional dpmi 1.0 function.  Don't care if this fails.
             }
         }
 
