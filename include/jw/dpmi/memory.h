@@ -351,7 +351,7 @@ namespace jw::dpmi
     struct linear_memory
     {
         std::uintptr_t address() const noexcept { return addr; }
-        virtual std::size_t size() const noexcept { return bytes; }
+        std::size_t size() const noexcept { return bytes; }
 
         template <typename T>
         T* near_pointer() const { return linear_to_near<T>(addr); }
@@ -774,7 +774,7 @@ namespace jw::dpmi
 
         template<typename... Args>
         void resize(std::size_t num_elements, Args&&... args) { base::resize(num_elements * sizeof(T), std::forward<Args>(args)...); }
-        virtual std::size_t size() const noexcept override { return base::size() / sizeof(T); }
+        std::size_t size() const noexcept { return base::size() / sizeof(T); }
     };
 
     template <typename T = std::byte> using memory = memory_t<T, memory_base>;
