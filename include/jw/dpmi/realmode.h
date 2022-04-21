@@ -90,7 +90,7 @@ namespace jw
                     int 0x31
                  )" : "=@ccc" (c)
                     , "+a" (ax)
-                    , "=m" (*this)
+                    , "+m" (*this)
                     : "b" (interrupt)
                     , "c" (0)
                     : "edi", "cc"
