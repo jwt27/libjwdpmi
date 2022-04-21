@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
@@ -16,6 +17,13 @@ namespace jw
 {
     namespace video
     {
+        struct scanline_length
+        {
+            std::size_t pixels_per_scanline;
+            std::size_t bytes_per_scanline;
+            std::size_t max_scanlines;
+        };
+
         struct vbe : public vga
         {
             struct error : public std::runtime_error { using runtime_error::runtime_error; };
@@ -29,9 +37,9 @@ namespace jw
             const vbe_info& get_vbe_info();
             const std::map<std::uint_fast16_t,vbe_mode_info>& get_modes() { get_vbe_info(); return modes; }
             virtual void set_mode(vbe_mode m, const crtc_info* crtc = nullptr) override;
-            virtual std::tuple<std::size_t, std::size_t, std::size_t> set_scanline_length(std::size_t width, bool width_in_pixels = true);
-            virtual std::tuple<std::size_t, std::size_t, std::size_t> get_scanline_length();
-            virtual std::tuple<std::size_t, std::size_t, std::size_t> get_max_scanline_length();
+            virtual scanline_length set_scanline_length(std::size_t width, bool width_in_pixels = true);
+            virtual scanline_length get_scanline_length();
+            virtual scanline_length get_max_scanline_length();
             virtual void set_display_start(vector2i pos, bool wait_for_vsync = false);
             virtual vector2i get_display_start();
             virtual void schedule_display_start(vector2i pos);
@@ -41,16 +49,14 @@ namespace jw
 
             std::size_t get_bits_per_pixel()
             {
-                std::size_t pixels, bytes;
-                std::tie(pixels, bytes, std::ignore) = get_scanline_length();
-                return bytes * 8 / pixels;
+                auto r = get_scanline_length();
+                return r.bytes_per_scanline * 8 / r.pixels_per_scanline;
             }
 
             std::size_t get_lfb_size_in_pixels()
             {
-                std::size_t line_size;
-                std::tie(line_size, std::ignore, std::ignore) = get_scanline_length();
-                return line_size * mode_info->resolution_y * mode_info->linear_num_image_pages;
+                auto r = get_scanline_length();
+                return r.pixels_per_scanline * mode_info->resolution_y * mode_info->linear_num_image_pages;
             }
 
         protected:
@@ -81,8 +87,8 @@ namespace jw
             //virtual restore_state()
             //virtual std::uint32_t set_window()
             //virtual std::uint32_t get_window()
-            virtual std::tuple<std::size_t, std::size_t, std::size_t> set_scanline_length(std::size_t width, bool width_in_pixels = true) override;
-            virtual std::tuple<std::size_t, std::size_t, std::size_t> get_max_scanline_length() override;
+            virtual scanline_length set_scanline_length(std::size_t width, bool width_in_pixels = true) override;
+            virtual scanline_length get_max_scanline_length() override;
             virtual void set_display_start(vector2i pos, bool wait_for_vsync = false) override;
             virtual void schedule_display_start(vector2i pos) override;
             //virtual void schedule_stereo_display_start(bool wait_for_vsync = false)

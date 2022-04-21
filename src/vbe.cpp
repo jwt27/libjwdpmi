@@ -358,7 +358,7 @@ namespace jw
             dac_bits = 6;
         }
 
-        std::tuple<std::size_t, std::size_t, std::size_t> vbe::set_scanline_length(std::size_t width, bool width_in_pixels)
+        scanline_length vbe::set_scanline_length(std::size_t width, bool width_in_pixels)
         {
             auto& reg = get_realmode_registers();
             reg.ax = 0x4f06;
@@ -366,13 +366,10 @@ namespace jw
             reg.cx = width;
             reg.call_int(0x10);
             check_error(reg.ax, __PRETTY_FUNCTION__);
-            std::uint16_t pixels_per_scanline = reg.cx;
-            std::uint16_t bytes_per_scanline = reg.bx;
-            std::uint16_t max_scanlines = reg.dx;
-            return { pixels_per_scanline, bytes_per_scanline, max_scanlines };
+            return { reg.cx, reg.bx, reg.dx };
         }
 
-        std::tuple<std::size_t, std::size_t, std::size_t> vbe3::set_scanline_length(std::size_t width, bool width_in_pixels)
+        scanline_length vbe3::set_scanline_length(std::size_t width, bool width_in_pixels)
         {
             if (!vbe3_pm) return vbe2::set_scanline_length(width, width_in_pixels);
 
@@ -391,33 +388,27 @@ namespace jw
             return { pixels_per_scanline, bytes_per_scanline, max_scanlines };
         }
 
-        std::tuple<std::size_t, std::size_t, std::size_t> vbe::get_scanline_length()
+        scanline_length vbe::get_scanline_length()
         {
             auto& reg = get_realmode_registers();
             reg.ax = 0x4f06;
             reg.bl = 1;
             reg.call_int(0x10);
             check_error(reg.ax, __PRETTY_FUNCTION__);
-            std::uint16_t pixels_per_scanline = reg.cx;
-            std::uint16_t bytes_per_scanline = reg.bx;
-            std::uint16_t max_scanlines = reg.dx;
-            return { pixels_per_scanline, bytes_per_scanline, max_scanlines };
+            return { reg.cx, reg.bx, reg.dx };
         }
 
-        std::tuple<std::size_t, std::size_t, std::size_t> vbe::get_max_scanline_length()
+        scanline_length vbe::get_max_scanline_length()
         {
             auto& reg = get_realmode_registers();
             reg.ax = 0x4f06;
             reg.bl = 3;
             reg.call_int(0x10);
             check_error(reg.ax, __PRETTY_FUNCTION__);
-            std::uint16_t pixels_per_scanline = reg.cx;
-            std::uint16_t bytes_per_scanline = reg.bx;
-            std::uint16_t max_scanlines = reg.dx;
-            return { pixels_per_scanline, bytes_per_scanline, max_scanlines };
+            return { reg.cx, reg.bx, reg.dx };
         }
 
-        std::tuple<std::size_t, std::size_t, std::size_t> vbe3::get_max_scanline_length()
+        scanline_length vbe3::get_max_scanline_length()
         {
             if (!vbe3_pm) return vbe2::get_max_scanline_length();
 
