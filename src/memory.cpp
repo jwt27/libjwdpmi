@@ -214,7 +214,7 @@ namespace jw::dpmi
     {
         auto ldt_access = direct_ldt_access();
         if (ldt_access != no) [[likely]]
-            write_descriptor_direct(sel, data, ldt_access == ring0);
+            return write_descriptor_direct(sel, data, ldt_access == ring0);
 
         dpmi_error_code error;
         bool c;
