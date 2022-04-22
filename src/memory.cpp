@@ -444,7 +444,7 @@ namespace jw::dpmi
     void memory_base::dpmi09_alloc()
     {
         throw_if_irq();
-        if (handle != null_handle) deallocate();
+        if (handle != 0) deallocate();
         split_uint32_t new_size { size() };
         split_uint32_t new_addr, new_handle;
         std::uint16_t ax { 0x0501 };
@@ -473,7 +473,7 @@ namespace jw::dpmi
     std::optional<dpmi_error> memory_base::dpmi10_alloc(bool committed, std::uintptr_t desired_address)
     {
         if (committed) throw_if_irq();
-        if (handle != null_handle) deallocate();
+        if (handle != 0) deallocate();
         std::uint32_t new_handle;
         std::uintptr_t new_addr;
         std::uint16_t ax { 0x0504 };

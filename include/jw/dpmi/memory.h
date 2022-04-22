@@ -461,7 +461,7 @@ namespace jw::dpmi
         memory_base(const memory_base&) = delete;
         memory_base& operator=(const memory_base&) = delete;
 
-        memory_base(memory_base&& m) noexcept : linear_memory(m), handle(m.handle) { m.handle = null_handle; }
+        memory_base(memory_base&& m) noexcept : linear_memory(m), handle(m.handle) { m.handle = 0; }
         memory_base& operator=(memory_base&& m) noexcept
         {
             std::swap(handle, m.handle);
@@ -489,7 +489,7 @@ namespace jw::dpmi
         }
 
         std::uint32_t get_handle() const noexcept { return handle; }
-        virtual operator bool() const noexcept { return handle != null_handle; }
+        virtual operator bool() const noexcept { return handle != 0; }
         virtual std::ptrdiff_t get_offset_in_block() const noexcept { return 0; }
 
     protected:
@@ -523,7 +523,7 @@ namespace jw::dpmi
 
         virtual void deallocate()
         {
-            if (handle == null_handle) return;
+            if (handle == 0) return;
             split_uint32_t _handle { handle };
             std::uint16_t ax { 0x0502 };
             [[maybe_unused]] bool c;
@@ -537,12 +537,11 @@ namespace jw::dpmi
 #           ifndef NDEBUG
             if (c) throw dpmi_error { ax, __PRETTY_FUNCTION__ };
 #           endif
-            handle = null_handle;
+            handle = 0;
         }
 
         static inline bool dpmi10_alloc_supported = true;
-        static constexpr std::uint32_t null_handle { std::numeric_limits<std::uint32_t>::max() };
-        std::uint32_t handle { null_handle };
+        std::uint32_t handle { 0 };
 
     private:
         void dpmi09_alloc();
@@ -579,7 +578,7 @@ namespace jw::dpmi
         virtual operator bool() const noexcept override
         {
             if (device_map_supported) return base::operator bool();
-            else return addr != null_handle;
+            else return addr != 0;
         };
 
     protected:
@@ -661,11 +660,6 @@ namespace jw::dpmi
         virtual void resize(std::size_t, bool = true) override { throw dpmi_error { unsupported_function, __PRETTY_FUNCTION__ }; }
         auto dos_pointer() const noexcept { return dos_addr; }
         virtual std::ptrdiff_t get_offset_in_block() const noexcept override { return offset; }
-        virtual operator bool() const noexcept override
-        {
-            if (dos_map_supported) return base::operator bool();
-            else return addr != null_handle;
-        };
 
     protected:
         mapped_dos_memory_base(no_alloc_tag, std::size_t num_bytes) : base(no_alloc_tag { }, round_up_to_page_size(num_bytes) + page_size) { }
@@ -722,6 +716,7 @@ namespace jw::dpmi
             num_bytes = round_up_to_paragraph_size(num_bytes);
             dos_resize(dos_handle, num_bytes);
             bytes = num_bytes;
+            assume(dos_addr.offset == 0);
             base::allocate(conventional_to_physical(dos_addr));
         }
 
@@ -736,6 +731,7 @@ namespace jw::dpmi
             auto result = dpmi::dos_allocate(bytes);
             dos_handle = result.handle;
             dos_addr = result.pointer;
+            assume(dos_addr.offset == 0);
             base::allocate(conventional_to_physical(dos_addr));
         }
 
