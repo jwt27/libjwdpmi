@@ -92,15 +92,8 @@ namespace jw::dpmi
                 selector_bits ldt_selector = ldtr;
 
                 auto ldt_desc = read_descriptor_direct(ldt_selector, use_ring0);
-
-                split_uint32_t base;
-                base.lo = ldt_desc.segment.base_lo;
-                base.hi.lo = ldt_desc.segment.base_hi_lo;
-                base.hi.hi = ldt_desc.segment.base_hi_hi;
-                split_uint32_t limit { };
-                limit.lo = ldt_desc.segment.limit_lo;
-                limit.hi = ldt_desc.segment.limit_hi;
-                ldt = descriptor::create_segment(base, limit);
+                ldt.emplace(descriptor::create());
+                ldt->write(ldt_desc);
 
                 if (use_ring0) have_access = ring0;
                 else have_access = yes;
@@ -211,7 +204,7 @@ namespace jw::dpmi
             , "=a" (error)
             , "=m" (data)
             : "a" (0x000b)
-            , "b" (sel)
+            , "b" (sel | 3)
             : "edi", "memory");
         if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
         return data;
@@ -230,7 +223,7 @@ namespace jw::dpmi
             : "=@ccc" (c)
             , "=a" (error)
             : "a" (0x000c)
-            , "b" (sel)
+            , "b" (sel | 3)
             , "D" (&data));
         if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
     }
@@ -247,7 +240,7 @@ namespace jw::dpmi
             , "=c" (base.hi)
             , "=d" (base.lo)
             : "a" (0x0006)
-            , "b" (seg));
+            , "b" (seg | 3));
         if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
 
         return base;
@@ -264,32 +257,29 @@ namespace jw::dpmi
             : "=@ccc" (c)
             , "=a" (error)
             : "a" (0x0007)
-            , "b" (seg)
+            , "b" (seg | 3)
             , "c" (base.hi)
             , "d" (base.lo)
             : "memory");
         if (c) throw dpmi_error(error, __PRETTY_FUNCTION__);
     }
 
-    std::size_t descriptor::get_limit() const
-    {
-        auto data = read();
-        auto v { data.segment.limit() };
-        if (data.segment.is_page_granular) return v << 12 | ((1 << 12) - 1);
-        return v;
-    }
-
     std::size_t descriptor::get_limit(selector sel)
     {
-        if (selector_bits { sel }.privilege_level < selector_bits { get_cs() }.privilege_level)
-            return descriptor { sel }.get_limit();
+        if (direct_ldt_access() != no) [[likely]]
+        {
+            auto data = descriptor { sel }.read();
+            auto v { data.segment.limit() };
+            if (data.segment.is_page_granular) return v << 12 | ((1 << 12) - 1);
+            return v;
+        }
 
         std::size_t limit;
         bool z;
         asm("lsl %1, %2"
             : "=@ccz" (z)
             , "=r" (limit)
-            : "rm" (static_cast<std::uint32_t>(sel))
+            : "rm" (static_cast<std::uint32_t>(sel) | 3)
             : "cc");
         if (not z) throw dpmi_error { invalid_selector, __PRETTY_FUNCTION__ };
         return limit;
@@ -297,6 +287,24 @@ namespace jw::dpmi
 
     void descriptor::set_limit(selector sel, std::size_t limit)
     {
+        if (direct_ldt_access() != no) [[likely]]
+        {
+            auto d = descriptor { sel };
+            auto data = d.read();
+            if (limit >= 1_MB)
+            {
+                data.segment.is_page_granular = true;
+                data.segment.limit(limit >> 12);
+            }
+            else
+            {
+                data.segment.is_page_granular = false;
+                data.segment.limit(limit);
+            }
+            d.write(data);
+            return;
+        }
+
         dpmi_error_code error;
         split_uint32_t _limit = (limit >= 1_MB) ? round_up_to_page_size(limit) - 1 : limit;
         bool c;
@@ -306,7 +314,7 @@ namespace jw::dpmi
             : "=@ccc" (c)
             , "=a" (error)
             : "a" (0x0008)
-            , "b" (sel)
+            , "b" (sel | 3)
             , "c" (_limit.hi)
             , "d" (_limit.lo)
             : "memory");

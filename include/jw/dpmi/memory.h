@@ -191,7 +191,7 @@ namespace jw::dpmi
         void set_base(std::uintptr_t b) { set_base(sel, b); }
         std::uintptr_t get_base() const { return get_base(sel); }
         void set_limit(std::size_t l) { set_limit(sel, l); }
-        std::size_t get_limit() const;
+        std::size_t get_limit() const { return get_limit(sel); }
         void set_selector_privilege(unsigned priv) { sel.privilege_level = priv; }
 
         [[nodiscard]] descriptor_data read() const;
