@@ -574,7 +574,7 @@ namespace jw::dpmi
         device_memory_base(device_memory_base&& m) : base(static_cast<base&&>(m)) { }
         device_memory_base& operator=(device_memory_base&& m) { base::operator=(static_cast<base&&>(m)); return *this; }
 
-        virtual void resize(std::size_t, bool = true) override { }
+        virtual void resize(std::size_t, bool = true) override { throw dpmi_error { unsupported_function, __PRETTY_FUNCTION__ }; }
         virtual operator bool() const noexcept override
         {
             if (device_map_supported) return base::operator bool();
@@ -712,12 +712,13 @@ namespace jw::dpmi
 
         virtual void resize(std::size_t num_bytes, bool = true) override
         {
-            base::deallocate();
             num_bytes = round_up_to_paragraph_size(num_bytes);
+            const bool remap = num_bytes > bytes;
+            if (remap) base::deallocate();
             dos_resize(dos_handle, num_bytes);
             bytes = num_bytes;
             assume(dos_addr.offset == 0);
-            base::allocate(conventional_to_physical(dos_addr));
+            if (remap) base::allocate(conventional_to_physical(dos_addr));
         }
 
         selector get_selector() const noexcept { return dos_handle; }
