@@ -752,21 +752,17 @@ namespace jw::dpmi
     {
         // Constructor arguments for each memory class:
         // memory(std::size_t num_elements, bool committed = true)
-        // device_memory(std::size_t num_elements, std::uintptr_t physical_address, bool use_old_alloc = false)
+        // device_memory(std::size_t num_elements, std::uintptr_t physical_address, bool use_dpmi09_alloc = false)
         // mapped_dos_memory(std::size_t num_elements, std::uintptr_t dos_physical_address)
+        // mapped_dos_memory(std::size_t num_elements, far_ptr16 dos_address)
         // dos_memory(std::size_t num_elements)
         template<typename... Args>
         memory_t(std::size_t num_elements, Args&&... args) : base(num_elements * sizeof(T), std::forward<Args>(args)...) { }
 
-        auto* near_pointer() { return base::template near_pointer<T>(); }
-        auto* operator->() noexcept { return near_pointer(); }
-        auto& operator*() noexcept { return *near_pointer(); }
-        auto& operator[](std::ptrdiff_t i) noexcept { return *(near_pointer() + i); }
-
-        const auto* near_pointer() const { return base::template near_pointer<T>(); }
-        const auto* operator->() const noexcept { return near_pointer(); }
-        const auto& operator*() const noexcept { return *near_pointer(); }
-        const auto& operator[](std::ptrdiff_t i) const noexcept { return *(near_pointer() + i); }
+        auto* near_pointer() const { return base::template near_pointer<T>(); }
+        auto* operator->() const noexcept { return near_pointer(); }
+        auto& operator*() const noexcept { return *near_pointer(); }
+        auto& operator[](std::ptrdiff_t i) const noexcept { return *(near_pointer() + i); }
 
         template<typename... Args>
         void resize(std::size_t num_elements, Args&&... args) { base::resize(num_elements * sizeof(T), std::forward<Args>(args)...); }
