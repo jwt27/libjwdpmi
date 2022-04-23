@@ -9,7 +9,7 @@
 
 #pragma once
 #include <exception>
-#include <cstdlib>
+#include <new>
 
 int main(int, const char**);
 
@@ -35,57 +35,7 @@ namespace jw
 
     [[nodiscard]] void* realloc(void* pointer, std::size_t new_size, std::size_t alignment);
 
-    // Allocate from a pre-allocated locked memory pool.  This memory may be
-    // deallocated with free().
-    [[nodiscard]] void* locked_malloc(std::size_t size, std::size_t alignment = __STDCPP_DEFAULT_NEW_ALIGNMENT__);
-
-    // Allocate from a pre-allocated locked memory pool and construct an
-    // object.  The returned pointer may be deallocated with a regular
-    // 'delete' expression.
-    template<typename T, typename... A>
-    [[nodiscard]] inline T* locked_new(A&&... args)
-    {
-        void* const p = locked_malloc(sizeof(T), alignof(T));
-        if (p == nullptr) throw std::bad_alloc { };
-        try { return new (p) T { std::forward<A>(args)... }; }
-        catch (...) { free(p); throw; }
-    }
-
-    // Allocate from a pre-allocated locked memory pool and construct an
-    // array.  The returned pointer may be deallocated with a regular
-    // 'delete[]' expression.
-    template<typename T, typename... A>
-    [[nodiscard]] inline T* locked_new_array(std::size_t n, A&&... args)
-    {
-        void* const p = locked_malloc(sizeof(T) * n, alignof(T));
-        if (p == nullptr) throw std::bad_alloc { };
-        try { return new (p) T[n] { std::forward<A>(args)... }; }
-        catch (...) { free(p); throw; }
-    }
-
-    // Allocate from a pre-allocated locked memory pool and construct an
-    // object via default-initialization.  The returned pointer may be
-    // deallocated with a regular 'delete' expression.
-    template<typename T>
-    [[nodiscard]] inline T* locked_uninitialized_new()
-    {
-        void* const p = locked_malloc(sizeof(T), alignof(T));
-        if (p == nullptr) throw std::bad_alloc { };
-        try { return new (p) T; }
-        catch (...) { free(p); throw; }
-    }
-
-    // Allocate from a pre-allocated locked memory pool and construct an array
-    // with default-initialized elements.  The returned pointer may be
-    // deallocated with a regular 'delete[]' expression.
-    template<typename T>
-    [[nodiscard]] inline T* locked_uninitialized_new_array(std::size_t n)
-    {
-        void* const p = locked_malloc(sizeof(T) * n, alignof(T));
-        if (p == nullptr) throw std::bad_alloc { };
-        try { return new (p) T[n]; }
-        catch (...) { free(p); throw; }
-    }
+    [[nodiscard]] void* allocate_locked(std::size_t, std::align_val_t = std::align_val_t { __STDCPP_DEFAULT_NEW_ALIGNMENT__ });
 
 #   ifdef HAVE__MMX__
     inline constexpr bool mmx = true;
@@ -97,4 +47,16 @@ namespace jw
 #   else
     inline constexpr bool sse = false;
 #   endif
+
+    // This tag type may be used to allocate from a pre-allocated locked
+    // memory pool, using the 'operator new' overloads below.  This also works
+    // with arrays.  The returned pointer can be deallocated using a regular
+    // 'delete' or 'delete[]' expression.
+    // Example: auto* p = new (jw::locked) int[128];
+    struct locked_alloc_tag { } constexpr inline locked;
 }
+
+[[nodiscard]] inline void* operator new  (std::size_t n, const jw::locked_alloc_tag&) { return jw::allocate_locked(n); }
+[[nodiscard]] inline void* operator new[](std::size_t n, const jw::locked_alloc_tag&) { return jw::allocate_locked(n); }
+[[nodiscard]] inline void* operator new  (std::size_t n, std::align_val_t a, const jw::locked_alloc_tag&) { return jw::allocate_locked(n, a); }
+[[nodiscard]] inline void* operator new[](std::size_t n, std::align_val_t a, const jw::locked_alloc_tag&) { return jw::allocate_locked(n, a); }
