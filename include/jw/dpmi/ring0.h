@@ -6,6 +6,7 @@
 #pragma once
 #include <optional>
 #include <jw/dpmi/memory.h>
+#include <jw/dpmi/irq_mask.h>
 
 namespace jw::dpmi
 {
@@ -33,6 +34,7 @@ namespace jw::dpmi
         inline static far_ptr32 entry;
         inline static std::uintptr_t esp;
         inline static selector ring3_ds;
+        interrupt_mask no_irqs { };
         bool dont_leave { false };
 
         static void setup(bool);
