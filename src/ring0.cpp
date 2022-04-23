@@ -8,7 +8,8 @@
 
 namespace jw::dpmi
 {
-    enum { unknown, yes, no } static ring0_accessible { unknown };
+    enum { unknown, yes, no } static constinit ring0_accessible { unknown };
+    static constinit std::size_t ring0_selector_limit { 0 };
 
     void ring0_privilege::setup(bool throw_on_fail)
     {
@@ -37,6 +38,7 @@ namespace jw::dpmi
             if (gate->read().call_gate.not_system_segment) throw std::runtime_error { "Failed to create call gate" };
 
             entry.segment = gate->get_selector();
+            ring0_selector_limit = __djgpp_selector_limit;
             ring0_accessible = yes;
         }
         catch (...)
@@ -52,11 +54,17 @@ namespace jw::dpmi
 
     ring0_privilege::ring0_privilege()
     {
-        selector_bits cs { get_cs() };
-        if (cs.privilege_level != 0)
+        selector_bits current_cs { get_cs() };
+        if (current_cs.privilege_level != 0)
         {
             if (ring0_accessible == unknown) [[unlikely]] setup(true);
             if (ring0_accessible != yes) throw no_ring0_access { };
+            if (ring0_selector_limit < static_cast<std::size_t>(__djgpp_selector_limit))
+            {
+                cs->set_limit(__djgpp_selector_limit);
+                ss->set_limit(__djgpp_selector_limit);
+                ring0_selector_limit = __djgpp_selector_limit;
+            }
             ring3_ds = get_ds();
             enter();
         }
