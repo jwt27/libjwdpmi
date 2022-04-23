@@ -198,14 +198,14 @@ namespace jw
                     do_ps2_command<seq...>(data.begin(), result);
                     return result;
                 }
-                catch (const io_error& e)
+                catch (const io_error&)
                 {
                     fmt::print(stderr, "Error occured during PS/2 command sequence:");
                     for (auto c : { seq... }) fmt::print(stderr, " {:0>2x}", c);
                     fmt::print(stderr, "\nWith data:");
                     for (auto d : data) fmt::print(stderr, " {:0>2x}", d);
                     fmt::print(stderr, "\n");
-                    print_exception(e);
+                    print_exception();
                     if (retried) throw;
                     reset();
                     retried = true;

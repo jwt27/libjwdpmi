@@ -17,7 +17,8 @@ namespace jw
 {
     struct init;
 
-    void print_exception(const std::exception& e, int level = 0) noexcept;
+    // Print the current exception to stderr, including any nested exceptions.
+    void print_exception() noexcept;
 
     struct terminate_exception final
     {

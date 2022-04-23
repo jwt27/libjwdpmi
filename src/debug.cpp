@@ -1422,8 +1422,7 @@ namespace jw
 
                     while (sent_packets.size() > 0 and debug_mode) recv_ack();
                 }
-                catch (const std::exception& e) { print_exception(e); catch_exception(); }
-                catch (...) { catch_exception(); }
+                catch (...) { print_exception(); catch_exception(); }
                 asm("cli");
 
                 leave();

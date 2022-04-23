@@ -153,8 +153,7 @@ namespace jw::dpmi::detail
         {
             fmt::print(stderr, "Exception while servicing IRQ {:d}\n", i);
             try { throw; }
-            catch (const std::exception& e) { print_exception(e); }
-            catch (...) { }
+            catch (...) { print_exception(); }
             halt();
         }
 

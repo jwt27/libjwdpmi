@@ -46,7 +46,7 @@ namespace jw
         void notify_gdb_exit(byte result);
     }
 
-    void print_exception(const std::exception& e, int level) noexcept
+    static void do_print_exception(const std::exception& e, int level = 0) noexcept
     {
         if (level == 0)
             fmt::print(stderr, "Exception: {}\n", e.what());
@@ -54,8 +54,15 @@ namespace jw
             fmt::print(stderr, "Nested exception {:d}: {}\n", level, e.what());
         if (auto* cpu_ex = dynamic_cast<const dpmi::cpu_exception*>(&e)) cpu_ex->print();
         try { std::rethrow_if_nested(e); }
-        catch (const std::exception& e) { print_exception(e, level + 1); }
-        catch (...) { fmt::print(stderr, "Exception {:d}: unknown exception\n", level + 1); }
+        catch (const std::exception& e) { do_print_exception(e, level + 1); }
+        catch (...) { fmt::print(stderr, "Nested exception {:d}: unknown exception\n", level + 1); }
+    }
+
+    void print_exception() noexcept
+    {
+        try { throw; }
+        catch (const std::exception& e) { do_print_exception(e); }
+        catch (...) { fmt::print(stderr, "Exception: unknown exception\n"); }
     }
 
     [[noreturn]] static void terminate_handler() noexcept
@@ -78,13 +85,12 @@ namespace jw
         {
             fmt::print(stderr, "std::terminate called after throwing an exception:\n");
             try { std::rethrow_exception(exc); }
-            catch (const std::exception& e) { print_exception(e); }
             catch (const terminate_exception& e)
             {
                 e.defuse();
                 fmt::print(stderr, "terminate_exception\n");
             }
-            catch (...) { fmt::print(stderr, "unknown exception\n"); }
+            catch (...) { print_exception(); }
         }
         else fmt::print(stderr, "Terminating.\n");
         debug::print_backtrace();
@@ -151,9 +157,8 @@ int main(int argc, const char** argv)
         const std::size_t n = a - args;
         jw::exit_code = jwdpmi_main({ args, n });
     }
-    catch (const std::exception& e) { fmt::print(stderr, "Caught exception in main()!\n"); jw::print_exception(e); }
     catch (const jw::terminate_exception& e) { e.defuse(); fmt::print(stderr, "{}\n", e.what()); }
-    catch (...) { fmt::print(stderr, "Caught unknown exception in main()!\n"); }
+    catch (...) { fmt::print(stderr, "Caught exception in main()!\n"); jw::print_exception(); }
 
     jw::detail::scheduler::kill_all();
 

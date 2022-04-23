@@ -108,15 +108,8 @@ namespace jw::dpmi::detail
             }
             else
             {
-                try { throw; }
-                catch (const cpu_exception& e) { print_exception(e); }
-                catch (...)
-                {
-                    fmt::print(stderr, "Caught exception while handling CPU exception 0x{:0>2x}\n", data->num.value);
-                    try { throw; }
-                    catch (const std::exception& e) { print_exception(e); }
-                    catch (...) { }
-                }
+                fmt::print(stderr, "Caught exception while handling CPU exception 0x{:0>2x}\n", data->num.value);
+                print_exception();
                 if (redirect_exception(info, kill)) success = true;
                 else std::terminate();
             }

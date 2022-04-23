@@ -171,8 +171,7 @@ namespace jw::detail
             fmt::print(stderr, FMT_STRING(" ({})"), t->name);
 #           endif
             fmt::print(stderr, "\n");
-            try { throw; }
-            catch (std::exception& e) { print_exception(e); }
+            print_exception();
             terminating = true;
         }
         t->state = thread::finishing;
@@ -241,8 +240,7 @@ namespace jw::detail
                 fmt::print(stderr, FMT_STRING(" ({})"), t->name);
 #               endif
                 fmt::print(stderr, "\n");
-                try { throw; }
-                catch (std::exception& e) { print_exception(e); }
+                print_exception();
                 terminating = true;
             }
         }
