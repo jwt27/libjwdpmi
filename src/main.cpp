@@ -105,6 +105,8 @@ namespace jw
             halt();
         }
 
+        uninstall_exception_handlers();
+
         std::_Exit(-1);
     }
 

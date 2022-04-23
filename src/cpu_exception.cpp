@@ -417,6 +417,11 @@ namespace jw::dpmi::detail
         try_install(exception_num::virtualization_exception);
         try_install(exception_num::security_exception);
     }
+
+    void uninstall_exception_handlers()
+    {
+        for (auto& i : exception_handlers) i.reset();
+    }
 }
 
 namespace jw::dpmi
