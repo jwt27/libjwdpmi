@@ -33,6 +33,10 @@ namespace jw
 
     [[nodiscard]] void* realloc(void* pointer, std::size_t new_size, std::size_t alignment);
 
+    // Allocate from a pre-allocated locked memory pool.  This memory may be
+    // deallocated with free().
+    [[nodiscard]] void* locked_malloc(std::size_t size, std::size_t alignment = __STDCPP_DEFAULT_NEW_ALIGNMENT__);
+
 #   ifdef HAVE__MMX__
     inline constexpr bool mmx = true;
 #   else

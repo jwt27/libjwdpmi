@@ -297,6 +297,45 @@ namespace jw
         }
         return new_p;
     }
+
+    [[nodiscard]] static void* do_locked_alloc(std::size_t size, std::size_t alignment)
+    {
+        if (irq_alloc == nullptr) throw std::bad_alloc { };
+
+        debug::trap_mask dont_trap_here { };
+        auto* p = irq_alloc->allocate(size, alignment);
+        min_chunk_size = std::min(min_chunk_size, irq_alloc->max_chunk_size());
+        return p;
+    }
+
+    static void resize_irq_alloc() noexcept
+    {
+        if (min_chunk_size >= irq_alloc_size / 4) [[likely]] return;
+        if (irq_alloc == nullptr) return;
+        if (irq_alloc_resize.test_and_set()) return;
+
+        local_destructor scope_guard { [] { irq_alloc_resize.clear(); } };
+        dpmi::interrupt_mask no_interrupts_here { };
+        debug::trap_mask dont_trap_here { };
+        auto* ia = irq_alloc;
+        irq_alloc = nullptr;
+        try
+        {
+            ia->grow(irq_alloc_size / 2);
+            min_chunk_size = ia->max_chunk_size();
+        }
+        catch (const std::bad_alloc&) { } // Relatively safe to ignore.
+        irq_alloc = ia;
+    }
+
+    void* locked_malloc(std::size_t n, std::size_t a)
+    {
+        if (not dpmi::in_irq_context())
+            resize_irq_alloc();
+
+        try { return do_locked_alloc(n, a); }
+        catch (...) { return nullptr; }
+    }
 }
 
 extern "C"
@@ -345,36 +384,11 @@ extern "C"
 [[nodiscard]] void* operator new(std::size_t size, std::align_val_t alignment)
 {
     if (dpmi::in_irq_context() or dpmi::get_cs() == dpmi::detail::ring0_cs)
-    {
-        if (irq_alloc != nullptr)
-        {
-            debug::trap_mask dont_trap_here { };
-            auto* p = irq_alloc->allocate(size, static_cast<std::size_t>(alignment));
-            min_chunk_size = std::min(min_chunk_size, irq_alloc->max_chunk_size());
-            return p;
-        }
-        else throw std::bad_alloc { };
-    }
+        return do_locked_alloc(size, static_cast<std::size_t>(alignment));
 
-    if (min_chunk_size < irq_alloc_size / 4
-        and irq_alloc != nullptr
-        and not irq_alloc_resize.test_and_set()) [[unlikely]]
-    {
-        local_destructor scope_guard { [] { irq_alloc_resize.clear(); } };
-        dpmi::interrupt_mask no_interrupts_here { };
-        debug::trap_mask dont_trap_here { };
-        auto* ia = irq_alloc;
-        irq_alloc = nullptr;
-        try
-        {
-            ia->grow(irq_alloc_size / 2);
-            min_chunk_size = ia->max_chunk_size();
-        }
-        catch (const std::bad_alloc&) { } // Relatively safe to ignore.
-        irq_alloc = ia;
-    }
+    resize_irq_alloc();
 
-    const auto align = static_cast<std::size_t>(alignment);
+    const auto align = std::max(static_cast<std::size_t>(alignment), std::size_t { 4 });
     const auto overhead = sizeof(std::size_t) + sizeof(std::uint8_t);
     const auto n = size + align + overhead;
 
@@ -383,8 +397,7 @@ extern "C"
     const auto p = reinterpret_cast<std::uintptr_t>(p_malloc);
 
     const auto a = p + overhead;
-    auto b = a & -align;
-    if (b != a) b += align;
+    const auto b = (a + align - 1) & -align;
     auto* const p_aligned = reinterpret_cast<void*>(b);
     *reinterpret_cast<std::size_t*>(p) = size;          // Store original size (for realloc).
     *reinterpret_cast<std::uint8_t*>(b - 1) = b - p;    // Store alignment offset.
