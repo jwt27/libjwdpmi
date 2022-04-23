@@ -51,6 +51,18 @@ namespace jw
     }
 
     // Allocate from a pre-allocated locked memory pool and construct an
+    // array.  The returned pointer may be deallocated with a regular
+    // 'delete[]' expression.
+    template<typename T, typename... A>
+    [[nodiscard]] inline T* locked_new_array(std::size_t n, A&&... args)
+    {
+        void* const p = locked_malloc(sizeof(T) * n, alignof(T));
+        if (p == nullptr) throw std::bad_alloc { };
+        try { return new (p) T[n] { std::forward<A>(args)... }; }
+        catch (...) { free(p); throw; }
+    }
+
+    // Allocate from a pre-allocated locked memory pool and construct an
     // object via default-initialization.  The returned pointer may be
     // deallocated with a regular 'delete' expression.
     template<typename T>
@@ -59,6 +71,18 @@ namespace jw
         void* const p = locked_malloc(sizeof(T), alignof(T));
         if (p == nullptr) throw std::bad_alloc { };
         try { return new (p) T; }
+        catch (...) { free(p); throw; }
+    }
+
+    // Allocate from a pre-allocated locked memory pool and construct an array
+    // with default-initialized elements.  The returned pointer may be
+    // deallocated with a regular 'delete[]' expression.
+    template<typename T>
+    [[nodiscard]] inline T* locked_uninitialized_new_array(std::size_t n)
+    {
+        void* const p = locked_malloc(sizeof(T) * n, alignof(T));
+        if (p == nullptr) throw std::bad_alloc { };
+        try { return new (p) T[n]; }
         catch (...) { free(p); throw; }
     }
 
