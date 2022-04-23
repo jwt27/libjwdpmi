@@ -224,6 +224,7 @@ namespace jw::dpmi::detail
     static_assert(sizeof(raw_exception_frame) == 0x94);
 
     void setup_exception_handling();
+    void uninstall_exception_handlers();
 
     [[noreturn]]
     void kill();

@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
@@ -59,7 +60,7 @@ namespace jw
             rtc_index.write(0x0C);
             rtc_data.read();
 
-            if (tsc_ref == tsc_reference::rtc) update_tsc();
+            if (tsc_ref == timer_irq::rtc) update_tsc();
 
             dpmi::irq_handler::acknowledge();
         }, dpmi::always_call | dpmi::no_interrupts };
@@ -74,7 +75,7 @@ namespace jw
                 :: "cc"
             );
 
-            if (tsc_ref == tsc_reference::pit) update_tsc();
+            if (tsc_ref == timer_irq::pit) update_tsc();
 
             dpmi::irq_handler::acknowledge();
         }, dpmi::always_call | dpmi::no_auto_eoi };
@@ -134,7 +135,7 @@ namespace jw
             rtc_data.read();                        // read and discard data
         }
 
-        void setup::setup_tsc(std::size_t sample_size, tsc_reference r)
+        void setup::setup_tsc(std::size_t sample_size, timer_irq r)
         {
             if (not dpmi::cpuid::feature_flags().time_stamp_counter) return;
 
@@ -142,8 +143,8 @@ namespace jw
             {
                 switch (r)
                 {
-                case tsc_reference::pit: return pit_irq.is_enabled();
-                case tsc_reference::rtc: return rtc_irq.is_enabled();
+                case timer_irq::pit: return pit_irq.is_enabled();
+                case timer_irq::rtc: return rtc_irq.is_enabled();
                 default: return false;
                 }
             };
@@ -173,10 +174,10 @@ namespace jw
         void setup::reset_pit()
         {
             dpmi::interrupt_mask no_irq { };
-            if (tsc_ref == tsc_reference::pit)
+            if (tsc_ref == timer_irq::pit)
             {
                 reset_tsc();
-                tsc_ref = tsc_reference::none;
+                tsc_ref = timer_irq::none;
             }
             pit_irq.disable();
             pit_ticks = 0;
@@ -189,10 +190,10 @@ namespace jw
         void setup::reset_rtc()
         {
             dpmi::interrupt_mask no_irq { };
-            if (tsc_ref == tsc_reference::rtc)
+            if (tsc_ref == timer_irq::rtc)
             {
                 reset_tsc();
-                tsc_ref = tsc_reference::none;
+                tsc_ref = timer_irq::none;
             }
             rtc_irq.disable();
             rtc_ticks = 0;
@@ -311,7 +312,7 @@ namespace jw
 
         tsc::time_point tsc::now() noexcept
         {
-            if (setup::tsc_ref == tsc_reference::none) [[unlikely]]
+            if (setup::tsc_ref == timer_irq::none) [[unlikely]]
             {
                 return time_point { std::chrono::duration_cast<duration>(pit::now().time_since_epoch()) };
             }

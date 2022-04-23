@@ -17,6 +17,7 @@
 #include <sys/nearptr.h>
 #include <cstring>
 #include <vector>
+#include <bitset>
 
 namespace jw::dpmi::detail
 {
@@ -84,14 +85,6 @@ namespace jw::dpmi::detail
     static bool handle_exception(__seg_fs raw_exception_frame* frame) noexcept
     {
         auto* const data = frame->data;
-
-        if (data->num == exception_num::device_not_available or
-            data->num == exception_num::invalid_opcode)
-        {
-            if (fpu_context::try_context_switch())
-                return true;
-        }
-
         auto* const f = data->is_dpmi10 ? &frame->frame_10 : &frame->frame_09;
         interrupt_id id { data->num, interrupt_type::exception };
 
@@ -107,34 +100,19 @@ namespace jw::dpmi::detail
         }
         catch (...)
         {
-            const auto base = descriptor::get_base(get_cs());
-            const bool can_redirect = not f->flags.v86_mode and
-                                      not f->info_bits.redirect_elsewhere and
-                                      descriptor::get_base(f->fault_address.segment) == base and
-                                      descriptor::get_base(f->stack.segment) == base;
-            const bool can_throw = config::enable_throwing_from_cpu_exceptions and can_redirect;
-
-            if (can_throw)
+            if (config::enable_throwing_from_cpu_exceptions and
+                redirect_exception(info, detail::rethrow_cpu_exception))
             {
                 pending_exceptions->emplace_back(std::current_exception());
-                redirect_exception(info, detail::rethrow_cpu_exception);
                 success = true;
             }
-            else if (can_redirect)
+            else
             {
-                try { throw; }
-                catch (const cpu_exception& e) { e.print(); }
-                catch (...)
-                {
-                    fmt::print(stderr, "Caught exception while handling CPU exception 0x{:0>2x}\n", data->num.value);
-                    try { throw; }
-                    catch (const std::exception& e) { print_exception(e); }
-                    catch (...) { }
-                }
-                redirect_exception(info, kill);
-                success = true;
+                fmt::print(stderr, "Caught exception while handling CPU exception 0x{:0>2x}\n", data->num.value);
+                print_exception();
+                if (redirect_exception(info, kill)) success = true;
+                else std::terminate();
             }
-            else std::terminate();
         }
 
 #       ifndef NDEBUG
@@ -330,31 +308,32 @@ namespace jw::dpmi::detail
         jw::terminate();
     }
 
-    template <exception_num N>
     static bool default_exception_handler(const exception_info& i)
     {
-        if constexpr (N == exception_num::double_fault or
-                      N == exception_num::machine_check)
+        if (i.num == exception_num::double_fault or
+            i.num == exception_num::machine_check)
         {
             i.frame->print();
             i.registers->print();
-            fmt::print(stderr, "{}\n", cpu_category { }.message(N));
+            fmt::print(stderr, "{}\n", cpu_category { }.message(i.num));
             halt();
         }
 
-        if (i.frame->flags.v86_mode) return false;
+        if constexpr (not config::enable_throwing_from_cpu_exceptions) return false;
 
-        if constexpr (config::enable_throwing_from_cpu_exceptions)
-            throw_cpu_exception(i);
-
-        return false;
-    }
-
-    template <exception_num N, exception_num... Next>
-    static void install_handlers()
-    {
-        exception_handlers[N].emplace(N, [](const exception_info& i) { return default_exception_handler<N>(i); });
-        if constexpr (sizeof...(Next) > 0) install_handlers<Next...>();
+        if (redirect_exception(i, rethrow_cpu_exception)) [[likely]]
+        {
+            try
+            {
+                throw_cpu_exception(i);
+            }
+            catch (...)
+            {
+                pending_exceptions->emplace_back(std::current_exception());
+            }
+            return true;
+        }
+        else return false;
     }
 
     void setup_exception_handling()
@@ -364,49 +343,62 @@ namespace jw::dpmi::detail
         done = true;
 
         for (auto& i : trampoline_pool) i.next_free = &i + 1;
-        trampoline_pool.rbegin()->next_free = nullptr;
+        trampoline_pool.back().next_free = nullptr;
         free_list = trampoline_pool.begin();
         *reinterpret_cast<std::uint32_t*>(exception_stack.data()) = 0xdeadbeef;
 
         pending_exceptions.emplace();
 
-        install_handlers<exception_num::invalid_opcode,
-                         exception_num::device_not_available,
-                         exception_num::general_protection_fault>();
+        auto install = [](exception_num n)
+        {
+            exception_handlers[n].emplace(n, [](const exception_info& i) { return default_exception_handler(i); });
+        };
+
+        auto try_install = [install](exception_num n)
+        {
+            try { install(n); } catch (const dpmi_error&) { /* ignore */ }
+        };
+
+        install(exception_num::general_protection_fault);
+        install(exception_num::stack_segment_fault);
 
         if constexpr (not config::enable_throwing_from_cpu_exceptions) return;
 
-        install_handlers<exception_num::divide_error,
-                         exception_num::trap,
-                         exception_num::non_maskable_interrupt,
-                         exception_num::breakpoint,
-                         exception_num::overflow,
-                         exception_num::bound_range_exceeded,
-                         exception_num::double_fault,
-                         exception_num::x87_segment_not_present,
-                         exception_num::invalid_tss,
-                         exception_num::segment_not_present,
-                         exception_num::stack_segment_fault,
-                         exception_num::page_fault>();
+        install(exception_num::divide_error);
+        install(exception_num::trap);
+        install(exception_num::non_maskable_interrupt);
+        install(exception_num::breakpoint);
+        install(exception_num::overflow);
+        install(exception_num::bound_range_exceeded);
+        install(exception_num::invalid_opcode);
+        install(exception_num::device_not_available);
+        install(exception_num::double_fault);
+        install(exception_num::x87_segment_not_present);
+        install(exception_num::invalid_tss);
+        install(exception_num::segment_not_present);
+        install(exception_num::page_fault);
 
-        try
-        {
-            install_handlers<exception_num::x87_exception,
-                             exception_num::alignment_check,
-                             exception_num::machine_check,
-                             exception_num::sse_exception,
-                             exception_num::virtualization_exception,
-                             exception_num::security_exception>();
-        }
-        catch (const dpmi_error&) { /* ignore */ }
+        try_install(exception_num::x87_exception);
+        try_install(exception_num::alignment_check);
+        try_install(exception_num::machine_check);
+        try_install(exception_num::sse_exception);
+        try_install(exception_num::virtualization_exception);
+        try_install(exception_num::security_exception);
+    }
+
+    void uninstall_exception_handlers()
+    {
+        for (auto& i : exception_handlers) i.reset();
     }
 }
 
 namespace jw::dpmi
 {
-    void redirect_exception(const exception_info& info, void(*func)())
+    bool redirect_exception(const exception_info& info, void(*func)())
     {
-        if (info.frame->info_bits.redirect_elsewhere) throw already_redirected { };
+        if (info.frame->info_bits.redirect_elsewhere or
+            info.frame->fault_address.segment != detail::main_cs or
+            info.frame->flags.v86_mode) return false;
 
         const std::uintptr_t ret = info.frame->fault_address.offset;
         const selector ss = info.frame->stack.segment;
@@ -421,6 +413,7 @@ namespace jw::dpmi
         info.frame->flags.interrupts_enabled = false;
         info.frame->fault_address.offset = p->code();
         info.frame->info_bits.redirect_elsewhere = true;
+        return true;
     }
 
     void async_signal::raise(id_type i)

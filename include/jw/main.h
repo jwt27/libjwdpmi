@@ -9,6 +9,7 @@
 
 #pragma once
 #include <exception>
+#include <cstdlib>
 
 int main(int, const char**);
 
@@ -16,7 +17,8 @@ namespace jw
 {
     struct init;
 
-    void print_exception(const std::exception& e, int level = 0) noexcept;
+    // Print the current exception to stderr, including any nested exceptions.
+    void print_exception() noexcept;
 
     struct terminate_exception final
     {
@@ -32,6 +34,58 @@ namespace jw
     [[noreturn]] inline void halt() { do { asm ("cli; hlt"); } while (true); }
 
     [[nodiscard]] void* realloc(void* pointer, std::size_t new_size, std::size_t alignment);
+
+    // Allocate from a pre-allocated locked memory pool.  This memory may be
+    // deallocated with free().
+    [[nodiscard]] void* locked_malloc(std::size_t size, std::size_t alignment = __STDCPP_DEFAULT_NEW_ALIGNMENT__);
+
+    // Allocate from a pre-allocated locked memory pool and construct an
+    // object.  The returned pointer may be deallocated with a regular
+    // 'delete' expression.
+    template<typename T, typename... A>
+    [[nodiscard]] inline T* locked_new(A&&... args)
+    {
+        void* const p = locked_malloc(sizeof(T), alignof(T));
+        if (p == nullptr) throw std::bad_alloc { };
+        try { return new (p) T { std::forward<A>(args)... }; }
+        catch (...) { free(p); throw; }
+    }
+
+    // Allocate from a pre-allocated locked memory pool and construct an
+    // array.  The returned pointer may be deallocated with a regular
+    // 'delete[]' expression.
+    template<typename T, typename... A>
+    [[nodiscard]] inline T* locked_new_array(std::size_t n, A&&... args)
+    {
+        void* const p = locked_malloc(sizeof(T) * n, alignof(T));
+        if (p == nullptr) throw std::bad_alloc { };
+        try { return new (p) T[n] { std::forward<A>(args)... }; }
+        catch (...) { free(p); throw; }
+    }
+
+    // Allocate from a pre-allocated locked memory pool and construct an
+    // object via default-initialization.  The returned pointer may be
+    // deallocated with a regular 'delete' expression.
+    template<typename T>
+    [[nodiscard]] inline T* locked_uninitialized_new()
+    {
+        void* const p = locked_malloc(sizeof(T), alignof(T));
+        if (p == nullptr) throw std::bad_alloc { };
+        try { return new (p) T; }
+        catch (...) { free(p); throw; }
+    }
+
+    // Allocate from a pre-allocated locked memory pool and construct an array
+    // with default-initialized elements.  The returned pointer may be
+    // deallocated with a regular 'delete[]' expression.
+    template<typename T>
+    [[nodiscard]] inline T* locked_uninitialized_new_array(std::size_t n)
+    {
+        void* const p = locked_malloc(sizeof(T) * n, alignof(T));
+        if (p == nullptr) throw std::bad_alloc { };
+        try { return new (p) T[n]; }
+        catch (...) { free(p); throw; }
+    }
 
 #   ifdef HAVE__MMX__
     inline constexpr bool mmx = true;

@@ -46,7 +46,7 @@ namespace jw
         void notify_gdb_exit(byte result);
     }
 
-    void print_exception(const std::exception& e, int level) noexcept
+    static void do_print_exception(const std::exception& e, int level = 0) noexcept
     {
         if (level == 0)
             fmt::print(stderr, "Exception: {}\n", e.what());
@@ -54,8 +54,15 @@ namespace jw
             fmt::print(stderr, "Nested exception {:d}: {}\n", level, e.what());
         if (auto* cpu_ex = dynamic_cast<const dpmi::cpu_exception*>(&e)) cpu_ex->print();
         try { std::rethrow_if_nested(e); }
-        catch (const std::exception& e) { print_exception(e, level + 1); }
-        catch (...) { fmt::print(stderr, "Exception {:d}: unknown exception\n", level + 1); }
+        catch (const std::exception& e) { do_print_exception(e, level + 1); }
+        catch (...) { fmt::print(stderr, "Nested exception {:d}: unknown exception\n", level + 1); }
+    }
+
+    void print_exception() noexcept
+    {
+        try { throw; }
+        catch (const std::exception& e) { do_print_exception(e); }
+        catch (...) { fmt::print(stderr, "Exception: unknown exception\n"); }
     }
 
     [[noreturn]] static void terminate_handler() noexcept
@@ -78,13 +85,12 @@ namespace jw
         {
             fmt::print(stderr, "std::terminate called after throwing an exception:\n");
             try { std::rethrow_exception(exc); }
-            catch (const std::exception& e) { print_exception(e); }
             catch (const terminate_exception& e)
             {
                 e.defuse();
                 fmt::print(stderr, "terminate_exception\n");
             }
-            catch (...) { fmt::print(stderr, "unknown exception\n"); }
+            catch (...) { print_exception(); }
         }
         else fmt::print(stderr, "Terminating.\n");
         debug::print_backtrace();
@@ -104,6 +110,8 @@ namespace jw
             fmt::print(stderr, ", unable to terminate.\n");
             halt();
         }
+
+        uninstall_exception_handlers();
 
         std::_Exit(-1);
     }
@@ -149,9 +157,8 @@ int main(int argc, const char** argv)
         const std::size_t n = a - args;
         jw::exit_code = jwdpmi_main({ args, n });
     }
-    catch (const std::exception& e) { fmt::print(stderr, "Caught exception in main()!\n"); jw::print_exception(e); }
     catch (const jw::terminate_exception& e) { e.defuse(); fmt::print(stderr, "{}\n", e.what()); }
-    catch (...) { fmt::print(stderr, "Caught unknown exception in main()!\n"); }
+    catch (...) { fmt::print(stderr, "Caught exception in main()!\n"); jw::print_exception(); }
 
     jw::detail::scheduler::kill_all();
 
@@ -190,10 +197,31 @@ namespace jw
             main_cs = get_cs();
             main_ds = get_ds();
 
-            jw::detail::scheduler::setup();
+            asm
+            (R"(
+                fnclex
+                fninit
+                sub esp, 4
+                fnstcw [esp]
+                or byte ptr [esp], 0xBF     # mask all FPU exceptions
+                fldcw [esp]
+                add esp, 4
+            )");
+#           ifdef HAVE__SSE__
+            asm
+            (R"(
+                sub esp, 4
+                stmxcsr [esp]
+                or word ptr [esp], 0x1F80
+                ldmxcsr [esp]
+                add esp, 4
+            )");
+#           endif
 
             interrupt_id::setup();
+            jw::detail::scheduler::setup();
             setup_exception_handling();
+            setup_direct_ldt_access();
 
             // Try setting control registers first in ring 3.  If we have no ring0 access, the
             // dpmi host might still trap and emulate control register access.
@@ -274,6 +302,45 @@ namespace jw
         }
         return new_p;
     }
+
+    [[nodiscard]] static void* do_locked_alloc(std::size_t size, std::size_t alignment)
+    {
+        if (irq_alloc == nullptr) throw std::bad_alloc { };
+
+        debug::trap_mask dont_trap_here { };
+        auto* p = irq_alloc->allocate(size, alignment);
+        min_chunk_size = std::min(min_chunk_size, irq_alloc->max_chunk_size());
+        return p;
+    }
+
+    static void resize_irq_alloc() noexcept
+    {
+        if (min_chunk_size >= irq_alloc_size / 4) [[likely]] return;
+        if (irq_alloc == nullptr) return;
+        if (irq_alloc_resize.test_and_set()) return;
+
+        local_destructor scope_guard { [] { irq_alloc_resize.clear(); } };
+        dpmi::interrupt_mask no_interrupts_here { };
+        debug::trap_mask dont_trap_here { };
+        auto* ia = irq_alloc;
+        irq_alloc = nullptr;
+        try
+        {
+            ia->grow(irq_alloc_size / 2);
+            min_chunk_size = ia->max_chunk_size();
+        }
+        catch (const std::bad_alloc&) { } // Relatively safe to ignore.
+        irq_alloc = ia;
+    }
+
+    void* locked_malloc(std::size_t n, std::size_t a)
+    {
+        if (not dpmi::in_irq_context())
+            resize_irq_alloc();
+
+        try { return do_locked_alloc(n, a); }
+        catch (...) { return nullptr; }
+    }
 }
 
 extern "C"
@@ -322,36 +389,11 @@ extern "C"
 [[nodiscard]] void* operator new(std::size_t size, std::align_val_t alignment)
 {
     if (dpmi::in_irq_context() or dpmi::get_cs() == dpmi::detail::ring0_cs)
-    {
-        if (irq_alloc != nullptr)
-        {
-            debug::trap_mask dont_trap_here { };
-            auto* p = irq_alloc->allocate(size, static_cast<std::size_t>(alignment));
-            min_chunk_size = std::min(min_chunk_size, irq_alloc->max_chunk_size());
-            return p;
-        }
-        else throw std::bad_alloc { };
-    }
+        return do_locked_alloc(size, static_cast<std::size_t>(alignment));
 
-    if (min_chunk_size < irq_alloc_size / 4
-        and irq_alloc != nullptr
-        and not irq_alloc_resize.test_and_set()) [[unlikely]]
-    {
-        local_destructor scope_guard { [] { irq_alloc_resize.clear(); } };
-        dpmi::interrupt_mask no_interrupts_here { };
-        debug::trap_mask dont_trap_here { };
-        auto* ia = irq_alloc;
-        irq_alloc = nullptr;
-        try
-        {
-            ia->grow(irq_alloc_size / 2);
-            min_chunk_size = ia->max_chunk_size();
-        }
-        catch (const std::bad_alloc&) { } // Relatively safe to ignore.
-        irq_alloc = ia;
-    }
+    resize_irq_alloc();
 
-    const auto align = static_cast<std::size_t>(alignment);
+    const auto align = std::max(static_cast<std::size_t>(alignment), std::size_t { 4 });
     const auto overhead = sizeof(std::size_t) + sizeof(std::uint8_t);
     const auto n = size + align + overhead;
 
@@ -360,8 +402,7 @@ extern "C"
     const auto p = reinterpret_cast<std::uintptr_t>(p_malloc);
 
     const auto a = p + overhead;
-    auto b = a & -align;
-    if (b != a) b += align;
+    const auto b = (a + align - 1) & -align;
     auto* const p_aligned = reinterpret_cast<void*>(b);
     *reinterpret_cast<std::size_t*>(p) = size;          // Store original size (for realloc).
     *reinterpret_cast<std::uint8_t*>(b - 1) = b - p;    // Store alignment offset.

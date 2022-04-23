@@ -8,30 +8,37 @@
 
 namespace jw::dpmi
 {
-    enum { unknown, yes, no } static ring0_accessible { unknown };
+    enum { unknown, yes, no } static constinit ring0_accessible { unknown };
+    static constinit std::size_t ring0_selector_limit { 0 };
 
     void ring0_privilege::setup(bool throw_on_fail)
     {
         if (ring0_accessible != unknown) return;
-        descriptor::direct_ldt_access();    // accessing ldt may require ring0, in which case this function will be re-entered.
-        if (ring0_accessible != unknown) return;
         try
         {
             cs = descriptor::clone_segment(detail::main_cs);
-            cs->segment.code_segment.privilege_level = 0;
+            auto data = cs->read();
+            data.segment.code_segment.privilege_level = 0;
             cs->set_selector_privilege(0);
             detail::ring0_cs = cs->get_selector();
-            cs->write();
+            cs->write(data);
+
             ss = descriptor::clone_segment(detail::safe_ds);
-            ss->segment.code_segment.privilege_level = 0;
+            data = ss->read();
+            data.segment.code_segment.privilege_level = 0;
             ss->set_selector_privilege(0);
             detail::ring0_ss = ss->get_selector();
-            ss->write();
+            ss->write(data);
+
             gate = descriptor::create_call_gate(detail::ring0_cs, reinterpret_cast<std::uintptr_t>(ring0_entry_point));
-            gate->call_gate.privilege_level = 3;
-            gate->call_gate.stack_params = 0;
-            gate->write();
+            data = gate->read();
+            data.call_gate.privilege_level = 3;
+            data.call_gate.stack_params = 0;
+            gate->write(data);
+            if (gate->read().call_gate.not_system_segment) throw std::runtime_error { "Failed to create call gate" };
+
             entry.segment = gate->get_selector();
+            ring0_selector_limit = __djgpp_selector_limit;
             ring0_accessible = yes;
         }
         catch (...)
@@ -47,11 +54,17 @@ namespace jw::dpmi
 
     ring0_privilege::ring0_privilege()
     {
-        selector_bits cs { get_cs() };
-        if (cs.privilege_level != 0)
+        selector_bits current_cs { get_cs() };
+        if (current_cs.privilege_level != 0)
         {
             if (ring0_accessible == unknown) [[unlikely]] setup(true);
             if (ring0_accessible != yes) throw no_ring0_access { };
+            if (ring0_selector_limit < static_cast<std::size_t>(__djgpp_selector_limit))
+            {
+                cs->set_limit(__djgpp_selector_limit);
+                ss->set_limit(__djgpp_selector_limit);
+                ring0_selector_limit = __djgpp_selector_limit;
+            }
             ring3_ds = get_ds();
             enter();
         }

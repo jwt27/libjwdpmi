@@ -12,19 +12,15 @@
 
 #include <cstdint>
 #include <algorithm>
-#include <deque>
 #include <stdexcept>
-#include <bitset>
 #include <string>
 #include <optional>
 #include <variant>
 #include <fmt/core.h>
 #include <jw/enum_struct.h>
 #include <jw/dpmi/dpmi.h>
-#include <jw/dpmi/lock.h>
 #include <jw/dpmi/alloc.h>
 #include <jw/dpmi/irq_check.h>
-#include <jw/dpmi/fpu.h>
 #include <jw/function.h>
 #include <jw/address_space.h>
 #include "jwdpmi_config.h"
@@ -165,17 +161,12 @@ namespace jw::dpmi
 
     using exception_handler_sig = bool(const exception_info&);
 
-    // Thrown when redirect_exception is called twice on the same exception frame.
-    struct already_redirected : std::runtime_error
-    {
-        already_redirected() : std::runtime_error { "Exception already redirected" } { }
-    };
-
     // Redirect to the given function on return from an exception handler.
     // Constructs a call frame on the stack so that execution resumes at the
     // fault location when this function returns.  All registers (including
     // FPU and flags) are preserved.
-    void redirect_exception(const exception_info& info, void(*)());
+    // Returns false if redirection from this exception frame is not possible.
+    bool redirect_exception(const exception_info& info, void(*)());
 }
 
 #pragma GCC diagnostic pop

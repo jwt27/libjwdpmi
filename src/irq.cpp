@@ -13,7 +13,6 @@
 #include <jw/main.h>
 #include <jw/thread.h>
 #include <jw/dpmi/irq_handler.h>
-#include <jw/dpmi/fpu.h>
 #include <jw/dpmi/detail/selectors.h>
 #include <jw/alloc.h>
 
@@ -154,8 +153,7 @@ namespace jw::dpmi::detail
         {
             fmt::print(stderr, "Exception while servicing IRQ {:d}\n", i);
             try { throw; }
-            catch (const std::exception& e) { print_exception(e); }
-            catch (...) { }
+            catch (...) { print_exception(); }
             halt();
         }
 

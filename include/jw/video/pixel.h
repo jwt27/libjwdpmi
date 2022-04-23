@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
@@ -674,12 +675,11 @@ namespace jw
         static_assert(sizeof(px8n  ) ==  1);
         static_assert(sizeof(pxvga ) ==  4);
 
-        inline auto generate_px8n_palette()
+        inline auto generate_px8n_palette() noexcept
         {
-            std::vector<px32n> result;
-            result.reserve(256);
-            for (auto i = 0; i < 256; ++i)
-                result.emplace_back(reinterpret_cast<px8n&>(i));
+            std::array<px32n, 256> result;
+            for (unsigned i = 0; i < 256; ++i)
+                result[i] = *reinterpret_cast<px8n*>(&i);
             return result;
         }
     }

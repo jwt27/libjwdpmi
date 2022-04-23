@@ -131,8 +131,6 @@ namespace jw::detail
             context_switch(&ct->context);
         }
 
-        dpmi::fpu_context::update_cr0();
-
 #       ifndef NDEBUG
         if (ct->id != thread::main_thread_id and *reinterpret_cast<std::uint32_t*>(ct->stack.data()) != 0xDEADBEEF) [[unlikely]]
             throw std::runtime_error { "Stack overflow!" };
@@ -173,8 +171,7 @@ namespace jw::detail
             fmt::print(stderr, FMT_STRING(" ({})"), t->name);
 #           endif
             fmt::print(stderr, "\n");
-            try { throw; }
-            catch (std::exception& e) { print_exception(e); }
+            print_exception();
             terminating = true;
         }
         t->state = thread::finishing;
@@ -243,8 +240,7 @@ namespace jw::detail
                 fmt::print(stderr, FMT_STRING(" ({})"), t->name);
 #               endif
                 fmt::print(stderr, "\n");
-                try { throw; }
-                catch (std::exception& e) { print_exception(e); }
+                print_exception();
                 terminating = true;
             }
         }

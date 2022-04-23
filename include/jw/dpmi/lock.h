@@ -13,9 +13,8 @@ namespace jw
     {
         namespace detail
         {
-            class memory_lock
+            struct memory_lock
             {
-            public:
                 memory_lock(const memory_lock& c) = delete;
                 memory_lock(memory_lock&& m) noexcept
                     : mem { std::move(m.mem) }, locked { m.locked }
@@ -37,19 +36,19 @@ namespace jw
 
             protected:
                 template<typename T>
-                memory_lock(selector segment, const T* ptr, std::size_t size_bytes) : mem(segment, ptr, size_bytes) { lock(); }
+                memory_lock(const T* ptr, std::size_t n) : mem { linear_memory::from_pointer(ptr, n) } { lock(); }
 
                 void lock()
                 {
                     if (locked) [[unlikely]] return;
-                    mem.lock_memory();
+                    mem.lock();
                     locked = true;
                 }
 
                 void unlock()
                 {
                     if (not locked) [[unlikely]] return;
-                    mem.unlock_memory();
+                    mem.unlock();
                     locked = false;
                 }
 
@@ -62,8 +61,7 @@ namespace jw
         struct data_lock final : protected detail::memory_lock
         {
             template<typename T>
-            data_lock(const T* addr, std::size_t num_elements = 1) : memory_lock(get_ds(), reinterpret_cast<const void*>(addr), num_elements * sizeof(T)) { }
-            data_lock(const void* addr, std::size_t size_bytes) : memory_lock(get_ds(), addr, size_bytes) { }
+            data_lock(const T* addr, std::size_t n = 1) : memory_lock(addr, n) { }
             using memory_lock::operator=;
         };
 
@@ -72,7 +70,7 @@ namespace jw
         class class_lock : public detail::memory_lock
         {
             friend T;
-            class_lock() : memory_lock(get_ds(), this, sizeof(T)) { }
+            class_lock() : memory_lock(static_cast<const void*>(this), sizeof(T)) { }
             class_lock(class_lock&&) : class_lock() { }
             class_lock(const class_lock&) : class_lock() { }
 
