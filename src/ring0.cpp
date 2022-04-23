@@ -13,8 +13,6 @@ namespace jw::dpmi
     void ring0_privilege::setup(bool throw_on_fail)
     {
         if (ring0_accessible != unknown) return;
-        descriptor::direct_ldt_access();    // accessing ldt may require ring0, in which case this function will be re-entered.
-        if (ring0_accessible != unknown) return;
         try
         {
             cs = descriptor::clone_segment(detail::main_cs);
@@ -23,17 +21,21 @@ namespace jw::dpmi
             cs->set_selector_privilege(0);
             detail::ring0_cs = cs->get_selector();
             cs->write(data);
+
             ss = descriptor::clone_segment(detail::safe_ds);
             data = ss->read();
             data.segment.code_segment.privilege_level = 0;
             ss->set_selector_privilege(0);
             detail::ring0_ss = ss->get_selector();
             ss->write(data);
+
             gate = descriptor::create_call_gate(detail::ring0_cs, reinterpret_cast<std::uintptr_t>(ring0_entry_point));
             data = gate->read();
             data.call_gate.privilege_level = 3;
             data.call_gate.stack_params = 0;
             gate->write(data);
+            if (gate->read().call_gate.not_system_segment) throw std::runtime_error { "Failed to create call gate" };
+
             entry.segment = gate->get_selector();
             ring0_accessible = yes;
         }

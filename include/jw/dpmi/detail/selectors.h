@@ -13,4 +13,6 @@ namespace jw::dpmi::detail
     inline selector ring0_ss;
 
     inline selector safe_ds;
+
+    void setup_direct_ldt_access() noexcept;
 }

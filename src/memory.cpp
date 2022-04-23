@@ -13,17 +13,16 @@
 
 namespace jw::dpmi
 {
-    std::optional<descriptor> gdt, ldt;
+    static std::optional<descriptor> gdt, ldt;
+    static bool direct_ldt_access = false;
 
-    [[gnu::noipa]] descriptor_data read_descriptor_direct(selector_bits s, bool use_ring0)
+    [[gnu::noipa]] static descriptor_data read_descriptor_direct(selector_bits s)
     {
         union
         {
             split_uint64_t raw;
             descriptor_data data;
         };
-        std::optional<ring0_privilege> r0;
-        if (use_ring0) r0.emplace();
         auto& table = s.local ? ldt : gdt;
         gs_override gs { table->get_selector() };
         asm ("mov %0, gs:[%1*8+0]" : "=r" (raw.lo) : "r" (s.index));
@@ -31,92 +30,75 @@ namespace jw::dpmi
         return data;
     }
 
-    [[gnu::noipa]] void write_descriptor_direct(selector_bits s, const descriptor_data& d, bool use_ring0)
+    [[gnu::noipa]] static void write_descriptor_direct(selector_bits s, const descriptor_data& d)
     {
         union
         {
             split_uint64_t raw;
             descriptor_data data;
         };
+
         data = d;
-        std::optional<ring0_privilege> r0;
-        if (use_ring0) r0.emplace();
         auto& table = s.local ? ldt : gdt;
         gs_override gs { table->get_selector() };
         asm ("mov gs:[%1*8+0], %0" :: "r" (raw.lo), "r" (s.index) : "memory");
         asm ("mov gs:[%1*8+4], %0" :: "r" (raw.hi), "r" (s.index) : "memory");
     }
+}
 
+namespace jw::dpmi::detail
+{
     struct [[gnu::packed]] gdt_register
     {
         std::uint16_t limit;
         std::uint32_t base;
     };
 
-    [[gnu::noipa]] auto sgdt()
+    [[gnu::noipa]] static auto sgdt()
     {
         gdt_register gdtr;
         asm ("sgdt %0"  : "=m"  (gdtr));
         return gdtr;
     }
 
-    [[gnu::noipa]] auto sldt()
+    [[gnu::noipa]] static auto sldt()
     {
         selector ldtr;
         asm ("sldt %w0" : "=rm" (ldtr));
         return ldtr;
     }
 
-    descriptor::direct_ldt_access_t descriptor::direct_ldt_access() noexcept
+    void setup_direct_ldt_access() noexcept
     {
-        static direct_ldt_access_t have_access { unknown };
-        if (have_access == unknown) [[unlikely]]
+        try
         {
-            bool use_ring0 { false };
-            retry:
-            try
-            {
-                have_access = no;
+            gdt_register gdtr;
+            selector ldtr;
 
-                gdt_register gdtr;
-                selector ldtr;
+            gdtr = sgdt();
+            ldtr = sldt();
 
-                {
-                    std::optional<ring0_privilege> r0;
-                    if (use_ring0) r0.emplace();
-                    gdtr = sgdt();
-                    ldtr = sldt();
-                }
+            gdt.emplace(descriptor::create_segment(gdtr.base, gdtr.limit + 1));
 
-                gdt = descriptor::create_segment(gdtr.base, gdtr.limit + 1);
-                selector_bits ldt_selector = ldtr;
+            auto ldt_data = read_descriptor_direct(ldtr);
+            ldt.emplace(descriptor::create_segment(ldt_data.segment.base(), ldt_data.segment.limit()));
 
-                auto ldt_desc = read_descriptor_direct(ldt_selector, use_ring0);
-                ldt.emplace(descriptor::create());
-                ldt->write(ldt_desc);
+            direct_ldt_access = true;
 
-                if (use_ring0) have_access = ring0;
-                else have_access = yes;
-
-                // Check if ldt access is possible
-                descriptor test { get_ds() };
-                [[maybe_unused]] volatile descriptor_data data = test.read();
-            }
-            catch (...)
-            {
-                have_access = no;
-                if (not use_ring0 and ring0_privilege::wont_throw())
-                {
-                    use_ring0 = true;
-                    goto retry;
-                }
-                gdt.reset();
-                ldt.reset();
-            }
+            descriptor test { get_ds() };
+            [[maybe_unused]] volatile descriptor_data test_data = test.read();
         }
-        return have_access;
+        catch (...)
+        {
+            direct_ldt_access = false;
+            gdt.reset();
+            ldt.reset();
+        }
     }
+}
 
+namespace jw::dpmi
+{
     descriptor::descriptor(descriptor&& d) noexcept
         : sel(d.sel), no_alloc(d.no_alloc)
     {
@@ -190,9 +172,8 @@ namespace jw::dpmi
 
     descriptor_data descriptor::read() const
     {
-        auto ldt_access = direct_ldt_access();
-        if (ldt_access != no) [[likely]]
-            return read_descriptor_direct(sel, ldt_access == ring0);
+        if (direct_ldt_access) [[likely]]
+            return read_descriptor_direct(sel);
 
         descriptor_data data;
         dpmi_error_code error;
@@ -212,9 +193,8 @@ namespace jw::dpmi
 
     void descriptor::write(const descriptor_data& data)
     {
-        auto ldt_access = direct_ldt_access();
-        if (ldt_access != no) [[likely]]
-            return write_descriptor_direct(sel, data, ldt_access == ring0);
+        if (direct_ldt_access) [[likely]]
+            return write_descriptor_direct(sel, data);
 
         dpmi_error_code error;
         bool c;
@@ -266,7 +246,7 @@ namespace jw::dpmi
 
     std::size_t descriptor::get_limit(selector sel)
     {
-        if (direct_ldt_access() != no) [[likely]]
+        if (direct_ldt_access) [[likely]]
         {
             auto data = descriptor { sel }.read();
             auto v { data.segment.limit() };
@@ -287,7 +267,7 @@ namespace jw::dpmi
 
     void descriptor::set_limit(selector sel, std::size_t limit)
     {
-        if (direct_ldt_access() != no) [[likely]]
+        if (direct_ldt_access) [[likely]]
         {
             auto d = descriptor { sel };
             auto data = d.read();

@@ -214,6 +214,7 @@ namespace jw
             interrupt_id::setup();
             jw::detail::scheduler::setup();
             setup_exception_handling();
+            setup_direct_ldt_access();
 
             // Try setting control registers first in ring 3.  If we have no ring0 access, the
             // dpmi host might still trap and emulate control register access.

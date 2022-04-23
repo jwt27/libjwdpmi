@@ -202,9 +202,6 @@ namespace jw::dpmi
         static std::size_t get_limit(selector sel);
         static void set_limit(selector sel, std::size_t limit);
 
-        enum direct_ldt_access_t { unknown, yes, no, ring0 };
-        static direct_ldt_access_t direct_ldt_access() noexcept;
-
     private:
         constexpr descriptor() noexcept = default;
         void allocate();
