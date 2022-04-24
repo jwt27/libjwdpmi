@@ -239,24 +239,26 @@ namespace jw::dpmi::detail
         set_pm_interrupt_vector(irq_to_vec(irq), prev_handler);
     }
 
-    void irq_controller::add(irq_level i, irq_handler* p)
+    void irq_controller::add(const irq_handler_data* p)
     {
         interrupt_mask no_irqs_here { };
-        if (data == nullptr) data = new irq_controller_data { };
-        auto* e = data->add(i);
+        if (data == nullptr) data = new (locked) irq_controller_data { };
+        const auto i = p->irq;
+        auto* const e = data->add(i);
         e->handler_chain.push_back(p);
         e->flags |= p->flags;
         irq_mask::unmask(i);
         if (i > 7) irq_mask::unmask(2);
     }
 
-    void irq_controller::remove(irq_level i, irq_handler* p)
+    void irq_controller::remove(const irq_handler_data* p)
     {
         interrupt_mask no_irqs_here { };
-        auto* e = data->get(i);
+        const auto i = p->irq;
+        auto* const e = data->get(i);
         e->handler_chain.erase(std::remove_if(e->handler_chain.begin(), e->handler_chain.end(), [p](auto a) { return a == p; }), e->handler_chain.end());
         e->flags = { };
-        for (auto* p : e->handler_chain) e->flags |= p->flags;
+        for (const auto* const p : e->handler_chain) e->flags |= p->flags;
         if (e->handler_chain.empty()) data->remove(i);
         if (data->allocated.none())
         {
