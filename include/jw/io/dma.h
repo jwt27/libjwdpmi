@@ -12,7 +12,7 @@ namespace jw::io
     struct dma_buffer
     {
         dma_buffer(std::size_t num_elements)
-            : mem(sizeof(T) * num_elements + 64_KB)
+            : mem(sizeof(T) * num_elements * 2)
         {
             const std::size_t n = sizeof(T) * num_elements;
             if (n > 64_KB) throw std::length_error { "DMA buffer too large" };
@@ -20,7 +20,7 @@ namespace jw::io
             const std::uintptr_t aligned = (address + 0xffff) & 0xffff0000;
             offset = aligned - address;
             if (offset >= n) offset = 0;
-            if (offset < 64_KB) mem.resize(offset + n);
+            if (offset < n) mem.resize(offset + n);
         }
 
         T* pointer() const noexcept { return reinterpret_cast<T*>(mem.near_pointer() + offset); }
