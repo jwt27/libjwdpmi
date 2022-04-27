@@ -13,6 +13,7 @@
 #include <jw/dpmi/irq_mask.h>
 #include <jw/dpmi/cpu_exception.h>
 #include <jw/dpmi/cpuid.h>
+#include <jw/dpmi/realmode.h>
 
 namespace jw::chrono
 {
@@ -38,6 +39,47 @@ namespace jw::chrono
     static constexpr io::io_port<byte> rtc_data { 0x71 };
     static constexpr io::out_port<byte> pit_cmd { 0x43 };
     static constexpr io::io_port<byte> pit0_data { 0x40 };
+
+    struct rtc_time
+    {
+        std::uint8_t year, month, day, hour, min, sec;
+    };
+
+    static rtc_time read_rtc() noexcept
+    {
+        auto from_bcd = [](std::uint8_t bcd) -> std::uint8_t
+        {
+            return (bcd >> 4) * 10 + (bcd & 0xF);
+        };
+
+        std::uint8_t year, month, day, hour, min, sec;  // BCD
+
+        {
+            dpmi::interrupt_mask no_irq { };
+            rtc_index.write(0x80);
+            sec = rtc_data.read();
+            rtc_index.write(0x82);
+            min = rtc_data.read();
+            rtc_index.write(0x84);
+            hour = rtc_data.read();
+            rtc_index.write(0x87);
+            day = rtc_data.read();
+            rtc_index.write(0x88);
+            month = rtc_data.read();
+            rtc_index.write(0x09);
+            year = rtc_data.read();
+        }
+
+        return
+        {
+            from_bcd(year),
+            from_bcd(month),
+            from_bcd(day),
+            from_bcd(hour),
+            from_bcd(min),
+            from_bcd(sec)
+        };
+    }
 
     static void update_tsc()
     {
@@ -101,6 +143,7 @@ namespace jw::chrono
 
     static void reset_pit()
     {
+        if (not pit_irq.is_enabled()) return;
         if (tsc_ref == timer_irq::pit)
         {
             reset_tsc();
@@ -110,7 +153,24 @@ namespace jw::chrono
         pit_cmd.write(0x34);
         pit0_data.write(0);
         pit0_data.write(0);
-        // todo: fix up DOS time at 0040:006C
+
+        const auto t = read_rtc();
+        dpmi::realmode_registers reg { };
+
+        reg.ah = 0x2b;      // Set date
+        reg.cx = t.year + 2000;
+        reg.dh = t.month;
+        reg.dl = t.day;
+        reg.call_int(0x21);
+
+        reg.ss = reg.sp = 0;
+
+        reg.ah = 0x2d;      // Set time
+        reg.ch = t.hour;
+        reg.cl = t.min;
+        reg.dh = t.sec;
+        reg.dl = 0;
+        reg.call_int(0x21);
     }
 
     static void reset_rtc()
@@ -229,61 +289,6 @@ namespace jw::chrono
             this_thread::yield_while([ticks] { return tsc_ticks_per_irq == ticks; });
     }
 
-    rtc::time_point rtc::now() noexcept
-    {
-        auto from_bcd = [](byte bcd)
-        {
-            return (bcd >> 4) * 10 + (bcd & 0xF);
-        };
-        auto read = []
-        {
-            return rtc_data.read();
-        };
-        auto set_index = [](byte i)
-        {
-            rtc_index.write(i);
-        };
-
-        byte year, month, day, hour, min, sec;  // BCD
-
-        {
-            dpmi::interrupt_mask no_irq { };
-            set_index(0x80);    // second
-            sec = read();
-            set_index(0x82);    // minute
-            min = read();
-            set_index(0x84);    // hour
-            hour = read();
-            set_index(0x87);    // day
-            day = read();
-            set_index(0x88);    // month
-            month = read();
-            set_index(0x09);    // year
-            year = read();
-        }
-
-        unsigned y = 2000 + from_bcd(year);
-        const unsigned m = from_bcd(month);
-        const unsigned d = from_bcd(day);
-
-        // algorithm from http://howardhinnant.github.io/date_algorithms.html
-        y -= m <= 2;
-        const unsigned era = y / 400;
-        const unsigned yoe = y - era * 400;
-        const unsigned doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
-        const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-        const unsigned days_since_1970 = era * 146097 + doe - 719468;
-
-        std::uint64_t unix_time = days_since_1970 * 60 * 60 * 24;
-        unix_time += from_bcd(hour) * 60 * 60;
-        unix_time += from_bcd(min) * 60;
-        unix_time += from_bcd(sec);
-
-        std::uint64_t usec = unix_time * static_cast<std::uint64_t>(1e6);
-        usec += round(rtc_ticks * ns_per_rtc_tick / 1e3);
-        return time_point { duration { usec } };
-    }
-
     pit::time_point pit::now() noexcept
     {
         if (not pit_irq.is_enabled()) [[unlikely]]
@@ -318,6 +323,35 @@ namespace jw::chrono
         return time_point { duration { round(a) + pit_ns_offset } };
     }
 
+    fixed<std::uint32_t, 6> pit::irq_delta() noexcept { return ns_per_pit_tick; }
+
+    rtc::time_point rtc::now() noexcept
+    {
+        const auto t = read_rtc();
+        unsigned y = t.year + 2000;
+        const unsigned m = t.month;
+        const unsigned d = t.day;
+
+        // algorithm from http://howardhinnant.github.io/date_algorithms.html
+        y -= m <= 2;
+        const unsigned era = y / 400;
+        const unsigned yoe = y - era * 400;
+        const unsigned doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+        const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+        const unsigned days_since_1970 = era * 146097 + doe - 719468;
+
+        std::uint64_t unix_time = days_since_1970 * 60 * 60 * 24;
+        unix_time += t.hour * 60 * 60;
+        unix_time += t.min * 60;
+        unix_time += t.sec;
+
+        std::uint64_t usec = unix_time * 1'000'000;
+        usec += round(rtc_ticks * ns_per_rtc_tick / 1e3);
+        return time_point { duration { usec } };
+    }
+
+    double rtc::irq_delta() noexcept { return ns_per_rtc_tick; }
+
     tsc::time_point tsc::now() noexcept
     {
         if (tsc_ref == timer_irq::none) [[unlikely]]
@@ -340,10 +374,6 @@ namespace jw::chrono
         ns /= tsc_ticks_per_irq;
         return duration { static_cast<std::uint64_t>(round(ns)) };
     }
-
-    fixed<std::uint32_t, 6> pit::irq_delta() noexcept { return ns_per_pit_tick; }
-
-    double rtc::irq_delta() noexcept { return ns_per_rtc_tick; }
 
     struct reset_all
     {
