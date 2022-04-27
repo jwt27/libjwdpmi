@@ -31,7 +31,6 @@ namespace jw::dpmi::detail
         const trivial_function<void()> function;
         const irq_config_flags flags;
         irq_level irq;
-        bool enabled { false };
     };
 
     struct irq_controller

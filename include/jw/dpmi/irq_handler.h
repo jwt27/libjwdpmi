@@ -33,9 +33,9 @@ namespace jw::dpmi
         ~irq_handler() { disable(); }
 
         void set_irq(irq_level i) { disable(); data->irq = i; }
-        void enable() { if (not data->enabled) { detail::irq_controller::add(data.get()); data->enabled = true; } }
-        void disable() { if (data->enabled) { detail::irq_controller::remove(data.get()); data->enabled = false; } }
-        bool is_enabled() const noexcept { return data->enabled; }
+        void enable() { if (not enabled) { detail::irq_controller::add(data.get()); enabled = true; } }
+        void disable() { if (enabled) { detail::irq_controller::remove(data.get()); enabled = false; } }
+        bool is_enabled() const noexcept { return enabled; }
 
         // Call this from your interrupt handler to signal that the IRQ has been successfully handled.
         static void acknowledge() noexcept { detail::irq_controller::acknowledge(); }
@@ -47,5 +47,6 @@ namespace jw::dpmi
         irq_handler& operator=(const irq_handler&) = delete;
 
         std::unique_ptr<detail::irq_handler_data> data;
+        bool enabled { false };
     };
 }
