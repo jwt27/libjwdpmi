@@ -27,8 +27,9 @@ namespace jw::chrono
     static fixed<std::uint32_t, 6> ns_per_pit_tick;
     static double ns_per_rtc_tick;
 
+    static constexpr std::uint64_t pit_ns_offset { 1'640'991'600'000'000'000ull }; // 2022-01-01 UNIX time in nanoseconds
+    static fixed<std::uint64_t, 6> pit_ns;
     static std::uint32_t pit_counter_max;
-    static volatile std::uint64_t pit_ticks;
     static volatile std::uint_fast16_t rtc_ticks;
 
     static timer_irq tsc_ref { timer_irq::none };
@@ -81,13 +82,9 @@ namespace jw::chrono
 
     static dpmi::irq_handler pit_irq { []
     {
-        asm
-        (
-            "add %k0, 1;"
-            "adc %k0+4, 0;"
-            : "+m" (pit_ticks)
-            :: "cc"
-        );
+        auto t = pit_ns;
+        t += ns_per_pit_tick;
+        volatile_store(&pit_ns.value, t.value);
 
         if (tsc_ref == timer_irq::pit) update_tsc();
 
@@ -96,7 +93,6 @@ namespace jw::chrono
 
     static void reset_tsc()
     {
-        dpmi::interrupt_mask no_irq { };
         tsc_sample_size = 0;
         tsc_total = 0;
         tsc_ticks_per_irq = 0;
@@ -105,14 +101,12 @@ namespace jw::chrono
 
     static void reset_pit()
     {
-        dpmi::interrupt_mask no_irq { };
         if (tsc_ref == timer_irq::pit)
         {
             reset_tsc();
             tsc_ref = timer_irq::none;
         }
         pit_irq.disable();
-        pit_ticks = 0;
         pit_cmd.write(0x34);
         pit0_data.write(0);
         pit0_data.write(0);
@@ -121,7 +115,6 @@ namespace jw::chrono
 
     static void reset_rtc()
     {
-        dpmi::interrupt_mask no_irq { };
         if (tsc_ref == timer_irq::rtc)
         {
             reset_tsc();
@@ -141,15 +134,23 @@ namespace jw::chrono
     {
         {
             dpmi::interrupt_mask no_irq { };
-            reset_pit();
-            if (not enable) return;
+            if (pit_irq.is_enabled() and not enable)
+            {
+                reset_pit();
+                return;
+            }
+            else if (not pit_irq.is_enabled() and enable)
+            {
+                const auto t = std::chrono::steady_clock::now();
+                pit_ns = t.time_since_epoch().count() - pit_ns_offset;
+                pit_irq.set_irq(0);
+            }
 
             if (freq_divisor < 1 or freq_divisor > 0x10000)
                 throw std::out_of_range("PIT frequency divisor must be a value between 1 and 0x10000, inclusive.");
 
             pit_counter_max = freq_divisor;
             ns_per_pit_tick = 1e9 / (max_frequency / freq_divisor);
-            pit_irq.set_irq(0);
             pit_irq.enable();
 
             split_uint16_t div { freq_divisor };
@@ -159,8 +160,8 @@ namespace jw::chrono
         }
         if (dpmi::interrupts_enabled())
         {
-            const auto ticks = pit_ticks;
-            do { } while (ticks == pit_ticks);
+            const auto t = pit_ns;
+            do { } while (t.value == volatile_load(&pit_ns.value));
         }
     }
 
@@ -287,15 +288,15 @@ namespace jw::chrono
     {
         if (not pit_irq.is_enabled()) [[unlikely]]
         {
-            auto t = std::chrono::duration_cast<duration>(std::chrono::steady_clock::now().time_since_epoch());
+            auto t = std::chrono::steady_clock::now().time_since_epoch();
             return time_point { t };
         }
-        std::uint64_t a, b;
+        decltype(pit_ns) a, b;
         std::uint16_t counter;
 
         {
             dpmi::interrupt_mask no_irqs { };
-            a = pit_ticks;
+            a.value = volatile_load(&pit_ns.value);
         }
         while (true)
         {
@@ -305,17 +306,16 @@ namespace jw::chrono
                 pit_cmd.write(0x00); // latch counter 0
                 counter = split_uint16_t { pit0_data.read(), pit0_data.read() };
             }
-            asm("nop");
+            asm ("nop");
             {
                 dpmi::interrupt_mask no_irqs { };
-                b = pit_ticks;
+                b.value = volatile_load(&pit_ns.value);
             }
-            if (a == b) [[likely]] break;
+            if (a.value == b.value) [[likely]] break;
             a = b;
         }
-        auto nsec = ns_per_pit_tick * a;
-        nsec += ns_per_pit_count * (pit_counter_max - counter);
-        return time_point { duration { round(nsec) } };
+        a += ns_per_pit_count * (pit_counter_max - counter);
+        return time_point { duration { round(a) + pit_ns_offset } };
     }
 
     tsc::time_point tsc::now() noexcept
@@ -349,8 +349,9 @@ namespace jw::chrono
     {
         ~reset_all()
         {
+            dpmi::interrupt_mask no_irq { };
             reset_pit();
             reset_rtc();
         };
-    } static reset;
+    } reset;
 }
