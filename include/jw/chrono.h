@@ -65,16 +65,11 @@ namespace jw::chrono
 
         static constexpr bool is_steady { false };
 
-        static void setup(timer_irq ref, std::size_t num_samples);  // num_samples must be a power of two
+        static void setup(std::size_t num_samples); // num_samples must be a power of two
 
         static time_point now() noexcept;
 
         static duration to_duration(tsc_count count);
-
-        static time_point to_time_point(tsc_count count)
-        {
-            return time_point { to_duration(count) };
-        }
     };
 
     struct rtc  // Real-Time Clock
