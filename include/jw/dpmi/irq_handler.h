@@ -32,6 +32,13 @@ namespace jw::dpmi
 
         ~irq_handler() { disable(); }
 
+        template<typename F>
+        irq_handler& operator=(F&& func)
+        {
+            data->function = std::forward<F>(func);
+            return *this;
+        }
+
         void set_irq(irq_level i) { disable(); data->irq = i; }
         void enable() { if (not enabled) { detail::irq_controller::add(data.get()); enabled = true; } }
         void disable() { if (enabled) { detail::irq_controller::remove(data.get()); enabled = false; } }

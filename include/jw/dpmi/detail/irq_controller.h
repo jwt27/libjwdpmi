@@ -28,7 +28,7 @@ namespace jw::dpmi::detail
         irq_handler_data(F&& func, irq_config_flags fl, irq_level i)
             : function { std::forward<F>(func) }, flags { fl }, irq { i } { }
 
-        const trivial_function<void()> function;
+        trivial_function<void()> function;
         const irq_config_flags flags;
         irq_level irq;
     };
