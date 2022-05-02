@@ -17,17 +17,15 @@
 
 namespace jw::chrono
 {
-    static std::size_t tsc_max_sample_size { 0 };
-    static std::size_t tsc_max_sample_bits;
-    static std::size_t tsc_sample_size { 0 };
-    static std::uint64_t tsc_total { 0 };
-    static bool tsc_resync { true };
-    static std::uint64_t last_tsc;
+    static std::uint32_t last_tsc;
+    static constinit bool tsc_calibrated { false };
 
-    static std::uint32_t tsc_ticks_per_irq { 0 };
     static constexpr fixed<std::uint32_t, 6> ns_per_pit_count { 1e9 / pit::max_frequency };
     static fixed<std::uint32_t, 6> ns_per_pit_tick;
     static double ns_per_rtc_tick;
+    static fixed<std::uint32_t, 24> fixed_ns_per_tsc_tick;
+    static long double float_ns_per_tsc_tick;
+    static long double cpu_freq;
 
     static constexpr std::uint64_t pit_ns_offset { 1'640'991'600'000'000'000ull }; // 2022-01-01 UNIX time in nanoseconds
     static fixed<std::uint64_t, 6> pit_ns;
@@ -80,26 +78,16 @@ namespace jw::chrono
         };
     }
 
-    static void update_tsc()
+    template<bool tsc>
+    [[gnu::hot]] static void irq0()
     {
-        auto tsc = rdtsc();
-        std::uint32_t diff = tsc - last_tsc;
-        last_tsc = tsc;
-        if (tsc_resync) [[unlikely]] { tsc_resync = false; return; }
-        if (tsc_sample_size == tsc_max_sample_size)
-        {
-            tsc_total -= static_cast<std::uint32_t>(tsc_total >> tsc_max_sample_bits);
-            --tsc_sample_size;
-        }
-        tsc_total += diff;
-        ++tsc_sample_size;
-        if (tsc_sample_size == tsc_max_sample_size) [[likely]]
-            tsc_ticks_per_irq = tsc_total >> tsc_max_sample_bits;
-        else
-            tsc_ticks_per_irq = tsc_total / tsc_sample_size;
+        if constexpr (tsc) last_tsc = rdtsc();
+        pit_ns += ns_per_pit_tick;
+
+        dpmi::irq_handler::acknowledge();
     }
 
-    static dpmi::irq_handler rtc_irq { []
+    [[gnu::hot]] static void irq8()
     {
         static byte last_sec { 0 };
 
@@ -116,26 +104,10 @@ namespace jw::chrono
         rtc_data.read();
 
         dpmi::irq_handler::acknowledge();
-    }, dpmi::always_call | dpmi::no_interrupts };
-
-    static dpmi::irq_handler pit_irq { []
-    {
-        auto t = pit_ns;
-        t += ns_per_pit_tick;
-        volatile_store(&pit_ns.value, t.value);
-
-        if (tsc_max_sample_size != 0) [[likely]] update_tsc();
-
-        dpmi::irq_handler::acknowledge();
-    }, dpmi::always_call | dpmi::no_auto_eoi };
-
-    static void reset_tsc()
-    {
-        tsc_sample_size = 0;
-        tsc_total = 0;
-        tsc_ticks_per_irq = 0;
-        tsc_resync = true;
     }
+
+    static dpmi::irq_handler pit_irq { 0, [] { irq0<false>(); }, dpmi::always_call | dpmi::no_auto_eoi };
+    static dpmi::irq_handler rtc_irq { 8, [] { irq8(); }, dpmi::always_call | dpmi::no_interrupts };
 
     static void reset_pit()
     {
@@ -240,25 +212,101 @@ namespace jw::chrono
         rtc_data.read();                        // read and discard data
     }
 
-    void tsc::setup(std::size_t sample_size)
+    void tsc::setup()
     {
         if (not dpmi::cpuid::feature_flags().time_stamp_counter) return;
 
+        if (pit_irq.is_enabled())
+            throw std::runtime_error { "Please call tsc::setup() before pit::setup()." };
+
+        constexpr io::io_port<byte> pic0_mask { 0x21 };
+        constexpr std::size_t N = 8;
+        constexpr unsigned divisor = 0x1000;
+        constexpr long double time = divisor / chrono::pit::max_frequency;
+
+        std::array<std::uint64_t, N + 1> samples;
+        auto* sample = samples.begin();
+
         {
             dpmi::interrupt_mask no_irq { };
-            if (sample_size != 0)
+            pit_irq = [&sample]
             {
-                if (not std::has_single_bit(sample_size))
-                    throw std::runtime_error { "TSC sample size must be a power of two." };
-                tsc_max_sample_bits = std::bit_width(sample_size - 1);
+                *sample++ = chrono::rdtsc();
+                dpmi::irq_handler::acknowledge();
+            };
+            pit_irq.enable();
+
+            pit_cmd.write(0b00'11'010'0);
+            split_uint16_t div { divisor };
+            pit0_data.write(div.lo);
+            pit0_data.write(div.hi);
+
+            // Mask all except IRQ 0.
+            const auto irq_mask = pic0_mask.read();
+            pic0_mask.write(0b11111110);
+
+            {
+                dpmi::interrupt_unmask allow_irq { };
+                // This loop needs to be as tight as possible.
+                asm("Loop: cmp [%0], %1; jb Loop" :: "r" (&sample), "r" (samples.end()));
             }
-            tsc_max_sample_size = sample_size;
-            reset_tsc();
+
+            pic0_mask.write(irq_mask);
+
+            pit_cmd.write(0b00'11'010'0);
+            pit0_data.write(0);
+            pit0_data.write(0);
+
+            pit_irq.disable();
         }
 
-        const unsigned ticks = tsc_ticks_per_irq;
-        if (tsc_max_sample_size != 0 and dpmi::interrupts_enabled() and pit_irq.is_enabled())
-            this_thread::yield_while([ticks] { return volatile_load(&tsc_ticks_per_irq) == ticks; });
+        std::array<std::uint32_t, N> counts;
+
+        for (unsigned i = 0; i < N; ++i)
+            counts[i] = samples[i + 1] - samples[i];
+
+        std::uint32_t max_n = 0, n = 0;
+        std::uint32_t most, current = 0;
+        std::sort(counts.begin(), counts.end() - 1);
+
+        // Find the most commonly occuring TSC count (statistical "mode")
+        for (unsigned i = 0; i < N; ++i)
+        {
+            if (counts[i] == current) ++n;
+            else
+            {
+                n = 1;
+                current = counts[i];
+            }
+
+            if (n > max_n)
+            {
+                max_n = n;
+                most = current;
+            }
+        }
+
+        long double count = most;
+
+        if (max_n < 3)
+        {
+            // TSC count mode not found.  This generally happens on emulators
+            // only, or maybe if the DPMI host executes a non-deterministic
+            // amount of code before calling the user IRQ handler.  Or,
+            // several NMIs may have occured during sampling.
+            // Discard the first 3 samples and calculate an average.
+            std::uint64_t total = 0;
+            for (unsigned i = 4; i < N + 1; ++i)
+                total += samples[i] - samples[i - 1];
+            count = static_cast<long double>(total) / (N - 3);
+        }
+
+        pit_irq = [] { irq0<true>(); };
+
+        cpu_freq = count / time;
+        float_ns_per_tsc_tick = 1e9 / cpu_freq;
+        fixed_ns_per_tsc_tick = float_ns_per_tsc_tick;
+        tsc_calibrated = true;
     }
 
     pit::time_point pit::now() noexcept
@@ -322,17 +370,9 @@ namespace jw::chrono
 
     double rtc::irq_delta() noexcept { return ns_per_rtc_tick; }
 
-    static long double tsc_to_ns(tsc_count count)
-    {
-        long double ns = ns_per_pit_tick;
-        ns /= tsc_ticks_per_irq;
-        ns *= count;
-        return ns;
-    }
-
     tsc::time_point tsc::now() noexcept
     {
-        if (tsc_max_sample_size == 0) [[unlikely]]
+        if (not tsc_calibrated or not pit_irq.is_enabled()) [[unlikely]]
             return time_point { pit::now().time_since_epoch() };
 
         decltype(pit_ns) pit;
@@ -344,14 +384,18 @@ namespace jw::chrono
             last = volatile_load(&last_tsc);
         }
 
-        const auto ns = pit + tsc_to_ns(rdtsc() - last);
-        return time_point { duration { static_cast<std::int64_t>(round(ns)) } };
+        const tsc_count tsc = rdtsc();
+        const std::uint32_t count = tsc - last;
+        const auto ns = pit + static_cast<decltype(pit_ns)>(fixed_ns_per_tsc_tick * count);
+        return time_point { duration { static_cast<std::int64_t>(round(ns) + pit_ns_offset) } };
     }
 
     tsc::duration tsc::to_duration(tsc_count count)
     {
-        return duration { static_cast<std::int64_t>(round(tsc_to_ns(count))) };
+        return duration { static_cast<std::int64_t>(round(count * float_ns_per_tsc_tick)) };
     }
+
+    long double tsc::cpu_frequency() noexcept { return cpu_freq; }
 
     struct reset_all
     {

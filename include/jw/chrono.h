@@ -39,9 +39,10 @@ namespace jw::chrono
         rtc = 8
     };
 
-    struct pit  // Programmable Interval Timer
+    // Programmable Interval Timer
+    struct pit
     {
-        using duration = std::chrono::duration<std::int64_t, std::nano>;
+        using duration = std::chrono::nanoseconds;
         using rep = duration::rep;
         using period = duration::period;
         using time_point = std::chrono::time_point<pit>;
@@ -56,23 +57,37 @@ namespace jw::chrono
         static fixed<std::uint32_t, 6> irq_delta() noexcept;
     };
 
-    struct tsc  // Time Stamp Counter
+    // Time Stamp Counter
+    struct tsc
     {
-        using duration = std::chrono::duration<std::int64_t, std::nano>;
+        using duration = std::chrono::nanoseconds;
         using rep = duration::rep;
         using period = duration::period;
         using time_point = std::chrono::time_point<tsc>;
 
         static constexpr bool is_steady { false };
 
-        static void setup(std::size_t num_samples); // num_samples must be a power of two
+        // Calibrate rdtsc using the PIT.  This must be done *before* calling
+        // pit::setup().  A calibration cycle takes ~28ms, during which
+        // interrupts will be disabled.
+        static void setup();
 
+        // Returns the current time.  Resolution is dependent on the CPU
+        // frequency, eg. 2ns on a 500MHz CPU.  If the CPU does not support
+        // rdtsc, this returns pit::now().
         static time_point now() noexcept;
 
+        // Convert a tsc_count to a duration using the calibration values
+        // from tsc::setup().  This is most accurate for short intervals.
+        // The return value is undefined if the CPU does not support rdtsc.
         static duration to_duration(tsc_count count);
+
+        // Returns the CPU frequency as measured by tsc::setup().
+        static long double cpu_frequency() noexcept;
     };
 
-    struct rtc  // Real-Time Clock
+    // Real-Time Clock
+    struct rtc
     {
         using duration = std::chrono::microseconds;
         using rep = duration::rep;
