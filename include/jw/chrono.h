@@ -53,7 +53,7 @@ namespace jw::chrono
         // Enable or disable the PIT interrupt (IRQ 0) and reprogram it to
         // trigger at a specific frequency.  The divisor can be calculated as:
         //      freq_divisor = round(max_frequency / desired_frequency)
-        // Valid values are in the range [1 .. 0x10000].  The default value
+        // Valid values are in the range [2 .. 0x10000].  The default value
         // (0x10000) corresponds to ~18.2Hz.  The interrupt frequency may be
         // changed on the fly, without invalidating previous time points.
         static void setup(bool enable, std::uint32_t freq_divisor = 0x10000);

@@ -165,8 +165,8 @@ namespace jw::chrono
                 pit_irq.set_irq(0);
             }
 
-            if (freq_divisor < 1 or freq_divisor > 0x10000)
-                throw std::out_of_range("PIT frequency divisor must be a value between 1 and 0x10000, inclusive.");
+            if (freq_divisor < 2 or freq_divisor > 0x10000)
+                throw std::out_of_range("Invalid PIT frequency divisor");
 
             pit_counter_max = freq_divisor;
             ns_per_pit_tick = 1e9 / (max_frequency / freq_divisor);
@@ -191,7 +191,7 @@ namespace jw::chrono
         if (not enable) return;
 
         if (freq_shift < 1 or freq_shift > 15)
-            throw std::out_of_range { "RTC frequency shift must be a value between 1 and 15, inclusive." };
+            throw std::out_of_range { "Invalid RTC frequency shift" };
 
         ns_per_rtc_tick = 1e9 / (max_frequency >> (freq_shift - 1));
         rtc_irq.set_irq(8);
