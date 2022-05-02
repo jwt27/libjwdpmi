@@ -186,15 +186,15 @@ namespace jw::dpmi
             }
         }
 
-        static constexpr std::tuple<byte, io::io_port<byte>&> mp(irq_level irq)
+        static constexpr std::tuple<byte, io::io_port<byte>> mp(irq_level irq)
         {
             byte mask = 1 << (irq % 8);
             auto& port = irq < 8 ? pic0_data : pic1_data;
             return { mask, port };
         }
 
-        static inline constinit io::io_port<byte> pic0_data { 0x21 };
-        static inline constinit io::io_port<byte> pic1_data { 0xA1 };
+        static inline constexpr io::io_port<byte> pic0_data { 0x21 };
+        static inline constexpr io::io_port<byte> pic1_data { 0xA1 };
 
         struct mask_counter
         {
