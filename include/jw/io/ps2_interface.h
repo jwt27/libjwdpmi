@@ -35,7 +35,7 @@ namespace jw
             caps_lock_led = 0b100
         };
 
-        struct ps2_interface : dpmi::class_lock<ps2_interface>
+        struct ps2_interface
         {
             std::optional<key_state_pair> get_scancode();
 
@@ -81,7 +81,7 @@ namespace jw
 
             static auto& instance()
             {
-                if (not instantiated()) instance_ptr.reset(new ps2_interface { });
+                if (not instantiated()) instance_ptr.reset(new (locked) ps2_interface { });
                 return instance_ptr;
             }
             virtual ~ps2_interface();

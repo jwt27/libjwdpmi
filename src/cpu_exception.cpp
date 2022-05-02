@@ -321,19 +321,19 @@ namespace jw::dpmi::detail
 
         if constexpr (not config::enable_throwing_from_cpu_exceptions) return false;
 
-        if (redirect_exception(i, rethrow_cpu_exception)) [[likely]]
+        try
         {
-            try
-            {
-                throw_cpu_exception(i);
-            }
-            catch (...)
+            throw_cpu_exception(i);
+        }
+        catch (...)
+        {
+            if (redirect_exception(i, rethrow_cpu_exception)) [[likely]]
             {
                 pending_exceptions->emplace_back(std::current_exception());
+                return true;
             }
-            return true;
         }
-        else return false;
+        return false;
     }
 
     void setup_exception_handling()

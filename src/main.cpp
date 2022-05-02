@@ -333,13 +333,12 @@ namespace jw
         irq_alloc = ia;
     }
 
-    void* locked_malloc(std::size_t n, std::size_t a)
+    void* allocate_locked(std::size_t n, std::align_val_t a)
     {
         if (not dpmi::in_irq_context())
             resize_irq_alloc();
 
-        try { return do_locked_alloc(n, a); }
-        catch (...) { return nullptr; }
+        return do_locked_alloc(n, static_cast<std::size_t>(a));
     }
 }
 

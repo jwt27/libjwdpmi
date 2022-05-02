@@ -14,138 +14,122 @@
 #include <jw/math.h>
 #include <jw/fixed.h>
 
-namespace jw
+namespace jw::chrono
 {
-    namespace chrono
+    using tsc_count = std::uint64_t;
+
+    inline tsc_count rdtsc()
     {
-        using tsc_count = std::uint64_t;
-
-        inline tsc_count rdtsc()
-        {
-            tsc_count tsc;
-            asm volatile ("rdtsc;": "=A" (tsc));
-            return tsc;
-        }
-
-        inline tsc_count rdtscp()
-        {
-            tsc_count tsc;
-            asm volatile ("cpuid;rdtsc;": "=A" (tsc): "a" (0) : "ebx", "ecx");
-            return tsc;
-        }
-
-        enum class timer_irq
-        {
-            none = -1,
-            pit = 0,
-            rtc = 8
-        };
-
-        struct setup
-        {
-            friend class rtc;
-            friend class pit;
-            friend class tsc;
-
-            static constexpr long double max_pit_frequency { 1194375.0L / 1.001L };     // freq = max_pit_frequency / divisor
-            static constexpr unsigned max_rtc_frequency { 0x8000 };                     // freq = max_rtc_frequency >> (shift - 1)
-
-            static void setup_pit(bool enable, std::uint32_t freq_divisor = 0x10000);   // default: 18.2Hz
-            static void setup_rtc(bool enable, std::uint8_t freq_shift = 10);           // default: 64Hz
-            static void setup_tsc(std::size_t num_samples, timer_irq ref = timer_irq::none);    // num_samples must be a power of two
-
-        private:
-            static inline std::atomic<std::uint32_t> tsc_ticks_per_irq { 0 };
-            static constexpr fixed<std::uint32_t, 6> ns_per_pit_count { 1e9 / max_pit_frequency };
-            static inline fixed<std::uint32_t, 6> ns_per_pit_tick;
-            static inline double ns_per_rtc_tick;
-
-            static inline std::uint32_t pit_counter_max;
-            static inline volatile std::uint64_t pit_ticks;
-            static inline volatile std::uint_fast16_t rtc_ticks;
-
-            static dpmi::irq_handler pit_irq;
-            static dpmi::irq_handler rtc_irq;
-
-            static void update_tsc();
-            static void reset_pit();
-            static void reset_rtc();
-            static void reset_tsc();
-
-            static inline timer_irq tsc_ref { timer_irq::none };
-
-            static inline constexpr io::out_port<byte> rtc_index { 0x70 };
-            static inline constexpr io::io_port<byte> rtc_data { 0x71 };
-            static inline constexpr io::out_port<byte> pit_cmd { 0x43 };
-            static inline constexpr io::io_port<byte> pit0_data { 0x40 };
-
-            struct reset_all { ~reset_all(); } static inline reset;
-        };
-
-        struct rtc  // Real-Time Clock
-        {
-            using duration = std::chrono::microseconds;
-            using rep = duration::rep;
-            using period = duration::period;
-            using time_point = std::chrono::time_point<rtc>;
-
-            static constexpr bool is_steady { false };
-            static time_point now() noexcept;
-
-            static std::time_t to_time_t(const time_point& t) noexcept
-            {
-                return std::chrono::duration_cast<std::chrono::seconds>(t.time_since_epoch()).count();
-            }
-
-            static time_point from_time_t(std::time_t t) noexcept
-            {
-                return time_point { std::chrono::duration_cast<duration>(std::chrono::seconds { t }) };
-            }
-
-            static auto irq_delta() { return setup::ns_per_rtc_tick; }
-        };
-
-        struct pit  // Programmable Interval Timer
-        {
-            using duration = std::chrono::duration<std::int64_t, std::nano>;
-            using rep = duration::rep;
-            using period = duration::period;
-            using time_point = std::chrono::time_point<pit>;
-
-            static constexpr bool is_steady { false };
-            static time_point now() noexcept;
-
-            static auto irq_delta() { return setup::ns_per_pit_tick; }
-        };
-
-        struct tsc  // Time Stamp Counter
-        {
-            using duration = std::chrono::duration<std::int64_t, std::nano>;
-            using rep = duration::rep;
-            using period = duration::period;
-            using time_point = std::chrono::time_point<tsc>;
-
-            static constexpr bool is_steady { false };
-            static time_point now() noexcept;
-
-            static duration to_duration(tsc_count count)
-            {
-                double ns;
-                switch (setup::tsc_ref)
-                {
-                case timer_irq::pit: ns = setup::ns_per_pit_tick; break;
-                case timer_irq::rtc: ns = setup::ns_per_rtc_tick; break;
-                default: [[unlikely]] return duration::min();
-                }
-                ns *= count;
-                ns /= setup::tsc_ticks_per_irq;
-                return duration { static_cast<std::uint64_t>(round(ns)) };
-            }
-
-            static time_point to_time_point(tsc_count count)
-            {
-                return time_point { to_duration(count) };
-            }
-        };
+        tsc_count tsc;
+        asm volatile ("rdtsc" : "=A" (tsc));
+        return tsc;
     }
+
+    inline tsc_count rdtscp()
+    {
+        tsc_count tsc;
+        asm volatile ("cpuid; rdtsc" : "=A" (tsc) : "a" (0) : "ebx", "ecx");
+        return tsc;
+    }
+
+    enum class timer_irq
+    {
+        none = -1,
+        pit = 0,
+        rtc = 8
+    };
+
+    // Programmable Interval Timer
+    struct pit
+    {
+        using duration = std::chrono::nanoseconds;
+        using rep = duration::rep;
+        using period = duration::period;
+        using time_point = std::chrono::time_point<pit>;
+
+        static constexpr long double max_frequency { 1194375.0L / 1.001L };
+        static constexpr bool is_steady { false };
+
+        // Enable or disable the PIT interrupt (IRQ 0) and reprogram it to
+        // trigger at a specific frequency.  The divisor can be calculated as:
+        //      freq_divisor = round(max_frequency / desired_frequency)
+        // Valid values are in the range [2 .. 0x10000].  The default value
+        // (0x10000) corresponds to ~18.2Hz.  The interrupt frequency may be
+        // changed on the fly, without invalidating previous time points.
+        static void setup(bool enable, std::uint32_t freq_divisor = 0x10000);
+
+        // Returns the current UNIX time.  This has a fixed resolution of
+        // 838.1ns, regardless of interrupt frequency.  If the PIT IRQ is not
+        // enabled, returns std::chrono::steady_clock::now(), which has about
+        // ~55ms resolution.
+        static time_point now() noexcept;
+
+        // Returns the time interval between interrupts in nanoseconds.
+        static fixed<std::uint32_t, 6> irq_delta() noexcept;
+    };
+
+    // Time Stamp Counter
+    struct tsc
+    {
+        using duration = std::chrono::nanoseconds;
+        using rep = duration::rep;
+        using period = duration::period;
+        using time_point = std::chrono::time_point<tsc>;
+
+        static constexpr bool is_steady { false };
+
+        // Calibrate rdtsc using the PIT.  This must be done *before* calling
+        // pit::setup().  A calibration cycle takes ~28ms, during which
+        // interrupts will be disabled.
+        static void setup();
+
+        // Returns the current UNIX time.  Resolution is dependent on the CPU
+        // frequency, eg. 2ns on a 500MHz CPU.  If the CPU does not support
+        // rdtsc, this returns pit::now().
+        static time_point now() noexcept;
+
+        // Convert a tsc_count to a duration using the calibration values
+        // from tsc::setup().  This is most accurate for short intervals.
+        // The return value is undefined if the CPU does not support rdtsc.
+        static duration to_duration(tsc_count count);
+
+        // Returns the CPU frequency as measured by tsc::setup().
+        static long double cpu_frequency() noexcept;
+    };
+
+    // Real-Time Clock
+    struct rtc
+    {
+        using duration = std::chrono::microseconds;
+        using rep = duration::rep;
+        using period = duration::period;
+        using time_point = std::chrono::time_point<rtc>;
+
+        static constexpr unsigned max_frequency { 0x8000 };
+        static constexpr bool is_steady { false };
+
+        // Enable the RTC interrupt (IRQ 8) and reprogram it to trigger at a
+        // specific frequency.  This frequency may be calculated with:
+        //      f = max_frequency >> (freq_shift - 1)
+        // Valid shift values are in the range [1 .. 15].  The default value
+        // corresponds to 64Hz.
+        static void setup(bool enable, std::uint8_t freq_shift = 10);
+
+        // Returns the current UNIX time.  This always reads the RTC directly,
+        // so this call is very slow.
+        static time_point now() noexcept;
+
+        static std::time_t to_time_t(const time_point& t) noexcept
+        {
+            return std::chrono::duration_cast<std::chrono::seconds>(t.time_since_epoch()).count();
+        }
+
+        static time_point from_time_t(std::time_t t) noexcept
+        {
+            return time_point { std::chrono::duration_cast<duration>(std::chrono::seconds { t }) };
+        }
+
+        // Retuns the time interval between interrupts in nanoseconds.
+        static double irq_delta() noexcept;
+    };
 }

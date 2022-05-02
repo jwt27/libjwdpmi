@@ -17,22 +17,28 @@
 #include <jw/dpmi/irq_mask.h>
 #include <jw/dpmi/irq_config_flags.h>
 
-namespace jw::dpmi
-{
-    struct irq_handler;
-}
-
 namespace jw::dpmi::detail
 {
     [[gnu::naked, gnu::hot]]
     void irq_entry_point() noexcept;
 
+    struct irq_handler_data
+    {
+        template<typename F>
+        irq_handler_data(F&& func, irq_config_flags fl, irq_level i)
+            : function { std::forward<F>(func) }, flags { fl }, irq { i } { }
+
+        trivial_function<void()> function;
+        const irq_config_flags flags;
+        irq_level irq;
+    };
+
     struct irq_controller
     {
         friend void irq_entry_point() noexcept;
 
-        static void add(irq_level i, irq_handler* p);
-        static void remove(irq_level i, irq_handler* p);
+        static void add(const irq_handler_data* p);
+        static void remove(const irq_handler_data* p);
 
         static void acknowledge() noexcept
         {
@@ -106,7 +112,7 @@ namespace jw::dpmi::detail
 
         [[gnu::hot]] void call();
 
-        std::deque<irq_handler*, locking_allocator<irq_handler*>> handler_chain { };
+        std::deque<const irq_handler_data*, locking_allocator<const irq_handler_data*>> handler_chain { };
         const irq_level irq;
         const far_ptr32 prev_handler { };
         irq_config_flags flags { };
@@ -117,7 +123,7 @@ namespace jw::dpmi::detail
         static inline irq_controller_data* data { nullptr };
     };
 
-    struct irq_controller::irq_controller_data : class_lock<irq_controller_data>
+    struct irq_controller::irq_controller_data
     {
         irq_controller_data();
         ~irq_controller_data();
