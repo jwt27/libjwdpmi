@@ -47,13 +47,24 @@ namespace jw::chrono
         using period = duration::period;
         using time_point = std::chrono::time_point<pit>;
 
-        static constexpr long double max_frequency { 1194375.0L / 1.001L }; // freq = max_frequency / divisor
+        static constexpr long double max_frequency { 1194375.0L / 1.001L };
         static constexpr bool is_steady { false };
 
-        static void setup(bool enable, std::uint32_t freq_divisor = 0x10000);   // default: 18.2Hz
+        // Enable or disable the PIT interrupt (IRQ 0) and reprogram it to
+        // trigger at a specific frequency.  The divisor can be calculated as:
+        //      freq_divisor = round(max_frequency / desired_frequency)
+        // Valid values are in the range [1 .. 0x10000].  The default value
+        // (0x10000) corresponds to ~18.2Hz.  The interrupt frequency may be
+        // changed on the fly, without invalidating previous time points.
+        static void setup(bool enable, std::uint32_t freq_divisor = 0x10000);
 
+        // Returns the current UNIX time.  This has a fixed resolution of
+        // 838.1ns, regardless of interrupt frequency.  If the PIT IRQ is not
+        // enabled, returns std::chrono::steady_clock::now(), which has about
+        // ~55ms resolution.
         static time_point now() noexcept;
 
+        // Returns the time interval between interrupts in nanoseconds.
         static fixed<std::uint32_t, 6> irq_delta() noexcept;
     };
 
@@ -72,7 +83,7 @@ namespace jw::chrono
         // interrupts will be disabled.
         static void setup();
 
-        // Returns the current time.  Resolution is dependent on the CPU
+        // Returns the current UNIX time.  Resolution is dependent on the CPU
         // frequency, eg. 2ns on a 500MHz CPU.  If the CPU does not support
         // rdtsc, this returns pit::now().
         static time_point now() noexcept;
@@ -94,11 +105,18 @@ namespace jw::chrono
         using period = duration::period;
         using time_point = std::chrono::time_point<rtc>;
 
-        static constexpr unsigned max_frequency { 0x8000 }; // freq = max_frequency >> (shift - 1)
+        static constexpr unsigned max_frequency { 0x8000 };
         static constexpr bool is_steady { false };
 
-        static void setup(bool enable, std::uint8_t freq_shift = 10);   // default: 64Hz
+        // Enable the RTC interrupt (IRQ 8) and reprogram it to trigger at a
+        // specific frequency.  This frequency may be calculated with:
+        //      f = max_frequency >> (freq_shift - 1)
+        // Valid shift values are in the range [1 .. 15].  The default value
+        // corresponds to 64Hz.
+        static void setup(bool enable, std::uint8_t freq_shift = 10);
 
+        // Returns the current UNIX time.  This always reads the RTC directly,
+        // so this call is very slow.
         static time_point now() noexcept;
 
         static std::time_t to_time_t(const time_point& t) noexcept
@@ -111,6 +129,7 @@ namespace jw::chrono
             return time_point { std::chrono::duration_cast<duration>(std::chrono::seconds { t }) };
         }
 
+        // Retuns the time interval between interrupts in nanoseconds.
         static double irq_delta() noexcept;
     };
 }
