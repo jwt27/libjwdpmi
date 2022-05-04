@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 
@@ -6,23 +7,28 @@
 
 namespace jw::dpmi
 {
-    void cpuid::populate()
+    bool cpuid::check_support() noexcept
     {
         bool have_cpuid;
         std::uint32_t scratch;
         asm
-        (
-            "pushfd;"
-            "mov %0, [esp];"
-            "xor dword ptr [esp], 0x00200000;"    // ID bit
-            "popfd;"
-            "pushfd;"
-            "cmp %0, [esp];"
-            "pop %0;"
-            : "=&r" (scratch)
+        (R"(
+            pushfd
+            mov %0, [esp]
+            xor dword ptr [esp], 0x00200000     # ID bit
+            popfd
+            pushfd
+            cmp %0, [esp]
+            pop %0
+         )" : "=&r" (scratch)
             , "=@ccne" (have_cpuid)
         );
-        if (not have_cpuid) return;
+        return have_cpuid;
+    }
+
+    void cpuid::populate()
+    {
+        if (not supported()) return;
 
         std::uint32_t max = 0;
         for (std::uint32_t i = 0; i <= max; ++i)

@@ -54,6 +54,17 @@ namespace jw::dpmi
 
     struct cpuid
     {
+        [[gnu::const]] static bool supported() noexcept
+        {
+            enum : std::uint8_t { unknown, yes, no } static status;
+            if (status == unknown) [[unlikely]]
+            {
+                if (check_support()) status = yes;
+                else status = no;
+            }
+            return status == yes;
+        }
+
         static const cpuid_leaf& leaf(std::uint32_t i)
         {
             if (leaves.empty()) [[unlikely]] populate();
@@ -85,5 +96,7 @@ namespace jw::dpmi
         static inline std::map<std::uint32_t, cpuid_leaf, std::less<std::uint32_t>, locking_allocator<std::pair<const std::uint32_t, cpuid_leaf>>> leaves { };
 
         static void populate();
+
+        [[gnu::const]] static bool check_support() noexcept;
     };
 }
