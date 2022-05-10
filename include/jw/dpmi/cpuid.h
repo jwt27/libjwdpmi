@@ -13,10 +13,10 @@ namespace jw::dpmi
 {
     struct cpuid_leaf
     {
-        std::uint32_t eax, ebx, ecx, edx;
+        std::uint32_t eax, ebx, edx, ecx;
     };
 
-    struct cpu_feature_flags
+    struct common_cpu_feature_flags
     {
         bool fpu_on_chip : 1;
         bool v86_mode_enhancements : 1;
@@ -34,6 +34,10 @@ namespace jw::dpmi
         bool page_global_bit : 1;
         bool machine_check_architecture : 1;
         bool cmov : 1;
+    };
+
+    struct alignas(int) intel_cpu_feature_flags : common_cpu_feature_flags
+    {
         bool page_attribute_table : 1;
         bool page_size_extension_36bit : 1;
         bool processor_serial_number : 1;
@@ -52,51 +56,99 @@ namespace jw::dpmi
         bool pending_break_enable : 1;
     };
 
+    static_assert(sizeof(intel_cpu_feature_flags) == 4);
+
     struct cpuid
     {
+        // Check if the CPUID instruction is supported.
         [[gnu::const]] static bool supported() noexcept
         {
-            enum : std::uint8_t { unknown, yes, no } static status;
-            if (status == unknown) [[unlikely]]
-            {
-                if (check_support()) status = yes;
-                else status = no;
-            }
-            return status == yes;
+            return max() != 0;
         }
 
-        static const cpuid_leaf& leaf(std::uint32_t i)
+        // Returns the maximum allowed parameter to leaf().  A value of 0
+        // indicates that CPUID is not supported.
+        [[gnu::const]] static std::uint32_t max() noexcept
         {
-            if (leaves.empty()) [[unlikely]] populate();
-            return leaves[i];
+            static constinit std::uint32_t max { 0xffffffff };
+            if (max == 0xffffffff) [[unlikely]]
+            {
+                bool have_cpuid;
+                std::uint32_t scratch;
+                asm volatile
+                (R"(
+                    pushfd
+                    mov %0, [esp]
+                    xor dword ptr [esp], 0x00200000     # ID bit
+                    popfd
+                    pushfd
+                    cmp %0, [esp]
+                    pop %0
+                 )" : "=&r" (scratch)
+                    , "=@ccne" (have_cpuid)
+                );
+                if (not have_cpuid) return max = 0;
+                max = leaf(0).eax;
+            }
+            return max;
         }
 
-        static std::string vendor()
+        // Returns the maximum allowed parameter to extended_leaf().  A value
+        // of 0 indicates that extended leaves are not supported.
+        [[gnu::const]] static std::uint32_t max_extended() noexcept
+        {
+            static constinit std::uint32_t max { 0xffffffff };
+            if (max == 0xffffffff) [[unlikely]]
+            {
+                if (not supported()) return max = 0;
+                max = extended_leaf(0).eax;
+                if (max <= 0x80000000) max = 0;
+            }
+            return max;
+        }
+
+        // Get the CPU vendor identification string.  Returns an empty string
+        // if CPUID is not supported.
+        [[gnu::const]] static std::string vendor()
         {
             std::string v { };
+            if (not supported()) return v;
             v.reserve(3 * 4);
-            auto& l = leaf(0);
+            auto l = leaf(0);
             v.append(reinterpret_cast<const char*>(&l.ebx), 4);
             v.append(reinterpret_cast<const char*>(&l.edx), 4);
             v.append(reinterpret_cast<const char*>(&l.ecx), 4);
             return v;
         }
 
-        static cpu_feature_flags feature_flags()
+        // Get the feature flags from leaf(1).edx.  If CPUID is not supported,
+        // all bits will be clear.
+        [[gnu::const]] static intel_cpu_feature_flags feature_flags()
         {
             union
             {
-                std::uint32_t edx = leaf(1).edx;
-                cpu_feature_flags flags;
+                std::uint32_t edx;
+                intel_cpu_feature_flags flags { };
             };
+            if (max() > 0) [[likely]] edx = leaf(1).edx;
             return flags;
         }
 
-    private:
-        static inline std::map<std::uint32_t, cpuid_leaf, std::less<std::uint32_t>, locking_allocator<std::pair<const std::uint32_t, cpuid_leaf>>> leaves { };
+        // Get the specified CPUID leaf.  Make sure to check max() or
+        // supported() before calling this.
+        [[gnu::const]] static cpuid_leaf leaf(std::uint32_t i)
+        {
+            cpuid_leaf l;
+            asm volatile ("cpuid" : "=a" (l.eax), "=b" (l.ebx), "=c" (l.ecx), "=d" (l.edx) : "a" (i));
+            return l;
+        }
 
-        static void populate();
-
-        [[gnu::const]] static bool check_support() noexcept;
+        // Get the specified extended CPUID leaf.  You don't need to set the
+        // high bit on the index.  Make sure to check max_extended() before
+        // calling this.
+        [[gnu::const]] static cpuid_leaf extended_leaf(std::uint32_t i)
+        {
+            return leaf(i | 0x80000000);
+        }
     };
 }
