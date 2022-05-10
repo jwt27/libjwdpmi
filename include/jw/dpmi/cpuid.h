@@ -56,6 +56,26 @@ namespace jw::dpmi
         bool pending_break_enable : 1;
     };
 
+    struct alignas(int) amd_cpu_feature_flags : common_cpu_feature_flags
+    {
+        bool page_attribute_table : 1;
+        bool page_size_extension_36bit : 1;
+        bool : 2;
+        bool execute_disable : 1;
+        bool : 1;
+        bool mmx_extensions : 1;
+        bool mmx : 1;
+        bool fxsave : 1;
+        bool fast_fxsave : 1;
+        bool : 1;
+        bool rdtscp : 1;
+        bool : 1;
+        bool long_mode : 1;
+        bool amd3dnow_extensions : 1;
+        bool amd3dnow : 1;
+
+    };
+
     static_assert(sizeof(intel_cpu_feature_flags) == 4);
 
     struct cpuid
@@ -131,6 +151,19 @@ namespace jw::dpmi
                 intel_cpu_feature_flags flags { };
             };
             if (max() > 0) [[likely]] edx = leaf(1).edx;
+            return flags;
+        }
+
+        // Get the feature flags from extended_leaf(1).edx.  If these are not
+        // available, all bits will be clear.
+        [[gnu::const]] static amd_cpu_feature_flags amd_feature_flags()
+        {
+            union
+            {
+                std::uint32_t edx;
+                amd_cpu_feature_flags flags { };
+            };
+            if (max_extended() > 0) [[likely]] edx = extended_leaf(1).edx;
             return flags;
         }
 
