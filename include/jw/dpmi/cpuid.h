@@ -77,6 +77,7 @@ namespace jw::dpmi
     };
 
     static_assert(sizeof(intel_cpu_feature_flags) == 4);
+    static_assert(sizeof(amd_cpu_feature_flags) == 4);
 
     struct cpuid
     {
@@ -117,12 +118,13 @@ namespace jw::dpmi
         // of 0 indicates that extended leaves are not supported.
         [[gnu::const]] static std::uint32_t max_extended() noexcept
         {
-            static constinit std::uint32_t max { 0xffffffff };
-            if (max == 0xffffffff) [[unlikely]]
+            static constinit std::uint32_t max { 0xffffffffu };
+            if (max == 0xffffffffu) [[unlikely]]
             {
                 if (not supported()) return max = 0;
                 max = extended_leaf(0).eax;
-                if (max <= 0x80000000) max = 0;
+                if (max <= 0x80000000u) max = 0;
+                max &= 0x7fffffffu;
             }
             return max;
         }
@@ -143,7 +145,7 @@ namespace jw::dpmi
 
         // Get the feature flags from leaf(1).edx.  If CPUID is not supported,
         // all bits will be clear.
-        [[gnu::const]] static intel_cpu_feature_flags feature_flags()
+        [[gnu::const]] static intel_cpu_feature_flags feature_flags() noexcept
         {
             union
             {
@@ -156,7 +158,7 @@ namespace jw::dpmi
 
         // Get the feature flags from extended_leaf(1).edx.  If these are not
         // available, all bits will be clear.
-        [[gnu::const]] static amd_cpu_feature_flags amd_feature_flags()
+        [[gnu::const]] static amd_cpu_feature_flags amd_feature_flags() noexcept
         {
             union
             {
