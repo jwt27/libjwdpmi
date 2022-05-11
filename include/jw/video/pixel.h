@@ -10,7 +10,7 @@
 #include <vector>
 #include <mmintrin.h>
 #include <xmmintrin.h>
-#include <jw/main.h>
+#include <jw/simd.h>
 #include <jw/math.h>
 
 namespace jw
@@ -78,6 +78,13 @@ namespace jw
 #           define MMX_FUNCTION PIXEL_FUNCTION
 #       endif
 
+        template<simd flags = default_simd(), typename F, typename... A>
+        MMX_FUNCTION inline decltype(auto) mmx_function(F&& func, A&&... args)
+        {
+            mmx_guard<flags> guard { };
+            return std::forward<F>(func)(std::forward<A>(args)...);
+        }
+
         template<typename P>
         struct alignas(P) [[gnu::packed, gnu::may_alias]] pixel : public P
         {
@@ -100,14 +107,14 @@ namespace jw
 
             constexpr pixel(const pixel& p) noexcept { assign(p); }
             constexpr pixel(pixel&& p) noexcept { assign(p); }
-            constexpr pixel& operator=(const pixel& p) noexcept { assign(p); return *this; };
-            constexpr pixel& operator=(pixel&& p) noexcept { assign(p); return *this; };
+            constexpr pixel& operator=(const pixel& p) noexcept { return assign(p); };
+            constexpr pixel& operator=(pixel&& p) noexcept { return assign(p); };
 
             template <typename U> constexpr operator pixel<U>() const noexcept { return cast_to<U>(); }
 
             static constexpr bool has_alpha() { return P::ax > 0; }
 
-            template<typename U>
+            template<simd flags = default_simd(), typename U>
             PIXEL_FUNCTION constexpr pixel& blend(const pixel<U>& other)
             {
                 if constexpr (not pixel<U>::has_alpha())
@@ -119,31 +126,29 @@ namespace jw
                     using VT = std::conditional_t<std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>, float, std::uint32_t>;
                     V<4, VT> src = other.template vector<VT>();
                     V<4, VT> dst = vector<VT>();
-                    *this = vector<VT>(vector_blend<U, VT>(dst, src));
+                    return *this = vector<VT>(vector_blend<U, VT>(dst, src));
                 };
-                if (std::is_constant_evaluated()) do_blend_vector();
-                else
+
+                if (std::is_constant_evaluated()) return do_blend_vector();
+
+                if constexpr (flags.match(simd::sse) and (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>))
                 {
-                    if constexpr (sse and (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>))
+                    auto do_blend = [this, &other]()
                     {
-                        auto do_blend = [this, &other]()
-                        {
-                            *this = m128(m128_blend<U>(m128(), other.m128()));
-                        };
-                        if constexpr (std::is_integral_v<typename P::T> or std::is_integral_v<typename U::T>)
-                            mmx_function { [&do_blend] { do_blend(); } }();
-                        else do_blend();
-                    }
-                    else if constexpr (mmx and std::is_integral_v<typename P::T> and std::is_integral_v<typename U::T>)
-                    {
-                        mmx_function { [this, &other] { *this = m64(m64_blend<U>(m64(), other.m64())); } }();
-                    }
-                    else do_blend_vector();
+                        return *this = m128(m128_blend<U>(m128(), other.m128()));
+                    };
+                    if constexpr (std::is_integral_v<typename P::T> or std::is_integral_v<typename U::T>)
+                        return mmx_function<flags>([&do_blend] { return do_blend(); });
+                    else return do_blend();
                 }
-                return *this;
+                else if constexpr (flags.match(simd::mmx) and std::is_integral_v<typename P::T> and std::is_integral_v<typename U::T>)
+                {
+                    return mmx_function<flags>([this, &other] { return *this = m64(m64_blend<U>(m64(), other.m64())); });
+                }
+                else return do_blend_vector();
             }
 
-            template<typename U>
+            template<simd flags = default_simd(), typename U>
             PIXEL_FUNCTION constexpr pixel& blend_straight(const pixel<U>& other)
             {
                 if constexpr (not pixel<U>::has_alpha())
@@ -156,30 +161,29 @@ namespace jw
                     using VT = std::conditional_t<std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>, float, std::uint32_t>;
                     V<4, VT> src = vector_premul<VT>(other.template vector<VT>());
                     V<4, VT> dst = vector_premul<VT>(vector<VT>());
-                    *this = vector<VT>(vector_blend<U, VT>(dst, src));
+                    return *this = vector<VT>(vector_blend<U, VT>(dst, src));
                 };
-                if (std::is_constant_evaluated()) do_blend_vector();
-                else
+
+                if (std::is_constant_evaluated()) return do_blend_vector();
+
+                if constexpr (flags.match(simd::sse) and (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>))
                 {
-                    if constexpr (sse and (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>))
+                    auto do_blend = [this, &other]()
                     {
-                        auto do_blend = [this, &other]()
-                        {
-                            *this = m128(m128_blend<U>(m128_premul(m128()), m128_premul(other.m128())));
-                        };
-                        if constexpr (std::is_integral_v<typename P::T> or std::is_integral_v<typename U::T>)
-                            mmx_function { [&do_blend] { do_blend(); } }();
-                        else do_blend();
-                    }
-                    else if constexpr (mmx and std::is_integral_v<typename P::T> and std::is_integral_v<typename U::T>)
-                    {
-                        mmx_function { [this, &other] { *this = m64(m64_blend<U>(m64_premul(m64()), m64_premul(other.m64()))); } }();
-                    }
-                    else do_blend_vector();
+                        return *this = m128(m128_blend<U>(m128_premul(m128()), m128_premul(other.m128())));
+                    };
+                    if constexpr (std::is_integral_v<typename P::T> or std::is_integral_v<typename U::T>)
+                        return mmx_function<flags>([&do_blend] { return do_blend(); });
+                    else return do_blend();
                 }
-                return *this;
+                else if constexpr (flags.match(simd::mmx) and std::is_integral_v<typename P::T> and std::is_integral_v<typename U::T>)
+                {
+                    return mmx_function<flags>([this, &other] { return *this = m64(m64_blend<U>(m64_premul(m64()), m64_premul(other.m64()))); });
+                }
+                else return do_blend_vector();
             }
 
+            template<simd flags = default_simd()>
             PIXEL_FUNCTION constexpr pixel& premultiply_alpha()
             {
                 if constexpr (not has_alpha()) return *this;
@@ -187,29 +191,32 @@ namespace jw
                 auto do_premul_vector = [this]
                 {
                     using VT = std::conditional_t<std::is_floating_point_v<typename P::T>, float, std::uint32_t>;
-                    *this = vector<VT>(vector_premul<VT>(vector<VT>()));
+                    return *this = vector<VT>(vector_premul<VT>(vector<VT>()));
                 };
-                if (std::is_constant_evaluated()) do_premul_vector();
-                else
+
+                if (std::is_constant_evaluated()) return do_premul_vector();
+
+                if constexpr (flags.match(simd::sse) and std::is_floating_point_v<typename P::T>)* this = m128(m128_premul(m128()));
+                else if constexpr (flags.match(simd::mmx) and not std::is_floating_point_v<typename P::T>)
+                    return mmx_function<flags>([this] { return *this = m64(m64_premul(m64())); });
+                else return do_premul_vector();
+            }
+
+            template <simd flags = default_simd(), typename U>
+            PIXEL_FUNCTION constexpr pixel& assign(const pixel<U>& p) noexcept
+            {
+                if constexpr (std::is_same_v<P, U>)
                 {
-                    if constexpr (sse and std::is_floating_point_v<typename P::T>)* this = m128(m128_premul(m128()));
-                    else if constexpr (mmx and not std::is_floating_point_v<typename P::T>)
-                        mmx_function { [this] { *this = m64(m64_premul(m64())); } }();
-                    else do_premul_vector();
+                    if constexpr (sizeof(pixel) == 16) *reinterpret_cast<__m128*>(this) = *reinterpret_cast<const __m128*>(&p);
+                    else if constexpr (sizeof(pixel) == 8) *reinterpret_cast<__m64*>(this) = *reinterpret_cast<const __m64*>(&p);
+                    else std::memcpy(this, &p, sizeof(pixel));
+                    return *this;
                 }
-                return *this;
+                else return assign<flags>(cast_to<P, flags>(p));
             }
 
         private:
-            constexpr void assign(const pixel& p) noexcept
-            {
-                if constexpr (sizeof(pixel) == 0x10)* reinterpret_cast<__m128*>(this) = *reinterpret_cast<const __m128*>(&p);
-                else if constexpr (sizeof(pixel) == 4)* reinterpret_cast<std::uint32_t*>(this) = *reinterpret_cast<const std::uint32_t*>(&p);
-                else if constexpr (sizeof(pixel) == 2)* reinterpret_cast<std::uint16_t*>(this) = *reinterpret_cast<const std::uint16_t*>(&p);
-                else if constexpr (sizeof(pixel) == 1)* reinterpret_cast<std::uint8_t*>(this) = *reinterpret_cast<const std::uint8_t*>(&p);
-            }
-
-            template <typename U>
+            template <typename U, simd flags = default_simd()>
             PIXEL_FUNCTION constexpr pixel<U> cast_to() const
             {
                 auto do_cast_vector = [this]()
@@ -217,36 +224,25 @@ namespace jw
                     using VT = std::conditional_t<std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>, float, std::uint32_t>;
                     return pixel<U>::template vector<VT>(vector_cast_to<U, VT>(vector<VT>()));
                 };
+
                 if (std::is_constant_evaluated()) return do_cast_vector();
 
-                if constexpr (sse and (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>))
+                if constexpr (flags.match(simd::sse) and (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>))
                 {
                     auto do_cast = [this]()
                     {
                         return pixel<U>::m128(m128_cast_to<U>(m128()));
                     };
                     if constexpr (std::is_integral_v<typename P::T> or std::is_integral_v<typename U::T>)
-                        return mmx_function { [&do_cast] { return do_cast(); } }();
+                        return mmx_function<flags>([&do_cast] { return do_cast(); });
                     else return do_cast();
                 }
-                else if constexpr (mmx and (sse or (std::is_integral_v<typename P::T> and std::is_integral_v<typename U::T>)))
+                else if constexpr (flags.match(simd::mmx) and (flags.match(simd::sse) or (std::is_integral_v<typename P::T> and std::is_integral_v<typename U::T>)))
                 {
-                    return mmx_function { [this] { return pixel<U>::m64(m64_cast_to<U>(m64())); } }();
+                    return mmx_function<flags>([this] { return pixel<U>::m64(m64_cast_to<U, flags>(m64())); });
                 }
                 else return do_cast_vector();
             }
-
-            template<typename F>
-            struct mmx_function
-            {
-                F f;
-                constexpr mmx_function(F&& func) noexcept : f(std::forward<F>(func)) { }
-                template<typename... T> MMX_FUNCTION auto operator()(T&& ... args) const
-                {
-                    struct mmx_guard { ~mmx_guard() { _mm_empty(); } } guard { };
-                    return f(std::forward<T>(args)...);
-                }
-            };
 
             PIXEL_FUNCTION static constexpr pixel m64(__m64 value) noexcept // V4HI
             {
@@ -320,7 +316,7 @@ namespace jw
                 return src;
             }
 
-            template <typename U>
+            template <typename U, simd flags = default_simd()>
             PIXEL_FUNCTION static constexpr __m64 m64_cast_to(__m64 src) noexcept
             {
                 constexpr auto mullo = reinterpret_cast<__m64>(pixel<U>::template vector_max<std::uint16_t>(P::ax));
@@ -351,7 +347,7 @@ namespace jw
                 }
                 if constexpr (pixel<U>::has_alpha() and not has_alpha())
                 {
-                    if constexpr (sse) dst = _mm_insert_pi16(dst, U::ax, 3);
+                    if constexpr (flags.match(simd::mmx2)) dst = _mm_insert_pi16(dst, U::ax, 3);
                     else
                     {
                         dst = _mm_and_si64(dst, _mm_setr_pi16(0xffff, 0xffff, 0xffff, 0));
@@ -447,12 +443,12 @@ namespace jw
                 return dst;
             }
 
-            template <typename U>
+            template <typename U, simd flags = default_simd()>
             PIXEL_FUNCTION constexpr __m64 m64_blend(__m64 dst, __m64 src)
             {
                 auto a = _mm_set1_pi16(U::ax - reinterpret_cast<V<4, std::uint16_t>>(src)[3]);
 
-                if constexpr (not std::is_same_v<P, U>) src = pixel<U>::template m64_cast_to<P>(src);
+                if constexpr (not std::is_same_v<P, U>) src = pixel<U>::template m64_cast_to<P, flags>(src);
                 dst = _mm_mullo_pi16(dst, a);
                 if constexpr (U::ax == 3)
                 {
@@ -493,33 +489,32 @@ namespace jw
             }
 
             template<std::size_t bits, typename VT = std::uint16_t, std::size_t maxbits = bits>
-            static constexpr auto vector_reciprocal(VT v0, VT v1, VT v2, VT v3) noexcept
+            static consteval auto vector_reciprocal(VT v0, VT v1, VT v2, VT v3) noexcept
             {
                 auto r = [](VT v) -> VT { return std::min(((1ul << bits) + v - 1) / v, (1ul << maxbits) - 1); };
-                return V<4, VT> { r(v0), r(v1), r(v2), r(v3)};
+                return V<4, VT> { r(v0), r(v1), r(v2), r(v3) };
             }
 
             template<std::size_t bits, typename VT = std::uint16_t, std::size_t maxbits = bits>
-            static constexpr auto vector_reciprocal(VT v0) noexcept
+            static consteval auto vector_reciprocal(VT v0) noexcept
             {
                 return vector_reciprocal<bits, VT, maxbits>(v0, v0, v0, v0);
             }
 
             template<typename VT = float>
-            static constexpr auto vector_max(VT noalpha = 1) noexcept
+            static consteval auto vector_max(VT noalpha = 1) noexcept
             {
                 return V<4, VT> { P::bx, P::gx, P::rx, static_cast<VT>(has_alpha() ? P::ax : noalpha) };
             }
 
             template<std::size_t bits, typename VT = std::uint16_t, std::size_t maxbits = bits>
-            static constexpr auto vector_max_reciprocal(VT noalpha = 1) noexcept
+            static consteval auto vector_max_reciprocal(VT noalpha = 1) noexcept
             {
                 return vector_reciprocal<bits, VT, maxbits>(P::bx, P::gx, P::rx, static_cast<VT>(has_alpha() ? P::ax : noalpha));
             }
 
-            template<typename T> constexpr bool is_constexpr(T value) { return __builtin_constant_p(value); }
-            static constexpr std::uint8_t shuffle_mask(int v0, int v1, int v2, int v3) noexcept { return (v0 & 3) | ((v1 & 3) << 2) | ((v2 & 3) << 4) | ((v3 & 3) << 6); }
-            static constexpr bool byte_aligned() noexcept { return P::byte_aligned; }
+            static consteval std::uint8_t shuffle_mask(int v0, int v1, int v2, int v3) noexcept { return (v0 & 3) | ((v1 & 3) << 2) | ((v2 & 3) << 4) | ((v3 & 3) << 6); }
+            static consteval bool byte_aligned() noexcept { return P::byte_aligned; }
         };
 
 #       undef MMX_NOINLINE
