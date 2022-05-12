@@ -198,8 +198,10 @@ namespace jw
             main_cs = get_cs();
             main_ds = get_ds();
 
+            cpuid::setup();
+            asm volatile ("" ::: "memory");
             const auto cpu = dpmi::cpuid::feature_flags();
-            dpmi::detail::use_fxsave = cpu.fxsave;
+            use_fxsave = cpu.fxsave;
 
             asm volatile
             (R"(

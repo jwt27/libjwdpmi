@@ -91,42 +91,14 @@ namespace jw::dpmi
         // indicates that CPUID is not supported.
         [[gnu::const]] static std::uint32_t max() noexcept
         {
-            static constinit std::uint32_t max { 0xffffffff };
-            if (max == 0xffffffff) [[unlikely]]
-            {
-                bool have_cpuid;
-                std::uint32_t scratch;
-                asm volatile
-                (R"(
-                    pushfd
-                    mov %0, [esp]
-                    xor dword ptr [esp], 0x00200000     # ID bit
-                    popfd
-                    pushfd
-                    cmp %0, [esp]
-                    pop %0
-                 )" : "=&r" (scratch)
-                    , "=@ccne" (have_cpuid)
-                );
-                if (not have_cpuid) return max = 0;
-                max = leaf(0).eax;
-            }
-            return max;
+            return max_leaf;
         }
 
         // Returns the maximum allowed parameter to extended_leaf().  A value
         // of 0 indicates that extended leaves are not supported.
         [[gnu::const]] static std::uint32_t max_extended() noexcept
         {
-            static constinit std::uint32_t max { 0xffffffffu };
-            if (max == 0xffffffffu) [[unlikely]]
-            {
-                if (not supported()) return max = 0;
-                max = extended_leaf(0).eax;
-                if (max <= 0x80000000u) max = 0;
-                max &= 0x7fffffffu;
-            }
-            return max;
+            return max_extended_leaf;
         }
 
         // Get the CPU vendor identification string.  Returns an empty string
@@ -185,5 +157,32 @@ namespace jw::dpmi
         {
             return leaf(i | 0x80000000);
         }
+
+        // This is used once during initialization.  No need to call it
+        // manually.
+        static void setup() noexcept
+        {
+            bool have_cpuid;
+            std::uint32_t scratch;
+            asm volatile
+            (R"(
+                pushfd
+                mov %0, [esp]
+                xor dword ptr [esp], 0x00200000     # ID bit
+                popfd
+                pushfd
+                cmp %0, [esp]
+                pop %0
+             )" : "=&r" (scratch)
+                , "=@ccne" (have_cpuid)
+            );
+            if (not have_cpuid) return;
+            max_leaf = leaf(0).eax;
+            max_extended_leaf = std::max(extended_leaf(0).eax, 0x80000000ul) & 0x7fffffffu;
+        }
+
+    private:
+        static inline std::uint32_t max_leaf { 0 };
+        static inline std::uint32_t max_extended_leaf { 0 };
     };
 }
