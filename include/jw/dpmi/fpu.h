@@ -11,6 +11,11 @@
 #include <xmmintrin.h>
 #include <jw/split_int.h>
 
+namespace jw::dpmi::detail
+{
+    inline bool use_fxsave;
+}
+
 namespace jw::dpmi
 {
 #   pragma GCC diagnostic push
@@ -93,11 +98,45 @@ namespace jw::dpmi
 
 #   pragma GCC diagnostic pop
 
-#   ifdef HAVE__SSE__
-    using fpu_registers = fxsave_data;
-#   else
-    using fpu_registers = fsave_data;
-#   endif
+    enum class fpu_registers_type { fsave, fxsave };
+
+    union fpu_registers
+    {
+        fsave_data fsave;
+        fxsave_data fxsave;
+
+        void save() noexcept
+        {
+            switch (type())
+            {
+            case fpu_registers_type::fsave: return fsave.save();
+            case fpu_registers_type::fxsave: return fxsave.save();
+            default: __builtin_unreachable();
+            }
+        }
+
+        void restore() noexcept
+        {
+            switch (type())
+            {
+            case fpu_registers_type::fsave: return fsave.restore();
+            case fpu_registers_type::fxsave: return fxsave.restore();
+            default: __builtin_unreachable();
+            }
+        }
+
+        [[gnu::const]] static fpu_registers_type type() noexcept
+        {
+#           ifdef HAVE__SSE__
+            return fpu_registers_type::fxsave;
+#           else
+            if (detail::use_fxsave)
+                return fpu_registers_type::fxsave;
+            else
+                return fpu_registers_type::fsave;
+#           endif
+        }
+    };
 
     // Saves the FPU registers and restores them on destruction.
     struct fpu_context
