@@ -1,9 +1,11 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
 #include <initializer_list>
 #include <unordered_map>
+#include <stdexcept>
 #include <jw/io/ioport.h>
 #include <jw/common.h>
 

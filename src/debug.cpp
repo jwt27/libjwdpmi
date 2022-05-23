@@ -257,11 +257,7 @@ namespace jw
                 "mxcsr"
             };
 
-#           ifndef HAVE__SSE__
-            constexpr auto reg_max = regnum::fop;
-#           else
             constexpr auto reg_max = regnum::mxcsr;
-#           endif
 
             inline constexpr std::uint32_t posix_signal(std::int32_t exc) noexcept
             {
@@ -641,13 +637,39 @@ namespace jw
                 }
             }
 
-            void reg(string& out, regnum reg, std::uint32_t id)
+            template<typename T>
+            static void fpu_reg(string& out, regnum reg, const T* fpu)
+            {
+                switch (reg)
+                {
+                    case st0: case st1: case st2: case st3: case st4: case st5: case st6: case st7:
+                        return encode(out, &fpu->st[reg - st0], regsize[reg]);
+                    case fctrl: { std::uint32_t s = fpu->fctrl; return encode(out, &s); }
+                    case fstat: { std::uint32_t s = fpu->fstat; return encode(out, &s); }
+                    case ftag:  { std::uint32_t s = fpu->ftag ; return encode(out, &s); }
+                    case fiseg: { std::uint32_t s = fpu->fiseg; return encode(out, &s); }
+                    case fioff: { std::uint32_t s = fpu->fioff; return encode(out, &s); }
+                    case foseg: { std::uint32_t s = fpu->foseg; return encode(out, &s); }
+                    case fooff: { std::uint32_t s = fpu->fooff; return encode(out, &s); }
+                    case fop:   { std::uint32_t s = fpu->fop  ; return encode(out, &s); }
+                    case xmm0: case xmm1: case xmm2: case xmm3: case xmm4: case xmm5: case xmm6: case xmm7:
+                        if constexpr (std::is_same_v<T, fxsave_data>) return encode(out, &fpu->xmm[reg - xmm0]);
+                    case mxcsr:
+                        if constexpr (std::is_same_v<T, fxsave_data>) return encode(out, &fpu->mxcsr);
+                    default:
+                        return encode_null(out, regsize[reg]);
+                }
+            }
+
+            static void reg(string& out, regnum reg, std::uint32_t id)
             {
                 if (threads.count(id) == 0)
                 {
                     encode_null(out, regsize[reg]);
                     return;
                 }
+                if (reg > reg_max) [[unlikely]] return;
+
                 auto&& t = threads[id];
                 if (&t == current_thread)
                 {
@@ -675,26 +697,12 @@ namespace jw
                     case gs: { if (dpmi10_frame) { std::uint32_t s = d10f->gs; encode(out, &s); } else encode_null(out, regsize[reg]); return; }
                     case eip: encode(out, &f->fault_address.offset); return;
                     default:
-                        if (reg > reg_max) return;
                         auto* fpu = &interrupt_id::get()->fpu;
-                        switch (reg)
+                        switch (fpu_registers::type())
                         {
-                            case st0: case st1: case st2: case st3: case st4: case st5: case st6: case st7:
-                                encode(out, &fpu->st[reg - st0], regsize[reg]); return;
-                            case fctrl: { std::uint32_t s = fpu->fctrl; encode(out, &s); return; }
-                            case fstat: { std::uint32_t s = fpu->fstat; encode(out, &s); return; }
-                            case ftag:  { std::uint32_t s = fpu->ftag ; encode(out, &s); return; }
-                            case fiseg: { std::uint32_t s = fpu->fiseg; encode(out, &s); return; }
-                            case fioff: { std::uint32_t s = fpu->fioff; encode(out, &s); return; }
-                            case foseg: { std::uint32_t s = fpu->foseg; encode(out, &s); return; }
-                            case fooff: { std::uint32_t s = fpu->fooff; encode(out, &s); return; }
-                            case fop:   { std::uint32_t s = fpu->fop  ; encode(out, &s); return; }
-#                           ifdef HAVE__SSE__
-                            case xmm0: case xmm1: case xmm2: case xmm3: case xmm4: case xmm5: case xmm6: case xmm7:
-                                encode(out, &fpu->xmm[reg - xmm0]); return;
-                            case mxcsr: encode(out, &fpu->mxcsr); return;
-#                           endif
-                            default: encode_null(out, regsize[reg]); return;
+                        case fpu_registers_type::fsave: return fpu_reg(out, reg, &fpu->fsave);
+                        case fpu_registers_type::fxsave: return fpu_reg(out, reg, &fpu->fxsave);
+                        default: __builtin_unreachable();
                         }
                     }
                 }
@@ -728,7 +736,31 @@ namespace jw
                 }
             }
 
-            bool setreg(regnum reg, const std::string_view& value, std::uint32_t id)
+            template<typename T>
+            static bool set_fpu_reg(regnum reg, const std::string_view& value, T* fpu)
+            {
+                switch (reg)
+                {
+                case st0: case st1: case st2: case st3: case st4: case st5: case st6: case st7:
+                    return reverse_decode(value, &fpu->st[reg - st0], regsize[reg]);
+                case fctrl: { return reverse_decode(value, &fpu->fctrl, regsize[reg]); }
+                case fstat: { return reverse_decode(value, &fpu->fstat, regsize[reg]); }
+                case ftag:  { return reverse_decode(value, &fpu->ftag,  regsize[reg]); }
+                case fiseg: { return reverse_decode(value, &fpu->fiseg, regsize[reg]); }
+                case fioff: { return reverse_decode(value, &fpu->fioff, regsize[reg]); }
+                case foseg: { return reverse_decode(value, &fpu->foseg, regsize[reg]); }
+                case fooff: { return reverse_decode(value, &fpu->fooff, regsize[reg]); }
+                case fop:   { return reverse_decode(value, &fpu->fop,   regsize[reg]); }
+                case xmm0: case xmm1: case xmm2: case xmm3: case xmm4: case xmm5: case xmm6: case xmm7:
+                    if constexpr (std::is_same_v<T, fxsave_data>) return reverse_decode(value, &fpu->xmm[reg - xmm0], regsize[reg]);
+                case mxcsr:
+                    if constexpr (std::is_same_v<T, fxsave_data>) return reverse_decode(value, &fpu->mxcsr, regsize[reg]);
+                default:
+                    return false;
+                }
+            }
+
+            static bool setreg(regnum reg, const std::string_view& value, std::uint32_t id)
             {
                 if (threads.count(id) == 0) return false;
                 auto&& t = threads[id];
@@ -759,24 +791,11 @@ namespace jw
                     case gs: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->gs, 2); } return false;
                     default:
                         auto* fpu = &interrupt_id::get()->fpu;
-                        switch (reg)
+                        switch (fpu_registers::type())
                         {
-                        case st0: case st1: case st2: case st3: case st4: case st5: case st6: case st7:
-                            return reverse_decode(value, &fpu->st[reg - st0], regsize[reg]);
-                        case fctrl: { return reverse_decode(value, &fpu->fctrl, regsize[reg]); }
-                        case fstat: { return reverse_decode(value, &fpu->fstat, regsize[reg]); }
-                        case ftag:  { return reverse_decode(value, &fpu->ftag,  regsize[reg]); }
-                        case fiseg: { return reverse_decode(value, &fpu->fiseg, regsize[reg]); }
-                        case fioff: { return reverse_decode(value, &fpu->fioff, regsize[reg]); }
-                        case foseg: { return reverse_decode(value, &fpu->foseg, regsize[reg]); }
-                        case fooff: { return reverse_decode(value, &fpu->fooff, regsize[reg]); }
-                        case fop:   { return reverse_decode(value, &fpu->fop,   regsize[reg]); }
-#                       ifdef HAVE__SSE__
-                        case xmm0: case xmm1: case xmm2: case xmm3: case xmm4: case xmm5: case xmm6: case xmm7:
-                            return reverse_decode(value, &fpu->xmm[reg - xmm0], regsize[reg]);
-                        case mxcsr: return reverse_decode(value, &fpu->mxcsr, regsize[reg]);
-#                       endif
-                        default: return false;
+                        case fpu_registers_type::fsave: return set_fpu_reg(reg, value, &fpu->fsave);
+                        case fpu_registers_type::fxsave: return set_fpu_reg(reg, value, &fpu->fxsave);
+                        default: __builtin_unreachable();
                         }
                     }
                 }

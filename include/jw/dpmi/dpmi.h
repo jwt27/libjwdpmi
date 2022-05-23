@@ -12,6 +12,7 @@
 #include <iomanip>
 #include <memory>
 #include <cassert>
+#include <array>
 #include <fmt/core.h>
 #include <jw/address_space.h>
 #include <jw/dpmi/dpmi_error.h>

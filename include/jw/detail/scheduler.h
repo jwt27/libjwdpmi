@@ -12,6 +12,7 @@
 #include <memory>
 #include <deque>
 #include <set>
+#include <optional>
 #include <jw/dpmi/irq_check.h>
 #include <jw/dpmi/alloc.h>
 #include <jw/function.h>

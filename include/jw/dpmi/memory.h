@@ -9,6 +9,7 @@
 #pragma once
 #include <limits>
 #include <memory_resource>
+#include <optional>
 #include <sys/nearptr.h>
 #include <jw/dpmi/dpmi.h>
 #include <jw/dpmi/detail/selectors.h>

@@ -22,6 +22,7 @@
 #include <jw/io/ps2_interface.h>
 #include <jw/dpmi/ring0.h>
 #include <jw/dpmi/detail/selectors.h>
+#include <jw/dpmi/cpuid.h>
 #include <jw/video/ansi.h>
 #include <cxxabi.h>
 #include <unwind.h>
@@ -197,7 +198,12 @@ namespace jw
             main_cs = get_cs();
             main_ds = get_ds();
 
-            asm
+            cpuid::setup();
+            asm volatile ("" ::: "memory");
+            const auto cpu = dpmi::cpuid::feature_flags();
+            use_fxsave = cpu.fxsave;
+
+            asm volatile
             (R"(
                 fnclex
                 fninit
@@ -207,16 +213,18 @@ namespace jw
                 fldcw [esp]
                 add esp, 4
             )");
-#           ifdef HAVE__SSE__
-            asm
-            (R"(
-                sub esp, 4
-                stmxcsr [esp]
-                or word ptr [esp], 0x1F80
-                ldmxcsr [esp]
-                add esp, 4
-            )");
-#           endif
+
+            if (cpu.sse)
+            {
+                asm volatile
+                (R"(
+                    sub esp, 4
+                    stmxcsr [esp]
+                    or word ptr [esp], 0x1F80
+                    ldmxcsr [esp]
+                    add esp, 4
+                )");
+            }
 
             interrupt_id::setup();
             jw::detail::scheduler::setup();
@@ -231,7 +239,7 @@ namespace jw
             {
                 std::optional<ring0_privilege> r0;
                 if (use_ring0) r0.emplace();
-                set_control_registers();
+                set_control_registers(cpu.sse);
             }
             catch (const general_protection_fault&)
             {
@@ -253,20 +261,14 @@ namespace jw
 
     private:
         [[gnu::noipa]] static void may_throw() { }
-        [[gnu::noipa]] static void set_control_registers()
+        [[gnu::noipa]] static void set_control_registers(bool sse)
         {
             may_throw();    // HACK
             std::uint32_t cr;
             asm ("mov %0, cr0" : "=r" (cr));
-            asm ("mov cr0, %0" :: "r" (cr | 0x10));     // enable native x87 exceptions
+            asm volatile ("mov cr0, %0" :: "r" (cr | 0x10));    // enable native x87 exceptions
 
-#           ifdef HAVE__SSE__
-            constexpr bool have_sse = true;
-#           else
-            constexpr bool have_sse = false;
-#           endif
-
-            if constexpr (have_sse or not config::support_virtual_interrupt_flag)
+            if (sse or not config::support_virtual_interrupt_flag)
             {
                 asm ("mov %0, cr4" : "=r" (cr));
                 if constexpr (not config::support_virtual_interrupt_flag)
@@ -277,9 +279,9 @@ namespace jw
                         std::terminate();
                     }
                 }
-                if constexpr (have_sse)
+                if (sse)
                 {
-                    asm("mov cr4, %0" :: "r" (cr | 0x600));    // enable SSE and SSE exceptions
+                    asm volatile ("mov cr4, %0" :: "r" (cr | 0x600));    // enable SSE and SSE exceptions
                 }
             }
         }

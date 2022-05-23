@@ -37,17 +37,6 @@ namespace jw
 
     [[nodiscard]] void* allocate_locked(std::size_t, std::align_val_t = std::align_val_t { __STDCPP_DEFAULT_NEW_ALIGNMENT__ });
 
-#   ifdef HAVE__MMX__
-    inline constexpr bool mmx = true;
-#   else
-    inline constexpr bool mmx = false;
-#   endif
-#   ifdef HAVE__SSE__
-    inline constexpr bool sse = true;
-#   else
-    inline constexpr bool sse = false;
-#   endif
-
     // This tag type may be used to allocate from a pre-allocated locked
     // memory pool, using the 'operator new' overloads below.  This also works
     // with arrays.  The returned pointer can be deallocated using a regular

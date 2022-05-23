@@ -267,7 +267,7 @@ namespace jw::chrono
 
         std::uint32_t max_n = 0, n = 0;
         std::uint32_t most, current = 0;
-        std::sort(counts.begin(), counts.end() - 1);
+        std::sort(counts.begin(), counts.end());
 
         // Find the most commonly occuring TSC count (statistical "mode")
         for (unsigned i = 0; i < N; ++i)
