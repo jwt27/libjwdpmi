@@ -12,6 +12,7 @@
 #include <vector>
 #include <map>
 #include <memory_resource>
+#include <optional>
 
 #include <jw/common.h>
 #include <jw/dpmi/lock.h>

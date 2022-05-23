@@ -3,6 +3,7 @@
 
 #pragma once
 #include <array>
+#include <optional>
 #include <jw/dpmi/cpu_exception.h>
 #include <jw/function.h>
 

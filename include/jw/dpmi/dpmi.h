@@ -12,6 +12,7 @@
 #include <iomanip>
 #include <memory>
 #include <cassert>
+#include <array>
 #include <fmt/core.h>
 #include <jw/dpmi/dpmi_error.h>
 #include <jw/split_int.h>
