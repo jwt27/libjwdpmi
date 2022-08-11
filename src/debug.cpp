@@ -640,6 +640,7 @@ namespace jw
             template<typename T>
             static void fpu_reg(string& out, regnum reg, const T* fpu)
             {
+                assume(reg >= st0);
                 switch (reg)
                 {
                     case st0: case st1: case st2: case st3: case st4: case st5: case st6: case st7:
@@ -652,12 +653,13 @@ namespace jw
                     case foseg: { std::uint32_t s = fpu->foseg; return encode(out, &s); }
                     case fooff: { std::uint32_t s = fpu->fooff; return encode(out, &s); }
                     case fop:   { std::uint32_t s = fpu->fop  ; return encode(out, &s); }
-                    case xmm0: case xmm1: case xmm2: case xmm3: case xmm4: case xmm5: case xmm6: case xmm7:
-                        if constexpr (std::is_same_v<T, fxsave_data>) return encode(out, &fpu->xmm[reg - xmm0]);
-                    case mxcsr:
-                        if constexpr (std::is_same_v<T, fxsave_data>) return encode(out, &fpu->mxcsr);
                     default:
-                        return encode_null(out, regsize[reg]);
+                        if constexpr (std::is_same_v<T, fxsave_data>)
+                        {
+                            if (reg == mxcsr) return encode(out, &fpu->mxcsr);
+                            else return encode(out, &fpu->xmm[reg - xmm0]);
+                        }
+                        else return encode_null(out, regsize[reg]);
                 }
             }
 
@@ -739,6 +741,7 @@ namespace jw
             template<typename T>
             static bool set_fpu_reg(regnum reg, const std::string_view& value, T* fpu)
             {
+                assume(reg >= st0);
                 switch (reg)
                 {
                 case st0: case st1: case st2: case st3: case st4: case st5: case st6: case st7:
@@ -751,12 +754,13 @@ namespace jw
                 case foseg: { return reverse_decode(value, &fpu->foseg, regsize[reg]); }
                 case fooff: { return reverse_decode(value, &fpu->fooff, regsize[reg]); }
                 case fop:   { return reverse_decode(value, &fpu->fop,   regsize[reg]); }
-                case xmm0: case xmm1: case xmm2: case xmm3: case xmm4: case xmm5: case xmm6: case xmm7:
-                    if constexpr (std::is_same_v<T, fxsave_data>) return reverse_decode(value, &fpu->xmm[reg - xmm0], regsize[reg]);
-                case mxcsr:
-                    if constexpr (std::is_same_v<T, fxsave_data>) return reverse_decode(value, &fpu->mxcsr, regsize[reg]);
                 default:
-                    return false;
+                    if constexpr (std::is_same_v<T, fxsave_data>)
+                    {
+                        if (reg == mxcsr) return reverse_decode(value, &fpu->mxcsr, regsize[reg]);
+                        else return reverse_decode(value, &fpu->xmm[reg - xmm0], regsize[reg]);
+                    }
+                    else return false;
                 }
             }
 
