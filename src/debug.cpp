@@ -868,9 +868,9 @@ namespace jw
                             fmt::format_to(std::back_inserter(str), FMT_STRING("T{:0>2x}"), posix_signal(signal));
                             if (t_ptr->get_state() != jw::detail::thread::starting)
                             {
-                                fmt::format_to(it(), FMT_STRING("{:x}:"), eip); reg(str, eip, t_ptr->id); str += ';';
-                                fmt::format_to(it(), FMT_STRING("{:x}:"), esp); reg(str, esp, t_ptr->id); str += ';';
-                                fmt::format_to(it(), FMT_STRING("{:x}:"), ebp); reg(str, ebp, t_ptr->id); str += ';';
+                                str += "8:"; reg(str, eip, t_ptr->id); str += ';';
+                                str += "4:"; reg(str, esp, t_ptr->id); str += ';';
+                                str += "5:"; reg(str, ebp, t_ptr->id); str += ';';
                             }
                             fmt::format_to(it(), FMT_STRING("thread:{:x};"), t_ptr->id);
                             if (signal == thread_started)
