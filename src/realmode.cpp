@@ -158,16 +158,14 @@ namespace jw
                     # DS:ESI = real-mode stack pointer
                     # ES:EDI = real-mode registers struct
                 cld
-                lodsw
-                mov word ptr es:[edi + 0x2a], ax    # return IP
-                lodsw
-                mov word ptr es:[edi + 0x2c], ax    # return CS
+                lea eax, [edi - %[self_offset]]                 # EAX points to *this
+                add edi, 0x2a
+                movsd                                           # pop CS:IP
+                add word ptr es:[edi], 4 + 2 * %[iret_frame]    # adjust SP
             .if %[iret_frame]
-                lodsw
-                mov word ptr es:[edi + 0x20], ax    # flags
+                sub edi, 0x0e
+                movsw                                           # pop FLAGS
             .endif
-                add word ptr es:[edi + 0x2e], 4 + 2 * %[iret_frame]
-                lea eax, [edi - %[self_offset]]     # points to 'this'
                 mov ebp, esp
                 mov ecx, es
                 mov edx, ds
