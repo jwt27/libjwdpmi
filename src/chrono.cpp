@@ -21,7 +21,7 @@ namespace jw::chrono
     static constinit bool tsc_calibrated { false };
 
     static constexpr fixed<std::uint32_t, 6> ns_per_pit_count { 1e9 / pit::max_frequency };
-    static fixed<std::uint32_t, 6> ns_per_pit_tick;
+    static fixed<std::uint32_t, 6> ns_per_pit_tick { 1e9 / (pit::max_frequency / 0x10000)  };
     static double ns_per_rtc_tick;
     static fixed<std::uint32_t, 24> fixed_ns_per_tsc_tick;
     static long double float_ns_per_tsc_tick;
@@ -30,7 +30,8 @@ namespace jw::chrono
     static constexpr std::uint64_t pit_ns_offset { 1'640'991'600'000'000'000ull }; // 2022-01-01 UNIX time in nanoseconds
     static fixed<std::uint64_t, 6> pit_ns;
     static std::uint32_t pit_bios_count;
-    static std::uint32_t pit_counter_max;
+    static std::uint32_t pit_counter_max { 0x10000 };
+    static std::uint32_t pit_counter_new_max;
     static volatile std::uint_fast16_t rtc_ticks;
 
     static constexpr io::out_port<byte> rtc_index { 0x70 };
@@ -102,6 +103,14 @@ namespace jw::chrono
             pit_bios_count &= 0xffff;
         }
 
+        if (pit_counter_max != pit_counter_new_max) [[unlikely]]
+        {
+            // When a new count value is programmed, the PIT only loads it
+            // after the current counting cycle is finished.
+            ns_per_pit_tick = 1e9 / (pit::max_frequency / pit_counter_new_max);
+            pit_counter_max = pit_counter_new_max;
+        }
+
         dpmi::irq_handler::acknowledge();
     }
 
@@ -170,8 +179,7 @@ namespace jw::chrono
             if (freq_divisor < 2 or freq_divisor > 0x10000)
                 throw std::out_of_range("Invalid PIT frequency divisor");
 
-            pit_counter_max = freq_divisor;
-            ns_per_pit_tick = 1e9 / (max_frequency / freq_divisor);
+            pit_counter_new_max = freq_divisor;
             pit_irq.enable();
 
             split_uint16_t div { freq_divisor };
