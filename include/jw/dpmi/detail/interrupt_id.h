@@ -15,7 +15,7 @@ namespace jw::dpmi::detail
 {
     inline constinit std::uint32_t interrupt_count { 0 };
 
-    enum class interrupt_type
+    enum class interrupt_type : std::uint8_t
     {
         none,
         exception,
@@ -23,7 +23,7 @@ namespace jw::dpmi::detail
         realmode_irq
     };
 
-    enum class ack
+    enum class ack : std::uint8_t
     {
         no,
         eoi_sent,
