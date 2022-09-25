@@ -29,6 +29,7 @@ namespace jw::chrono
 
     static constexpr std::uint64_t pit_ns_offset { 1'640'991'600'000'000'000ull }; // 2022-01-01 UNIX time in nanoseconds
     static fixed<std::uint64_t, 6> pit_ns;
+    static std::uint32_t pit_bios_count;
     static std::uint32_t pit_counter_max;
     static volatile std::uint_fast16_t rtc_ticks;
 
@@ -36,6 +37,8 @@ namespace jw::chrono
     static constexpr io::io_port<byte> rtc_data { 0x71 };
     static constexpr io::out_port<byte> pit_cmd { 0x43 };
     static constexpr io::io_port<byte> pit0_data { 0x40 };
+
+    static dpmi::selector bda_selector;
 
     struct rtc_time
     {
@@ -83,6 +86,21 @@ namespace jw::chrono
     {
         if constexpr (tsc) last_tsc = rdtsc();
         pit_ns += ns_per_pit_tick;
+        pit_bios_count += pit_counter_max;
+        if (pit_bios_count > 0xffff)
+        {
+            constexpr auto ticks_per_day { static_cast<std::uint32_t>(round(24 * 60 * 60 * (pit::max_frequency / 0x10000))) };
+            dpmi::gs_override gs { bda_selector };
+            std::uint32_t bios_time;
+            asm ("mov %0, gs:[0x6c]" : "=r" (bios_time));
+            if (++bios_time >= ticks_per_day) [[unlikely]]
+            {
+                bios_time = 0;
+                asm volatile ("inc byte ptr gs:[0x70]" ::: "cc");       // Update BIOS day counter
+            }
+            asm volatile ("mov gs:[0x6c], %0" :: "r" (bios_time));      // Update BIOS timer
+            pit_bios_count &= 0xffff;
+        }
 
         dpmi::irq_handler::acknowledge();
     }
@@ -116,24 +134,6 @@ namespace jw::chrono
         pit_cmd.write(0x34);
         pit0_data.write(0);
         pit0_data.write(0);
-
-        const auto t = read_rtc();
-        dpmi::realmode_registers reg { };
-
-        reg.ah = 0x2b;      // Set date
-        reg.cx = t.year + 2000;
-        reg.dh = t.month;
-        reg.dl = t.day;
-        reg.call_int(0x21);
-
-        reg.ss = reg.sp = 0;
-
-        reg.ah = 0x2d;      // Set time
-        reg.ch = t.hour;
-        reg.cl = t.min;
-        reg.dh = t.sec;
-        reg.dl = 0;
-        reg.call_int(0x21);
     }
 
     static void reset_rtc()
@@ -163,6 +163,8 @@ namespace jw::chrono
                 const auto t = std::chrono::steady_clock::now();
                 pit_ns = t.time_since_epoch().count() - pit_ns_offset;
                 pit_irq.set_irq(0);
+                bda_selector = dpmi::dos_selector(0x0040);
+                pit_bios_count = 0;
             }
 
             if (freq_divisor < 2 or freq_divisor > 0x10000)
