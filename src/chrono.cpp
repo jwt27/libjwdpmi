@@ -29,7 +29,7 @@ namespace jw::chrono
 
     static constexpr std::uint64_t pit_ns_offset { 1'640'991'600'000'000'000ull }; // 2022-01-01 UNIX time in nanoseconds
     static fixed<std::uint64_t, 6> pit_ns;
-    static std::uint32_t pit_bios_count;
+    static std::uint32_t pit_bios_count { 0 };
     static std::uint32_t pit_counter_max { 0x10000 };
     static std::uint32_t pit_counter_new_max;
     static volatile std::uint_fast16_t rtc_ticks;
@@ -82,6 +82,12 @@ namespace jw::chrono
         };
     }
 
+    static void recalculate_pit_interval(std::uint32_t count) noexcept
+    {
+        ns_per_pit_tick = 1e9 / (pit::max_frequency / count);
+        pit_counter_max = count;
+    }
+
     template<bool tsc>
     [[gnu::hot]] static void irq0()
     {
@@ -107,8 +113,7 @@ namespace jw::chrono
         {
             // When a new count value is programmed, the PIT only loads it
             // after the current counting cycle is finished.
-            ns_per_pit_tick = 1e9 / (pit::max_frequency / pit_counter_new_max);
-            pit_counter_max = pit_counter_new_max;
+            recalculate_pit_interval(pit_counter_new_max);
         }
 
         dpmi::irq_handler::acknowledge<0>();
@@ -136,13 +141,19 @@ namespace jw::chrono
     static dpmi::irq_handler pit_irq { 0, [] { irq0<false>(); }, dpmi::always_call | dpmi::no_auto_eoi };
     static dpmi::irq_handler rtc_irq { 8, [] { irq8(); }, dpmi::always_call | dpmi::no_interrupts };
 
+    static void write_pit(split_uint16_t count)
+    {
+        pit_cmd.write(0b00'11'010'0); // select counter 0, write both lsb/msb, mode 2 (rate generator), binary mode
+        pit0_data.write(count.lo);
+        pit0_data.write(count.hi);
+    }
+
     static void reset_pit()
     {
         if (not pit_irq.is_enabled()) return;
         pit_irq.disable();
-        pit_cmd.write(0x34);
-        pit0_data.write(0);
-        pit0_data.write(0);
+        write_pit(0x10000);
+        recalculate_pit_interval(0x10000);
     }
 
     static void reset_rtc()
@@ -173,7 +184,6 @@ namespace jw::chrono
                 pit_ns = t.time_since_epoch().count() - pit_ns_offset;
                 pit_irq.set_irq(0);
                 bda_selector = dpmi::dos_selector(0x0040);
-                pit_bios_count = 0;
             }
 
             if (freq_divisor < 2 or freq_divisor > 0x10000)
@@ -181,11 +191,7 @@ namespace jw::chrono
 
             pit_counter_new_max = freq_divisor;
             pit_irq.enable();
-
-            split_uint16_t div { freq_divisor };
-            pit_cmd.write(0b00'11'010'0); // select counter 0, write both lsb/msb, mode 2 (rate generator), binary mode
-            pit0_data.write(div.lo);
-            pit0_data.write(div.hi);
+            write_pit(freq_divisor);
         }
         if (dpmi::interrupts_enabled())
         {
@@ -245,11 +251,7 @@ namespace jw::chrono
                 dpmi::irq_handler::acknowledge<0>();
             };
             pit_irq.enable();
-
-            pit_cmd.write(0b00'11'010'0);
-            split_uint16_t div { divisor };
-            pit0_data.write(div.lo);
-            pit0_data.write(div.hi);
+            write_pit(divisor);
 
             // Mask all except IRQ 0.
             const auto irq_mask = pic0_mask.read();
@@ -263,10 +265,7 @@ namespace jw::chrono
 
             pic0_mask.write(irq_mask);
 
-            pit_cmd.write(0b00'11'010'0);
-            pit0_data.write(0);
-            pit0_data.write(0);
-
+            write_pit(0x10000);
             pit_irq.disable();
         }
 
