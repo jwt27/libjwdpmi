@@ -40,12 +40,17 @@ namespace jw::dpmi::detail
         static void add(const irq_handler_data* p);
         static void remove(const irq_handler_data* p);
 
+        template<std::uint8_t irq>
         static void acknowledge() noexcept
         {
             auto* id = interrupt_id::get();
-            if (id->acknowledged == ack::no)
-                send_eoi(id->num);
-            id->acknowledged = ack::yes;
+            acknowledge(id, irq);
+        }
+
+        static void acknowledge() noexcept
+        {
+            auto* id = interrupt_id::get();
+            acknowledge(id, id->num);
         }
 
         static void set_pm_interrupt_vector(int_vector v, far_ptr32 ptr);
@@ -85,7 +90,14 @@ namespace jw::dpmi::detail
                 return std::bitset<8> { pic1_cmd.read() }[i - 8];
             }
             pic0_cmd.write(0x0B);
-            return std::bitset<8> { pic0_cmd.read() } [i] ;
+            return std::bitset<8> { pic0_cmd.read() }[i];
+        }
+
+        static void acknowledge(interrupt_id_data* id, std::uint8_t irq) noexcept
+        {
+            if (id->acknowledged == ack::no)
+                send_eoi(irq);
+            id->acknowledged = ack::yes;
         }
 
         static void send_eoi_without_acknowledge()

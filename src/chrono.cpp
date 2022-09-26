@@ -111,7 +111,7 @@ namespace jw::chrono
             pit_counter_max = pit_counter_new_max;
         }
 
-        dpmi::irq_handler::acknowledge();
+        dpmi::irq_handler::acknowledge<0>();
     }
 
     [[gnu::hot]] static void irq8()
@@ -130,7 +130,7 @@ namespace jw::chrono
         rtc_index.write(0x0C);
         rtc_data.read();
 
-        dpmi::irq_handler::acknowledge();
+        dpmi::irq_handler::acknowledge<8>();
     }
 
     static dpmi::irq_handler pit_irq { 0, [] { irq0<false>(); }, dpmi::always_call | dpmi::no_auto_eoi };
@@ -242,7 +242,7 @@ namespace jw::chrono
             pit_irq = [&sample]
             {
                 *sample++ = chrono::rdtsc();
-                dpmi::irq_handler::acknowledge();
+                dpmi::irq_handler::acknowledge<0>();
             };
             pit_irq.enable();
 

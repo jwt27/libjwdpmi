@@ -47,6 +47,10 @@ namespace jw::dpmi
         // Call this from your interrupt handler to signal that the IRQ has been successfully handled.
         static void acknowledge() noexcept { detail::irq_controller::acknowledge(); }
 
+        // When the IRQ number is known at compile time, this is faster than the above.
+        template<std::uint8_t irq>
+        static void acknowledge() noexcept { detail::irq_controller::acknowledge<irq>(); }
+
     private:
         irq_handler(irq_handler&&) = delete;
         irq_handler(const irq_handler&) = delete;

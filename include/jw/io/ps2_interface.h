@@ -279,7 +279,7 @@ namespace jw
                         else scancode_queue.push_back(c);
                     } while (get_status().data_available);
 
-                    dpmi::irq_handler::acknowledge();
+                    dpmi::irq_handler::acknowledge<1>();
 
                     if (callback) this_thread::invoke_next(callback);
                 }
