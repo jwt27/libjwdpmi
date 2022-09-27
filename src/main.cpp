@@ -166,6 +166,13 @@ int main(int argc, const char** argv)
     return jw::exit_code;
 }
 
+namespace jw::dpmi::detail
+{
+    const selector main_cs { };
+    const selector main_ds { };
+    const selector safe_ds { };
+}
+
 namespace jw
 {
     constinit dpmi::locked_pool_resource<true>* irq_alloc { nullptr };
@@ -194,9 +201,9 @@ namespace jw
             min_chunk_size = irq_alloc_size;
             irq_alloc = new dpmi::locked_pool_resource<true> { irq_alloc_size };
 
-            safe_ds = __djgpp_ds_alias;
-            main_cs = get_cs();
-            main_ds = get_ds();
+            const_cast<selector&>(safe_ds) = __djgpp_ds_alias;
+            const_cast<selector&>(main_cs) = get_cs();
+            const_cast<selector&>(main_ds) = get_ds();
 
             cpuid::setup();
             asm volatile ("" ::: "memory");
