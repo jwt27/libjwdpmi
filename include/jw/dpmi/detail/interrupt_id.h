@@ -32,7 +32,7 @@ namespace jw::dpmi::detail
 
     struct interrupt_id_data
     {
-        fpu_registers fpu;
+        fpu_registers* const fpu;
         const std::uint64_t id { id_count++ };
         const std::uint32_t num;
         const interrupt_type type;
@@ -45,18 +45,18 @@ namespace jw::dpmi::detail
         friend struct interrupt_id;
         static inline constinit std::uint64_t id_count { 0 };
 
-        interrupt_id_data() noexcept : num { 0 }, type { interrupt_type::none }, next { nullptr } { }
+        interrupt_id_data() noexcept : fpu { nullptr }, num { 0 }, type { interrupt_type::none }, next { nullptr } { }
 
-        interrupt_id_data(std::uint32_t n, interrupt_type t, interrupt_id_data* current) noexcept
-            : num { n }, type { t }, next { current } { }
+        interrupt_id_data(fpu_registers* f, std::uint32_t n, interrupt_type t, interrupt_id_data* current) noexcept
+            : fpu { f }, num { n }, type { t }, next { current } { }
     };
 
     struct interrupt_id : interrupt_id_data
     {
-        interrupt_id(std::uint32_t n, interrupt_type t) noexcept : interrupt_id_data { n, t, current }
+        interrupt_id(fpu_registers* f, std::uint32_t n, interrupt_type t) noexcept : interrupt_id_data { f, n, t, current }
         {
             ++interrupt_count;
-            fpu.save();
+            fpu->save();
             next->eh_globals = jw::detail::get_eh_globals();
             jw::detail::set_eh_globals({ });
             current = this;
@@ -66,7 +66,7 @@ namespace jw::dpmi::detail
         {
             current = next;
             jw::detail::set_eh_globals(next->eh_globals);
-            fpu.restore();
+            fpu->restore();
             --interrupt_count;
         }
 

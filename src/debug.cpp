@@ -699,7 +699,7 @@ namespace jw
                     case gs: { if (dpmi10_frame) { std::uint32_t s = d10f->gs; encode(out, &s); } else encode_null(out, regsize[reg]); return; }
                     case eip: encode(out, &f->fault_address.offset); return;
                     default:
-                        auto* fpu = &interrupt_id::get()->fpu;
+                        auto* const fpu = interrupt_id::get()->fpu;
                         switch (fpu_registers::type())
                         {
                         case fpu_registers_type::fsave: return fpu_reg(out, reg, &fpu->fsave);
@@ -794,7 +794,7 @@ namespace jw
                     case fs: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->fs, 2); } return false;
                     case gs: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->gs, 2); } return false;
                     default:
-                        auto* fpu = &interrupt_id::get()->fpu;
+                        auto* const fpu = interrupt_id::get()->fpu;
                         switch (fpu_registers::type())
                         {
                         case fpu_registers_type::fsave: return set_fpu_reg(reg, value, &fpu->fsave);

@@ -108,8 +108,9 @@ namespace jw
 
         void realmode_callback::call(realmode_callback* self, std::uintptr_t stack_offset, selector stack_selector) noexcept
         {
+            fpu_registers fpu;
             std::optional<detail::interrupt_id> id;
-            if (self->is_irq) id.emplace(0, detail::interrupt_type::realmode_irq);
+            if (self->is_irq) id.emplace(&fpu, 0, detail::interrupt_type::realmode_irq);
 
             auto* const reg = self->reg_ptr++;
             if (self->reg_ptr > self->reg_pool.data() + self->reg_pool.size()) [[unlikely]]

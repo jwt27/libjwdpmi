@@ -137,7 +137,8 @@ namespace jw::dpmi::detail
 
     void irq_controller::handle_irq(irq_level i) noexcept
     {
-        interrupt_id id { i, interrupt_type::irq };
+        fpu_registers fpu;
+        interrupt_id id { &fpu, i, interrupt_type::irq };
         try
         {
             std::optional<irq_mask> mask;
