@@ -154,6 +154,12 @@ namespace jw::chrono
         pit_irq.disable();
         write_pit(0x10000);
         recalculate_pit_interval(0x10000);
+
+        // Adjust bios timer if necessary, to prevent it from ticking too fast.
+        // The PIT only starts counting from 0x10000 again after the next tick.
+        pit_bios_count += pit_counter_max;
+        if (pit_bios_count <= 0xffff) asm volatile ("dec dword ptr gs:[0x6c]");
+        else pit_bios_count &= 0xffff;
     }
 
     static void reset_rtc()
