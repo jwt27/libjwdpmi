@@ -94,10 +94,12 @@ namespace jw::chrono
         if constexpr (tsc) last_tsc = rdtsc();
         pit_ns += ns_per_pit_tick;
         pit_bios_count += pit_counter_max;
-        if (pit_bios_count > 0xffff)
+        if (pit_bios_count > 0xffff) [[likely]]
         {
-            constexpr auto ticks_per_day { static_cast<std::uint32_t>(round(24 * 60 * 60 * (pit::max_frequency / 0x10000))) };
+            pit_bios_count &= 0xffff;
             dpmi::gs_override gs { bda_selector };
+
+            constexpr auto ticks_per_day { static_cast<std::uint32_t>(round(24 * 60 * 60 * (pit::max_frequency / 0x10000))) };
             std::uint32_t bios_time;
             asm ("mov %0, gs:[0x6c]" : "=r" (bios_time));
             if (++bios_time >= ticks_per_day) [[unlikely]]
@@ -106,7 +108,19 @@ namespace jw::chrono
                 asm volatile ("inc byte ptr gs:[0x70]" ::: "cc");       // Update BIOS day counter
             }
             asm volatile ("mov gs:[0x6c], %0" :: "r" (bios_time));      // Update BIOS timer
-            pit_bios_count &= 0xffff;
+
+            std::uint8_t motor_enable;
+            asm("mov %0, gs:[0x40]" : "=Q" (motor_enable));
+            if (motor_enable > 0)
+            {
+                if (--motor_enable == 0)
+                {
+                    // Turn off floppy drive motors and update status bits.
+                    io::write_port<std::uint8_t>(0x3f2, 0x0c);
+                    asm volatile ("and byte ptr gs:[0x3f], 0xf0" ::: "cc");
+                }
+                asm volatile ("mov gs:[0x40], %0" :: "Q" (motor_enable));
+            }
         }
 
         if (pit_counter_max != pit_counter_new_max) [[unlikely]]
