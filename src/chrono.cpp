@@ -152,8 +152,14 @@ namespace jw::chrono
         dpmi::irq_handler::acknowledge<8>();
     }
 
-    static dpmi::irq_handler pit_irq { 0, [] { irq0<false>(); }, dpmi::always_call | dpmi::no_auto_eoi };
+    static dpmi::irq_handler pit_irq { 0, [] { }, dpmi::always_call | dpmi::no_auto_eoi };
     static dpmi::irq_handler rtc_irq { 8, [] { irq8(); }, dpmi::always_call | dpmi::no_interrupts };
+
+    static void select_irq0_handler()
+    {
+        if (tsc_calibrated) pit_irq = [] { irq0<true>(); };
+        else pit_irq = [] { irq0<false>(); };
+    }
 
     static void write_pit(split_uint16_t count)
     {
@@ -210,6 +216,7 @@ namespace jw::chrono
                 throw std::out_of_range("Invalid PIT frequency divisor");
 
             pit_counter_new_max = freq_divisor;
+            select_irq0_handler();
             pit_irq.enable();
             write_pit(freq_divisor);
         }
@@ -329,8 +336,6 @@ namespace jw::chrono
                 total += samples[i] - samples[i - 1];
             count = static_cast<long double>(total) / (N - 3);
         }
-
-        pit_irq = [] { irq0<true>(); };
 
         cpu_freq = count / time;
         float_ns_per_tsc_tick = 1e9 / cpu_freq;
