@@ -19,6 +19,7 @@ namespace jw::chrono
 {
     static std::uint32_t last_tsc;
     static constinit bool tsc_calibrated { false };
+    static volatile bool wait_for_irq0 { false };
 
     static constexpr fixed<std::uint32_t, 6> ns_per_pit_count { 1e9 / pit::max_frequency };
     static fixed<std::uint32_t, 6> ns_per_pit_tick { 1e9 / (pit::max_frequency / 0x10000)  };
@@ -130,6 +131,7 @@ namespace jw::chrono
             recalculate_pit_interval(pit_counter_new_max);
         }
 
+        wait_for_irq0 = false;
         dpmi::irq_handler::acknowledge<0>();
     }
 
@@ -161,25 +163,39 @@ namespace jw::chrono
         else pit_irq = [] { irq0<false>(); };
     }
 
-    static void write_pit(split_uint16_t count)
+    static void write_pit(split_uint16_t count) noexcept
     {
         pit_cmd.write(0b00'11'010'0); // select counter 0, write both lsb/msb, mode 2 (rate generator), binary mode
         pit0_data.write(count.lo);
         pit0_data.write(count.hi);
     }
 
+    static void do_pit_reset() noexcept
+    {
+        pit_bios_count = 0;
+        write_pit(0x10000);
+        recalculate_pit_interval(0x10000);
+        pit_irq.disable();
+    }
+
     static void reset_pit()
     {
         if (not pit_irq.is_enabled()) return;
-        pit_irq.disable();
-        write_pit(0x10000);
-        recalculate_pit_interval(0x10000);
 
-        // Adjust bios timer if necessary, to prevent it from ticking too fast.
-        // The PIT only starts counting from 0x10000 again after the next tick.
-        pit_bios_count += pit_counter_max;
-        if (pit_bios_count <= 0xffff) asm volatile ("dec dword ptr gs:[0x6c]");
-        else pit_bios_count &= 0xffff;
+        const int next_count = pit_bios_count + pit_counter_max;
+        if (std::abs(0x10000 - next_count) > 0x500) // +/- 1ms tolerance
+        {
+            // Adjust next cycle to avoid BIOS clock drift.
+            const unsigned offset = 0x10000 - (next_count & 0xffff);
+            write_pit(offset);
+            wait_for_irq0 = true;
+            pit_irq = []
+            {
+                irq0<false>();
+                do_pit_reset();
+            };
+        }
+        else do_pit_reset();
     }
 
     static void reset_rtc()
@@ -209,6 +225,7 @@ namespace jw::chrono
                 const auto t = std::chrono::steady_clock::now();
                 pit_ns = t.time_since_epoch().count() - pit_ns_offset;
                 pit_irq.set_irq(0);
+                wait_for_irq0 = tsc_calibrated;
                 bda_selector = dpmi::dos_selector(0x0040);
             }
 
@@ -220,10 +237,10 @@ namespace jw::chrono
             pit_irq.enable();
             write_pit(freq_divisor);
         }
-        if (dpmi::interrupts_enabled())
+        if (wait_for_irq0)
         {
-            const auto t = pit_ns;
-            do { } while (t.value == volatile_load(&pit_ns.value));
+            dpmi::interrupt_unmask allow_irq { };
+            do { } while (wait_for_irq0);
         }
     }
 
@@ -435,9 +452,16 @@ namespace jw::chrono
     {
         ~reset_all()
         {
-            dpmi::interrupt_mask no_irq { };
-            reset_pit();
-            reset_rtc();
+            {
+                dpmi::interrupt_mask no_irq { };
+                reset_pit();
+                reset_rtc();
+            }
+            if (wait_for_irq0)
+            {
+                dpmi::interrupt_unmask allow_irq { };
+                do { } while (wait_for_irq0);
+            }
         };
     } reset;
 }
