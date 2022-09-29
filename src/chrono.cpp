@@ -27,7 +27,7 @@ namespace jw::chrono
     static long double float_ns_per_tsc_tick;
     static long double cpu_freq;
 
-    static constexpr std::uint64_t pit_ns_offset { 1'640'991'600'000'000'000ull }; // 2022-01-01 UNIX time in nanoseconds
+    static constexpr std::uint64_t pit_ns_offset { 1'640'995'200'000'000'000ull }; // 2022-01-01 UNIX time in nanoseconds
     static fixed<std::uint64_t, 6> pit_ns;
     static std::uint32_t pit_bios_count { 0 };
     static std::uint32_t pit_counter_max { 0x10000 };
