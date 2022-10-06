@@ -23,6 +23,7 @@
 #include <jw/dpmi/ring0.h>
 #include <jw/dpmi/detail/selectors.h>
 #include <jw/dpmi/cpuid.h>
+#include <jw/dpmi/bda.h>
 #include <jw/video/ansi.h>
 #include <cxxabi.h>
 #include <unwind.h>
@@ -166,6 +167,12 @@ int main(int argc, const char** argv)
     return jw::exit_code;
 }
 
+namespace jw::dpmi
+{
+    constinit static std::optional<mapped_dos_memory<bios_data_area>> bda_memory;
+    bios_data_area* const bda { };
+}
+
 namespace jw::dpmi::detail
 {
     const selector main_cs { };
@@ -237,6 +244,9 @@ namespace jw
             jw::detail::scheduler::setup();
             setup_exception_handling();
             setup_direct_ldt_access();
+
+            bda_memory.emplace(1, far_ptr16 { 0x0040, 0x0000 });
+            const_cast<bios_data_area*&>(bda) = bda_memory->near_pointer();
 
             // Try setting control registers first in ring 3.  If we have no ring0 access, the
             // dpmi host might still trap and emulate control register access.
