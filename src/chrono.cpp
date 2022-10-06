@@ -13,7 +13,7 @@
 #include <jw/dpmi/irq_mask.h>
 #include <jw/dpmi/cpu_exception.h>
 #include <jw/dpmi/cpuid.h>
-#include <jw/dpmi/realmode.h>
+#include <jw/dpmi/bda.h>
 
 namespace jw::chrono
 {
@@ -39,8 +39,6 @@ namespace jw::chrono
     static constexpr io::io_port<byte> rtc_data { 0x71 };
     static constexpr io::out_port<byte> pit_cmd { 0x43 };
     static constexpr io::io_port<byte> pit0_data { 0x40 };
-
-    static dpmi::selector bda_selector;
 
     struct rtc_time
     {
@@ -98,29 +96,26 @@ namespace jw::chrono
         if (pit_bios_count > 0xffff) [[likely]]
         {
             pit_bios_count &= 0xffff;
-            dpmi::gs_override gs { bda_selector };
 
             constexpr auto ticks_per_day { static_cast<std::uint32_t>(round(24 * 60 * 60 * (pit::max_frequency / 0x10000))) };
-            std::uint32_t bios_time;
-            asm ("mov %0, gs:[0x6c]" : "=r" (bios_time));
+            auto bios_time = dpmi::bda->read<std::uint32_t>(0x6c);
             if (++bios_time >= ticks_per_day) [[unlikely]]
             {
                 bios_time = 0;
-                asm volatile ("inc byte ptr gs:[0x70]" ::: "cc");       // Update BIOS day counter
+                dpmi::bda->write(0x70, dpmi::bda->read<std::uint8_t>(0x70) + 1);    // Update BIOS day counter
             }
-            asm volatile ("mov gs:[0x6c], %0" :: "r" (bios_time));      // Update BIOS timer
+            dpmi::bda->write(0x6c, bios_time);                                      // Update BIOS timer
 
-            std::uint8_t motor_enable;
-            asm("mov %0, gs:[0x40]" : "=Q" (motor_enable));
+            auto motor_enable = dpmi::bda->read<std::uint8_t>(0x40);
             if (motor_enable > 0)
             {
                 if (--motor_enable == 0)
                 {
                     // Turn off floppy drive motors and update status bits.
                     io::write_port<std::uint8_t>(0x3f2, 0x0c);
-                    asm volatile ("and byte ptr gs:[0x3f], 0xf0" ::: "cc");
+                    dpmi::bda->write(0x3f, dpmi::bda->read<std::uint8_t>(0x3f) & 0xf0);
                 }
-                asm volatile ("mov gs:[0x40], %0" :: "Q" (motor_enable));
+                dpmi::bda->write(0x40, motor_enable);
             }
         }
 
@@ -226,7 +221,6 @@ namespace jw::chrono
                 pit_ns = t.time_since_epoch().count() - pit_ns_offset;
                 pit_irq.set_irq(0);
                 wait_for_irq0 = tsc_calibrated;
-                bda_selector = dpmi::dos_selector(0x0040);
             }
 
             if (freq_divisor < 2 or freq_divisor > 0x10000)
