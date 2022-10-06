@@ -16,7 +16,21 @@ namespace jw::dpmi
     static std::optional<descriptor> gdt, ldt;
     static bool direct_ldt_access = false;
 
-    [[gnu::noipa]] static descriptor_data read_descriptor_direct(selector_bits s)
+    [[gnu::noipa]] static void may_throw() { }; // stupid hack
+
+    template<bool safe = false>
+    [[gnu::noipa]] static void test_descriptor_direct(selector table)
+    {
+        gs_override gs { table };
+        std::uint32_t x;
+        may_throw();
+        asm volatile ("mov %0, gs:[0]" : "=r" (x));
+        may_throw();
+        asm volatile ("mov gs:[0], %0" :: "r" (x) : "memory");
+        may_throw();
+    }
+
+    static descriptor_data read_descriptor_direct(selector_bits s)
     {
         union
         {
@@ -30,7 +44,7 @@ namespace jw::dpmi
         return data;
     }
 
-    [[gnu::noipa]] static void write_descriptor_direct(selector_bits s, const descriptor_data& d)
+    static void write_descriptor_direct(selector_bits s, const descriptor_data& d)
     {
         union
         {
@@ -57,14 +71,18 @@ namespace jw::dpmi::detail
     [[gnu::noipa]] static auto sgdt()
     {
         gdt_register gdtr;
+        may_throw();
         asm ("sgdt %0"  : "=m"  (gdtr));
+        may_throw();
         return gdtr;
     }
 
     [[gnu::noipa]] static auto sldt()
     {
         selector ldtr;
+        may_throw();
         asm ("sldt %w0" : "=rm" (ldtr));
+        may_throw();
         return ldtr;
     }
 
@@ -79,9 +97,11 @@ namespace jw::dpmi::detail
             ldtr = sldt();
 
             gdt.emplace(descriptor::create_segment(gdtr.base, gdtr.limit + 1));
+            test_descriptor_direct(gdt->get_selector());
 
             auto ldt_data = read_descriptor_direct(ldtr);
             ldt.emplace(descriptor::create_segment(ldt_data.segment.base(), ldt_data.segment.limit()));
+            test_descriptor_direct(ldt->get_selector());
 
             direct_ldt_access = true;
 
