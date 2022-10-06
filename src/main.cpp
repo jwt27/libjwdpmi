@@ -198,10 +198,22 @@ namespace jw
 
             if constexpr (not config::support_virtual_interrupt_flag)
             {
-                if (cpu_flags::current().io_privilege < 3)
+                bool ok { true };
                 {
-                    fmt::print(stderr, "IOPL 3 required.\n");
-                    std::terminate();
+                    interrupt_unmask allow_irq { };
+                    ok &= interrupts_enabled();
+                    {
+                        interrupt_mask no_irq { };
+                        ok &= not interrupts_enabled();
+                    }
+                    ok &= interrupts_enabled();
+                }
+                if (not ok)
+                {
+                    const auto iopl = cpu_flags::current().io_privilege;
+                    const auto cpl = selector_bits(get_cs()).privilege_level;
+                    fmt::print(stderr, "Virtual interrupt support required on this host - see jwdpmi_config.h. (IOPL {} < CPL {})\n", iopl, cpl);
+                    std::_Exit(-1);
                 }
             }
 

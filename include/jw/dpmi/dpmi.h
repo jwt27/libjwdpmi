@@ -269,7 +269,7 @@ namespace jw
             bool cpuid : 1;
             unsigned : 10;
 
-            void get() { asm ("pushfd; pop %0" : "=rm" (*this)); }
+            void get() { asm volatile ("pushfd; pop %0" : "=rm" (*this)); }
             static cpu_flags current() { cpu_flags f; f.get(); return f; }
         };
         static_assert (sizeof(cpu_flags) == 4);
