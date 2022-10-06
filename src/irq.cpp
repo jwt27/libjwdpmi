@@ -181,9 +181,10 @@ namespace jw::dpmi::detail
     void irq_controller::call()
     {
         auto* id = interrupt_id::get();
-        for (auto f : handler_chain)
+        for (const auto* p = first; p != nullptr; p = p->next)
         {
-            if (f->flags & always_call or id->acknowledged != ack::yes) f->function();
+            if (p->enabled and (p->flags & always_call or id->acknowledged != ack::yes))
+                p->call();
         }
         if (flags & always_chain or id->acknowledged == ack::no)
         {
@@ -240,27 +241,62 @@ namespace jw::dpmi::detail
         set_pm_interrupt_vector(irq_to_vec(irq), prev_handler);
     }
 
-    void irq_controller::add(const irq_handler_data* p)
+    void irq_controller::enable(irq_handler_data* p)
     {
-        interrupt_mask no_irqs_here { };
-        if (data == nullptr) data = new (locked) irq_controller_data { };
+        if (p->enabled) return;
         const auto i = p->irq;
-        auto* const e = data->add(i);
-        e->handler_chain.push_back(p);
+        if (i >= 16) return;
+        auto* e = data->get(i);
+        interrupt_mask no_irqs_here { };
+        p->enabled = true;
         e->flags |= p->flags;
         irq_mask::unmask(i);
         if (i > 7) irq_mask::unmask(2);
     }
 
-    void irq_controller::remove(const irq_handler_data* p)
+    void irq_controller::disable(irq_handler_data* p)
     {
-        interrupt_mask no_irqs_here { };
+        if (not p->enabled) return;
         const auto i = p->irq;
-        auto* const e = data->get(i);
-        e->handler_chain.erase(std::remove_if(e->handler_chain.begin(), e->handler_chain.end(), [p](auto a) { return a == p; }), e->handler_chain.end());
+        auto* e = data->get(i);
+        interrupt_mask no_irqs_here { };
+        p->enabled = false;
         e->flags = { };
-        for (const auto* const p : e->handler_chain) e->flags |= p->flags;
-        if (e->handler_chain.empty()) data->remove(i);
+        for (auto* i = e->first; i != nullptr; i = i->next)
+            if (i->enabled) e->flags |= i->flags;
+    }
+
+    void irq_controller::assign(irq_handler_data* p, irq_level i)
+    {
+        if (p->irq == i) return;
+        remove(p);
+        if (data == nullptr) data = new (locked) irq_controller_data { };
+        auto* const e = data->add(i);
+        const bool enabled = p->enabled;
+        interrupt_mask no_irqs_here { };
+        p->irq = i;
+        if (e->first == nullptr) e->first = p;
+        if (e->last != nullptr) e->last->next = p;
+        p->prev = e->last;
+        e->last = p;
+        if (enabled) enable(p);
+    }
+
+    void irq_controller::remove(irq_handler_data* p)
+    {
+        const auto i = p->irq;
+        if (i >= 16) return;
+        auto* const e = data->get(i);
+        interrupt_mask no_irqs_here { };
+        disable(p);
+        if (e->first == p) e->first = p->next;
+        if (e->last  == p) e->last  = p->prev;
+        if (p->prev != nullptr) p->prev->next = p->next;
+        if (p->next != nullptr) p->next->prev = p->prev;
+        p->prev = p->next = nullptr;
+        p->irq = 16;
+
+        if (e->first == nullptr) data->remove(i);
         if (data->allocated.none())
         {
             delete data;

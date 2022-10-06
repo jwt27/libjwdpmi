@@ -8,7 +8,6 @@
 
 #pragma once
 #include <bitset>
-#include <deque>
 #include <atomic>
 #include <jw/function.h>
 #include <jw/io/ioport.h>
@@ -24,21 +23,34 @@ namespace jw::dpmi::detail
 
     struct irq_handler_data
     {
-        template<typename F>
-        irq_handler_data(F&& func, irq_config_flags fl, irq_level i)
-            : function { std::forward<F>(func) }, flags { fl }, irq { i } { }
+        friend struct irq_controller;
 
-        trivial_function<void()> function;
+        template<typename F>
+        irq_handler_data(F&& func, irq_config_flags fl)
+            : call { std::forward<F>(func) }, flags { fl } { }
+
+        irq_level assigned_irq() const { return irq; }
+        bool is_enabled() const { return enabled; }
+
+        trivial_function<void()> call;
         const irq_config_flags flags;
-        irq_level irq;
+
+    private:
+        irq_level irq { 16 };
+        bool enabled { false };
+        irq_handler_data* next { nullptr };
+        irq_handler_data* prev { nullptr };
     };
 
     struct irq_controller
     {
         friend void irq_entry_point() noexcept;
 
-        static void add(const irq_handler_data* p);
-        static void remove(const irq_handler_data* p);
+        static void enable (irq_handler_data*);
+        static void disable(irq_handler_data*);
+
+        static void assign(irq_handler_data*, irq_level);
+        static void remove(irq_handler_data*);
 
         template<std::uint8_t irq>
         static void acknowledge() noexcept
@@ -124,7 +136,8 @@ namespace jw::dpmi::detail
 
         [[gnu::hot]] void call();
 
-        std::deque<const irq_handler_data*, locking_allocator<const irq_handler_data*>> handler_chain { };
+        irq_handler_data* first { nullptr };
+        irq_handler_data* last { nullptr };
         const irq_level irq;
         const far_ptr32 prev_handler { };
         irq_config_flags flags { };

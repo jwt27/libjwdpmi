@@ -25,24 +25,31 @@ namespace jw::dpmi
     public:
         template<typename F>
         irq_handler(irq_level i, F&& func, irq_config_flags flags = { })
-            : data { new (locked) detail::irq_handler_data { std::forward<F>(func), flags, i } } { }
+            : irq_handler { std::forward<F>(func), flags }
+        {
+            detail::irq_controller::assign(data.get(), i);
+        }
 
         template<typename F>
-        irq_handler(F&& func, irq_config_flags flags = { }) : irq_handler { 0, std::forward<F>(func), flags } { }
+        irq_handler(F&& func, irq_config_flags flags = { })
+            : data { new (locked) detail::irq_handler_data { std::forward<F>(func), flags } } { }
 
-        ~irq_handler() { disable(); }
+        ~irq_handler()
+        {
+            detail::irq_controller::remove(data.get());
+        }
 
         template<typename F>
         irq_handler& operator=(F&& func)
         {
-            data->function = std::forward<F>(func);
+            data->call = std::forward<F>(func);
             return *this;
         }
 
-        void set_irq(irq_level i) { disable(); data->irq = i; }
-        void enable() { if (not enabled) { detail::irq_controller::add(data.get()); enabled = true; } }
-        void disable() { if (enabled) { detail::irq_controller::remove(data.get()); enabled = false; } }
-        bool is_enabled() const noexcept { return enabled; }
+        void set_irq(irq_level i) { detail::irq_controller::assign(data.get(), i); }
+        void enable() { detail::irq_controller::enable(data.get()); }
+        void disable() { detail::irq_controller::disable(data.get()); }
+        bool is_enabled() const noexcept { return data->is_enabled(); }
 
         // Call this from your interrupt handler to signal that the IRQ has been successfully handled.
         static void acknowledge() noexcept { detail::irq_controller::acknowledge(); }
@@ -58,6 +65,5 @@ namespace jw::dpmi
         irq_handler& operator=(const irq_handler&) = delete;
 
         std::unique_ptr<detail::irq_handler_data> data;
-        bool enabled { false };
     };
 }
