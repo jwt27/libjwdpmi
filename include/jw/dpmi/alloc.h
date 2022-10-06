@@ -29,27 +29,19 @@ namespace jw::dpmi
     // _CRT0_FLAG_LOCK_MEMORY to lock code and static data, however.
     struct locking_memory_resource : public std::pmr::memory_resource
     {
-        virtual ~locking_memory_resource()
-        {
-            if (not map) return;
-            if (not map->empty()) return;
-            map.reset();
-        }
-
     protected:
         [[nodiscard]] virtual void* do_allocate(std::size_t n, std::size_t a) override
         {
             throw_if_irq();
-            if (not map) [[unlikely]] map.emplace();
             void* p = ::operator new(n, std::align_val_t { a });
-            map->emplace(p, data_lock { p, n });
+            linear_memory::from_pointer(p, n).lock();
             return p;
         }
 
-        virtual void do_deallocate(void* p, std::size_t, std::size_t) noexcept override
+        virtual void do_deallocate(void* p, std::size_t n, std::size_t a) noexcept override
         {
-            map->erase(p);
-            ::operator delete(p);
+            linear_memory::from_pointer(p, n).unlock();
+            ::operator delete(p, n, std::align_val_t { a });
         }
 
         virtual bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override
@@ -57,8 +49,6 @@ namespace jw::dpmi
             auto* o = dynamic_cast<const locking_memory_resource*>(&other);
             return o != nullptr;
         }
-
-        static inline constinit std::optional<std::map<void*, data_lock>> map { std::nullopt };
     };
 
     // Allocator based on locking_memory_resource
