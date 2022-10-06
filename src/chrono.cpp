@@ -303,8 +303,18 @@ namespace jw::chrono
 
             {
                 dpmi::interrupt_unmask allow_irq { };
-                // This loop needs to be as tight as possible.
-                asm("Loop: cmp [%0], %1; jb Loop" :: "r" (&sample), "r" (samples.end()));
+                asm
+                (R"(
+                    .balign 0x10
+                Loop:
+                    .nops 14, 1
+                    cmp [%0], %1
+                    .nops 14, 1
+                    jb Loop
+                 )" :
+                    : "r" (&sample),
+                      "r" (samples.end())
+                );
             }
 
             pic0_mask.write(irq_mask);
