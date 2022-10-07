@@ -1,7 +1,7 @@
 *          text=auto
-*.md       text whitespace=blank-at-eof,-blank-at-eol,tab-in-indent
-*.cpp      text whitespace=trailing-space,tab-in-indent
-*.h        text whitespace=trailing-space,tab-in-indent
-*.sh       text whitespace=trailing-space eol=lf
-*.in       text whitespace=trailing-space eol=lf
-configure  text whitespace=trailing-space eol=lf
+*.md       text diff=markdown whitespace=blank-at-eof,-blank-at-eol,tab-in-indent
+*.cpp      text diff=cpp      whitespace=trailing-space,tab-in-indent
+*.h        text diff=cpp      whitespace=trailing-space,tab-in-indent
+*.sh       text diff=bash     whitespace=trailing-space eol=lf
+configure  text diff=bash     whitespace=trailing-space eol=lf
+*.in       text               whitespace=trailing-space eol=lf
