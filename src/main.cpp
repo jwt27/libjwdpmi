@@ -363,14 +363,6 @@ namespace jw
         catch (const std::bad_alloc&) { } // Relatively safe to ignore.
         irq_alloc = ia;
     }
-
-    void* allocate_locked(std::size_t n, std::align_val_t a)
-    {
-        if (not dpmi::in_irq_context())
-            resize_irq_alloc();
-
-        return do_locked_alloc(n, static_cast<std::size_t>(a));
-    }
 }
 
 extern "C"
@@ -416,6 +408,50 @@ extern "C"
     void __wrap_free(void* p) noexcept { ::operator delete(p); }
 }
 
+namespace jw
+{
+
+    void* allocate_locked(std::size_t n, std::align_val_t a)
+    {
+        if (not dpmi::in_irq_context())
+            resize_irq_alloc();
+
+        return do_locked_alloc(n, static_cast<std::size_t>(a));
+    }
+
+    void free_locked(void* p, std::size_t n, std::align_val_t a)
+    {
+        debug::trap_mask dont_trap_here { };
+        irq_alloc->deallocate(p, n, static_cast<std::size_t>(a));
+    }
+
+    void* allocate(std::size_t size, std::align_val_t alignment)
+    {
+        const auto align = std::max(static_cast<std::size_t>(alignment), std::size_t { 4 });
+        const auto overhead = sizeof(std::size_t) + sizeof(std::uint8_t);
+        const auto n = size + align + overhead;
+
+        void* const p_malloc = __real_malloc(n);
+        if (p_malloc == nullptr) throw std::bad_alloc { };
+        const auto p = reinterpret_cast<std::uintptr_t>(p_malloc);
+
+        const auto a = p + overhead;
+        const auto b = (a + align - 1) & -align;
+        auto* const p_aligned = reinterpret_cast<void*>(b);
+        *reinterpret_cast<std::size_t*>(p) = size;          // Store original size (for realloc).
+        *reinterpret_cast<std::uint8_t*>(b - 1) = b - p;    // Store alignment offset.
+
+        return p_aligned;
+    }
+
+    void free(void* ptr, std::size_t, std::align_val_t)
+    {
+        auto* p = static_cast<std::uint8_t*>(ptr);
+        p -= *(p - 1);
+        __real_free(p);
+    }
+}
+
 [[nodiscard]] void* operator new(std::size_t size, std::align_val_t alignment)
 {
     if (dpmi::in_irq_context() or dpmi::get_cs() == dpmi::detail::ring0_cs)
@@ -423,36 +459,15 @@ extern "C"
 
     resize_irq_alloc();
 
-    const auto align = std::max(static_cast<std::size_t>(alignment), std::size_t { 4 });
-    const auto overhead = sizeof(std::size_t) + sizeof(std::uint8_t);
-    const auto n = size + align + overhead;
-
-    void* const p_malloc = __real_malloc(n);
-    if (p_malloc == nullptr) throw std::bad_alloc { };
-    const auto p = reinterpret_cast<std::uintptr_t>(p_malloc);
-
-    const auto a = p + overhead;
-    const auto b = (a + align - 1) & -align;
-    auto* const p_aligned = reinterpret_cast<void*>(b);
-    *reinterpret_cast<std::size_t*>(p) = size;          // Store original size (for realloc).
-    *reinterpret_cast<std::uint8_t*>(b - 1) = b - p;    // Store alignment offset.
-
-    return p_aligned;
+    return allocate(size, alignment);
 }
 
 void operator delete(void* ptr, std::size_t n, std::align_val_t a) noexcept
 {
     if (irq_alloc != nullptr and irq_alloc->in_pool(ptr))
-    {
-        debug::trap_mask dont_trap_here { };
-        irq_alloc->deallocate(ptr, n, static_cast<std::size_t>(a));
-    }
+        free_locked(ptr, n, a);
     else
-    {
-        auto* p = static_cast<std::uint8_t*>(ptr);
-        p -= *(p - 1);
-        __real_free(p);
-    }
+        free(ptr, n, a);
 }
 
 [[nodiscard]] void* operator new(std::size_t n)

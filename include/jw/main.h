@@ -35,7 +35,10 @@ namespace jw
 
     [[nodiscard]] void* realloc(void* pointer, std::size_t new_size, std::size_t alignment);
 
+    [[nodiscard]] void* allocate(std::size_t, std::align_val_t = std::align_val_t { __STDCPP_DEFAULT_NEW_ALIGNMENT__ });
     [[nodiscard]] void* allocate_locked(std::size_t, std::align_val_t = std::align_val_t { __STDCPP_DEFAULT_NEW_ALIGNMENT__ });
+    void free(void*, std::size_t, std::align_val_t = std::align_val_t { __STDCPP_DEFAULT_NEW_ALIGNMENT__ });
+    void free_locked(void*, std::size_t, std::align_val_t = std::align_val_t { __STDCPP_DEFAULT_NEW_ALIGNMENT__ });
 
     // This tag type may be used to allocate from a pre-allocated locked
     // memory pool, using the 'operator new' overloads below.  This also works
