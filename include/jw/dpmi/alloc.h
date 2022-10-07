@@ -20,6 +20,7 @@
 #include <jw/dpmi/irq_mask.h>
 #include <jw/dpmi/irq_check.h>
 #include <jw/alloc.h>
+#include <jw/main.h>
 
 namespace jw::dpmi
 {
@@ -27,31 +28,36 @@ namespace jw::dpmi
     // STL containers safe to access from interrupt handlers, as long as the
     // handler itself does not allocate anything.  It still relies on
     // _CRT0_FLAG_LOCK_MEMORY to lock code and static data, however.
-    struct locking_memory_resource : public std::pmr::memory_resource
+    inline auto* locking_resource() noexcept
     {
-    protected:
-        [[nodiscard]] virtual void* do_allocate(std::size_t n, std::size_t a) override
+        struct resource final : std::pmr::memory_resource
         {
-            throw_if_irq();
-            void* p = ::operator new(n, std::align_val_t { a });
-            linear_memory::from_pointer(p, n).lock();
-            return p;
-        }
+        protected:
+            [[nodiscard]] virtual void* do_allocate(std::size_t n, std::size_t a) override
+            {
+                throw_if_irq();
+                void* p = jw::allocate(n, std::align_val_t { a });
+                linear_memory::from_pointer(p, n).lock();
+                return p;
+            }
 
-        virtual void do_deallocate(void* p, std::size_t n, std::size_t a) noexcept override
-        {
-            linear_memory::from_pointer(p, n).unlock();
-            ::operator delete(p, n, std::align_val_t { a });
-        }
+            virtual void do_deallocate(void* p, std::size_t n, std::size_t a) noexcept override
+            {
+                linear_memory::from_pointer(p, n).unlock();
+                jw::free(p, n, std::align_val_t { a });
+            }
 
-        virtual bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override
-        {
-            auto* o = dynamic_cast<const locking_memory_resource*>(&other);
-            return o != nullptr;
-        }
-    };
+            virtual bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override
+            {
+                return this == &other;
+            }
+        } static constinit memres { };
+        return &memres;
+    }
 
-    // Allocator based on locking_memory_resource
+    using locking_resource_t = std::remove_cvref_t<decltype(*locking_resource())>;
+
+    // Allocator based on locking_resource
     template <typename T = std::byte>
     struct locking_allocator
     {
@@ -60,12 +66,12 @@ namespace jw::dpmi
 
         [[nodiscard]] constexpr T* allocate(std::size_t n)
         {
-            return static_cast<T*>(res.allocate(n * sizeof(T), alignof(T)));
+            return static_cast<T*>(locking_resource()->allocate(n * sizeof(T), alignof(T)));
         }
 
         constexpr void deallocate(T* p, std::size_t n)
         {
-            res.deallocate(static_cast<void*>(p), n * sizeof(T), alignof(T));
+            locking_resource()->deallocate(static_cast<void*>(p), n * sizeof(T), alignof(T));
         }
 
         template <typename U> struct rebind { using other = locking_allocator<U>; };
@@ -76,9 +82,6 @@ namespace jw::dpmi
 
         template <typename U> constexpr friend bool operator== (const locking_allocator&, const locking_allocator<U>&) noexcept { return true; }
         template <typename U> constexpr friend bool operator!= (const locking_allocator&, const locking_allocator<U>&) noexcept { return false; }
-
-    private:
-        [[no_unique_address]] locking_memory_resource res;
     };
 
     // Allocates from a pre-allocated locked memory pool.  This allows
@@ -90,7 +93,7 @@ namespace jw::dpmi
     struct locked_pool_resource final : public pool_resource, private std::conditional_t<lock_self, class_lock<locked_pool_resource<lock_self>>, empty>
     {
         using base = pool_resource;
-        constexpr locked_pool_resource() noexcept : base { &upstream } { }
+        constexpr locked_pool_resource() noexcept : base { locking_resource() } { }
         locked_pool_resource(std::size_t size_bytes) : locked_pool_resource { } { grow(size_bytes); }
 
         constexpr locked_pool_resource(locked_pool_resource&& o) noexcept = default;
@@ -105,8 +108,6 @@ namespace jw::dpmi
         virtual void do_grow(const std::span<std::byte>& ptr) noexcept override { grow_impl<interrupt_mask>(ptr); }
         virtual void auto_grow(std::size_t) override { throw std::bad_alloc { }; }
         [[nodiscard]] virtual void* do_allocate(std::size_t n, std::size_t a) override { return allocate_impl<interrupt_mask>(n, a); }
-
-        locking_memory_resource upstream { };
     };
 
     // Allocator based on locked_pool_resource
