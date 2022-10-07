@@ -367,7 +367,7 @@ namespace jw::dpmi
         {
             auto data = d.read();
             addr = data.segment.base();
-            bytes = data.segment.limit() * (data.segment.is_page_granular ? page_size : 0);
+            bytes = data.segment.limit() * (data.segment.is_page_granular ? page_size : 1);
         }
 
         linear_memory(const linear_memory&) noexcept = default;
