@@ -15,8 +15,6 @@
 
 namespace jw::dpmi::detail
 {
-
-
     template<bool enable>
     struct interrupt_flag
     {
@@ -52,10 +50,18 @@ namespace jw::dpmi::detail
 
         void restore()
         {
-            if constexpr (use_dpmi)
-                asm volatile ("int 0x31" :: "a" (prev_state) : "cc");
+            if constexpr (use_dpmi and enable)
+            {
+                if (not (prev_state & 1)) [[likely]] { asm ("cli"); }
+            }
+            else if constexpr (use_dpmi and not enable)
+            {
+                if (prev_state & 1) [[likely]] { asm ("sti"); }
+            }
             else
+            {
                 asm volatile ("push %0; popfd" :: "rm" (prev_state) : "cc");
+            }
         }
 
         const std::uint32_t prev_state;
