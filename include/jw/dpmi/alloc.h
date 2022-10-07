@@ -36,7 +36,7 @@ namespace jw::dpmi
             [[nodiscard]] virtual void* do_allocate(std::size_t n, std::size_t a) override
             {
                 throw_if_irq();
-                void* p = jw::allocate(n, std::align_val_t { a });
+                void* p = jw::allocate(n, a);
                 linear_memory::from_pointer(p, n).lock();
                 return p;
             }
@@ -44,7 +44,7 @@ namespace jw::dpmi
             virtual void do_deallocate(void* p, std::size_t n, std::size_t a) noexcept override
             {
                 linear_memory::from_pointer(p, n).unlock();
-                jw::free(p, n, std::align_val_t { a });
+                jw::free(p, n, a);
             }
 
             virtual bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override

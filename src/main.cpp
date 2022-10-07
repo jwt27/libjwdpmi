@@ -411,23 +411,23 @@ extern "C"
 namespace jw
 {
 
-    void* allocate_locked(std::size_t n, std::align_val_t a)
+    void* allocate_locked(std::size_t n, std::size_t a)
     {
         if (not dpmi::in_irq_context())
             resize_irq_alloc();
 
-        return do_locked_alloc(n, static_cast<std::size_t>(a));
+        return do_locked_alloc(n, a);
     }
 
-    void free_locked(void* p, std::size_t n, std::align_val_t a)
+    void free_locked(void* p, std::size_t n, std::size_t a)
     {
         debug::trap_mask dont_trap_here { };
-        irq_alloc->deallocate(p, n, static_cast<std::size_t>(a));
+        irq_alloc->deallocate(p, n, a);
     }
 
-    void* allocate(std::size_t size, std::align_val_t alignment)
+    void* allocate(std::size_t size, std::size_t alignment)
     {
-        const auto align = std::max(static_cast<std::size_t>(alignment), std::size_t { 4 });
+        const auto align = std::max(alignment, std::size_t { 4 });
         const auto overhead = sizeof(std::size_t) + sizeof(std::uint8_t);
         const auto n = size + align + overhead;
 
@@ -444,7 +444,7 @@ namespace jw
         return p_aligned;
     }
 
-    void free(void* ptr, std::size_t, std::align_val_t)
+    void free(void* ptr, std::size_t, std::size_t)
     {
         auto* p = static_cast<std::uint8_t*>(ptr);
         p -= *(p - 1);
@@ -459,15 +459,15 @@ namespace jw
 
     resize_irq_alloc();
 
-    return allocate(size, alignment);
+    return allocate(size, static_cast<std::size_t>(alignment));
 }
 
 void operator delete(void* ptr, std::size_t n, std::align_val_t a) noexcept
 {
     if (irq_alloc != nullptr and irq_alloc->in_pool(ptr))
-        free_locked(ptr, n, a);
+        free_locked(ptr, n, static_cast<std::size_t>(a));
     else
-        free(ptr, n, a);
+        free(ptr, n, static_cast<std::size_t>(a));
 }
 
 [[nodiscard]] void* operator new(std::size_t n)
