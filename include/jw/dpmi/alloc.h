@@ -168,4 +168,58 @@ namespace jw::dpmi
     protected:
         std::shared_ptr<locked_pool_resource<false>> res;
     };
+
+    // Returns a std::pmr::memory_resource that allocates from the global
+    // locked pool, same as 'operator new (jw::locked)'.
+    inline auto* global_locked_pool_resource() noexcept
+    {
+        struct resource final : std::pmr::memory_resource
+        {
+        protected:
+            [[nodiscard]] virtual void* do_allocate(std::size_t n, std::size_t a) override
+            {
+                return jw::allocate_locked(n, a);
+            }
+
+            virtual void do_deallocate(void* p, std::size_t n, std::size_t a) noexcept override
+            {
+                jw::free_locked(p, n, a);
+            }
+
+            virtual bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override
+            {
+                return this == &other;
+            }
+        } static constinit memres { };
+        return &memres;
+    }
+
+    using global_locked_pool_resource_t = std::remove_cvref_t<decltype(*global_locked_pool_resource())>;
+
+    // Allocator based on global_locked_pool_resource
+    template <typename T = std::byte>
+    struct global_locked_pool_allocator
+    {
+        using value_type = T;
+        using pointer = T*;
+
+        [[nodiscard]] constexpr T* allocate(std::size_t n)
+        {
+            return static_cast<T*>(global_locked_pool_resource()->allocate(n * sizeof(T), alignof(T)));
+        }
+
+        constexpr void deallocate(T* p, std::size_t n)
+        {
+            global_locked_pool_resource()->deallocate(static_cast<void*>(p), n * sizeof(T), alignof(T));
+        }
+
+        template <typename U> struct rebind { using other = global_locked_pool_allocator<U>; };
+
+        template <typename U>
+        constexpr global_locked_pool_allocator(const global_locked_pool_allocator<U>&) noexcept { }
+        constexpr global_locked_pool_allocator() = default;
+
+        template <typename U> constexpr friend bool operator== (const global_locked_pool_allocator&, const global_locked_pool_allocator<U>&) noexcept { return true; }
+        template <typename U> constexpr friend bool operator!= (const global_locked_pool_allocator&, const global_locked_pool_allocator<U>&) noexcept { return false; }
+    };
 }
