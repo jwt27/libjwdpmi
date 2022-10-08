@@ -1,6 +1,7 @@
 #pragma once
 #include <crt0.h>
 #include <jw/common.h>
+#include <jw/simd_flags.h>
 
 #if __has_include(<tcp.h>)
 # define JWDPMI_WITH_WATT32
@@ -71,5 +72,8 @@ namespace jw
 
         // Default clock used by yield_for() and yield_while_for().
         using thread_clock = jw::chrono::pit;
+
+        // SIMD instruction set flags that simd_select() is allowed to use.
+        constexpr simd allowed_simd = simd::mmx | simd::mmx2 | simd::amd3dnow | simd::amd3dnow2 | simd::sse;
     }
 }
