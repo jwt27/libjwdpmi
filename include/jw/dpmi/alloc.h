@@ -88,12 +88,12 @@ namespace jw::dpmi
     // interrupt handlers to insert/remove elements in STL containers without
     // risking page faults.
     // When specifying a pool size, make sure to account for overhead
-    // (reallocation, fragmentation, alignment overhead).
-    template<bool lock_self = true>
-    struct locked_pool_resource final : public pool_resource, private std::conditional_t<lock_self, class_lock<locked_pool_resource<lock_self>>, empty>
+    // (reallocation, fragmentation, alignment overhead).  And keep in mind
+    // that the resource itself must also be allocated in locked memory!
+    struct locked_pool_resource final : public pool_resource
     {
         using base = pool_resource;
-        constexpr locked_pool_resource() noexcept : base { locking_resource() } { }
+        locked_pool_resource() noexcept : base { locking_resource() } { }
         locked_pool_resource(std::size_t size_bytes) : locked_pool_resource { } { grow(size_bytes); }
 
         constexpr locked_pool_resource(locked_pool_resource&& o) noexcept = default;
@@ -111,14 +111,14 @@ namespace jw::dpmi
     };
 
     // Allocator based on locked_pool_resource
-    template<bool lock_self = true, typename T = std::byte>
-    struct locked_pool_allocator : private std::conditional_t<lock_self, class_lock<locked_pool_allocator<lock_self, T>>, empty>
+    template<typename T = std::byte>
+    struct locked_pool_allocator
     {
         using value_type = T;
         using pointer = T*;
 
         locked_pool_allocator(std::size_t size_bytes)
-            : res { std::allocate_shared<locked_pool_resource<false>>(locking_allocator<locked_pool_resource<false>> { }, size_bytes) } { }
+            : res { std::allocate_shared<locked_pool_resource>(locking_allocator<locked_pool_resource> { }, size_bytes) } { }
 
         locked_pool_allocator() = delete;
         locked_pool_allocator(locked_pool_allocator&&) = default;
@@ -156,17 +156,17 @@ namespace jw::dpmi
 
         bool in_pool(T* p) const noexcept { return res->in_pool(static_cast<void*>(p)); }
 
-        std::weak_ptr<locked_pool_resource<false>> resource() noexcept { return res; }
+        std::weak_ptr<locked_pool_resource> resource() noexcept { return res; }
 
-        template <bool lock_other, typename U> friend class locked_pool_allocator;
-        template <bool lock_other, typename U> locked_pool_allocator(const locked_pool_allocator<lock_other, U>& c) : res(c.res) { }
+        template <typename U> friend class locked_pool_allocator;
+        template <typename U> locked_pool_allocator(const locked_pool_allocator<U>& c) : res(c.res) { }
 
-        template <typename U> struct rebind { using other = locked_pool_allocator<lock_self, U>; };
-        template <bool lock_other, typename U> constexpr friend bool operator== (const locked_pool_allocator& a, const locked_pool_allocator<lock_other, U>& b) noexcept { return a.res == b.res; }
-        template <bool lock_other, typename U> constexpr friend bool operator!= (const locked_pool_allocator& a, const locked_pool_allocator<lock_other, U>& b) noexcept { return not (a == b); }
+        template <typename U> struct rebind { using other = locked_pool_allocator<U>; };
+        template <typename U> constexpr friend bool operator== (const locked_pool_allocator& a, const locked_pool_allocator<U>& b) noexcept { return a.res == b.res; }
+        template <typename U> constexpr friend bool operator!= (const locked_pool_allocator& a, const locked_pool_allocator<U>& b) noexcept { return not (a == b); }
 
     protected:
-        std::shared_ptr<locked_pool_resource<false>> res;
+        std::shared_ptr<locked_pool_resource> res;
     };
 
     // Returns a std::pmr::memory_resource that allocates from the global

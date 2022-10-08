@@ -182,7 +182,7 @@ namespace jw::dpmi::detail
 
 namespace jw
 {
-    constinit dpmi::locked_pool_resource<true>* irq_alloc { nullptr };
+    constinit dpmi::locked_pool_resource* irq_alloc { nullptr };
     constinit std::atomic_flag irq_alloc_resize { false };
     constexpr std::size_t irq_alloc_size = config::global_locked_pool_size;
     constinit std::size_t min_chunk_size { 0 };
@@ -218,7 +218,8 @@ namespace jw
             }
 
             min_chunk_size = irq_alloc_size;
-            irq_alloc = new dpmi::locked_pool_resource<true> { irq_alloc_size };
+            locking_allocator<locked_pool_resource> irq_alloc_alloc { };
+            irq_alloc = new (irq_alloc_alloc.allocate(1)) dpmi::locked_pool_resource { irq_alloc_size };
 
             const_cast<selector&>(safe_ds) = __djgpp_ds_alias;
             const_cast<selector&>(main_cs) = get_cs();

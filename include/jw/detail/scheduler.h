@@ -49,7 +49,7 @@ namespace jw::detail
     };
 
     template <typename T = std::byte>
-    using thread_allocator = monomorphic_allocator<dpmi::locked_pool_resource<true>, T>;
+    using thread_allocator = monomorphic_allocator<dpmi::locked_pool_resource, T>;
 
     struct thread
     {
@@ -199,7 +199,7 @@ namespace jw::detail
         static void setup();
         static void kill_all();
 
-        inline static constinit std::optional<dpmi::locked_pool_resource<true>> memres { std::nullopt };
+        inline static constinit std::optional<dpmi::locked_pool_resource> memres { std::nullopt };
         inline static constinit std::optional<set_type> threads { std::nullopt };
         inline static constinit std::optional<set_type::iterator> iterator { std::nullopt };
         inline static constinit bool terminating { false };

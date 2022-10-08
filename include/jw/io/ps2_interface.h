@@ -265,7 +265,7 @@ namespace jw
 
             jw::trivial_function<void()> callback { };
 
-            dpmi::locked_pool_resource<false> memres { 1_KB };
+            dpmi::locked_pool_resource memres { 1_KB };
             std::pmr::deque<detail::raw_scancode> scancode_queue { &memres };
 
             dpmi::irq_handler irq_handler { [this]()

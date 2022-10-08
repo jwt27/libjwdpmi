@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
@@ -77,8 +78,7 @@ namespace jw::io
             } output_range;
         } cfg;
 
-        gameport(config c, std::size_t alloc_size = 1_KB) : cfg(c), port(c.port),
-            memory_resource(using_irq()? std::make_unique<dpmi::locked_pool_resource<true>>(alloc_size) : nullptr)
+        gameport(config c) : cfg(c), port(c.port)
         {
             switch (cfg.strategy)
             {
@@ -168,12 +168,15 @@ namespace jw::io
         typename clock::time_point timing_start;
         std::bitset<4> button_state { 0 };
         std::optional<dpmi::data_lock> lock;
-        std::unique_ptr<std::pmr::memory_resource> memory_resource;
         std::pmr::deque<std::pair<std::bitset<4>, typename clock::time_point>> button_events { get_memory_resource() };
         std::pmr::deque<std::pair<raw_t, typename clock::time_point>> samples { get_memory_resource() };
 
         bool using_irq() const { return cfg.strategy == poll_strategy::pit_irq or cfg.strategy == poll_strategy::rtc_irq; }
-        std::pmr::memory_resource* get_memory_resource() const noexcept { if (using_irq()) return memory_resource.get(); else return std::pmr::get_default_resource(); }
+        std::pmr::memory_resource* get_memory_resource() const noexcept
+        {
+            if (using_irq()) return dpmi::global_locked_pool_resource();
+            else return std::pmr::get_default_resource();
+        }
 
         void poll()
         {

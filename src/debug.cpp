@@ -58,7 +58,7 @@ namespace jw
             bool thread_events_enabled { false };
             exception_info current_exception;
 
-            using resource_type = locked_pool_resource<false>;
+            using resource_type = locked_pool_resource;
 
             template<typename T = std::byte>
             using allocator = default_constructing_allocator_adaptor<monomorphic_allocator<resource_type, T>>;
