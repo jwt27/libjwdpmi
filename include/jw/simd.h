@@ -106,3 +106,22 @@ namespace jw::simd_target
     constexpr simd athlon      = simd::mmx | simd::amd3dnow | simd::mmx2 | simd::amd3dnow2;
     constexpr simd athlon_xp   = simd::mmx | simd::amd3dnow | simd::mmx2 | simd::amd3dnow2 | simd::sse;
 }
+
+namespace jw
+{
+    template<typename F, typename... A>
+    decltype(auto) simd_select(F&& func, A&&... args)
+    {
+        const auto flags = runtime_simd();
+#       define SIMD_SELECT_CALL(X) return std::forward<F>(func).template operator()<X>(std::forward<A>(args)...)
+#       define SIMD_SELECT_MATCH(X) if (flags.match(X)) SIMD_SELECT_CALL(X)
+        SIMD_SELECT_MATCH(simd_target::athlon_xp);
+        SIMD_SELECT_MATCH(simd_target::athlon);
+        SIMD_SELECT_MATCH(simd_target::pentium_3);
+        SIMD_SELECT_MATCH(simd_target::k6_2);
+        SIMD_SELECT_MATCH(simd_target::pentium_mmx);
+        SIMD_SELECT_CALL(default_simd());
+#       undef SIMD_SELECT_MATCH
+#       undef SIMD_SELECT_CALL
+    }
+}
