@@ -29,8 +29,10 @@ namespace jw
         // resizing is disabled.
         constexpr std::size_t interrupt_minimum_stack_size = 16_KB;
 
-        // Initial memory pool for operator new() in interrupt context.
-        constexpr std::size_t interrupt_initial_memory_pool = 1_MB;
+        // Initial size for the global locked memory pool.  This is used by
+        // 'operator new' when in interrupt context, but can also be allocated
+        // from directly via 'operator new (jw::locked) T'.
+        constexpr std::size_t global_locked_pool_size = 1_MB;
 
         // Total stack size for exception handlers.  Remote debugging requires
         // more stack space.

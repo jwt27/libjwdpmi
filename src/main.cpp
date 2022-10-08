@@ -184,7 +184,7 @@ namespace jw
 {
     constinit dpmi::locked_pool_resource<true>* irq_alloc { nullptr };
     constinit std::atomic_flag irq_alloc_resize { false };
-    constexpr std::size_t irq_alloc_size = config::interrupt_initial_memory_pool;
+    constexpr std::size_t irq_alloc_size = config::global_locked_pool_size;
     constinit std::size_t min_chunk_size { 0 };
 
     struct init
