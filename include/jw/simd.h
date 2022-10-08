@@ -12,7 +12,7 @@
 namespace jw
 {
     // Return the SIMD flags available for the default CPU target.
-    constexpr simd default_simd() noexcept
+    constexpr inline simd default_simd() noexcept
     {
         simd flags = simd::none;
 #       ifdef __MMX__
@@ -76,7 +76,7 @@ namespace jw::simd_target
 namespace jw
 {
     template<typename F, typename... A>
-    decltype(auto) simd_select(F&& func, A&&... args)
+    inline decltype(auto) simd_select(F&& func, A&&... args)
     {
         const auto flags = runtime_simd() | default_simd();
 #       define SIMD_SELECT_CALL(X) return std::forward<F>(func).template operator()<X>(std::forward<A>(args)...)
