@@ -15,7 +15,7 @@ namespace jw::dpmi::detail
         rm_int_callback(std::uint8_t i) : raw_handler { i, callback.pointer() } { }
 
         realmode_interrupt_handler* last { nullptr };
-        realmode_callback callback { [this](realmode_registers* reg, far_ptr32 stack) { handle(reg, stack); }, true };
+        realmode_callback callback { [this](realmode_registers* reg, far_ptr32 stack) { handle(reg, stack); }, { .iret_frame = true } };
         raw_realmode_interrupt_handler raw_handler;
 
         void handle(realmode_registers* reg, far_ptr32 stack)

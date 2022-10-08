@@ -120,26 +120,39 @@ namespace jw
             const far_ptr16 ptr;
         };
 
+        // Configuration options for realmode_callback.
+        struct realmode_callback_config
+        {
+            // Enable this if the real-mode code will be invoked by INT instead
+            // of CALL FAR, and thus should return by IRET instead of RETF.
+            bool iret_frame = false;
+
+            // Specifies what dpmi::in_irq_context() returns when this callback
+            // is invoked.  Enable this if your callback will be invoked from a
+            // hardware interrupt handler.
+            bool irq_context = false;
+
+            // A new realmode_registers struct must be used for each re-entry
+            // into the callback.  This option controls how many are allocated,
+            // and so determines how many times the callback may be re-entered.
+            std::size_t pool_size = 8;
+
+            // Stack size available to the callback.
+            std::size_t stack_size = 16_KB;
+        };
+
         // Allocates a callback function that can be invoked from real-mode.
-        // The constructor parameter 'iret_frame' specifies whether the real-
-        // mode code should return via IRET or RETF.  Parameter 'irq_context'
-        // specifies what dpmi::in_irq_context() returns when this callback
-        // is invoked, enable this if your callback will be used from a
-        // hardware interrupt handler.
-        // The callback may be re-entered multiple times, as long as there is
-        // enough space available to store the incoming realmode_registers.
-        // This is controlled via parameter 'pool_size'.
         // The callback function takes a pointer to a registers structure
         // which may be modified, and a far pointer to access the real-mode
-        // stack.  The return CS/IP (and flags) will have already been popped
-        // off and stored in the registers struct.
+        // stack.  On entry, the return CS/IP (and flags) will have already
+        // been popped off and stored in the registers struct.
         struct realmode_callback final
         {
             using function_type = void(realmode_registers*, far_ptr32);
 
             template<typename F>
-            realmode_callback(F&& function, bool iret_frame = false, bool irq_context = false, std::size_t stack_size = 16_KB, std::size_t pool_size = 8)
-                : data { new (locked) callback_data { std::forward<F>(function), iret_frame, irq_context, stack_size, pool_size } } { }
+            realmode_callback(F&& function, realmode_callback_config cfg = { })
+                : data { new (locked) callback_data { std::forward<F>(function), cfg } } { }
 
             far_ptr16 pointer() const noexcept { return data->pointer(); }
 
@@ -153,14 +166,14 @@ namespace jw
             struct callback_data : raw_realmode_callback
             {
                 template<typename F>
-                callback_data(F&& function, bool iret_frame, bool irq_context, std::size_t stack_size = 16_KB, std::size_t pool_size = 8)
-                    : raw_realmode_callback({ get_cs(), reinterpret_cast<std::uintptr_t>(iret_frame ? entry_point<true> : entry_point<false>) })
-                    , is_irq { irq_context }
+                callback_data(F&& function, const realmode_callback_config& cfg)
+                    : raw_realmode_callback({ get_cs(), reinterpret_cast<std::uintptr_t>(cfg.iret_frame ? entry_point<true> : entry_point<false>) })
+                    , is_irq { cfg.irq_context }
                     , func { std::forward<F>(function) }
                 {
-                    stack.resize(stack_size);
+                    stack.resize(cfg.stack_size);
                     stack_ptr = stack.data() + stack.size() - 4;
-                    reg_pool.resize(pool_size);
+                    reg_pool.resize(cfg.pool_size);
                     reg_ptr = reg_pool.data();
                 }
 
