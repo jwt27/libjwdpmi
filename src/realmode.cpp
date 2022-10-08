@@ -106,7 +106,7 @@ namespace jw
             }
         }
 
-        void realmode_callback::call(realmode_callback* self, std::uintptr_t stack_offset, selector stack_selector) noexcept
+        void realmode_callback::callback_data::call(callback_data* self, std::uintptr_t stack_offset, selector stack_selector) noexcept
         {
             fpu_registers fpu;
             std::optional<detail::interrupt_id> id;
@@ -148,11 +148,11 @@ namespace jw
         }
 
         template<bool iret_frame>
-        void realmode_callback::entry_point() noexcept
+        void realmode_callback::callback_data::entry_point() noexcept
         {
 #           pragma GCC diagnostic push
 #           pragma GCC diagnostic ignored "-Winvalid-offsetof"  // It just works.
-#           define OFFSET(X) offsetof(realmode_callback, X)
+#           define OFFSET(X) offsetof(callback_data, X)
             asm
             (R"(
                     # on entry here:
@@ -198,8 +198,8 @@ namespace jw
 #           pragma GCC diagnostic pop
         }
 
-        template void realmode_callback::entry_point<true>();
-        template void realmode_callback::entry_point<false>();
+        template void realmode_callback::callback_data::entry_point<true>();
+        template void realmode_callback::callback_data::entry_point<false>();
 
         raw_realmode_interrupt_handler::raw_realmode_interrupt_handler(std::uint8_t i, far_ptr16 ptr)
             : int_num { i }, prev_handler { get(i) }
@@ -254,7 +254,7 @@ namespace jw
             prev = pos.last;
             if (prev != nullptr) prev->next = this;
             pos.last = this;
-            pos.callback.is_irq |= is_irq;
+            pos.callback.is_irq(pos.callback.is_irq() | is_irq);
         }
 
         realmode_interrupt_handler::~realmode_interrupt_handler()
@@ -272,10 +272,10 @@ namespace jw
             }
             else next->prev = prev;
 
-            pos.callback.is_irq = false;
+            pos.callback.is_irq(false);
             for (auto* i = pos.last; i != nullptr; i = i->prev)
             {
-                pos.callback.is_irq |= i->is_irq;
+                pos.callback.is_irq(pos.callback.is_irq() | i->is_irq);
             }
         }
     }

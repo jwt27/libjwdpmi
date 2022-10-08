@@ -133,38 +133,53 @@ namespace jw
         // which may be modified, and a far pointer to access the real-mode
         // stack.  The return CS/IP (and flags) will have already been popped
         // off and stored in the registers struct.
-        struct realmode_callback final : raw_realmode_callback, private class_lock<realmode_callback>
+        struct realmode_callback final
         {
             using function_type = void(realmode_registers*, far_ptr32);
 
             template<typename F>
             realmode_callback(F&& function, bool iret_frame = false, bool irq_context = false, std::size_t stack_size = 16_KB, std::size_t pool_size = 8)
-                : raw_realmode_callback({ get_cs(), reinterpret_cast<std::uintptr_t>(iret_frame ? entry_point<true> : entry_point<false>) })
-                , is_irq { irq_context }
-                , func { std::forward<F>(function) }
-            {
-                stack.resize(stack_size);
-                stack_ptr = stack.data() + stack.size() - 4;
-                reg_pool.resize(pool_size);
-                reg_ptr = reg_pool.data();
-            }
+                : data { new (locked) callback_data { std::forward<F>(function), iret_frame, irq_context, stack_size, pool_size } } { }
 
-            bool is_irq;
+            far_ptr16 pointer() const noexcept { return data->pointer(); }
+
+            bool is_irq() const noexcept { return data->is_irq; }
+            void is_irq(bool i) noexcept { data->is_irq = i; }
 
         private:
             template <typename T>
             using allocator = default_constructing_allocator_adaptor<locking_allocator<T>>;
 
-            template<bool>
-            [[gnu::naked]] static void entry_point() noexcept;
-            [[gnu::cdecl]] static void call(realmode_callback*, std::uintptr_t, selector) noexcept;
+            struct callback_data : raw_realmode_callback
+            {
+                template<typename F>
+                callback_data(F&& function, bool iret_frame, bool irq_context, std::size_t stack_size = 16_KB, std::size_t pool_size = 8)
+                    : raw_realmode_callback({ get_cs(), reinterpret_cast<std::uintptr_t>(iret_frame ? entry_point<true> : entry_point<false>) })
+                    , is_irq { irq_context }
+                    , func { std::forward<F>(function) }
+                {
+                    stack.resize(stack_size);
+                    stack_ptr = stack.data() + stack.size() - 4;
+                    reg_pool.resize(pool_size);
+                    reg_ptr = reg_pool.data();
+                }
 
-            std::byte* stack_ptr;
-            realmode_registers* reg_ptr;
+                bool is_irq;
 
-            trivial_function<function_type> func;
-            std::vector<std::byte, allocator<std::byte>> stack;
-            std::vector<realmode_registers, allocator<realmode_registers>> reg_pool;
+            private:
+                template<bool>
+                [[gnu::naked]] static void entry_point() noexcept;
+                [[gnu::cdecl]] static void call(callback_data*, std::uintptr_t, selector) noexcept;
+
+                std::byte* stack_ptr;
+                realmode_registers* reg_ptr;
+
+                trivial_function<function_type> func;
+                std::vector<std::byte, allocator<std::byte>> stack;
+                std::vector<realmode_registers, allocator<realmode_registers>> reg_pool;
+            };
+
+            std::unique_ptr<callback_data> data;
         };
 
         // Registers a real-mode procedure as real-mode software interrupt
