@@ -64,6 +64,14 @@ namespace jw
     {
         ~mmx_guard() { mmx_empty<flags>(); }
     };
+
+    // This wrapper function helps avoid mixing MMX and x87 code.
+    template<simd flags, typename F, typename... A>
+    [[gnu::noinline]] inline decltype(auto) mmx_function(F&& func, A&&... args)
+    {
+        mmx_guard<flags> guard { };
+        return std::forward<F>(func)(std::forward<A>(args)...);
+    }
 }
 
 namespace jw::simd_target
