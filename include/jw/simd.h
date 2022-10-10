@@ -52,14 +52,14 @@ namespace jw
         return flags;
     }
 
-    template<simd flags = default_simd()>
+    template<simd flags>
     inline void mmx_empty() noexcept
     {
         if constexpr (flags & simd::amd3dnow) _m_femms();
         else if constexpr (flags & simd::mmx) _m_empty();
     }
 
-    template<simd flags = default_simd()>
+    template<simd flags>
     struct mmx_guard
     {
         ~mmx_guard() { mmx_empty<flags>(); }
