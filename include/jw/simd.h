@@ -11,6 +11,9 @@
 
 namespace jw
 {
+    template<typename T, std::size_t N>
+    using simd_vector [[gnu::vector_size(sizeof(T) * N)]] = T;
+
     // Return the SIMD flags available for the default CPU target.
     constexpr inline simd default_simd() noexcept
     {
