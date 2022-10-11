@@ -21,8 +21,8 @@ namespace jw::chrono
     static constinit bool tsc_calibrated { false };
     static volatile bool wait_for_irq0 { false };
 
-    static constexpr fixed<std::uint32_t, 6> ns_per_pit_count { 1e9 / pit::max_frequency };
-    static fixed<std::uint32_t, 6> ns_per_pit_tick { 1e9 / (pit::max_frequency / 0x10000)  };
+    static constexpr fixed<std::uint32_t, 22> ns_per_pit_count { 1e9L / pit::max_frequency };
+    static fixed<std::uint32_t, 6> ns_per_pit_tick { 0x10000 * ns_per_pit_count  };
     static double ns_per_rtc_tick;
     static fixed<std::uint32_t, 24> fixed_ns_per_tsc_tick;
     static long double float_ns_per_tsc_tick;
@@ -83,7 +83,7 @@ namespace jw::chrono
 
     static void recalculate_pit_interval(std::uint32_t count) noexcept
     {
-        ns_per_pit_tick = 1e9 / (pit::max_frequency / count);
+        ns_per_pit_tick = count * ns_per_pit_count;
         pit_counter_max = count;
     }
 
