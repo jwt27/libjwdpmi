@@ -137,8 +137,10 @@ namespace jw::dpmi::detail
 
     void irq_controller::handle_irq(irq_level i) noexcept
     {
-        fpu_registers fpu;
+        constexpr bool save_fpu { config::save_fpu_on_interrupt };
+        std::conditional_t<save_fpu, fpu_context, empty> fpu;
         interrupt_id id { &fpu, i, interrupt_type::irq };
+
         try
         {
             std::optional<irq_mask> mask;

@@ -46,6 +46,25 @@ namespace jw
         // Default stack size for threads.
         constexpr std::size_t thread_default_stack_size = 64_KB;
 
+#       if defined(NDEBUG) and not defined(HAVE__SSE__)
+        // If you need to use floating-point instructions in interrupts,
+        // exceptions, or realmode callbacks, you must save and restore the
+        // FPU registers.  The preferred method is to use dpmi::fpu_context
+        // where necessary.  If it is hard to control where FPU instructions
+        // may be used, or you want extra safety, these flags may be enabled.
+        constexpr bool save_fpu_on_interrupt = false;
+        constexpr bool save_fpu_on_exception = false;
+        constexpr bool save_fpu_on_realmode_callback = false;
+#       else
+        // When compiling with -msse or -march=pentium3, it may be difficult to
+        // control where the compiler decides to use SSE instructions, so it is
+        // safer to leave these enabled.
+        // The debugger also requires the FPU context to be saved on exception.
+        constexpr bool save_fpu_on_interrupt = true;
+        constexpr bool save_fpu_on_exception = true;
+        constexpr bool save_fpu_on_realmode_callback = true;
+#       endif
+
         // Set up cpu exception handlers to throw C++ exceptions instead.
         constexpr bool enable_throwing_from_cpu_exceptions = true;
 

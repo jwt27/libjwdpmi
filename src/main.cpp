@@ -178,6 +178,8 @@ namespace jw::dpmi::detail
     const selector main_cs { };
     const selector main_ds { };
     const selector safe_ds { };
+
+    const bool use_fxsave { false };
 }
 
 namespace jw
@@ -228,7 +230,7 @@ namespace jw
             cpuid::setup();
             asm volatile ("" ::: "memory");
             const auto cpu = dpmi::cpuid::feature_flags();
-            use_fxsave = cpu.fxsave;
+            const_cast<bool&>(use_fxsave) = cpu.fxsave;
 
             asm volatile
             (R"(

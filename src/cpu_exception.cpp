@@ -84,7 +84,9 @@ namespace jw::dpmi::detail
     [[gnu::cdecl, gnu::hot]]
     static bool handle_exception(raw_exception_frame* frame) noexcept
     {
-        fpu_registers fpu;
+        constexpr bool save_fpu { config::save_fpu_on_exception };
+        std::conditional_t<save_fpu, fpu_context, empty> fpu;
+
         auto* const data = frame->data;
         auto* const f = data->is_dpmi10 ? &frame->frame_10 : &frame->frame_09;
         interrupt_id id { &fpu, data->num, interrupt_type::exception };

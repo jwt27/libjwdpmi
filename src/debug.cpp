@@ -682,27 +682,28 @@ namespace jw
 
                     switch (reg)
                     {
-                    case eax: encode(out, &r->eax); return;
-                    case ebx: encode(out, &r->ebx); return;
-                    case ecx: encode(out, &r->ecx); return;
-                    case edx: encode(out, &r->edx); return;
-                    case ebp: encode(out, &r->ebp); return;
-                    case esi: encode(out, &r->esi); return;
-                    case edi: encode(out, &r->edi); return;
-                    case esp: encode(out, &f->stack.offset); return;
-                    case eflags: encode(out, &f->raw_eflags); return;
-                    case cs: { std::uint32_t s = f->fault_address.segment; encode(out, &s); return; }
-                    case ss: { std::uint32_t s = f->stack.segment; encode(out, &s); return; }
-                    case ds: { if (dpmi10_frame) { std::uint32_t s = d10f->ds; encode(out, &s); } else encode_null(out, regsize[reg]); return; }
-                    case es: { if (dpmi10_frame) { std::uint32_t s = d10f->es; encode(out, &s); } else encode_null(out, regsize[reg]); return; }
-                    case fs: { if (dpmi10_frame) { std::uint32_t s = d10f->fs; encode(out, &s); } else encode_null(out, regsize[reg]); return; }
-                    case gs: { if (dpmi10_frame) { std::uint32_t s = d10f->gs; encode(out, &s); } else encode_null(out, regsize[reg]); return; }
-                    case eip: encode(out, &f->fault_address.offset); return;
+                    case eax: return encode(out, &r->eax);
+                    case ebx: return encode(out, &r->ebx);
+                    case ecx: return encode(out, &r->ecx);
+                    case edx: return encode(out, &r->edx);
+                    case ebp: return encode(out, &r->ebp);
+                    case esi: return encode(out, &r->esi);
+                    case edi: return encode(out, &r->edi);
+                    case esp: return encode(out, &f->stack.offset);
+                    case eflags: return encode(out, &f->raw_eflags);
+                    case cs: { std::uint32_t s = f->fault_address.segment; return encode(out, &s); }
+                    case ss: { std::uint32_t s = f->stack.segment; return encode(out, &s); }
+                    case ds: { if (dpmi10_frame) { std::uint32_t s = d10f->ds; return encode(out, &s); } else return encode_null(out, regsize[reg]); }
+                    case es: { if (dpmi10_frame) { std::uint32_t s = d10f->es; return encode(out, &s); } else return encode_null(out, regsize[reg]); }
+                    case fs: { if (dpmi10_frame) { std::uint32_t s = d10f->fs; return encode(out, &s); } else return encode_null(out, regsize[reg]); }
+                    case gs: { if (dpmi10_frame) { std::uint32_t s = d10f->gs; return encode(out, &s); } else return encode_null(out, regsize[reg]); }
+                    case eip: return encode(out, &f->fault_address.offset);
                     default:
                         auto* const fpu = interrupt_id::get()->fpu;
+                        if (fpu == nullptr) return encode_null(out, regsize[reg]);
                         switch (fpu_registers::type())
                         {
-                        case fpu_registers_type::fsave: return fpu_reg(out, reg, &fpu->fsave);
+                        case fpu_registers_type::fsave:  return fpu_reg(out, reg, &fpu->fsave);
                         case fpu_registers_type::fxsave: return fpu_reg(out, reg, &fpu->fxsave);
                         default: __builtin_unreachable();
                         }
@@ -712,28 +713,25 @@ namespace jw
                 {
                     auto* t_ptr = t.thread;
                     if (not t_ptr or t_ptr->get_state() == jw::detail::thread::starting)
-                    {
-                        encode_null(out, regsize[reg]);
-                        return;
-                    }
+                        return encode_null(out, regsize[reg]);
                     auto* r = t_ptr->get_context();
                     std::uint32_t r_esp = reinterpret_cast<std::uintptr_t>(r) - sizeof(jw::detail::thread_context);
                     std::uint32_t r_eip = r->return_address;
                     switch (reg)
                     {
-                    case ebx: encode(out, &r->ebx); return;
-                    case ebp: encode(out, &r->ebp); return;
-                    case esi: encode(out, &r->esi); return;
-                    case edi: encode(out, &r->edi); return;
-                    case esp: encode(out, &r_esp); return;
-                    case cs: { std::uint32_t s = main_cs; encode(out, &s); return; }
+                    case ebx: return encode(out, &r->ebx);
+                    case ebp: return encode(out, &r->ebp);
+                    case esi: return encode(out, &r->esi);
+                    case edi: return encode(out, &r->edi);
+                    case esp: return encode(out, &r_esp);
+                    case cs: { std::uint32_t s = main_cs; return encode(out, &s); }
                     case ss:
                     case ds:
-                    case es: { std::uint32_t s = main_ds; encode(out, &s); return; }
-                    case fs: { std::uint32_t s = r->fs; encode(out, &s, regsize[reg]); return; }
-                    case gs: { std::uint32_t s = r->gs; encode(out, &s, regsize[reg]); return; }
-                    case eip: encode(out, &r_eip); return;
-                    default: encode_null(out, regsize[reg]);
+                    case es: { std::uint32_t s = main_ds; return encode(out, &s); }
+                    case fs: { std::uint32_t s = r->fs; return encode(out, &s, regsize[reg]); }
+                    case gs: { std::uint32_t s = r->gs; return encode(out, &s, regsize[reg]); }
+                    case eip: return encode(out, &r_eip);
+                    default: return encode_null(out, regsize[reg]);
                     }
                 }
             }
@@ -789,15 +787,16 @@ namespace jw
                     case eflags: return reverse_decode(value, &f->raw_eflags, regsize[reg]);
                     case cs:     return reverse_decode(value.substr(0, 4), &f->fault_address.segment, 2);
                     case ss:     return reverse_decode(value.substr(0, 4), &f->stack.segment, 2);
-                    case ds: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->ds, 2); } return false;
-                    case es: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->es, 2); } return false;
-                    case fs: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->fs, 2); } return false;
-                    case gs: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->gs, 2); } return false;
+                    case ds: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->ds, 2); } else return false;
+                    case es: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->es, 2); } else return false;
+                    case fs: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->fs, 2); } else return false;
+                    case gs: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->gs, 2); } else return false;
                     default:
                         auto* const fpu = interrupt_id::get()->fpu;
+                        if (fpu == nullptr) return false;
                         switch (fpu_registers::type())
                         {
-                        case fpu_registers_type::fsave: return set_fpu_reg(reg, value, &fpu->fsave);
+                        case fpu_registers_type::fsave:  return set_fpu_reg(reg, value, &fpu->fsave);
                         case fpu_registers_type::fxsave: return set_fpu_reg(reg, value, &fpu->fxsave);
                         default: __builtin_unreachable();
                         }

@@ -34,7 +34,6 @@ namespace jw::detail
     void scheduler::setup()
     {
         memres.emplace(64_KB);
-        thread_allocator<thread> alloc { memory_resource() };
         threads.emplace(memory_resource());
 
         thread& p = const_cast<thread&>(*threads->emplace().first);
@@ -48,6 +47,7 @@ namespace jw::detail
         {
             if (reg->ax != 0x1680) return false;
             if (dpmi::in_irq_context()) return false;
+            [[maybe_unused]] std::conditional_t<config::save_fpu_on_realmode_callback, empty, dpmi::fpu_context> fpu { };
             yield();
             errno = 0;
             reg->al = 0;

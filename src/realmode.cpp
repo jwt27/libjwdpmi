@@ -108,9 +108,14 @@ namespace jw
 
         void realmode_callback::callback_data::call(callback_data* self, std::uintptr_t stack_offset, selector stack_selector) noexcept
         {
-            fpu_registers fpu;
+            constexpr bool save_fpu { config::save_fpu_on_realmode_callback };
+            std::optional<std::conditional_t<save_fpu, fpu_context, empty>> fpu;
             std::optional<detail::interrupt_id> id;
-            if (self->is_irq) id.emplace(&fpu, 0, detail::interrupt_type::realmode_irq);
+            if (self->is_irq)
+            {
+                fpu.emplace();
+                id.emplace(&*fpu, 0, detail::interrupt_type::realmode_irq);
+            }
 
             auto* const reg = self->reg_ptr++;
             if (self->reg_ptr > self->reg_pool.data() + self->reg_pool.size()) [[unlikely]]
