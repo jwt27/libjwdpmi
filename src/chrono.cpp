@@ -374,10 +374,11 @@ namespace jw::chrono
 
         {
             dpmi::interrupt_mask no_irqs { };
-            a.value = volatile_load(&pit_ns.value);
+            b.value = volatile_load(&pit_ns.value);
         }
-        while (true)
+        do
         {
+            a = b;
             asm ("nop");
             {
                 dpmi::interrupt_mask no_irqs { };
@@ -389,9 +390,8 @@ namespace jw::chrono
                 dpmi::interrupt_mask no_irqs { };
                 b.value = volatile_load(&pit_ns.value);
             }
-            if (a.value == b.value) [[likely]] break;
-            a = b;
-        }
+        } while (a.value != b.value);
+
         a += ns_per_pit_count * (pit_counter_max - counter);
         return time_point { duration { round(a) + pit_ns_offset } };
     }
@@ -439,7 +439,8 @@ namespace jw::chrono
             last = volatile_load(&last_tsc);
         }
 
-        const tsc_count tsc = rdtsc();
+        // This relies on unsigned integer roll-over, so only the lower 32 bits are needed here.
+        const std::uint32_t tsc = rdtsc();
         const std::uint32_t count = tsc - last;
         const auto ns = pit + static_cast<decltype(pit_ns)>(fixed_ns_per_tsc_tick * count);
         return time_point { duration { static_cast<std::int64_t>(round(ns) + pit_ns_offset) } };
