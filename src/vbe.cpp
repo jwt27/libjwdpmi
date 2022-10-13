@@ -650,7 +650,7 @@ namespace jw
                 auto* ptr = static_cast<const void*>(pal.data());
                 if (dac_bits < 8)
                 {
-                    for (unsigned i = 0; i < size; ++i) copy[i] = pal[i];
+                    for (unsigned i = 0; i < size; ++i) copy[i] = static_cast<pxvga>(pal[i]);
                     ptr = static_cast<const void*>(copy.data());
                 }
 
@@ -705,7 +705,7 @@ namespace jw
             auto* ptr = static_cast<const void*>(pal.data());
             if (dac_bits < 8)
             {
-                for (unsigned i = 0; i < size; ++i) copy[i] = pal[i];
+                for (unsigned i = 0; i < size; ++i) copy[i] = static_cast<pxvga>(pal[i]);
                 ptr = static_cast<const void*>(copy.data());
             }
 
@@ -739,7 +739,7 @@ namespace jw
 
             std::array<px32n, 256> result;
             auto* ptr = dos_data->palette.data();
-            if (dac_bits < 8) for (auto i = 0; i < 256; ++i) result[i] = reinterpret_cast<pxvga*>(ptr)[i];
+            if (dac_bits < 8) for (auto i = 0; i < 256; ++i) result[i] = static_cast<px32n>(reinterpret_cast<pxvga*>(ptr)[i]);
             else for (auto i = 0; i < 256; ++i) result[i] = ptr[i];
             return result;
         }

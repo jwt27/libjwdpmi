@@ -7,7 +7,7 @@
 
 #pragma once
 #include <type_traits>
-#include <vector>
+#include <array>
 #include <mmintrin.h>
 #include <xmmintrin.h>
 #include <jw/simd.h>
@@ -110,7 +110,7 @@ namespace jw
             constexpr pixel& operator=(const pixel& p) noexcept { return assign(p); };
             constexpr pixel& operator=(pixel&& p) noexcept { return assign(p); };
 
-            template <typename U> constexpr operator pixel<U>() const noexcept { return cast_to<U>(); }
+            template <typename U> constexpr explicit operator pixel<U>() const noexcept { return cast_to<U, default_simd()>(); }
 
             static constexpr bool has_alpha() { return P::ax > 0; }
 
@@ -212,11 +212,11 @@ namespace jw
                     else std::memcpy(this, &p, sizeof(pixel));
                     return *this;
                 }
-                else return assign<flags>(cast_to<P, flags>(p));
+                else return assign<flags>(p.template cast_to<P, flags>());
             }
 
         private:
-            template <typename U, simd flags = default_simd()>
+            template <typename U, simd flags>
             PIXEL_FUNCTION constexpr pixel<U> cast_to() const
             {
                 auto do_cast_vector = [this]()
@@ -443,7 +443,7 @@ namespace jw
                 return dst;
             }
 
-            template <typename U, simd flags = default_simd()>
+            template <typename U, simd flags>
             PIXEL_FUNCTION constexpr __m64 m64_blend(__m64 dst, __m64 src)
             {
                 auto a = _mm_set1_pi16(U::ax - reinterpret_cast<V<4, std::uint16_t>>(src)[3]);
@@ -674,7 +674,7 @@ namespace jw
         {
             std::array<px32n, 256> result;
             for (unsigned i = 0; i < 256; ++i)
-                result[i] = *reinterpret_cast<px8n*>(&i);
+                result[i] = static_cast<px32n>(*reinterpret_cast<px8n*>(&i));
             return result;
         }
     }

@@ -64,7 +64,7 @@ namespace jw
                     auto r = dac_data.read();
                     auto g = dac_data.read();
                     auto b = dac_data.read();
-                    result[i] = pxvga { r, g, b };
+                    result[i] = static_cast<px32n>(pxvga { r, g, b });
                 }
             }
             return result;
