@@ -3,8 +3,6 @@
 
 #pragma once
 #include <type_traits>
-#include <mmintrin.h>
-#include <mm3dnow.h>
 #include <jw/dpmi/cpuid.h>
 #include <jw/simd_flags.h>
 #include "jwdpmi_config.h"
@@ -50,27 +48,6 @@ namespace jw
             if (amd.mmx_extensions) flags |= simd::mmx2;
         }
         return flags;
-    }
-
-    template<simd flags>
-    inline void mmx_empty() noexcept
-    {
-        if constexpr (flags & simd::amd3dnow) _m_femms();
-        else if constexpr (flags & simd::mmx) _m_empty();
-    }
-
-    template<simd flags>
-    struct mmx_guard
-    {
-        ~mmx_guard() { mmx_empty<flags>(); }
-    };
-
-    // This wrapper function helps avoid mixing MMX and x87 code.
-    template<simd flags, typename F, typename... A>
-    [[gnu::noinline]] inline decltype(auto) mmx_function(F&& func, A&&... args)
-    {
-        mmx_guard<flags> guard { };
-        return std::forward<F>(func)(std::forward<A>(args)...);
     }
 }
 
