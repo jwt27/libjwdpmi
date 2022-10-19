@@ -10,7 +10,7 @@
 #include <array>
 #include <mmintrin.h>
 #include <xmmintrin.h>
-#include <jw/simd.h>
+#include <jw/mmx.h>
 #include <jw/math.h>
 
 namespace jw
@@ -68,22 +68,7 @@ namespace jw
 #       else
 #           define PIXEL_FUNCTION [[gnu::hot, gnu::always_inline]]
 #       endif
-#       ifdef HAVE__MMX__
-#           ifdef HAVE__SSE__
-#               define MMX_FUNCTION [[gnu::hot, gnu::sseregparm, gnu::noinline]]
-#           else
-#               define MMX_FUNCTION [[gnu::hot, gnu::noinline]]
-#           endif
-#       else
-#           define MMX_FUNCTION PIXEL_FUNCTION
-#       endif
 
-        template<simd flags = default_simd(), typename F, typename... A>
-        MMX_FUNCTION inline decltype(auto) mmx_function(F&& func, A&&... args)
-        {
-            mmx_guard<flags> guard { };
-            return std::forward<F>(func)(std::forward<A>(args)...);
-        }
 
         template<typename P>
         struct alignas(P) [[gnu::packed, gnu::may_alias]] pixel : public P
@@ -92,6 +77,8 @@ namespace jw
 
             template<std::size_t N, typename VT>
             using V [[gnu::vector_size(N * sizeof(VT)), gnu::may_alias]] = VT;
+
+            using T = typename P::T;
 
             static constexpr auto cast_PT(auto v) noexcept { return static_cast<typename P::T>(v); }
 
@@ -143,7 +130,7 @@ namespace jw
                 }
                 else if constexpr (flags.match(simd::mmx) and std::is_integral_v<typename P::T> and std::is_integral_v<typename U::T>)
                 {
-                    return mmx_function<flags>([this, &other] { return *this = m64(m64_blend<U>(m64(), other.m64())); });
+                    return mmx_function<flags>([this, &other] { return *this = m64(m64_blend<U, flags>(m64(), other.m64())); });
                 }
                 else return do_blend_vector();
             }
@@ -161,26 +148,30 @@ namespace jw
                     using VT = std::conditional_t<std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>, float, std::uint32_t>;
                     V<4, VT> src = vector_premul<VT>(other.template vector<VT>());
                     V<4, VT> dst = vector_premul<VT>(vector<VT>());
-                    return *this = vector<VT>(vector_blend<U, VT>(dst, src));
+                    *this = vector<VT>(vector_blend<U, VT>(dst, src));
                 };
 
-                if (std::is_constant_evaluated()) return do_blend_vector();
-
-                if constexpr (flags.match(simd::sse) and (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>))
+                if (std::is_constant_evaluated())
+                {
+                    do_blend_vector();
+                }
+                else if constexpr (flags.match(simd::sse) and (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>))
                 {
                     auto do_blend = [this, &other]()
                     {
-                        return *this = m128(m128_blend<U>(m128_premul(m128()), m128_premul(other.m128())));
+                        *this = m128(m128_blend<U>(m128_premul(m128()), m128_premul(other.m128())));
                     };
                     if constexpr (std::is_integral_v<typename P::T> or std::is_integral_v<typename U::T>)
-                        return mmx_function<flags>([&do_blend] { return do_blend(); });
-                    else return do_blend();
+                        mmx_function<flags>([&do_blend] { do_blend(); });
+                    else do_blend();
                 }
                 else if constexpr (flags.match(simd::mmx) and std::is_integral_v<typename P::T> and std::is_integral_v<typename U::T>)
                 {
-                    return mmx_function<flags>([this, &other] { return *this = m64(m64_blend<U>(m64_premul(m64()), m64_premul(other.m64()))); });
+                    mmx_function<flags>([this, &other] { *this = m64(m64_blend<U, flags>(m64_premul<flags>(m64()), m64_premul<flags>(other.m64()))); });
                 }
-                else return do_blend_vector();
+                else do_blend_vector();
+
+                return *this;
             }
 
             template<simd flags = default_simd()>
@@ -198,7 +189,7 @@ namespace jw
 
                 if constexpr (flags.match(simd::sse) and std::is_floating_point_v<typename P::T>)* this = m128(m128_premul(m128()));
                 else if constexpr (flags.match(simd::mmx) and not std::is_floating_point_v<typename P::T>)
-                    return mmx_function<flags>([this] { return *this = m64(m64_premul(m64())); });
+                    return mmx_function<flags>([this] { return *this = m64(m64_premul<flags>(m64())); });
                 else return do_premul_vector();
             }
 
@@ -310,50 +301,41 @@ namespace jw
             template <typename U>
             PIXEL_FUNCTION static constexpr __m128 m128_cast_to(__m128 src) noexcept
             {
-                constexpr __m128 cast = reinterpret_cast<__m128>(pixel<U>::template vector_max<float>(P::ax) * (1.0f / vector_max<float>(U::ax or 1.0f)));
+                constexpr __m128 cast = reinterpret_cast<__m128>(pixel<U>::template vector_max<float>(P::ax) * (1.0f / vector_max<float>(U::ax > 0 ? U::ax : 1.0f)));
                 src = _mm_mul_ps(src, cast);
-                if constexpr (pixel<U>::has_alpha() and not has_alpha()) src = _mm_setr_ps(src[0], src[1], src[2], static_cast<float>(U::ax));
+                if constexpr (pixel<U>::has_alpha() and not has_alpha())
+                    src = _mm_setr_ps(src[0], src[1], src[2], static_cast<float>(U::ax));
                 return src;
             }
 
-            template <typename U, simd flags = default_simd()>
+            template <typename U, simd flags>
             PIXEL_FUNCTION static constexpr __m64 m64_cast_to(__m64 src) noexcept
             {
-                constexpr auto mullo = reinterpret_cast<__m64>(pixel<U>::template vector_max<std::uint16_t>(P::ax));
-                constexpr auto mulhi = reinterpret_cast<__m64>(vector_max_reciprocal<17, std::uint16_t, 15>(U::ax | 1));
-                auto vector_max_contains = [](std::uint16_t value)
+                constexpr bool include_alpha = has_alpha() and pixel<U>::has_alpha();
+
+                constexpr std::array<std::uint16_t, 4> mul
                 {
-                    auto v = vector_max<std::uint16_t>(U::ax | 1);
-                    for (auto i = 0; i < 4; ++i) if (v[i] == value) return true;
-                    return false;
+                    static_cast<std::uint16_t>(U::bx),
+                    static_cast<std::uint16_t>(U::gx),
+                    static_cast<std::uint16_t>(U::rx),
+                    static_cast<std::uint16_t>(include_alpha ? U::ax : 0)
                 };
 
-                src = _mm_mullo_pi16(src, mullo);
-                auto dst = _mm_mulhi_pi16(src, mulhi);
-                dst = _mm_srli_pi16(_mm_adds_pu8(dst, _mm_set1_pi16(1)), 1);
+                constexpr std::array<std::uint16_t, 4> div
+                {
+                    static_cast<std::uint16_t>(P::bx),
+                    static_cast<std::uint16_t>(P::gx),
+                    static_cast<std::uint16_t>(P::rx),
+                    static_cast<std::uint16_t>(include_alpha ? P::ax : 1)
+                };
 
-                if constexpr (vector_max_contains(1))
-                {
-                    constexpr auto is1 = reinterpret_cast<__m64>(vector_max<std::uint16_t>(U::ax) == 1);
-                    auto v1 = _mm_and_si64(src, is1);
-                    dst = _mm_or_si64(_mm_andnot_si64(is1, dst), v1);
-                }
-                if constexpr (vector_max_contains(3))
-                {
-                    constexpr auto mulhi3 = reinterpret_cast<__m64>(vector_max_reciprocal<16, std::uint16_t, 15>(U::ax | 1));
-                    constexpr auto is3 = reinterpret_cast<__m64>(vector_max<std::uint16_t>() == 3);
-                    auto v3 = _mm_mulhi_pi16(_mm_and_si64(src, is3), mulhi3);
-                    dst = _mm_or_si64(_mm_andnot_si64(is3, dst), v3);
-                }
+                constexpr auto src_max = component_max(include_alpha);
+
+                __m64 dst = mmx_muldiv_pu16<flags, true, mul, div, src_max>(src);
+
                 if constexpr (pixel<U>::has_alpha() and not has_alpha())
-                {
-                    if constexpr (flags.match(simd::mmx2)) dst = _mm_insert_pi16(dst, U::ax, 3);
-                    else
-                    {
-                        dst = _mm_and_si64(dst, _mm_setr_pi16(0xffff, 0xffff, 0xffff, 0));
-                        dst = _mm_or_si64(dst, _mm_setr_pi16(0, 0, 0, U::ax));
-                    }
-                }
+                    dst = mmx_insert_constant_pi16<flags, 3, U::ax>(dst);
+
                 return dst;
             }
 
@@ -362,7 +344,7 @@ namespace jw
             {
                 if constexpr (std::is_floating_point_v<VT>)
                 {
-                    src *= pixel<U>::template vector_max<VT>(P::ax) * (1.0f / vector_max<VT>(U::ax or 1.0f));
+                    src *= pixel<U>::template vector_max<VT>(P::ax) * (1.0f / vector_max<VT>(U::ax > 0 ? U::ax : 1.0f));
                 }
                 else
                 {
@@ -386,25 +368,16 @@ namespace jw
                 return src;
             }
 
+            template<simd flags>
             PIXEL_FUNCTION static constexpr __m64 m64_premul(__m64 src) noexcept
             {
                 if constexpr (not has_alpha()) return src;
-                constexpr auto mask = shuffle_mask(3, 3, 3, 3);
-                auto scalar_a = reinterpret_cast<V<4, std::uint16_t>>(src)[3];
-                auto a = _mm_shuffle_pi16(src, mask);
-                src = _mm_mullo_pi16(src, a);
-                if constexpr (P::ax == 3)
-                {
-                    constexpr auto ax = vector_reciprocal<16, std::uint16_t, 15>(P::ax);
-                    src = _mm_mulhi_pi16(src, reinterpret_cast<__m64>(ax));
-                }
-                else if constexpr (P::ax > 3)
-                {
-                    constexpr auto ax = vector_reciprocal<17, std::uint16_t, 15>(P::ax);
-                    src = _mm_mulhi_pi16(src, reinterpret_cast<__m64>(ax));
-                    src = _mm_srli_pi16(_mm_adds_pu8(src, _mm_set1_pi16(1)), 1);
-                }
-                src = _mm_insert_pi16(src, scalar_a, 3);
+                constexpr std::uint16_t max = std::max({ P::bx, P::gx, P::rx, P::ax });
+                const std::uint16_t a = mmx_extract_pi16<flags, 3>(src);
+                const __m64 va = _mm_setr_pi16(a, a, a, P::ax);
+                src = _mm_mullo_pi16(src, va);
+                src = mmx_div_scalar_pu16<flags, true, P::ax, max * P::ax>(src);
+                src = mmx_insert_pi16<flags, 3>(src, a);
                 return src;
             }
 
@@ -446,21 +419,11 @@ namespace jw
             template <typename U, simd flags>
             PIXEL_FUNCTION constexpr __m64 m64_blend(__m64 dst, __m64 src)
             {
-                auto a = _mm_set1_pi16(U::ax - reinterpret_cast<V<4, std::uint16_t>>(src)[3]);
-
+                constexpr std::uint16_t max = std::max({ P::bx, P::gx, P::rx, P::ax });
+                auto a = _mm_set1_pi16(U::ax - mmx_extract_pi16<flags, 3>(src));
                 if constexpr (not std::is_same_v<P, U>) src = pixel<U>::template m64_cast_to<P, flags>(src);
                 dst = _mm_mullo_pi16(dst, a);
-                if constexpr (U::ax == 3)
-                {
-                    constexpr auto ax = vector_reciprocal<16, std::uint16_t, 15>(U::ax);
-                    dst = _mm_mulhi_pi16(dst, reinterpret_cast<__m64>(ax));
-                }
-                else if constexpr (U::ax != 1)
-                {
-                    constexpr auto ax = vector_reciprocal<17, std::uint16_t, 15>(U::ax);
-                    dst = _mm_mulhi_pi16(dst, reinterpret_cast<__m64>(ax));
-                    dst = _mm_srli_pi16(_mm_adds_pu8(dst, _mm_set1_pi16(1)), 1);
-                }
+                dst = mmx_div_scalar_pu16<flags, true, U::ax, max * U::ax>(dst);
                 dst = _mm_adds_pu8(dst, src);
                 return dst;
             }
@@ -486,6 +449,20 @@ namespace jw
                     dst += src;
                 }
                 return dst;
+            }
+
+            static consteval T component_max(bool with_alpha) noexcept
+            {
+                T x = std::max({ P::bx, P::gx, P::rx });
+                if constexpr (has_alpha()) if (with_alpha) x = std::max(x, P::ax);
+                return x;
+            }
+
+            static consteval T component_min(bool with_alpha) noexcept
+            {
+                T x = std::min({ P::bx, P::gx, P::rx });
+                if constexpr (has_alpha()) if (with_alpha) x = std::min(x, P::ax);
+                return x;
             }
 
             template<std::size_t bits, typename VT = std::uint16_t, std::size_t maxbits = bits>
