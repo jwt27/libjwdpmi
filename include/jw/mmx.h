@@ -2,9 +2,12 @@
 /* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
+#include <bit>
+#include <array>
 #include <mmintrin.h>
 #include <mm3dnow.h>
 #include <jw/simd.h>
+#include <jw/math.h>
 
 // These functions emulate the "mmx2" intrinsics in <xmmintrin.h>.  Those have
 // a target("sse") attribute, and can not be used with target("3dnowa").
@@ -153,5 +156,138 @@ namespace jw
         dst = _mm_and_si64(dst, reinterpret_cast<__m64>(and_mask));
         dst = _mm_or_si64 (dst, reinterpret_cast<__m64>( or_mask));
         return dst;
+    }
+
+    // Round an unsigned fixed-point MMX vector.
+    template<simd flags, unsigned frac_bits>
+    [[gnu::always_inline]] inline __m64 mmx_round_pu16(__m64 src)
+    {
+        static_assert(frac_bits > 0);
+        constexpr unsigned x = 1 << (frac_bits - 1);
+        constexpr simd_vector<std::int16_t, 4> add { x, x, x, x };
+        return _mm_srli_pi16(_mm_adds_pu16(src, reinterpret_cast<__m64>(add)), frac_bits);
+    }
+
+    // Round a signed fixed-point MMX vector.
+    template<simd flags, unsigned frac_bits>
+    [[gnu::always_inline]] inline __m64 mmx_round_pi16(__m64 src)
+    {
+        static_assert(frac_bits > 0);
+        constexpr unsigned x = 1 << (frac_bits - 1);
+        constexpr simd_vector<std::int16_t, 4> add { x, x, x, x };
+        return _mm_srai_pi16(_mm_adds_pi16(src, reinterpret_cast<__m64>(add)), frac_bits);
+    }
+
+    // Multiply an unsigned MMX vector by a floating-point constant, with rounding.
+    template<simd flags, bool rounding, std::array<long double, 4> mul, std::uint16_t input_max>
+    [[gnu::always_inline]] inline __m64 mmx_fmul_pu16(__m64 src) noexcept
+    {
+        constexpr bool input_overflow = input_max > 0x7fff;
+
+        constexpr auto product = [](long double x) constexpr
+        {
+            return std::array<long double, 4> { x * mul[0], x * mul[1], x * mul[2], x * mul[3] };
+        };
+
+        constexpr std::uint16_t output_max = [product] constexpr
+        {
+            auto x = product(input_max);
+            return std::max({ round(x[0]), round(x[1]), round(x[2]), round(x[3]) });
+        }();
+
+        constexpr auto factor = [product](unsigned frac_bits) consteval
+        {
+            auto x = product(1 << frac_bits);
+            simd_vector<std::uint16_t, 4> v
+            {
+                static_cast<std::uint16_t>(round(x[0])),
+                static_cast<std::uint16_t>(round(x[1])),
+                static_cast<std::uint16_t>(round(x[2])),
+                static_cast<std::uint16_t>(round(x[3]))
+            };
+            return reinterpret_cast<__m64>(v);
+        };
+
+        constexpr auto max_frac_bits = [](bool unsigned_mul) consteval
+        {
+            constexpr auto mul_max = std::max({ mul[0], mul[1], mul[2], mul[3] });
+            unsigned max_bits = unsigned_mul ? 16 : 15;
+            unsigned max_frac = ((1 << max_bits) - 1) / mul_max;
+            return std::bit_width(max_frac) - 1;
+        };
+
+        constexpr auto frac_bits = [output_max](unsigned desired_bits) consteval
+        {
+            unsigned dst_bits = std::bit_width(output_max);
+            return desired_bits < 16 ? std::min(16 - dst_bits, desired_bits) : desired_bits;
+        };
+
+        if constexpr (flags.match(simd::amd3dnow) and max_frac_bits(false) >= 16 and rounding)
+        {
+            src = _m_pmulhrw(src, factor(16));
+        }
+        else if constexpr (flags.match(simd::mmx2) and max_frac_bits(true) >= 16 + rounding)
+        {
+            src = mmx2_mulhi_pu16(src, factor(16 + rounding));
+            if constexpr (rounding) src = mmx_round_pu16<flags, 1>(src);
+        }
+        else if constexpr (max_frac_bits(false) >= 16 + rounding + input_overflow)
+        {
+            if constexpr (input_overflow) src = _mm_srli_pi16(src, 1);
+            src = _mm_mulhi_pi16(src, factor(16 + rounding + input_overflow));
+            if constexpr (rounding) src = mmx_round_pu16<flags, 1>(src);
+        }
+        else
+        {
+            if constexpr (input_overflow) src = src = _mm_srli_pi16(src, 1);
+            constexpr unsigned bits = frac_bits(15);
+            static_assert(bits > rounding + input_overflow);
+            src = _mm_mullo_pi16(src, factor(bits));
+            if constexpr (rounding) src = mmx_round_pu16<flags, bits - input_overflow>(src);
+            else src = _mm_srli_pi16(src, bits - input_overflow);
+        }
+
+        return src;
+    }
+
+    // Multiply and divide an unsigned MMX vector by unsigned constants, with rounding.
+    template<simd flags, bool round, std::array<std::uint16_t, 4> mul, std::array<std::uint16_t, 4> div, std::uint16_t input_max>
+    [[gnu::always_inline]] inline __m64 mmx_muldiv_pu16(__m64 src) noexcept
+    {
+        constexpr std::array<long double, 4> factor
+        {
+            static_cast<long double>(mul[0]) / div[0],
+            static_cast<long double>(mul[1]) / div[1],
+            static_cast<long double>(mul[2]) / div[2],
+            static_cast<long double>(mul[3]) / div[3]
+        };
+        return mmx_fmul_pu16<flags, round, factor, input_max>(src);
+    }
+
+    // Multiply and divide an unsigned MMX vector by unsigned scalar constants, with rounding.
+    template<simd flags, bool round, std::uint16_t mul, std::uint16_t div, std::uint16_t input_max>
+    [[gnu::always_inline]] inline __m64 mmx_muldiv_scalar_pu16(__m64 src) noexcept
+    {
+        constexpr std::array<std::uint16_t, 4> vmul { mul, mul, mul, mul };
+        constexpr std::array<std::uint16_t, 4> vdiv { div, div, div, div };
+        return mmx_muldiv_pu16<flags, round, vmul, vdiv, input_max>(src);
+    }
+
+    // Divide an unsigned MMX vector by an unsigned constant, with rounding.
+    template<simd flags, bool round, std::array<std::uint16_t, 4> div, std::uint16_t input_max>
+    [[gnu::always_inline]] inline __m64 mmx_div_pu16(__m64 src) noexcept
+    {
+        constexpr std::array<std::uint16_t, 4> vmul { 1, 1, 1, 1 };
+        return mmx_muldiv_pu16<flags, round, vmul, div, input_max>(src);
+    }
+
+    // Divide an unsigned MMX vector by an unsigned scalar constant, with rounding.
+    template<simd flags, bool round, std::uint16_t div, std::uint16_t input_max>
+    [[gnu::always_inline]] inline __m64 mmx_div_scalar_pu16(__m64 src) noexcept
+    {
+        if constexpr (div == 1) return src;
+        constexpr std::array<std::uint16_t, 4> vmul { 1, 1, 1, 1 };
+        constexpr std::array<std::uint16_t, 4> vdiv { div, div, div, div };
+        return mmx_muldiv_pu16<flags, round, vmul, vdiv, input_max>(src);
     }
 }
