@@ -75,9 +75,6 @@ namespace jw
         {
             template<typename> friend struct pixel;
 
-            template<std::size_t N, typename VT>
-            using V [[gnu::vector_size(N * sizeof(VT)), gnu::may_alias]] = VT;
-
             using T = typename P::T;
 
             static constexpr auto cast_PT(auto v) noexcept { return static_cast<typename P::T>(v); }
@@ -247,7 +244,7 @@ namespace jw
                 }
                 else
                 {
-                    auto v2 = reinterpret_cast<V<8, byte>&>(v);
+                    auto v2 = reinterpret_cast<simd_vector<std::uint8_t, 8>&>(v);
                     pixel result { v2[2], v2[1], v2[0], v2[3] };
                     return result;
                 }
@@ -277,7 +274,7 @@ namespace jw
             }
 
             template<typename VT = std::uint16_t>
-            PIXEL_FUNCTION static constexpr pixel vector(V<4, VT> src) noexcept
+            PIXEL_FUNCTION static constexpr pixel vector(simd_vector<VT, 4> src) noexcept
             {
                 if constexpr ((std::is_same_v<VT, float> and std::is_same_v<typename P::T, float>) or (sizeof(VT) == 1 and byte_aligned()))
                 {
@@ -287,14 +284,14 @@ namespace jw
             }
 
             template<typename VT = std::uint16_t>
-            PIXEL_FUNCTION constexpr V<4, VT> vector() const noexcept
+            PIXEL_FUNCTION constexpr simd_vector<VT, 4> vector() const noexcept
             {
-                V<4, VT> src;
+                simd_vector<VT, 4> src;
                 if constexpr ((std::is_same_v<VT, float> and std::is_same_v<typename P::T, float>) or (sizeof(VT) == 1 and byte_aligned()))
-                    src = *reinterpret_cast<const V<4, VT>*>(this);
+                    src = *reinterpret_cast<const simd_vector<VT, 4>*>(this);
                 else if constexpr (has_alpha())
-                    src = V<4, VT> { static_cast<VT>(this->b), static_cast<VT>(this->g), static_cast<VT>(this->r), static_cast<VT>(this->a), };
-                else src = V<4, VT> { static_cast<VT>(this->b), static_cast<VT>(this->g), static_cast<VT>(this->r), 0 };
+                    src = simd_vector<VT, 4> { static_cast<VT>(this->b), static_cast<VT>(this->g), static_cast<VT>(this->r), static_cast<VT>(this->a), };
+                else src = simd_vector<VT, 4> { static_cast<VT>(this->b), static_cast<VT>(this->g), static_cast<VT>(this->r), 0 };
                 return src;
             }
 
@@ -340,7 +337,7 @@ namespace jw
             }
 
             template <typename U, typename VT>
-            PIXEL_FUNCTION static constexpr V<4, VT> vector_cast_to(V<4, VT> src) noexcept
+            PIXEL_FUNCTION static constexpr simd_vector<VT, 4> vector_cast_to(simd_vector<VT, 4> src) noexcept
             {
                 if constexpr (std::is_floating_point_v<VT>)
                 {
@@ -355,13 +352,13 @@ namespace jw
                     src >>= rbits;
                 }
                 if constexpr (has_alpha()) return src;
-                else return V<4, VT> { src[0], src[1], src[2], static_cast<VT>(U::ax) };
+                else return simd_vector<VT, 4> { src[0], src[1], src[2], static_cast<VT>(U::ax) };
             }
 
             PIXEL_FUNCTION static constexpr __m128 m128_premul(__m128 src) noexcept
             {
                 if constexpr (not has_alpha()) return src;
-                constexpr auto ax = reinterpret_cast<__m128>(1.0f / V<4, float> { P::ax, P::ax, P::ax, 1 });
+                constexpr auto ax = reinterpret_cast<__m128>(1.0f / simd_vector<float, 4> { P::ax, P::ax, P::ax, 1 });
                 auto srca = _mm_setr_ps(src[3], src[3], src[3], 1);
                 src = _mm_mul_ps(src, srca);
                 src = _mm_mul_ps(src, ax);
@@ -382,13 +379,13 @@ namespace jw
             }
 
             template <typename VT>
-            PIXEL_FUNCTION static constexpr V<4, VT> vector_premul(V<4, VT> src) noexcept
+            PIXEL_FUNCTION static constexpr simd_vector<VT, 4> vector_premul(simd_vector<VT, 4> src) noexcept
             {
                 if constexpr (not has_alpha()) return src;
-                auto a = V<4, VT> { src[3], src[3], src[3], 1 };
+                auto a = simd_vector<VT, 4> { src[3], src[3], src[3], 1 };
                 if constexpr (std::is_floating_point_v<VT>)
                 {
-                    constexpr auto ax = 1.0f / V<4, float> { P::ax, P::ax, P::ax, 1 };
+                    constexpr auto ax = 1.0f / simd_vector<float, 4> { P::ax, P::ax, P::ax, 1 };
                     src *= a * ax;
                 }
                 else
@@ -406,12 +403,15 @@ namespace jw
             template <typename U>
             PIXEL_FUNCTION constexpr __m128 m128_blend(__m128 dst, __m128 src)
             {
-                constexpr auto ax = reinterpret_cast<__m128>(1.0f / V<4, float> { U::ax, U::ax, U::ax, U::ax });
                 auto a = _mm_sub_ps(_mm_set1_ps(U::ax), _mm_set1_ps(src[3]));
 
                 if constexpr (not std::is_same_v<P, U>) src = pixel<U>::template m128_cast_to<P>(src);
                 dst = _mm_mul_ps(dst, a);
-                dst = _mm_mul_ps(dst, ax);
+                if constexpr (U::ax != 1)
+                {
+                    constexpr auto ax = reinterpret_cast<__m128>(1.0f / simd_vector<float, 4> { U::ax, U::ax, U::ax, U::ax });
+                    dst = _mm_mul_ps(dst, ax);
+                }
                 dst = _mm_add_ps(dst, src);
                 return dst;
             }
@@ -429,7 +429,7 @@ namespace jw
             }
 
             template <typename U, typename VT>
-            PIXEL_FUNCTION static constexpr V<4, VT> vector_blend(V<4, VT> dst, V<4, VT> src) noexcept
+            PIXEL_FUNCTION static constexpr simd_vector<VT, 4> vector_blend(simd_vector<VT, 4> dst, simd_vector<VT, 4> src) noexcept
             {
                 if constexpr (not std::is_same_v<P, U>) src = pixel<U>::template vector_cast_to<P, VT>(src);
                 if constexpr (std::is_floating_point_v<VT>)
@@ -469,7 +469,7 @@ namespace jw
             static consteval auto vector_reciprocal(VT v0, VT v1, VT v2, VT v3) noexcept
             {
                 auto r = [](VT v) -> VT { return std::min(((1ul << bits) + v - 1) / v, (1ul << maxbits) - 1); };
-                return V<4, VT> { r(v0), r(v1), r(v2), r(v3) };
+                return simd_vector<VT, 4> { r(v0), r(v1), r(v2), r(v3) };
             }
 
             template<std::size_t bits, typename VT = std::uint16_t, std::size_t maxbits = bits>
@@ -481,7 +481,7 @@ namespace jw
             template<typename VT = float>
             static consteval auto vector_max(VT noalpha = 1) noexcept
             {
-                return V<4, VT> { P::bx, P::gx, P::rx, static_cast<VT>(has_alpha() ? P::ax : noalpha) };
+                return simd_vector<VT, 4> { P::bx, P::gx, P::rx, static_cast<VT>(has_alpha() ? P::ax : noalpha) };
             }
 
             template<std::size_t bits, typename VT = std::uint16_t, std::size_t maxbits = bits>
