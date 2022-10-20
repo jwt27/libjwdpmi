@@ -309,22 +309,8 @@ namespace jw
             PIXEL_FUNCTION static constexpr __m64 m64_cast_to(__m64 src) noexcept
             {
                 constexpr bool include_alpha = has_alpha() and pixel<U>::has_alpha();
-
-                constexpr std::array<std::uint16_t, 4> mul
-                {
-                    static_cast<std::uint16_t>(U::bx),
-                    static_cast<std::uint16_t>(U::gx),
-                    static_cast<std::uint16_t>(U::rx),
-                    static_cast<std::uint16_t>(include_alpha ? U::ax : 0)
-                };
-
-                constexpr std::array<std::uint16_t, 4> div
-                {
-                    static_cast<std::uint16_t>(P::bx),
-                    static_cast<std::uint16_t>(P::gx),
-                    static_cast<std::uint16_t>(P::rx),
-                    static_cast<std::uint16_t>(include_alpha ? P::ax : 1)
-                };
+                constexpr std::array<int, 4> mul { U::bx, U::gx, U::rx, include_alpha ? U::ax : 0 };
+                constexpr std::array<int, 4> div { P::bx, P::gx, P::rx, include_alpha ? P::ax : 1 };
 
                 constexpr auto src_max = component_max(include_alpha);
 

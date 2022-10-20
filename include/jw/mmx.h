@@ -251,7 +251,7 @@ namespace jw
     }
 
     // Multiply and divide an unsigned MMX vector by unsigned constants, with rounding.
-    template<simd flags, bool round, std::array<std::uint16_t, 4> mul, std::array<std::uint16_t, 4> div, std::uint16_t input_max>
+    template<simd flags, bool round, std::array<int, 4> mul, std::array<int, 4> div, std::uint16_t input_max>
     [[gnu::always_inline]] inline __m64 mmx_muldiv_pu16(__m64 src) noexcept
     {
         constexpr std::array<long double, 4> factor
@@ -265,29 +265,29 @@ namespace jw
     }
 
     // Multiply and divide an unsigned MMX vector by unsigned scalar constants, with rounding.
-    template<simd flags, bool round, std::uint16_t mul, std::uint16_t div, std::uint16_t input_max>
+    template<simd flags, bool round, int mul, int div, std::uint16_t input_max>
     [[gnu::always_inline]] inline __m64 mmx_muldiv_scalar_pu16(__m64 src) noexcept
     {
-        constexpr std::array<std::uint16_t, 4> vmul { mul, mul, mul, mul };
-        constexpr std::array<std::uint16_t, 4> vdiv { div, div, div, div };
+        constexpr std::array<int, 4> vmul { mul, mul, mul, mul };
+        constexpr std::array<int, 4> vdiv { div, div, div, div };
         return mmx_muldiv_pu16<flags, round, vmul, vdiv, input_max>(src);
     }
 
     // Divide an unsigned MMX vector by an unsigned constant, with rounding.
-    template<simd flags, bool round, std::array<std::uint16_t, 4> div, std::uint16_t input_max>
+    template<simd flags, bool round, std::array<int, 4> div, std::uint16_t input_max>
     [[gnu::always_inline]] inline __m64 mmx_div_pu16(__m64 src) noexcept
     {
-        constexpr std::array<std::uint16_t, 4> vmul { 1, 1, 1, 1 };
+        constexpr std::array<int, 4> vmul { 1, 1, 1, 1 };
         return mmx_muldiv_pu16<flags, round, vmul, div, input_max>(src);
     }
 
     // Divide an unsigned MMX vector by an unsigned scalar constant, with rounding.
-    template<simd flags, bool round, std::uint16_t div, std::uint16_t input_max>
+    template<simd flags, bool round, int div, std::uint16_t input_max>
     [[gnu::always_inline]] inline __m64 mmx_div_scalar_pu16(__m64 src) noexcept
     {
         if constexpr (div == 1) return src;
-        constexpr std::array<std::uint16_t, 4> vmul { 1, 1, 1, 1 };
-        constexpr std::array<std::uint16_t, 4> vdiv { div, div, div, div };
+        constexpr std::array<int, 4> vmul { 1, 1, 1, 1 };
+        constexpr std::array<int, 4> vdiv { div, div, div, div };
         return mmx_muldiv_pu16<flags, round, vmul, vdiv, input_max>(src);
     }
 }
