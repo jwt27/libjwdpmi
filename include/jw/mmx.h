@@ -162,8 +162,8 @@ namespace jw
     template<simd flags, unsigned frac_bits>
     [[gnu::always_inline]] inline __m64 mmx_round_pu16(__m64 src)
     {
-        static_assert(frac_bits > 0);
-        constexpr unsigned x = 1 << (frac_bits - 1);
+        static_assert (frac_bits < 16);
+        constexpr std::int16_t x = 1 << (frac_bits - 1);
         constexpr simd_vector<std::int16_t, 4> add { x, x, x, x };
         return _mm_srli_pi16(_mm_adds_pu16(src, reinterpret_cast<__m64>(add)), frac_bits);
     }
@@ -172,8 +172,8 @@ namespace jw
     template<simd flags, unsigned frac_bits>
     [[gnu::always_inline]] inline __m64 mmx_round_pi16(__m64 src)
     {
-        static_assert(frac_bits > 0);
-        constexpr unsigned x = 1 << (frac_bits - 1);
+        static_assert (frac_bits < 16);
+        constexpr std::int16_t x = 1 << (frac_bits - 1);
         constexpr simd_vector<std::int16_t, 4> add { x, x, x, x };
         return _mm_srai_pi16(_mm_adds_pi16(src, reinterpret_cast<__m64>(add)), frac_bits);
     }
@@ -189,7 +189,7 @@ namespace jw
             return std::array<long double, 4> { x * mul[0], x * mul[1], x * mul[2], x * mul[3] };
         };
 
-        constexpr std::uint16_t output_max = [product] constexpr
+        constexpr std::uint16_t output_max = [product]() constexpr
         {
             auto x = product(input_max);
             return std::max({ round(x[0]), round(x[1]), round(x[2]), round(x[3]) });
@@ -208,43 +208,41 @@ namespace jw
             return reinterpret_cast<__m64>(v);
         };
 
-        constexpr auto max_frac_bits = [](bool unsigned_mul) consteval
+        constexpr auto frac_bits = [](bool unsigned_mul) consteval
         {
-            constexpr auto mul_max = std::max({ mul[0], mul[1], mul[2], mul[3] });
+            auto mul_max = std::max({ mul[0], mul[1], mul[2], mul[3] });
             unsigned max_bits = unsigned_mul ? 16 : 15;
             unsigned max_frac = ((1 << max_bits) - 1) / mul_max;
-            return std::bit_width(max_frac) - 1;
-        };
-
-        constexpr auto frac_bits = [output_max](unsigned desired_bits) consteval
-        {
+            unsigned bits = std::bit_width(max_frac) - 1;
             unsigned dst_bits = std::bit_width(output_max);
-            return desired_bits < 16 ? std::min(16 - dst_bits, desired_bits) : desired_bits;
+            return std::min((bits < 16 ? 16 : 32) - dst_bits, bits);
         };
 
-        if constexpr (flags.match(simd::amd3dnow) and max_frac_bits(false) >= 16 and rounding)
+        if constexpr (flags.match(simd::amd3dnow) and frac_bits(false) >= 16 and rounding and not input_overflow)
         {
             src = _m_pmulhrw(src, factor(16));
         }
-        else if constexpr (flags.match(simd::mmx2) and max_frac_bits(true) >= 16 + rounding)
+        else if constexpr (flags.match(simd::mmx2) and frac_bits(true) >= 16 + rounding)
         {
-            src = mmx2_mulhi_pu16(src, factor(16 + rounding));
-            if constexpr (rounding) src = mmx_round_pu16<flags, 1>(src);
+            constexpr unsigned bits = rounding ? frac_bits(true) : 16;
+            src = mmx2_mulhi_pu16(src, factor(bits));
+            if constexpr (rounding) src = mmx_round_pu16<flags, bits - 16>(src);
         }
-        else if constexpr (max_frac_bits(false) >= 16 + rounding + input_overflow)
+        else if constexpr (frac_bits(false) >= 16 + rounding + input_overflow)
         {
+            constexpr unsigned bits = rounding ? frac_bits(false) : 16 + input_overflow;
             if constexpr (input_overflow) src = _mm_srli_pi16(src, 1);
-            src = _mm_mulhi_pi16(src, factor(16 + rounding + input_overflow));
-            if constexpr (rounding) src = mmx_round_pu16<flags, 1>(src);
+            src = _mm_mulhi_pi16(src, factor(bits));
+            if constexpr (rounding) src = mmx_round_pu16<flags, bits - input_overflow - 16>(src);
         }
         else
         {
-            if constexpr (input_overflow) src = src = _mm_srli_pi16(src, 1);
-            constexpr unsigned bits = frac_bits(15);
-            static_assert(bits > rounding + input_overflow);
+            constexpr unsigned bits = frac_bits(true);
+            if constexpr (input_overflow and bits >= 1) src = _mm_srli_pi16(src, 1);
+            constexpr bool do_round = rounding and bits > input_overflow + 1;
             src = _mm_mullo_pi16(src, factor(bits));
-            if constexpr (rounding) src = mmx_round_pu16<flags, bits - input_overflow>(src);
-            else src = _mm_srli_pi16(src, bits - input_overflow);
+            if constexpr (do_round) src = mmx_round_pu16<flags, bits - input_overflow>(src);
+            else if constexpr (bits > input_overflow) src = _mm_srli_pi16(src, bits - input_overflow);
         }
 
         return src;
