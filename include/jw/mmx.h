@@ -242,9 +242,10 @@ namespace jw
         if constexpr (all_one()) return src;
         if constexpr (all_int()) return _mm_mullo_pi16(src, factor(0));
 
-        if constexpr (flags.match(simd::amd3dnow) and frac_bits(false) >= 16 and rounding and not input_overflow)
+        if constexpr (flags.match(simd::amd3dnow) and frac_bits(false) >= 16 + input_overflow and rounding)
         {
-            src = _m_pmulhrw(src, factor(16));
+            if constexpr (input_overflow) src = _mm_srli_pi16(src, 1);
+            src = _m_pmulhrw(src, factor(16 + input_overflow));
         }
         else if constexpr (flags.match(simd::mmx2) and frac_bits(true) >= 16 + rounding)
         {
