@@ -227,6 +227,21 @@ namespace jw
             return std::min((bits < 16 ? 16 : 32) - dst_bits, bits);
         };
 
+        constexpr auto all_one = []() consteval
+        {
+            for (auto f : mul) if (f != 1) return false;
+            return true;
+        };
+
+        constexpr auto all_int = []() consteval
+        {
+            for (auto f : mul) if (static_cast<int>(f) != f) return false;
+            return true;
+        };
+
+        if constexpr (all_one()) return src;
+        if constexpr (all_int()) return _mm_mullo_pi16(src, factor(0));
+
         if constexpr (flags.match(simd::amd3dnow) and frac_bits(false) >= 16 and rounding and not input_overflow)
         {
             src = _m_pmulhrw(src, factor(16));
