@@ -33,13 +33,16 @@ namespace jw
             }
             else
             {
-                for (const auto& i : pal)
+                mmx_function<default_simd()>([pal]
                 {
-                    auto p = static_cast<const pxvga>(i);
-                    dac_data.write(p.r);
-                    dac_data.write(p.g);
-                    dac_data.write(p.b);
-                }
+                    for (const auto& i : pal)
+                    {
+                        const auto p = pxvga::convert<default_simd()>(i);
+                        dac_data.write(p.r);
+                        dac_data.write(p.g);
+                        dac_data.write(p.b);
+                    }
+                });
             }
         }
 
@@ -51,21 +54,23 @@ namespace jw
             {
                 for (auto i = 0; i < 256; ++i)
                 {
-                    auto r = dac_data.read();
-                    auto g = dac_data.read();
-                    auto b = dac_data.read();
-                    result[i] = { r, g, b };
+                    result[i].r = dac_data.read();
+                    result[i].g = dac_data.read();
+                    result[i].b = dac_data.read();
                 }
             }
             else
             {
-                for (auto i = 0; i < 256; ++i)
+                mmx_function<default_simd()>([p = result.data()]
                 {
-                    auto r = dac_data.read();
-                    auto g = dac_data.read();
-                    auto b = dac_data.read();
-                    result[i] = static_cast<px32n>(pxvga { r, g, b });
-                }
+                    for (auto i = 0; i < 256; ++i)
+                    {
+                        auto r = dac_data.read();
+                        auto g = dac_data.read();
+                        auto b = dac_data.read();
+                        p[i] = px32n::convert<default_simd()>(pxvga { r, g, b });
+                    }
+                });
             }
             return result;
         }

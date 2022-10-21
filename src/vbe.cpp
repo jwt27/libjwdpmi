@@ -650,7 +650,11 @@ namespace jw
                 auto* ptr = static_cast<const void*>(pal.data());
                 if (dac_bits < 8)
                 {
-                    for (unsigned i = 0; i < size; ++i) copy[i] = static_cast<pxvga>(pal[i]);
+                    mmx_function<default_simd()>([p = copy.data(), size, pal]
+                    {
+                        for (unsigned i = 0; i < size; ++i)
+                            p[i] = pxvga::convert<default_simd()>(pal[i]);
+                    });
                     ptr = static_cast<const void*>(copy.data());
                 }
 
@@ -675,8 +679,11 @@ namespace jw
                 auto& dos_data = get_dos_data();
                 if (dac_bits < 8)
                 {
-                    for (std::size_t i = 0; i < size; ++i)
-                        new(reinterpret_cast<pxvga*>(dos_data->palette.data() + i)) pxvga { pal[i] };
+                    mmx_function<default_simd()>([p = dos_data->palette.data(), size, pal]
+                    {
+                        for (std::size_t i = 0; i < size; ++i)
+                            reinterpret_cast<pxvga*>(p)[i] = pxvga::convert<default_simd()>(pal[i]);
+                    });
                 }
                 else
                 {
@@ -705,7 +712,11 @@ namespace jw
             auto* ptr = static_cast<const void*>(pal.data());
             if (dac_bits < 8)
             {
-                for (unsigned i = 0; i < size; ++i) copy[i] = static_cast<pxvga>(pal[i]);
+                mmx_function<default_simd()>([p = copy.data(), pal, size]
+                {
+                    for (unsigned i = 0; i < size; ++i)
+                        p[i] = pxvga::convert<default_simd()>(pal[i]);
+                });
                 ptr = static_cast<const void*>(copy.data());
             }
 
@@ -739,7 +750,14 @@ namespace jw
 
             std::array<px32n, 256> result;
             auto* ptr = dos_data->palette.data();
-            if (dac_bits < 8) for (auto i = 0; i < 256; ++i) result[i] = static_cast<px32n>(reinterpret_cast<pxvga*>(ptr)[i]);
+            if (dac_bits < 8)
+            {
+                mmx_function<default_simd()>([p = result.data(), ptr]
+                {
+                    for (auto i = 0; i < 256; ++i)
+                        p[i] = px32n::convert<default_simd()>(reinterpret_cast<pxvga*>(ptr)[i]);
+                });
+            }
             else for (auto i = 0; i < 256; ++i) result[i] = ptr[i];
             return result;
         }

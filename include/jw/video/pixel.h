@@ -89,54 +89,46 @@ namespace jw
             template<typename Q = pixel, std::enable_if_t<not Q::has_alpha(), bool> = { }>
             constexpr pixel(auto cr, auto cg, auto cb) noexcept : P { cast_PT(cb), cast_PT(cg), cast_PT(cr) } { }
 
-            constexpr pixel(const pixel& p) noexcept { assign(p); }
-            constexpr pixel(pixel&& p) noexcept { assign(p); }
-            constexpr pixel& operator=(const pixel& p) noexcept { return assign(p); };
-            constexpr pixel& operator=(pixel&& p) noexcept { return assign(p); };
+            constexpr pixel(const pixel& p) noexcept { assign<simd::none>(p); }
+            constexpr pixel(pixel&& p) noexcept { assign<simd::none>(p); }
+            constexpr pixel& operator=(const pixel& p) noexcept { return assign<simd::none>(p); };
+            constexpr pixel& operator=(pixel&& p) noexcept { return assign<simd::none>(p); };
 
-            template <typename U> constexpr explicit operator pixel<U>() const noexcept { return cast_to<U, default_simd()>(); }
+            template <typename U> constexpr explicit operator pixel<U>() const noexcept { return cast_to<U, simd::none>(); }
 
             static constexpr bool has_alpha() { return P::ax > 0; }
 
-            template<simd flags = default_simd(), typename U>
-            PIXEL_FUNCTION constexpr pixel& blend_premul(const pixel<U>& other)
+            template<simd flags, typename U>
+            PIXEL_FUNCTION static constexpr pixel convert(const pixel<U>& other)
             {
-                if constexpr (not pixel<U>::has_alpha())
-                {
-                    return *this = other.template cast_to<P>();
-                }
+                return other.template cast_to<P, flags>();
+            }
+
+            template<simd flags, typename U>
+            PIXEL_FUNCTION constexpr pixel& blend_premultiplied(const pixel<U>& other)
+            {
+                if constexpr (not pixel<U>::has_alpha()) return *this = other.template cast_to<P>();
+
                 auto do_blend_vector = [this, &other]
                 {
                     using VT = std::conditional_t<std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>, float, std::int32_t>;
-                    return *this = vector<VT>(vector_blend_premul<U, VT>(vector<VT>(), other.template vector<VT>()));
+                    *this = vector<VT>(vector_blend_premul<U, VT>(vector<VT>(), other.template vector<VT>()));
                 };
 
-                if (std::is_constant_evaluated()) return do_blend_vector();
-
-                if constexpr (flags.match(simd::sse) and (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>))
-                {
-                    auto do_blend = [this, &other]()
-                    {
-                        return *this = m128(m128_blend_premul<U>(m128(), other.m128()));
-                    };
-                    if constexpr (std::is_integral_v<typename P::T> or std::is_integral_v<typename U::T>)
-                        return mmx_function<flags>([&do_blend] { return do_blend(); });
-                    else return do_blend();
-                }
+                if (std::is_constant_evaluated())
+                    do_blend_vector();
+                else if constexpr (flags.match(simd::sse) and (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>))
+                    *this = m128(m128_blend_premul<U>(m128(), other.m128()));
                 else if constexpr (flags.match(simd::mmx) and std::is_integral_v<typename P::T> and std::is_integral_v<typename U::T>)
-                {
-                    return mmx_function<flags>([this, &other] { return *this = m64(m64_blend_premul<U, flags>(m64(), other.m64())); });
-                }
-                else return do_blend_vector();
+                    *this = m64(m64_blend_premul<U, flags>(m64(), other.m64()));
+                else do_blend_vector();
+                return *this;
             }
 
-            template<simd flags = default_simd(), typename U>
+            template<simd flags, typename U>
             PIXEL_FUNCTION constexpr pixel& blend(const pixel<U>& other)
             {
-                if constexpr (not pixel<U>::has_alpha())
-                {
-                    return *this = other.template cast_to<P>();
-                }
+                if constexpr (not pixel<U>::has_alpha()) return *this = other.template cast_to<P>();
 
                 auto do_blend_vector = [this, &other]
                 {
@@ -145,29 +137,16 @@ namespace jw
                 };
 
                 if (std::is_constant_evaluated())
-                {
                     do_blend_vector();
-                }
                 else if constexpr (flags.match(simd::sse) and (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>))
-                {
-                    auto do_blend = [this, &other]()
-                    {
-                        *this = m128(m128_blend_straight<U>(m128(), other.m128()));
-                    };
-                    if constexpr (std::is_integral_v<typename P::T> or std::is_integral_v<typename U::T>)
-                        mmx_function<flags>([&do_blend] { do_blend(); });
-                    else do_blend();
-                }
+                    *this = m128(m128_blend_straight<U>(m128(), other.m128()));
                 else if constexpr (flags.match(simd::mmx) and std::is_integral_v<typename P::T> and std::is_integral_v<typename U::T>)
-                {
-                    mmx_function<flags>([this, &other] { *this = m64(m64_blend_straight<U, flags>(m64(), other.m64())); });
-                }
+                    *this = m64(m64_blend_straight<U, flags>(m64(), other.m64()));
                 else do_blend_vector();
-
                 return *this;
             }
 
-            template<simd flags = default_simd()>
+            template<simd flags>
             PIXEL_FUNCTION constexpr pixel& premultiply_alpha()
             {
                 if constexpr (not has_alpha()) return *this;
@@ -175,18 +154,20 @@ namespace jw
                 auto do_premul_vector = [this]
                 {
                     using VT = std::conditional_t<std::is_floating_point_v<typename P::T>, float, std::int32_t>;
-                    return *this = vector<VT>(vector_premul<VT>(vector<VT>()));
+                    *this = vector<VT>(vector_premul<VT>(vector<VT>()));
                 };
 
-                if (std::is_constant_evaluated()) return do_premul_vector();
-
-                if constexpr (flags.match(simd::sse) and std::is_floating_point_v<typename P::T>)* this = m128(m128_premul(m128()));
+                if (std::is_constant_evaluated())
+                    do_premul_vector();
+                if constexpr (flags.match(simd::sse) and std::is_floating_point_v<typename P::T>)
+                    *this = m128(m128_premul(m128()));
                 else if constexpr (flags.match(simd::mmx) and not std::is_floating_point_v<typename P::T>)
-                    return mmx_function<flags>([this] { return *this = m64(m64_premul<flags>(m64())); });
-                else return do_premul_vector();
+                    *this = m64(m64_premul<flags>(m64()));
+                else do_premul_vector();
+                return *this;
             }
 
-            template <simd flags = default_simd(), typename U>
+            template <simd flags, typename U>
             PIXEL_FUNCTION constexpr pixel& assign(const pixel<U>& p) noexcept
             {
                 if constexpr (std::is_same_v<P, U>)
@@ -209,22 +190,12 @@ namespace jw
                     return pixel<U>::template vector<VT>(vector_cast_to<U, VT>(vector<VT>()));
                 };
 
-                if (std::is_constant_evaluated()) return do_cast_vector();
-
-                if constexpr (flags.match(simd::sse) and (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>))
-                {
-                    auto do_cast = [this]()
-                    {
-                        return pixel<U>::m128(m128_cast_to<U>(m128()));
-                    };
-                    if constexpr (std::is_integral_v<typename P::T> or std::is_integral_v<typename U::T>)
-                        return mmx_function<flags>([&do_cast] { return do_cast(); });
-                    else return do_cast();
-                }
+                if (std::is_constant_evaluated())
+                    return do_cast_vector();
+                else if constexpr (flags.match(simd::sse) and (std::is_floating_point_v<typename P::T> or std::is_floating_point_v<typename U::T>))
+                    return pixel<U>::m128(m128_cast_to<U>(m128()));
                 else if constexpr (flags.match(simd::mmx) and (flags.match(simd::sse) or (std::is_integral_v<typename P::T> and std::is_integral_v<typename U::T>)))
-                {
-                    return mmx_function<flags>([this] { return pixel<U>::m64(m64_cast_to<U, flags>(m64())); });
-                }
+                    return pixel<U>::m64(m64_cast_to<U, flags>(m64()));
                 else return do_cast_vector();
             }
 
@@ -683,11 +654,12 @@ namespace jw
         static_assert(sizeof(px8n  ) ==  1);
         static_assert(sizeof(pxvga ) ==  4);
 
+        template<simd flags>
         inline auto generate_px8n_palette() noexcept
         {
             std::array<px32n, 256> result;
             for (unsigned i = 0; i < 256; ++i)
-                result[i] = static_cast<px32n>(*reinterpret_cast<px8n*>(&i));
+                result[i].template assign<flags>(*reinterpret_cast<px8n*>(&i));
             return result;
         }
     }
