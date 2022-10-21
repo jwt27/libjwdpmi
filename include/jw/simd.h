@@ -12,6 +12,11 @@ namespace jw
     template<typename T, std::size_t N>
     using simd_vector [[gnu::vector_size(sizeof(T) * N)]] = T;
 
+    consteval std::uint8_t shuffle_mask(unsigned v0, unsigned v1, unsigned v2, unsigned v3)
+    {
+        return ((v3 & 3) << 6) | ((v2 & 3) << 4) | ((v1 & 3) << 2) | (v0 & 3);
+    }
+
     // Return the SIMD flags available for the default CPU target.
     constexpr inline simd default_simd() noexcept
     {

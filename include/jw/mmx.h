@@ -158,6 +158,15 @@ namespace jw
         return dst;
     }
 
+    template<simd flags, std::uint8_t mask>
+    [[gnu::always_inline]] inline __m64 mmx_shuffle_pi16(__m64 src)
+    {
+        if constexpr (flags.match(simd::mmx2)) return mmx2_shuffle_pi16<mask>(src);
+        constexpr std::array<unsigned, 4> i { (mask >> 0) & 3, (mask >> 2) & 3, (mask >> 4) & 3, (mask >> 6) & 3 };
+        const auto v = reinterpret_cast<simd_vector<std::int16_t, 4>>(src);
+        return _mm_setr_pi16(v[i[0]], v[i[1]], v[i[2]], v[i[3]]);
+    }
+
     // Round an unsigned fixed-point MMX vector.
     template<simd flags, unsigned frac_bits>
     [[gnu::always_inline]] inline __m64 mmx_round_pu16(__m64 src)
