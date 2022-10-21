@@ -586,18 +586,18 @@ namespace jw
             static constexpr bool byte_aligned = true;
         };
 
-        struct [[gnu::packed]] bgra_6668
+        struct [[gnu::packed]] bgra_6660
         {
             using T = unsigned;
             T b : 8;
             T g : 8;
             T r : 8;
-            T a : 8;
+            T : 8;
 
             static constexpr T rx = 63;
             static constexpr T gx = 63;
             static constexpr T bx = 63;
-            static constexpr T ax = 255;
+            static constexpr T ax = 0;
             static constexpr bool byte_aligned = true;
         };
 
@@ -638,7 +638,7 @@ namespace jw
         using px8aa  = pixel<bgra_2222>;     // 6-bit 2:2:2, 2-bit alpha
         using px8a   = pixel<bgra_2321>;     // 7-bit 2:3:2, 1-bit alpha
         using px8n   = pixel<bgr_2330>;      // 8-bit 3:3:2, no alpha
-        using pxvga  = pixel<bgra_6668>;     // VGA DAC palette format
+        using pxvga  = pixel<bgra_6660>;     // VGA DAC palette format
 
         static_assert(sizeof(pxf   ) == 16);
         static_assert(sizeof(pxfn  ) == 16);
