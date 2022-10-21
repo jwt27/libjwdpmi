@@ -589,9 +589,9 @@ namespace jw
         struct [[gnu::packed]] bgra_6668
         {
             using T = unsigned;
-            T b : 6, : 2;
-            T g : 6, : 2;
-            T r : 6, : 2;
+            T b : 8;
+            T g : 8;
+            T r : 8;
             T a : 8;
 
             static constexpr T rx = 63;
