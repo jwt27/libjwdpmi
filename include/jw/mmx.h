@@ -111,8 +111,8 @@ namespace jw
     template<simd flags>
     [[gnu::always_inline]] inline void mmx_empty() noexcept
     {
-        if constexpr (flags & simd::amd3dnow) asm volatile ("femms");
-        else if constexpr (flags & simd::mmx) asm volatile ("emms");
+        if constexpr (flags & simd::amd3dnow) _m_femms();
+        else if constexpr (flags & simd::mmx) _mm_empty();
     }
 
     template<simd flags>
