@@ -171,7 +171,7 @@ namespace jw
     template<simd flags, unsigned frac_bits>
     [[gnu::always_inline]] inline __m64 mmx_round_pu16(__m64 src)
     {
-        static_assert (frac_bits < 16);
+        static_assert (frac_bits > 0 and frac_bits < 16);
         constexpr std::int16_t x = 1 << (frac_bits - 1);
         constexpr simd_vector<std::int16_t, 4> add { x, x, x, x };
         return _mm_srli_pi16(_mm_adds_pu16(src, reinterpret_cast<__m64>(add)), frac_bits);
@@ -181,7 +181,7 @@ namespace jw
     template<simd flags, unsigned frac_bits>
     [[gnu::always_inline]] inline __m64 mmx_round_pi16(__m64 src)
     {
-        static_assert (frac_bits < 16);
+        static_assert (frac_bits > 0 and frac_bits < 16);
         constexpr std::int16_t x = 1 << (frac_bits - 1);
         constexpr simd_vector<std::int16_t, 4> add { x, x, x, x };
         return _mm_srai_pi16(_mm_adds_pi16(src, reinterpret_cast<__m64>(add)), frac_bits);
@@ -262,11 +262,12 @@ namespace jw
         else
         {
             constexpr unsigned bits = frac_bits(true);
-            if constexpr (input_overflow and bits >= 1) src = _mm_srli_pi16(src, 1);
-            constexpr bool do_round = rounding and bits > input_overflow + 1;
             src = _mm_mullo_pi16(src, factor(bits));
-            if constexpr (do_round) src = mmx_round_pu16<flags, bits - input_overflow>(src);
-            else if constexpr (bits > input_overflow) src = _mm_srli_pi16(src, bits - input_overflow);
+            if constexpr (bits > 0)
+            {
+                if constexpr (rounding) src = mmx_round_pu16<flags, bits>(src);
+                else src = _mm_srli_pi16(src, bits);
+            }
         }
 
         return src;
