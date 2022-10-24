@@ -23,38 +23,38 @@ namespace jw
     using m64_t = simd_vector<int, 2>;
     using m128_t = simd_vector<float, 4>;
 
-    struct tag_nosimd { } inline constexpr nosimd;
-    struct tag_pi8    { } inline constexpr pi8;
-    struct tag_pi16   { } inline constexpr pi16;
-    struct tag_pi32   { } inline constexpr pi32;
-    struct tag_si64   { } inline constexpr si64;
-    struct tag_ps     { } inline constexpr ps;
-    struct tag_pf     { } inline constexpr pf;
+    struct format_nosimd { } inline constexpr nosimd;
+    struct format_pi8    { } inline constexpr pi8;
+    struct format_pi16   { } inline constexpr pi16;
+    struct format_pi32   { } inline constexpr pi32;
+    struct format_si64   { } inline constexpr si64;
+    struct format_ps     { } inline constexpr ps;
+    struct format_pf     { } inline constexpr pf;
 
     template<typename Tag> constexpr simd simd_flags_for_tag = simd::none;
-    template<> constexpr simd simd_flags_for_tag<tag_pi8>  = simd::mmx;
-    template<> constexpr simd simd_flags_for_tag<tag_pi16> = simd::mmx;
-    template<> constexpr simd simd_flags_for_tag<tag_pi32> = simd::mmx;
-    template<> constexpr simd simd_flags_for_tag<tag_si64> = simd::mmx;
-    template<> constexpr simd simd_flags_for_tag<tag_ps>   = simd::sse;
-    template<> constexpr simd simd_flags_for_tag<tag_pf>   = simd::amd3dnow;
+    template<> constexpr simd simd_flags_for_tag<format_pi8>  = simd::mmx;
+    template<> constexpr simd simd_flags_for_tag<format_pi16> = simd::mmx;
+    template<> constexpr simd simd_flags_for_tag<format_pi32> = simd::mmx;
+    template<> constexpr simd simd_flags_for_tag<format_si64> = simd::mmx;
+    template<> constexpr simd simd_flags_for_tag<format_ps>   = simd::sse;
+    template<> constexpr simd simd_flags_for_tag<format_pf>   = simd::amd3dnow;
 
     template<typename Tag> constexpr std::size_t simd_elements_for_tag = 0;
-    template<> constexpr std::size_t simd_elements_for_tag<tag_nosimd> = 1;
-    template<> constexpr std::size_t simd_elements_for_tag<tag_pi8>    = 8;
-    template<> constexpr std::size_t simd_elements_for_tag<tag_pi16>   = 4;
-    template<> constexpr std::size_t simd_elements_for_tag<tag_pi32>   = 2;
-    template<> constexpr std::size_t simd_elements_for_tag<tag_si64>   = 1;
-    template<> constexpr std::size_t simd_elements_for_tag<tag_ps>     = 4;
-    template<> constexpr std::size_t simd_elements_for_tag<tag_pf>     = 2;
+    template<> constexpr std::size_t simd_elements_for_tag<format_nosimd> = 1;
+    template<> constexpr std::size_t simd_elements_for_tag<format_pi8>    = 8;
+    template<> constexpr std::size_t simd_elements_for_tag<format_pi16>   = 4;
+    template<> constexpr std::size_t simd_elements_for_tag<format_pi32>   = 2;
+    template<> constexpr std::size_t simd_elements_for_tag<format_si64>   = 1;
+    template<> constexpr std::size_t simd_elements_for_tag<format_ps>     = 4;
+    template<> constexpr std::size_t simd_elements_for_tag<format_pf>     = 2;
 
     template<typename Tag> struct simd_type_for_tag_helper { using type = void;   };
-    template<> struct simd_type_for_tag_helper<tag_pi8>    { using type = m64_t;  };
-    template<> struct simd_type_for_tag_helper<tag_pi16>   { using type = m64_t;  };
-    template<> struct simd_type_for_tag_helper<tag_pi32>   { using type = m64_t;  };
-    template<> struct simd_type_for_tag_helper<tag_si64>   { using type = m64_t;  };
-    template<> struct simd_type_for_tag_helper<tag_ps>     { using type = m128_t; };
-    template<> struct simd_type_for_tag_helper<tag_pf>     { using type = m64_t;  };
+    template<> struct simd_type_for_tag_helper<format_pi8>    { using type = m64_t;  };
+    template<> struct simd_type_for_tag_helper<format_pi16>   { using type = m64_t;  };
+    template<> struct simd_type_for_tag_helper<format_pi32>   { using type = m64_t;  };
+    template<> struct simd_type_for_tag_helper<format_si64>   { using type = m64_t;  };
+    template<> struct simd_type_for_tag_helper<format_ps>     { using type = m128_t; };
+    template<> struct simd_type_for_tag_helper<format_pf>     { using type = m64_t;  };
 
     template<typename Tag> using simd_type_for_tag = simd_type_for_tag_helper<Tag>::type;
 
@@ -62,19 +62,19 @@ namespace jw
     template<typename T, typename Tag> concept can_store = requires (Tag t, T* p, simd_type_for_tag<Tag> v) { simd_store(t, p, v); };
 
     template<std::integral T> requires (sizeof(T) == 1)
-    [[gnu::always_inline]] inline __m64 simd_load(tag_pi8, const T* src)
+    [[gnu::always_inline]] inline __m64 simd_load(format_pi8, const T* src)
     {
         return *reinterpret_cast<const __m64*>(src);
     }
 
     template<std::integral T> requires (sizeof(T) == 1)
-    [[gnu::always_inline]] inline void simd_store(tag_pi8, T* dst, __m64 src)
+    [[gnu::always_inline]] inline void simd_store(format_pi8, T* dst, __m64 src)
     {
         *reinterpret_cast<__m64*>(dst) = src;
     }
 
     template<std::integral T> requires (sizeof(T) <= 2)
-    [[gnu::always_inline]] inline __m64 simd_load(tag_pi16, const T* src)
+    [[gnu::always_inline]] inline __m64 simd_load(format_pi16, const T* src)
     {
         if constexpr (sizeof(T) == 2) return *reinterpret_cast<const __m64*>(src);
         else
@@ -88,20 +88,20 @@ namespace jw
     }
 
     template<std::integral T> requires (sizeof(T) == 2)
-    [[gnu::always_inline]] inline void simd_store(tag_pi16, T* dst, __m64 src)
+    [[gnu::always_inline]] inline void simd_store(format_pi16, T* dst, __m64 src)
     {
         *reinterpret_cast<__m64*>(dst) = src;
     }
 
     template<std::integral T> requires (sizeof(T) == 1)
-    [[gnu::always_inline]] inline void simd_store(tag_pi16, T* dst, __m64 src)
+    [[gnu::always_inline]] inline void simd_store(format_pi16, T* dst, __m64 src)
     {
         const __m64 a = std::is_signed_v<T> ? _mm_packs_pi16(src, src) : _mm_packs_pu16(src, src);
         *reinterpret_cast<std::uint32_t*>(dst) = _mm_cvtsi64_si32(a);
     }
 
     template<std::integral T> requires (sizeof(T) <= 4)
-    [[gnu::always_inline]] inline __m64 simd_load(tag_pi32, const T* src)
+    [[gnu::always_inline]] inline __m64 simd_load(format_pi32, const T* src)
     {
         if constexpr (sizeof(T) == 4) return *reinterpret_cast<const __m64*>(src);
         else
@@ -115,20 +115,20 @@ namespace jw
     }
 
     template<std::integral T> requires (sizeof(T) == 4)
-    [[gnu::always_inline]] inline void simd_store(tag_pi32, T* dst, __m64 src)
+    [[gnu::always_inline]] inline void simd_store(format_pi32, T* dst, __m64 src)
     {
         *reinterpret_cast<__m64*>(dst) = src;
     }
 
     template<std::signed_integral T> requires (sizeof(T) == 2)
-    [[gnu::always_inline]] inline void simd_store(tag_pi32, T* dst, __m64 src)
+    [[gnu::always_inline]] inline void simd_store(format_pi32, T* dst, __m64 src)
     {
         const __m64 a = _mm_packs_pi32(src, src);
         *reinterpret_cast<std::uint32_t*>(dst) = _mm_cvtsi64_si32(a);
     }
 
     template<std::integral T> requires (sizeof(T) == 1)
-    [[gnu::always_inline]] inline void simd_store(tag_pi32, T* dst, __m64 src)
+    [[gnu::always_inline]] inline void simd_store(format_pi32, T* dst, __m64 src)
     {
         __m64 data = _mm_packs_pi32(src, src);
         data = std::is_signed_v<T> ? _mm_packs_pi16(data, data) : _mm_packs_pu16(data, data);
@@ -136,7 +136,7 @@ namespace jw
     }
 
     template<std::integral T> requires (sizeof(T) <= 8)
-    [[gnu::always_inline]] inline __m64 simd_load(tag_si64, const T* src)
+    [[gnu::always_inline]] inline __m64 simd_load(format_si64, const T* src)
     {
         if constexpr (sizeof(T) == 8) return *reinterpret_cast<const __m64*>(src);
         else
@@ -150,18 +150,18 @@ namespace jw
     }
 
     template<std::integral T> requires (sizeof(T) == 8)
-    [[gnu::always_inline]] inline void simd_store(tag_si64, T* dst, __m64 src)
+    [[gnu::always_inline]] inline void simd_store(format_si64, T* dst, __m64 src)
     {
         *reinterpret_cast<__m64*>(dst) = src;
     }
 
-    [[gnu::always_inline]] inline __m128 simd_load(tag_ps, const float* src)
+    [[gnu::always_inline]] inline __m128 simd_load(format_ps, const float* src)
     {
         return *reinterpret_cast<const __m128*>(src);
     }
 
     template<std::signed_integral T> requires (sizeof(T) == 4)
-    [[gnu::always_inline]] inline __m128 simd_load(tag_ps, const T* src)
+    [[gnu::always_inline]] inline __m128 simd_load(format_ps, const T* src)
     {
         const __m64 lo = *reinterpret_cast<const __m64*>(src + 0);
         const __m64 hi = *reinterpret_cast<const __m64*>(src + 2);
@@ -169,23 +169,23 @@ namespace jw
     }
 
     template<std::integral T> requires (sizeof(T) <= 2)
-    [[gnu::always_inline]] inline __m128 simd_load(tag_ps, const T* src)
+    [[gnu::always_inline]] inline __m128 simd_load(format_ps, const T* src)
     {
         const __m64 data = simd_load(pi16, src);
         return std::is_signed_v<T> ? _mm_cvtpi16_ps(data) : _mm_cvtpu16_ps(data);
     }
 
-    [[gnu::always_inline]] inline void simd_store(tag_ps, float* dst, __m128 src)
+    [[gnu::always_inline]] inline void simd_store(format_ps, float* dst, __m128 src)
     {
         *reinterpret_cast<__m128*>(dst) = src;
     }
 
     template<std::integral T> requires (sizeof(T) <= 4 and (std::is_signed_v<T> or sizeof(T) == 1))
-    [[gnu::always_inline]] inline void simd_store(tag_ps, T* dst, __m128 src)
+    [[gnu::always_inline]] inline void simd_store(format_ps, T* dst, __m128 src)
     {
         const __m64 lo = _mm_cvtps_pi32(src);
         const __m64 hi = _mm_cvtps_pi32(_mm_movehl_ps(src, src));
-        if constexpr (can_store<T, tag_pi16>)
+        if constexpr (can_store<T, format_pi16>)
             simd_store(pi16, dst, _mm_packs_pi32(lo, hi));
         else
         {
@@ -194,30 +194,30 @@ namespace jw
         }
     }
 
-    [[gnu::always_inline]] inline __m64 simd_load(tag_pf, const float* src)
+    [[gnu::always_inline]] inline __m64 simd_load(format_pf, const float* src)
     {
         return *reinterpret_cast<const __m64*>(src);
     }
 
     template<std::integral T> requires (sizeof(T) <= 4 and (std::is_signed_v<T> or sizeof(T) <= 2))
-    [[gnu::always_inline]] inline __m64 simd_load(tag_pf, const T* src)
+    [[gnu::always_inline]] inline __m64 simd_load(format_pf, const T* src)
     {
         return _m_pi2fd(simd_load(pi32, src));
     }
 
-    [[gnu::always_inline]] inline void simd_store(tag_pf, float* dst, __m64 src)
+    [[gnu::always_inline]] inline void simd_store(format_pf, float* dst, __m64 src)
     {
         *reinterpret_cast<__m64*>(dst) = src;
     }
 
     template<std::integral T> requires (sizeof(T) <= 4 and (std::is_signed_v<T> or sizeof(T) == 1))
-    [[gnu::always_inline]] inline void simd_store(tag_pf, T* dst, __m64 src)
+    [[gnu::always_inline]] inline void simd_store(format_pf, T* dst, __m64 src)
     {
         simd_store(pi32, dst, _m_pf2id(src));
     }
 
     template<typename F, typename... A>
-    concept simd_invocable = requires(F f, A&&... args) { f.template operator()<simd { }>(std::forward<A>(args)...); };
+    concept simd_invocable = requires(F&& f, A&&... args) { std::forward<F>(f).template operator()<simd { }>(std::forward<A>(args)...); };
 
     template<simd flags, typename F, typename... A> requires (simd_invocable<F, A...>)
     [[gnu::always_inline, gnu::flatten]] decltype(auto) simd_invoke(F&& func, A&&... args)
