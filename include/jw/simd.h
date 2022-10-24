@@ -275,17 +275,18 @@ namespace jw
     template<simd flags, typename To, typename From, typename F, typename... A>
     [[gnu::flatten, gnu::hot]] To* simd_transform(To* dst, const From* src, std::size_t n, F func, A... args)
     {
+        constexpr std::type_identity<From> id { };
         std::size_t i = 0;
 
         constexpr auto can_invoke = []<typename Fmt>(Fmt) consteval
         {
             using traits = simd_format_traits<Fmt>;
-            return flags.match(traits::flags) and can_load<From, Fmt> and can_store<To, Fmt> and simd_invocable<F, Fmt, typename traits::type, A...>;
+            return flags.match(traits::flags) and can_load<From, Fmt> and can_store<To, Fmt> and simd_invocable<F, Fmt, decltype(id), typename traits::type, A...>;
         };
 
         auto do_invoke = [&]<typename Fmt>(Fmt t)
         {
-            simd_store(t, dst + i, simd_invoke<flags>(func, t, simd_load(t, src + i), args...));
+            simd_store(t, dst + i, simd_invoke<flags>(func, t, id, simd_load(t, src + i), args...));
             i += simd_format_traits<Fmt>::elements;
         };
 
@@ -299,7 +300,7 @@ namespace jw
             else if constexpr (can_invoke(pf)) do_invoke(pf);
             else
             {
-                dst[i] = func(nosimd, src[i], args...);
+                dst[i] = func(nosimd, src[i], id, args...);
                 i += 1;
             }
         }
