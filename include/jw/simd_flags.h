@@ -80,13 +80,3 @@ namespace jw
         return flags;
     }
 }
-
-namespace jw::simd_target
-{
-    constexpr simd none        = simd::none;
-    constexpr simd pentium_mmx = simd::mmx;
-    constexpr simd pentium_3   = simd::mmx | simd::mmx2 | simd::sse;
-    constexpr simd k6_2        = simd::mmx | simd::amd3dnow;
-    constexpr simd athlon      = simd::mmx | simd::amd3dnow | simd::mmx2 | simd::amd3dnow2;
-    constexpr simd athlon_xp   = simd::mmx | simd::amd3dnow | simd::mmx2 | simd::amd3dnow2 | simd::sse;
-}

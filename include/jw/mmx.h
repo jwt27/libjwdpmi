@@ -126,7 +126,7 @@ namespace jw
     [[gnu::noinline]] inline decltype(auto) mmx_function(F&& func, A&&... args)
     {
         mmx_guard<flags> guard { };
-        return std::forward<F>(func)(std::forward<A>(args)...);
+        return (std::forward<F>(func)(std::forward<A>(args)...));
     }
 
     template<simd flags, unsigned N>
