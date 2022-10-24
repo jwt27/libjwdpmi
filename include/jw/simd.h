@@ -23,15 +23,40 @@ namespace jw
     using m64_t = simd_vector<int, 2>;
     using m128_t = simd_vector<float, 4>;
 
-    struct tag_pi8  { } inline constexpr pi8;
-    struct tag_pi16 { } inline constexpr pi16;
-    struct tag_pi32 { } inline constexpr pi32;
-    struct tag_si64 { } inline constexpr si64;
-    struct tag_ps   { } inline constexpr ps;
-    struct tag_pf   { } inline constexpr pf;
+    struct tag_nosimd { } inline constexpr nosimd;
+    struct tag_pi8    { } inline constexpr pi8;
+    struct tag_pi16   { } inline constexpr pi16;
+    struct tag_pi32   { } inline constexpr pi32;
+    struct tag_si64   { } inline constexpr si64;
+    struct tag_ps     { } inline constexpr ps;
+    struct tag_pf     { } inline constexpr pf;
 
-    template<typename Tag>
-    using simd_type_for_tag = std::conditional_t<std::same_as<Tag, tag_ps>, m128_t, m64_t>;
+    template<typename Tag> constexpr simd simd_flags_for_tag = simd::none;
+    template<> constexpr simd simd_flags_for_tag<tag_pi8>  = simd::mmx;
+    template<> constexpr simd simd_flags_for_tag<tag_pi16> = simd::mmx;
+    template<> constexpr simd simd_flags_for_tag<tag_pi32> = simd::mmx;
+    template<> constexpr simd simd_flags_for_tag<tag_si64> = simd::mmx;
+    template<> constexpr simd simd_flags_for_tag<tag_ps>   = simd::sse;
+    template<> constexpr simd simd_flags_for_tag<tag_pf>   = simd::amd3dnow;
+
+    template<typename Tag> constexpr std::size_t simd_elements_for_tag = 0;
+    template<> constexpr std::size_t simd_elements_for_tag<tag_nosimd> = 1;
+    template<> constexpr std::size_t simd_elements_for_tag<tag_pi8>    = 8;
+    template<> constexpr std::size_t simd_elements_for_tag<tag_pi16>   = 4;
+    template<> constexpr std::size_t simd_elements_for_tag<tag_pi32>   = 2;
+    template<> constexpr std::size_t simd_elements_for_tag<tag_si64>   = 1;
+    template<> constexpr std::size_t simd_elements_for_tag<tag_ps>     = 4;
+    template<> constexpr std::size_t simd_elements_for_tag<tag_pf>     = 2;
+
+    template<typename Tag> struct simd_type_for_tag_helper { using type = void;   };
+    template<> struct simd_type_for_tag_helper<tag_pi8>    { using type = m64_t;  };
+    template<> struct simd_type_for_tag_helper<tag_pi16>   { using type = m64_t;  };
+    template<> struct simd_type_for_tag_helper<tag_pi32>   { using type = m64_t;  };
+    template<> struct simd_type_for_tag_helper<tag_si64>   { using type = m64_t;  };
+    template<> struct simd_type_for_tag_helper<tag_ps>     { using type = m128_t; };
+    template<> struct simd_type_for_tag_helper<tag_pf>     { using type = m64_t;  };
+
+    template<typename Tag> using simd_type_for_tag = simd_type_for_tag_helper<Tag>::type;
 
     template<typename T, typename Tag> concept can_load = requires (Tag t, const T* p) { { simd_load(t, p) } -> std::same_as<simd_type_for_tag<Tag>>; };
     template<typename T, typename Tag> concept can_store = requires (Tag t, T* p, simd_type_for_tag<Tag> v) { simd_store(t, p, v); };
@@ -138,8 +163,8 @@ namespace jw
     template<std::signed_integral T> requires (sizeof(T) == 4)
     [[gnu::always_inline]] inline __m128 simd_load(tag_ps, const T* src)
     {
-        const __m64 lo = *reinterpret_cast<__m64*>(src + 0);
-        const __m64 hi = *reinterpret_cast<__m64*>(src + 2);
+        const __m64 lo = *reinterpret_cast<const __m64*>(src + 0);
+        const __m64 hi = *reinterpret_cast<const __m64*>(src + 2);
         return _mm_cvtpi32x2_ps(lo, hi);
     }
 
@@ -189,5 +214,49 @@ namespace jw
     [[gnu::always_inline]] inline void simd_store(tag_pf, T* dst, __m64 src)
     {
         simd_store(pi32, dst, _m_pf2id(src));
+    }
+
+    template<typename F, typename... A>
+    concept simd_invocable = requires(F f, A&&... args) { f.template operator()<simd { }>(std::forward<A>(args)...); };
+
+    template<simd flags, typename F, typename... A> requires (simd_invocable<F, A...>)
+    [[gnu::always_inline, gnu::flatten]] decltype(auto) simd_invoke(F&& func, A&&... args)
+    {
+        return (std::forward<F>(func).template operator()<flags>(std::forward<A>(args)...));
+    }
+
+    // Apply given transform function to src and store result in dst.  Size
+    // must be divisible by 8, and pointers must be 16-byte aligned.
+    template<simd flags, typename To, typename From, typename F, typename... A>
+    [[gnu::flatten, gnu::hot]] To* simd_transform(To* dst, const From* src, std::size_t n, F func, A... args)
+    {
+        std::size_t i = 0;
+
+        constexpr auto can_invoke = []<typename Tag>(Tag) consteval
+        {
+            return flags.match(simd_flags_for_tag<Tag>) and can_load<From, Tag> and can_store<To, Tag> and simd_invocable<F, Tag, simd_type_for_tag<Tag>, A...>;
+        };
+
+        auto do_invoke = [&]<typename Tag>(Tag t)
+        {
+            simd_store(t, dst + i, simd_invoke<flags>(func, t, simd_load(t, src + i), args...));
+            i += simd_elements_for_tag<Tag>;
+        };
+
+        while (i < n)
+        {
+            if constexpr (can_invoke(pi8)) do_invoke(pi8);
+            else if constexpr (can_invoke(pi16)) do_invoke(pi16);
+            else if constexpr (can_invoke(pi32)) do_invoke(pi32);
+            else if constexpr (can_invoke(si64)) do_invoke(si64);
+            else if constexpr (can_invoke(ps)) do_invoke(ps);
+            else if constexpr (can_invoke(pf)) do_invoke(pf);
+            else
+            {
+                dst[i] = func(nosimd, src[i], args...);
+                i += 1;
+            }
+        }
+        return dst + i;
     }
 }
