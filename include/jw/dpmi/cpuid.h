@@ -6,8 +6,6 @@
 #pragma once
 #include <cstdint>
 #include <string>
-#include <map>
-#include <jw/dpmi/alloc.h>
 
 namespace jw::dpmi
 {
