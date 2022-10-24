@@ -31,35 +31,80 @@ namespace jw
     struct format_ps     { } inline constexpr ps;
     struct format_pf     { } inline constexpr pf;
 
-    template<typename Tag> constexpr simd simd_flags_for_tag = simd::none;
-    template<> constexpr simd simd_flags_for_tag<format_pi8>  = simd::mmx;
-    template<> constexpr simd simd_flags_for_tag<format_pi16> = simd::mmx;
-    template<> constexpr simd simd_flags_for_tag<format_pi32> = simd::mmx;
-    template<> constexpr simd simd_flags_for_tag<format_si64> = simd::mmx;
-    template<> constexpr simd simd_flags_for_tag<format_ps>   = simd::sse;
-    template<> constexpr simd simd_flags_for_tag<format_pf>   = simd::amd3dnow;
+    template<typename T, typename... U>
+    concept any_of = (std::same_as<T, U> or ...);
 
-    template<typename Tag> constexpr std::size_t simd_elements_for_tag = 0;
-    template<> constexpr std::size_t simd_elements_for_tag<format_nosimd> = 1;
-    template<> constexpr std::size_t simd_elements_for_tag<format_pi8>    = 8;
-    template<> constexpr std::size_t simd_elements_for_tag<format_pi16>   = 4;
-    template<> constexpr std::size_t simd_elements_for_tag<format_pi32>   = 2;
-    template<> constexpr std::size_t simd_elements_for_tag<format_si64>   = 1;
-    template<> constexpr std::size_t simd_elements_for_tag<format_ps>     = 4;
-    template<> constexpr std::size_t simd_elements_for_tag<format_pf>     = 2;
+    template<typename T>
+    concept simd_format = any_of<T, format_nosimd, format_pi8, format_pi16, format_pi32, format_si64, format_ps, format_pf>;
 
-    template<typename Tag> struct simd_type_for_tag_helper { using type = void;   };
-    template<> struct simd_type_for_tag_helper<format_pi8>    { using type = m64_t;  };
-    template<> struct simd_type_for_tag_helper<format_pi16>   { using type = m64_t;  };
-    template<> struct simd_type_for_tag_helper<format_pi32>   { using type = m64_t;  };
-    template<> struct simd_type_for_tag_helper<format_si64>   { using type = m64_t;  };
-    template<> struct simd_type_for_tag_helper<format_ps>     { using type = m128_t; };
-    template<> struct simd_type_for_tag_helper<format_pf>     { using type = m64_t;  };
+    template<typename T, typename... U>
+    concept specific_simd_format = simd_format<T> and (simd_format<U> and ...) and any_of<T, U...>;
 
-    template<typename Tag> using simd_type_for_tag = simd_type_for_tag_helper<Tag>::type;
+    template<simd_format T>
+    struct simd_format_traits
+    {
+        using type = void;
+        static constexpr simd flags = simd::none;
+        static constexpr std::size_t elements = 1;
+        static constexpr std::size_t element_size = 0;
+    };
 
-    template<typename T, typename Tag> concept can_load = requires (Tag t, const T* p) { { simd_load(t, p) } -> std::same_as<simd_type_for_tag<Tag>>; };
-    template<typename T, typename Tag> concept can_store = requires (Tag t, T* p, simd_type_for_tag<Tag> v) { simd_store(t, p, v); };
+    template<>
+    struct simd_format_traits<format_pi8>
+    {
+        using type = m64_t;
+        static constexpr simd flags = simd::mmx;
+        static constexpr std::size_t elements = 8;
+        static constexpr std::size_t element_size = 1;
+    };
+
+    template<>
+    struct simd_format_traits<format_pi16>
+    {
+        using type = m64_t;
+        static constexpr simd flags = simd::mmx;
+        static constexpr std::size_t elements = 4;
+        static constexpr std::size_t element_size = 2;
+    };
+
+    template<>
+    struct simd_format_traits<format_pi32>
+    {
+        using type = m64_t;
+        static constexpr simd flags = simd::mmx;
+        static constexpr std::size_t elements = 2;
+        static constexpr std::size_t element_size = 4;
+    };
+
+    template<>
+    struct simd_format_traits<format_si64>
+    {
+        using type = m64_t;
+        static constexpr simd flags = simd::mmx;
+        static constexpr std::size_t elements = 1;
+        static constexpr std::size_t element_size = 8;
+    };
+
+    template<>
+    struct simd_format_traits<format_ps>
+    {
+        using type = m128_t;
+        static constexpr simd flags = simd::sse;
+        static constexpr std::size_t elements = 4;
+        static constexpr std::size_t element_size = 4;
+    };
+
+    template<>
+    struct simd_format_traits<format_pf>
+    {
+        using type = m64_t;
+        static constexpr simd flags = simd::amd3dnow;
+        static constexpr std::size_t elements = 2;
+        static constexpr std::size_t element_size = 4;
+    };
+
+    template<typename T, typename Fmt> concept can_load = requires (Fmt t, const T* p) { { simd_load(t, p) } -> std::same_as<typename simd_format_traits<Fmt>::type>; };
+    template<typename T, typename Fmt> concept can_store = requires (Fmt t, T* p, typename simd_format_traits<Fmt>::type v) { simd_store(t, p, v); };
 
     template<std::integral T> requires (sizeof(T) == 1)
     [[gnu::always_inline]] inline __m64 simd_load(format_pi8, const T* src)
@@ -232,15 +277,16 @@ namespace jw
     {
         std::size_t i = 0;
 
-        constexpr auto can_invoke = []<typename Tag>(Tag) consteval
+        constexpr auto can_invoke = []<typename Fmt>(Fmt) consteval
         {
-            return flags.match(simd_flags_for_tag<Tag>) and can_load<From, Tag> and can_store<To, Tag> and simd_invocable<F, Tag, simd_type_for_tag<Tag>, A...>;
+            using traits = simd_format_traits<Fmt>;
+            return flags.match(traits::flags) and can_load<From, Fmt> and can_store<To, Fmt> and simd_invocable<F, Fmt, typename traits::type, A...>;
         };
 
-        auto do_invoke = [&]<typename Tag>(Tag t)
+        auto do_invoke = [&]<typename Fmt>(Fmt t)
         {
             simd_store(t, dst + i, simd_invoke<flags>(func, t, simd_load(t, src + i), args...));
-            i += simd_elements_for_tag<Tag>;
+            i += simd_format_traits<Fmt>::elements;
         };
 
         while (i < n)
