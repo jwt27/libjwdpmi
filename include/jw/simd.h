@@ -103,8 +103,22 @@ namespace jw
         static constexpr std::size_t element_size = 4;
     };
 
-    template<typename T, typename Fmt> concept can_load = requires (Fmt t, const T* p) { { simd_load(t, p) } -> std::same_as<typename simd_format_traits<Fmt>::type>; };
-    template<typename T, typename Fmt> concept can_store = requires (Fmt t, T* p, typename simd_format_traits<Fmt>::type v) { simd_store(t, p, v); };
+    template<simd_format F, typename T> using simd_data_type = std::conditional_t<std::same_as<F, format_nosimd>, T, typename simd_format_traits<F>::type>;
+
+    template<typename T, typename Fmt> concept can_load = requires (Fmt t, const T* p) { { simd_load(t, p) } -> std::same_as<simd_data_type<Fmt, T>>; };
+    template<typename T, typename Fmt> concept can_store = requires (Fmt t, T* p, simd_data_type<Fmt, T> v) { simd_store(t, p, v); };
+
+    template<typename T>
+    [[gnu::always_inline]] inline T simd_load(format_nosimd, const T* src)
+    {
+        return *src;
+    }
+
+    template<typename T>
+    [[gnu::always_inline]] inline void simd_store(format_nosimd, T* dst, T&& src)
+    {
+        *dst = std::forward<T>(src);
+    }
 
     template<std::integral T> requires (sizeof(T) == 1)
     [[gnu::always_inline]] inline __m64 simd_load(format_pi8, const T* src)
