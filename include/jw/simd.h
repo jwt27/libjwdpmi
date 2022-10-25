@@ -47,7 +47,7 @@ namespace jw
     template<typename T, typename... U>
     concept specific_simd_format = simd_format<T> and (simd_format<U> and ...) and any_of<T, U...>;
 
-    template<simd_format T>
+    template<simd_format>
     struct simd_format_traits
     {
         using type = void;
@@ -110,10 +110,26 @@ namespace jw
         static constexpr std::size_t element_size = 4;
     };
 
-    template<simd_format F, typename T> using simd_data_type = std::conditional_t<std::same_as<F, format_nosimd>, T, typename simd_format_traits<F>::type>;
+    // Specialize this for custom types.
+    template<typename T, simd_format F> requires (std::is_arithmetic_v<T>)
+    struct simd_type_traits
+    {
+        // Data type to represent this type in the given format.
+        using data_type = typename simd_format_traits<F>::type;
 
-    template<typename T, typename Fmt> concept can_load = requires (Fmt t, const T* p) { { simd_load(t, p) } -> std::same_as<simd_data_type<Fmt, T>>; };
-    template<typename T, typename Fmt> concept can_store = requires (Fmt t, T* p, simd_data_type<Fmt, T> v) { simd_store(t, p, v); };
+        // Advance iterators by this amount.
+        static constexpr std::size_t delta = simd_format_traits<F>::elements;
+    };
+
+    template<typename T> requires (std::is_arithmetic_v<T>)
+    struct simd_type_traits<T, format_nosimd>
+    {
+        using data_type = T;
+        static constexpr std::size_t delta = 1;
+    };
+
+    template<typename T, typename Fmt> concept can_load = requires (Fmt t, const T* p) { { simd_load(t, p) } -> std::same_as<typename simd_type_traits<T, Fmt>::data_type>; };
+    template<typename T, typename Fmt> concept can_store = requires (Fmt t, T* p, typename simd_type_traits<T, Fmt>::data_type v) { simd_store(t, p, v); };
 
     template<typename T>
     [[gnu::always_inline]] inline T simd_load(format_nosimd, const T* src)
@@ -122,9 +138,9 @@ namespace jw
     }
 
     template<typename T>
-    [[gnu::always_inline]] inline void simd_store(format_nosimd, T* dst, T&& src)
+    [[gnu::always_inline]] inline void simd_store(format_nosimd, T* dst, T src)
     {
-        *dst = std::forward<T>(src);
+        *dst = src;
     }
 
     template<std::integral T> requires (sizeof(T) == 1)
@@ -301,15 +317,19 @@ namespace jw
 
         constexpr auto can_invoke = []<typename Fmt>(Fmt) consteval
         {
-            using traits = simd_format_traits<Fmt>;
-            return flags.match(traits::flags) and can_load<From, Fmt> and can_store<To, Fmt> and simd_invocable<F, Fmt, decltype(id), typename traits::type, A...>;
+            return flags.match(simd_format_traits<Fmt>::flags)
+                and can_load<From, Fmt>
+                and can_store<To, Fmt>
+                and simd_invocable<F, Fmt, decltype(id), typename simd_type_traits<From, Fmt>::data_type, A...>;
         };
 
         auto do_invoke = [&]<typename Fmt>(Fmt t)
         {
             simd_store(t, dst + i, simd_invoke<flags>(func, t, id, simd_load(t, src + i), args...));
-            i += simd_format_traits<Fmt>::elements;
+            i += simd_type_traits<From, Fmt>::delta;
         };
+
+        static_assert (can_invoke(nosimd));
 
         while (i < n)
         {
@@ -319,11 +339,7 @@ namespace jw
             else if constexpr (can_invoke(si64)) do_invoke(si64);
             else if constexpr (can_invoke(ps)) do_invoke(ps);
             else if constexpr (can_invoke(pf)) do_invoke(pf);
-            else
-            {
-                dst[i] = func(nosimd, src[i], id, args...);
-                i += 1;
-            }
+            else do_invoke(nosimd);
         }
         return dst + i;
     }
