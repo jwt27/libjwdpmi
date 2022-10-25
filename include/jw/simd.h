@@ -13,10 +13,17 @@ namespace jw
     template<typename T, std::size_t N>
     using simd_vector [[gnu::vector_size(sizeof(T) * N)]] = T;
 
-    consteval std::uint8_t shuffle_mask(unsigned v0, unsigned v1, unsigned v2, unsigned v3)
+    struct shuffle_mask
     {
-        return ((v3 & 3) << 6) | ((v2 & 3) << 4) | ((v1 & 3) << 2) | (v0 & 3);
-    }
+        std::uint8_t mask;
+
+        constexpr shuffle_mask(std::uint8_t mask) : mask { mask } { }
+        constexpr shuffle_mask(unsigned v0, unsigned v1, unsigned v2, unsigned v3)
+            : mask { static_cast<std::uint8_t>(((v3 & 3) << 6) | ((v2 & 3) << 4) | ((v1 & 3) << 2) | (v0 & 3)) } { }
+
+        constexpr operator std::uint8_t() const noexcept { return mask; }
+        constexpr unsigned operator[](unsigned i) const noexcept { return (mask >> (i << 1)) & 3; }
+    };
 
     // Using these types in template parameters (std::same_as, etc) prevents
     // ignored-attribute warnings.
