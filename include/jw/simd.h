@@ -128,17 +128,17 @@ namespace jw
         static constexpr std::size_t delta = 1;
     };
 
-    template<typename T, typename Fmt> concept can_load = requires (Fmt t, const T* p) { { simd_load(t, p) } -> std::same_as<typename simd_type_traits<T, Fmt>::data_type>; };
-    template<typename T, typename Fmt> concept can_store = requires (Fmt t, T* p, typename simd_type_traits<T, Fmt>::data_type v) { simd_store(t, p, v); };
+    template<typename I, typename Fmt> concept can_load = requires (Fmt t, I p) { { simd_load(t, p) } -> std::same_as<typename simd_type_traits<std::remove_cv_t<std::iter_value_t<I>>, Fmt>::data_type>; };
+    template<typename O, typename Fmt> concept can_store = requires (Fmt t, O p, typename simd_type_traits<std::remove_cv_t<std::iter_value_t<O>>, Fmt>::data_type v) { simd_store(t, p, v); };
 
-    template<typename T>
-    [[gnu::always_inline]] inline T simd_load(format_nosimd, const T* src)
+    template<std::indirectly_readable I> requires (std::is_arithmetic_v<std::iter_value_t<I>>)
+    [[gnu::always_inline]] inline auto simd_load(format_nosimd, I src)
     {
         return *src;
     }
 
-    template<typename T>
-    [[gnu::always_inline]] inline void simd_store(format_nosimd, T* dst, T src)
+    template<typename T, std::indirectly_writable<T> O> requires (std::is_arithmetic_v<std::iter_value_t<O>>)
+    [[gnu::always_inline]] inline void simd_store(format_nosimd, O dst, T src)
     {
         *dst = src;
     }
@@ -318,8 +318,8 @@ namespace jw
         constexpr auto can_invoke = []<typename Fmt>(Fmt) consteval
         {
             return flags.match(simd_format_traits<Fmt>::flags)
-                and can_load<From, Fmt>
-                and can_store<To, Fmt>
+                and can_load<const From*, Fmt>
+                and can_store<To*, Fmt>
                 and simd_invocable<F, Fmt, decltype(id), typename simd_type_traits<From, Fmt>::data_type, A...>;
         };
 
