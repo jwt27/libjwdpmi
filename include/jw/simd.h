@@ -298,10 +298,13 @@ namespace jw
         simd_store(pi32, dst, _m_pf2id(src));
     }
 
-    template<typename F, typename... A>
-    concept simd_invocable = requires(F&& f, A&&... args) { std::forward<F>(f).template operator()<simd { }>(std::forward<A>(args)...); };
+    template<typename F, simd flags, typename... A>
+    concept simd_invocable = requires(F&& f, A&&... args) { std::forward<F>(f).template operator()<flags>(std::forward<A>(args)...); };
 
-    template<simd flags, typename F, typename... A> requires (simd_invocable<F, A...>)
+    template<typename F, simd flags, typename... A>
+    using simd_invoke_result = decltype(std::declval<F>().template operator()<flags>(std::declval<A>()...));
+
+    template<simd flags, typename F, typename... A> requires (simd_invocable<F, flags, A...>)
     [[gnu::always_inline, gnu::flatten]] decltype(auto) simd_invoke(F&& func, A&&... args)
     {
         return (std::forward<F>(func).template operator()<flags>(std::forward<A>(args)...));
@@ -320,7 +323,7 @@ namespace jw
             return flags.match(simd_format_traits<Fmt>::flags)
                 and can_load<const From*, Fmt>
                 and can_store<To*, Fmt>
-                and simd_invocable<F, Fmt, decltype(id), typename simd_type_traits<From, Fmt>::data_type, A...>;
+                and simd_invocable<F, flags, Fmt, decltype(id), typename simd_type_traits<From, Fmt>::data_type, A...>;
         };
 
         auto do_invoke = [&]<typename Fmt>(Fmt t)
