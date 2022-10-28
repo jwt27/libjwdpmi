@@ -322,28 +322,36 @@ namespace jw
     {
         struct impl
         {
-            using type = T;
-            using data_type = std::remove_cvref_t<D>;
+            using type = std::remove_cvref_t<T>;
+            using data_type = D;
             const data_type data;
 
             constexpr operator data_type() const noexcept { return data; }
         };
-        return impl { std::forward<D>(data) };
+        if constexpr (requires { typename std::decay_t<D>::data_type; })
+            return simd_data<T, typename std::decay_t<D>::data_type>(std::forward<D>(data));
+        else
+            return impl { std::forward<D>(data) };
     }
 
     // Read the type name stored by simd_data().
-    template<typename D> using simd_type = typename std::remove_reference_t<D>::type;
+    template<typename D> using simd_type = typename std::decay_t<D>::type;
 
-    // Wrap simd_data in a struct with the specified format info.
+    // Wrap simd_data in a struct with the specified format info.  All data is
+    // converted to the data_type specified in simd_type_traits.
     template<simd_format F, typename... D>
     auto simd_return(F, D&&... data)
     {
-        struct impl
+        auto make = []<typename... D2>(D2&&... data)
         {
-            using format = F;
-            std::tuple<std::remove_cvref_t<D>...> data;
+            struct impl
+            {
+                using format = F;
+                std::tuple<std::decay_t<D2>...> data;
+            };
+            return impl { std::tuple<std::decay_t<D2>...> { std::forward<D2>(data)... } };
         };
-        return impl { std::tuple<std::remove_cvref_t<D>...> { simd_data<simd_type<D>, typename simd_type_traits<simd_type<D>, F>::data_type>(std::forward<D>(data))... } };
+        return make(simd_data<simd_type<D>>(std::forward<typename simd_type_traits<simd_type<D>, F>::data_type>(data))...);
     }
 
 #   pragma GCC diagnostic pop
@@ -371,7 +379,7 @@ namespace jw
         }
     };
 
-    // Store the given simd_data in a contained set of iterators.
+    // Store the incoming simd_data in a contained set of iterators.
     template<typename... I>
     struct simd_sink
     {
@@ -404,46 +412,143 @@ namespace jw
     // data that is being operated on.  This can be recovered via simd_type.
     // Data is then returned via simd_return(fmt, simd_data<T>(dst)...), which
     // is passed on to the next stage.
+    // When a stage produces more data than the next stage can accept, that
+    // next stage is invoked multiple times.
     template<typename... T>
     class simd_pipeline
     {
         std::tuple<T...> stages;
 
-        template<simd flags, std::size_t stage, simd_format Fmt, typename... A>
-        static consteval bool invocable(std::type_identity<std::tuple<A...>>)
+        template<typename... U> using tuple_id = std::type_identity<std::tuple<U...>>;
+
+        template<simd flags, simd_format Fmt, std::size_t stage, std::size_t first_arg, typename RFmt, typename... A>
+        static consteval bool invocable_recurse(auto result, tuple_id<A...> args, auto seq)
         {
-            if constexpr (not flags.match(simd_format_traits<Fmt>::flags)) return false;
-            using func = std::tuple_element_t<stage, decltype(stages)>;
-            constexpr bool valid = simd_invocable<func, flags, Fmt, A...>;
-            if constexpr (valid and stage < sizeof...(T) - 1)
-            {
-                using result = simd_invoke_result<func, flags, Fmt, A...>;
-                using format = typename result::format;
-                return invocable<flags, stage + 1, format>(std::type_identity<decltype(result::data)> { });
-            }
-            return valid;
+            if constexpr (first_arg < sizeof...(A))         // Check next args slice on same stage
+                return check_args_slice<flags, Fmt, stage, first_arg, RFmt>(result, args, seq);
+            else if constexpr (stage + 1 < sizeof...(T))    // Done, check next stage
+                return invocable<flags, RFmt, stage + 1>(result);
+            else return true;
         }
 
-        template<simd flags, std::size_t stage, simd_format Fmt, typename... A>
-        auto invoke(Fmt, A&&... args)
+        template<simd flags, simd_format Fmt, std::size_t stage, std::size_t first_arg, typename... A, std::size_t... N>
+        static consteval auto sliced_invoke_result(tuple_id<A...>, std::index_sequence<N...>)
         {
-            if constexpr (stage < sizeof...(T) - 1)
+            using func = std::tuple_element_t<stage, decltype(stages)>;
+            using slice = std::tuple<std::tuple_element_t<first_arg + N, std::tuple<A...>>...>;
+            constexpr auto check = []<typename... A2>(tuple_id<A2...>)
             {
-                auto result = simd_invoke<flags>(std::get<stage>(stages), Fmt { }, std::forward<A>(args)...);
-                using Fmt2 = typename decltype(result)::format;
-                return std::apply([this]<typename... A2>(A2&&... args) { return invoke<flags, stage + 1>(Fmt2 { }, std::forward<A2>(args)...); }, result.data);
+                if constexpr (simd_invocable<func, flags, Fmt, A2...>)
+                    return std::type_identity<simd_invoke_result<func, flags, Fmt, A2...>> { };
+            };
+            return check(std::type_identity<slice> { });
+        }
+
+        template<simd flags, simd_format Fmt, std::size_t stage, std::size_t first_arg, typename RFmt, typename... R, typename... A, std::size_t... N>
+        static consteval bool check_args_slice(tuple_id<R...>, tuple_id<A...> args, std::index_sequence<N...> seq)
+        {
+            using result_id = decltype(sliced_invoke_result<flags, Fmt, stage, first_arg>(args, seq));
+            if constexpr (not std::same_as<result_id, void>)
+            {
+                constexpr auto next_arg = first_arg + sizeof...(N);
+                using result_t = typename result_id::type;
+                if constexpr (not std::same_as<result_t, void>)
+                {
+                    using r_format = typename result_t::format;
+                    using r_data = decltype(result_t::data);
+                    using cumulative_data = decltype(std::tuple_cat(std::declval<std::tuple<R...>>(), std::declval<r_data>()));
+                    static_assert (std::same_as<RFmt, void> or std::same_as<RFmt, r_format>, "Pipeline stage returns conflicting formats");
+                    return invocable_recurse<flags, Fmt, stage, next_arg, r_format>(std::type_identity<cumulative_data> { }, args, seq);
+                }
+                else return invocable_recurse<flags, Fmt, stage, next_arg, void>(tuple_id<> { }, args, seq);
             }
-            else return simd_invoke<flags>(std::get<stage>(stages), Fmt { }, std::forward<A>(args)...);
+            else return false;
+        }
+
+        template<simd flags, simd_format Fmt, std::size_t stage, std::size_t try_args, typename... A>
+        static consteval std::size_t args_slice_size(tuple_id<A...> args)
+        {
+            if constexpr (try_args == 0) return 0;
+            else if constexpr (sizeof...(A) % try_args == 0)
+            {
+                if constexpr (check_args_slice<flags, Fmt, stage, 0, void>(tuple_id<> { }, args, std::make_index_sequence<try_args> { }))
+                    return try_args;
+                else return args_slice_size<flags, Fmt, stage, try_args - 1>(args);
+            }
+            else return args_slice_size<flags, Fmt, stage, try_args - 1>(args);
+        }
+
+        template<simd flags, simd_format Fmt, std::size_t stage = 0, typename... A>
+        static consteval bool invocable(tuple_id<A...> args)
+        {
+            if constexpr (not flags.match(simd_format_traits<Fmt>::flags)) return false;
+            else return args_slice_size<flags, Fmt, stage, sizeof...(A)>(args) > 0;
+        }
+
+        template<simd_format Fmt, typename... R>
+        auto make_result(std::tuple<R...>&& result)
+        {
+            auto unpack = [&result]<std::size_t... N>(std::index_sequence<N...>)
+            {
+                return simd_return(Fmt { }, std::get<N>(std::move(result))...);
+            };
+            return unpack(std::index_sequence_for<R...> { });
+        }
+
+        template<simd flags, simd_format Fmt, typename RFmt, std::size_t stage, std::size_t first_arg = 0, typename... A, typename R>
+        auto invoke_recurse(std::tuple<A&&...>&& args, auto seq, R&& result_so_far)
+        {
+            if constexpr (first_arg < sizeof...(A))
+                return invoke_slice<flags, Fmt, stage, first_arg>(std::move(args), seq, std::forward<R>(result_so_far));
+            else if constexpr (not std::same_as<RFmt, void>)
+                return make_result<RFmt>(std::forward<R>(result_so_far));
+        }
+
+        template<simd flags, simd_format Fmt, std::size_t stage, std::size_t first_arg = 0, typename... A, typename... R, std::size_t... N>
+        auto invoke_slice(std::tuple<A&&...>&& args, std::index_sequence<N...> seq, std::tuple<R...> result_so_far)
+        {
+            constexpr auto next_arg = first_arg + sizeof...(N);
+            using result_id = decltype(sliced_invoke_result<flags, Fmt, stage, first_arg>(tuple_id<A...> { }, seq));
+            auto do_invoke = [&args, this]
+            {
+                return simd_invoke<flags>(std::get<stage>(stages), Fmt { }, std::forward<std::tuple_element_t<first_arg + N, std::tuple<A...>>>(std::get<first_arg + N>(std::move(args)))...);
+            };
+
+            if constexpr (std::same_as<typename result_id::type, void>)
+            {
+                do_invoke();
+                return invoke_recurse<flags, Fmt, void, stage, next_arg>(std::move(args), seq, std::tuple<> { });
+            }
+            else
+            {
+                auto result = do_invoke();
+                using r_format = typename decltype(result)::format;
+                return invoke_recurse<flags, Fmt, r_format, stage, next_arg>(std::move(args), seq, std::tuple_cat(std::move(result_so_far), std::move(result.data)));
+            }
+        }
+
+        template<simd flags, simd_format Fmt, std::size_t stage, typename... A>
+        auto invoke(std::tuple<A&&...>&& args)
+        {
+            constexpr auto slice = args_slice_size<flags, Fmt, stage, sizeof...(A)>(tuple_id<A...> { });
+            constexpr auto seq = std::make_index_sequence<slice> { };
+            if constexpr (stage + 1 < sizeof...(T))
+            {
+                auto result = invoke_slice<flags, Fmt, stage>(std::move(args), seq, std::tuple<> { });
+                using Fmt2 = typename decltype(result)::format;
+                return std::apply([this]<typename... A2>(A2&&... args) { return invoke<flags, Fmt2, stage + 1>(std::forward_as_tuple(std::forward<A2>(args)...)); }, std::move(result.data));
+            }
+            else return invoke_slice<flags, Fmt, stage>(std::move(args), seq, std::tuple<> { });
         }
 
     public:
         template<typename... U>
         simd_pipeline(U&&... f) : stages { std::forward<U>(f)... } { }
 
-        template<simd flags, simd_format Fmt, typename... A> requires (invocable<flags, 0, Fmt>(std::type_identity<std::tuple<A...>> { }))
-        auto operator()(Fmt, A&&... args)
+        template<simd flags, simd_format Fmt, typename... A> requires (invocable<flags, Fmt>(tuple_id<A...> { }))
+        [[gnu::flatten, gnu::hot]] auto operator()(Fmt, A&&... args)
         {
-            return invoke<flags, 0>(Fmt { }, std::forward<A>(args)...);
+            return invoke<flags, Fmt, 0>(std::forward_as_tuple(std::forward<A>(args)...));
         }
     };
 
