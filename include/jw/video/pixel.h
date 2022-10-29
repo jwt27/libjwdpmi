@@ -68,32 +68,29 @@ namespace jw::video
 #   endif
 
     template<typename P>
-    struct alignas(P) [[gnu::packed, gnu::may_alias]] pixel : public P
+    struct alignas(P) [[gnu::packed, gnu::may_alias]] pixel : P
     {
         template<typename> friend struct pixel;
 
-        using T = typename P::T;
-
-        static constexpr auto cast_PT(auto v) noexcept { return static_cast<typename P::T>(v); }
-
-        constexpr pixel() noexcept = default;
-        template<typename Q = pixel, std::enable_if_t<Q::has_alpha(), bool> = { }>
-        constexpr pixel(auto cr, auto cg, auto cb, auto ca) noexcept : P { cast_PT(cb), cast_PT(cg), cast_PT(cr), cast_PT(ca) } { }
-        template<typename Q = pixel, std::enable_if_t<Q::has_alpha(), bool> = { }>
-        constexpr pixel(auto cr, auto cg, auto cb) noexcept : pixel { cr, cg, cb, P::ax } { }
-        template<typename Q = pixel, std::enable_if_t<not Q::has_alpha(), bool> = { }>
-        constexpr pixel(auto cr, auto cg, auto cb, auto) noexcept : pixel { cr, cg, cb } { }
-        template<typename Q = pixel, std::enable_if_t<not Q::has_alpha(), bool> = { }>
-        constexpr pixel(auto cr, auto cg, auto cb) noexcept : P { cast_PT(cb), cast_PT(cg), cast_PT(cr) } { }
-
-        constexpr pixel(const pixel& p) noexcept { assign<simd::none>(p); }
-        constexpr pixel(pixel&& p) noexcept { assign<simd::none>(p); }
-        constexpr pixel& operator=(const pixel& p) noexcept { return assign<simd::none>(p); };
-        constexpr pixel& operator=(pixel&& p) noexcept { return assign<simd::none>(p); };
-
-        template <typename U> constexpr explicit operator pixel<U>() const noexcept { return cast_to<U, simd::none>(); }
+        using layout = P;
+        using T = typename layout::T;
 
         static constexpr bool has_alpha() { return P::ax > 0; }
+
+        static constexpr pixel rgba(auto r, auto g, auto b, auto a) noexcept
+        {
+            pixel px;
+            px.b = static_cast<T>(b);
+            px.g = static_cast<T>(g);
+            px.r = static_cast<T>(r);
+            if constexpr (has_alpha()) px.a = static_cast<T>(a);
+            return px;
+        }
+
+        static constexpr pixel rgb(auto r, auto g, auto b) noexcept
+        {
+            return rgba(r, g, b, P::ax);
+        }
 
         template<simd flags, typename U>
         PIXEL_FUNCTION static constexpr pixel convert(const pixel<U>& other)
@@ -207,8 +204,7 @@ namespace jw::video
             else
             {
                 const auto* const v2 = reinterpret_cast<const std::uint8_t*>(&v);
-                pixel result { v2[2], v2[1], v2[0], v2[3] };
-                return result;
+                return pixel::rgba(v2[2], v2[1], v2[0], v2[3]);
             }
         }
 
@@ -246,7 +242,7 @@ namespace jw::video
         {
             if constexpr ((std::is_same_v<VT, float> and std::is_same_v<typename P::T, float>) or (sizeof(VT) == 1 and byte_aligned()))
                 return *reinterpret_cast<pixel*>(&src);
-            return pixel { src[2], src[1], src[0], src[3] };
+            return pixel::rgba(src[2], src[1], src[0], src[3]);
         }
 
         template<typename VT = std::uint16_t>

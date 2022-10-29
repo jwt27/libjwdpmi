@@ -68,7 +68,7 @@ namespace jw
                         auto r = dac_data.read();
                         auto g = dac_data.read();
                         auto b = dac_data.read();
-                        p[i] = px32n::convert<default_simd()>(pxvga { r, g, b });
+                        p[i] = px32n::convert<default_simd()>(pxvga::rgb(r, g, b));
                     }
                 });
             }
