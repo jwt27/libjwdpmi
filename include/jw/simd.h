@@ -411,7 +411,8 @@ namespace jw
     // The input data is wrapped by simd_data() so that it encodes the type of
     // data that is being operated on.  This can be recovered via simd_type.
     // Data is then returned via simd_return(fmt, simd_data<T>(dst)...), which
-    // is passed on to the next stage.
+    // is passed on to the next stage.  Only the first and last stages may
+    // accept/return arbitrary types.
     // When a stage produces more data than the next stage can accept, that
     // next stage is invoked multiple times.
     template<typename... T>
@@ -421,13 +422,23 @@ namespace jw
 
         template<typename... U> using tuple_id = std::type_identity<std::tuple<U...>>;
 
-        template<simd flags, simd_format Fmt, std::size_t stage, std::size_t first_arg, typename RFmt, typename... A>
-        static consteval bool invocable_recurse(auto result, tuple_id<A...> args, auto seq)
+        template<typename U> static constexpr bool is_simd_return = requires (U r)
+        {
+            typename U::format;
+            requires simd_format<typename U::format>;
+            { r.data };
+        };
+
+        template<simd flags, simd_format Fmt, std::size_t stage, std::size_t first_arg, typename RFmt, typename R, typename... A>
+        static consteval bool invocable_recurse(R result, tuple_id<A...> args, auto seq)
         {
             if constexpr (first_arg < sizeof...(A))         // Check next args slice on same stage
                 return check_args_slice<flags, Fmt, stage, first_arg, RFmt>(result, args, seq);
             else if constexpr (stage + 1 < sizeof...(T))    // Done, check next stage
+            {
+                static_assert (std::tuple_size_v<typename R::type> != 0, "Pipeline stage returns nothing");
                 return invocable<flags, RFmt, stage + 1>(result);
+            }
             else return true;
         }
 
@@ -452,7 +463,7 @@ namespace jw
             {
                 constexpr auto next_arg = first_arg + sizeof...(N);
                 using result_t = typename result_id::type;
-                if constexpr (not std::same_as<result_t, void>)
+                if constexpr (is_simd_return<result_t>)
                 {
                     using r_format = typename result_t::format;
                     using r_data = decltype(result_t::data);
@@ -460,7 +471,14 @@ namespace jw
                     static_assert (std::same_as<RFmt, void> or std::same_as<RFmt, r_format>, "Pipeline stage returns conflicting formats");
                     return invocable_recurse<flags, Fmt, stage, next_arg, r_format>(std::type_identity<cumulative_data> { }, args, seq);
                 }
-                else return invocable_recurse<flags, Fmt, stage, next_arg, void>(tuple_id<> { }, args, seq);
+                else
+                {
+                    static_assert (stage == sizeof...(T) - 1, "Intermediate pipeline stages must return via simd_return()");
+                    if constexpr (not std::same_as<result_t, void>)
+                        return invocable_recurse<flags, Fmt, stage, next_arg, void>(tuple_id<R..., result_t> { }, args, seq);
+                    else
+                        return invocable_recurse<flags, Fmt, stage, next_arg, void>(tuple_id<> { }, args, seq);
+                }
             }
             else return false;
         }
@@ -500,8 +518,13 @@ namespace jw
         {
             if constexpr (first_arg < sizeof...(A))
                 return invoke_slice<flags, Fmt, stage, first_arg>(std::move(args), seq, std::forward<R>(result_so_far));
-            else if constexpr (not std::same_as<RFmt, void>)
-                return make_result<RFmt>(std::forward<R>(result_so_far));
+            else if constexpr (std::same_as<RFmt, void>)
+            {
+                if constexpr (std::tuple_size_v<R> == 0) return;
+                else if constexpr (std::tuple_size_v<R> == 1) return std::get<0>(result_so_far);
+                else return result_so_far;
+            }
+            else return make_result<RFmt>(std::forward<R>(result_so_far));
         }
 
         template<simd flags, simd_format Fmt, std::size_t stage, std::size_t first_arg = 0, typename... A, typename... R, std::size_t... N>
@@ -519,11 +542,16 @@ namespace jw
                 do_invoke();
                 return invoke_recurse<flags, Fmt, void, stage, next_arg>(std::move(args), seq, std::tuple<> { });
             }
-            else
+            else if constexpr (is_simd_return<typename result_id::type>)
             {
                 auto result = do_invoke();
                 using r_format = typename decltype(result)::format;
                 return invoke_recurse<flags, Fmt, r_format, stage, next_arg>(std::move(args), seq, std::tuple_cat(std::move(result_so_far), std::move(result.data)));
+            }
+            else
+            {
+                auto result = std::make_tuple(do_invoke());
+                return invoke_recurse<flags, Fmt, void, stage, next_arg>(std::move(args), seq, std::tuple_cat(std::move(result_so_far), std::move(result)));
             }
         }
 
