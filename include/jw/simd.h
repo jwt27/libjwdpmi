@@ -514,7 +514,7 @@ namespace jw
         }
 
         template<simd flags, simd_format Fmt, typename RFmt, std::size_t stage, std::size_t first_arg = 0, typename... A, typename R>
-        auto invoke_recurse(std::tuple<A&&...>&& args, auto seq, R&& result_so_far)
+        auto invoke_recurse(std::tuple<A...>&& args, auto seq, R&& result_so_far)
         {
             if constexpr (first_arg < sizeof...(A))
                 return invoke_slice<flags, Fmt, stage, first_arg>(std::move(args), seq, std::forward<R>(result_so_far));
@@ -528,7 +528,7 @@ namespace jw
         }
 
         template<simd flags, simd_format Fmt, std::size_t stage, std::size_t first_arg = 0, typename... A, typename... R, std::size_t... N>
-        auto invoke_slice(std::tuple<A&&...>&& args, std::index_sequence<N...> seq, std::tuple<R...> result_so_far)
+        auto invoke_slice(std::tuple<A...>&& args, std::index_sequence<N...> seq, std::tuple<R...> result_so_far)
         {
             constexpr auto next_arg = first_arg + sizeof...(N);
             using result_id = decltype(sliced_invoke_result<flags, Fmt, stage, first_arg>(tuple_id<A...> { }, seq));
@@ -556,7 +556,7 @@ namespace jw
         }
 
         template<simd flags, simd_format Fmt, std::size_t stage, typename... A>
-        auto invoke(std::tuple<A&&...>&& args)
+        auto invoke(std::tuple<A...>&& args)
         {
             constexpr auto slice = args_slice_size<flags, Fmt, stage, sizeof...(A)>(tuple_id<A...> { });
             constexpr auto seq = std::make_index_sequence<slice> { };
@@ -564,7 +564,7 @@ namespace jw
             {
                 auto result = invoke_slice<flags, Fmt, stage>(std::move(args), seq, std::tuple<> { });
                 using Fmt2 = typename decltype(result)::format;
-                return std::apply([this]<typename... A2>(A2&&... args) { return invoke<flags, Fmt2, stage + 1>(std::forward_as_tuple(std::forward<A2>(args)...)); }, std::move(result.data));
+                return invoke<flags, Fmt2, stage + 1>(std::move(result.data));
             }
             else return invoke_slice<flags, Fmt, stage>(std::move(args), seq, std::tuple<> { });
         }
