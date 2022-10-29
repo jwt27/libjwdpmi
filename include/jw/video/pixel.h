@@ -67,10 +67,32 @@ namespace jw::video
 #       define PIXEL_FUNCTION [[gnu::hot, gnu::always_inline]]
 #   endif
 
-    template<typename P>
+    template<typename T>
+    concept pixel_layout = requires (T layout)
+    {
+        // Data type (float or unsigned)
+        typename T::T;
+
+        // Maximum value for each component
+        { T::rx }; { T::gx }; { T::bx }; { T::ax };
+
+        // Color components
+        { layout.r } -> std::same_as<typename T::T&>;
+        { layout.g } -> std::same_as<typename T::T&>;
+        { layout.b } -> std::same_as<typename T::T&>;
+
+        // Optional alpha component
+        requires T::ax == 0 or requires { { layout.a } -> std::same_as<typename T::T&>; };
+
+        // Specifies if component bit-fields are aligned on byte boundaries
+        // (enables efficient conversion to/from __m64)
+        { T::byte_aligned } -> std::convertible_to<bool>;
+    };
+
+    template<pixel_layout P>
     struct alignas(P) [[gnu::packed, gnu::may_alias]] pixel : P
     {
-        template<typename> friend struct pixel;
+        template<pixel_layout> friend struct pixel;
 
         using layout = P;
         using T = typename layout::T;
