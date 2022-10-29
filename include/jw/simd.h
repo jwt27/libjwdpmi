@@ -114,7 +114,7 @@ namespace jw
     };
 
     // Specialize this for custom types.
-    template<typename T, simd_format F> requires (std::is_arithmetic_v<T>)
+    template<typename T, simd_format F>
     struct simd_type_traits
     {
         // Data type to represent this type in the given format.
