@@ -363,6 +363,14 @@ namespace jw
         { std::tuple_size_v<decltype(r.data)> } -> std::convertible_to<std::size_t>;
     };
 
+    // Check if the given type was produced by simd_data().
+    template<typename T> concept simd_data_type = requires (T r)
+    {
+        typename T::type;
+        typename T::data_type;
+        { r.data } -> std::convertible_to<typename T::data_type>;
+    };
+
 #   pragma GCC diagnostic pop
 
     // Increment an iterator by the amount specified in simd_type_traits.
@@ -431,8 +439,10 @@ namespace jw
     // The input data is wrapped by simd_data() so that it encodes the type of
     // data that is being operated on.  This can be recovered via simd_type.
     // Data is then returned via simd_return(fmt, simd_data<T>(dst)...), which
-    // is passed on to the next stage.  Only the first and last stages may
-    // accept/return arbitrary types.
+    // is passed on to the next stage.  If a stage only accepts a single
+    // input, and does not change its format or type, the result may be
+    // returned directly.  The first and last stages may also accept/return
+    // arbitrary types.
     // When a stage produces more data than the next stage can accept, that
     // next stage is invoked multiple times.
     template<typename... T>
@@ -475,22 +485,33 @@ namespace jw
             if constexpr (not std::same_as<result_id, void>)
             {
                 constexpr auto next_arg = first_arg + sizeof...(N);
-                using result_t = typename result_id::type;
-                if constexpr (simd_return_type<result_t>)
+                using result = typename result_id::type;
+                if constexpr (simd_return_type<result>)
                 {
-                    using r_format = typename result_t::format;
-                    using r_data = decltype(result_t::data);
+                    using r_format = typename result::format;
+                    using r_data = decltype(result::data);
                     using cumulative_data = decltype(std::tuple_cat(std::declval<std::tuple<R...>>(), std::declval<r_data>()));
                     static_assert (std::same_as<RFmt, void> or std::same_as<RFmt, r_format>, "Pipeline stage returns conflicting formats");
                     return invocable_recurse<flags, Fmt, stage, next_arg, r_format>(std::type_identity<cumulative_data> { }, args, seq);
                 }
                 else
                 {
-                    static_assert (stage == sizeof...(T) - 1, "Intermediate pipeline stages must return via simd_return()");
-                    if constexpr (not std::same_as<result_t, void>)
-                        return invocable_recurse<flags, Fmt, stage, next_arg, void>(tuple_id<R..., result_t> { }, args, seq);
-                    else
-                        return invocable_recurse<flags, Fmt, stage, next_arg, void>(tuple_id<> { }, args, seq);
+                    static_assert (stage == sizeof...(T) - 1 or (sizeof...(N) == 1 and not std::same_as<result, void>),
+                                   "Intermediate pipeline stages with multiple inputs must return via simd_return()");
+
+                    if constexpr (not std::same_as<result, void>)
+                    {
+                        if constexpr (stage + 1 < sizeof...(T))
+                        {
+                            using arg_type = simd_type<std::tuple_element_t<first_arg, std::tuple<A...>>>;
+                            using wrapped_result = std::conditional_t<simd_data_type<result>, result, decltype(simd_data<arg_type>(std::declval<result>()))>;
+                            using converted_result = std::tuple_element_t<0, decltype(simd_return(std::declval<Fmt>(), std::declval<wrapped_result>()).data)>;
+
+                            return invocable_recurse<flags, Fmt, stage, next_arg, Fmt>(tuple_id<R..., converted_result> { }, args, seq);
+                        }
+                        else return invocable_recurse<flags, Fmt, stage, next_arg, void>(tuple_id<R..., result> { }, args, seq);
+                    }
+                    else return invocable_recurse<flags, Fmt, stage, next_arg, void>(tuple_id<> { }, args, seq);
                 }
             }
             else return false;
@@ -555,9 +576,21 @@ namespace jw
                 do_invoke();
                 return invoke_recurse<flags, Fmt, void, stage, next_arg>(std::move(args), seq, std::tuple<> { });
             }
-            else if constexpr (simd_return_type<typename result_id::type>)
+            else if constexpr (stage + 1 < sizeof...(T))
             {
-                auto result = do_invoke();
+                using result_type = typename result_id::type;
+                auto wrap_invoke = [&do_invoke]
+                {
+                    if constexpr (not simd_return_type<result_type>)
+                    {
+                        if constexpr (not simd_data_type<result_type>)
+                            return simd_return(Fmt { }, simd_data<simd_type<std::tuple_element_t<first_arg, std::tuple<A...>>>>(do_invoke()));
+                        else
+                            return simd_return(Fmt { }, do_invoke());
+                    }
+                    else return do_invoke();
+                };
+                auto result = wrap_invoke();
                 using r_format = typename decltype(result)::format;
                 return invoke_recurse<flags, Fmt, r_format, stage, next_arg>(std::move(args), seq, std::tuple_cat(std::move(result_so_far), std::move(result.data)));
             }
