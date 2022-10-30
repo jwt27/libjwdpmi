@@ -582,26 +582,26 @@ namespace jw
 
     template<typename... T> simd_pipeline(T...) -> simd_pipeline<std::remove_cvref_t<T>...>;
 
-    // Execute a SIMD pipeline or single stage with the specified arguments.
+    // Execute a SIMD pipeline or single stage with the specified arguments,
+    // trying simd_formats in the specified order.
+    template<simd flags, simd_format Fmt, simd_format... Fmts, typename F, typename... A>
+    [[gnu::flatten, gnu::hot]] auto simd_run(F&& func, A&&... args)
+    {
+        if constexpr (flags.match(simd_format_traits<Fmt>::flags) and simd_invocable<F, flags, Fmt, A...>)
+            return simd_invoke<flags>(std::forward<F>(func), Fmt { }, std::forward<A>(args)...);
+        else
+        {
+            static_assert (sizeof...(Fmts) > 0, "Unable to find suitable simd_format");
+            return simd_run<flags, Fmts...>(std::forward<F>(func), std::forward<A>(args)...);
+        }
+    }
+
+    // Execute a SIMD pipeline or single stage with the specified arguments,
+    // using the default format search order.
     template<simd flags, typename F, typename... A>
     [[gnu::flatten, gnu::hot]] auto simd_run(F&& func, A&&... args)
     {
-        constexpr auto can_invoke = []<typename Fmt>(Fmt) consteval
-        {
-            return flags.match(simd_format_traits<Fmt>::flags) and simd_invocable<F, flags, Fmt, A...>;
-        };
-
-        auto do_invoke = [&]<typename Fmt>(Fmt)
-        {
-            return simd_invoke<flags>(std::forward<F>(func), Fmt { }, std::forward<A>(args)...);
-        };
-
-        if constexpr (can_invoke(pi8)) return do_invoke(pi8);
-        else if constexpr (can_invoke(pi16)) return do_invoke(pi16);
-        else if constexpr (can_invoke(pi32)) return do_invoke(pi32);
-        else if constexpr (can_invoke(si64)) return do_invoke(si64);
-        else if constexpr (can_invoke(ps)) return do_invoke(ps);
-        else if constexpr (can_invoke(pf)) return do_invoke(pf);
-        else return do_invoke(nosimd);
+        return simd_run<flags, format_pi8, format_pi16, format_pi32, format_si64, format_ps, format_pf, format_nosimd>
+            (std::forward<F>(func), std::forward<A>(args)...);
     }
 }
