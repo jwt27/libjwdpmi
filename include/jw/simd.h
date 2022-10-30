@@ -414,6 +414,17 @@ namespace jw
         std::tuple<I...> iterators;
     };
 
+    // Reinterpret simd_data as a different type.
+    template<typename... T>
+    struct simd_reinterpret
+    {
+        template<simd flags, typename... U> requires (sizeof...(T) == sizeof...(U))
+            auto operator()(auto fmt, U&&... data)
+        {
+            return simd_return(fmt, simd_data<T>(std::forward<U>(data))...);
+        }
+    };
+
     // A SIMD pipeline is composed of one or more functor objects, each of
     // which defines an operator() with the following signature:
     //  template<simd flags> auto operator()(simd_format fmt, auto... src)
