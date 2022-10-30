@@ -323,7 +323,7 @@ namespace jw
         struct impl
         {
             using type = std::remove_cvref_t<T>;
-            using data_type = D;
+            using data_type = std::decay_t<D>;
             const data_type data;
 
             constexpr operator data_type() const noexcept { return data; }
@@ -351,7 +351,7 @@ namespace jw
             };
             return impl { std::tuple<std::decay_t<D2>...> { std::forward<D2>(data)... } };
         };
-        return make(simd_data<simd_type<D>>(std::forward<typename simd_type_traits<simd_type<D>, F>::data_type>(data))...);
+        return make(simd_data<simd_type<D>>(static_cast<simd_type_traits<simd_type<D>, F>::data_type>(std::forward<D>(data).data))...);
     }
 
 #   pragma GCC diagnostic pop
