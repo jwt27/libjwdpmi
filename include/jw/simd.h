@@ -354,6 +354,15 @@ namespace jw
         return make(simd_data<simd_type<D>>(static_cast<simd_type_traits<simd_type<D>, F>::data_type>(std::forward<D>(data).data))...);
     }
 
+    // Check if the given type was produced by simd_return().
+    template<typename T> concept simd_return_type = requires (T r)
+    {
+        typename T::format;
+        requires simd_format<typename T::format>;
+        { r.data };
+        { std::tuple_size_v<decltype(r.data)> } -> std::convertible_to<std::size_t>;
+    };
+
 #   pragma GCC diagnostic pop
 
     // Increment an iterator by the amount specified in simd_type_traits.
@@ -422,13 +431,6 @@ namespace jw
 
         template<typename... U> using tuple_id = std::type_identity<std::tuple<U...>>;
 
-        template<typename U> static constexpr bool is_simd_return = requires (U r)
-        {
-            typename U::format;
-            requires simd_format<typename U::format>;
-            { r.data };
-        };
-
         template<simd flags, simd_format Fmt, std::size_t stage, std::size_t first_arg, typename RFmt, typename R, typename... A>
         static consteval bool invocable_recurse(R result, tuple_id<A...> args, auto seq)
         {
@@ -463,7 +465,7 @@ namespace jw
             {
                 constexpr auto next_arg = first_arg + sizeof...(N);
                 using result_t = typename result_id::type;
-                if constexpr (is_simd_return<result_t>)
+                if constexpr (simd_return_type<result_t>)
                 {
                     using r_format = typename result_t::format;
                     using r_data = decltype(result_t::data);
@@ -542,7 +544,7 @@ namespace jw
                 do_invoke();
                 return invoke_recurse<flags, Fmt, void, stage, next_arg>(std::move(args), seq, std::tuple<> { });
             }
-            else if constexpr (is_simd_return<typename result_id::type>)
+            else if constexpr (simd_return_type<typename result_id::type>)
             {
                 auto result = do_invoke();
                 using r_format = typename decltype(result)::format;
@@ -603,5 +605,24 @@ namespace jw
     {
         return simd_run<flags, format_pi8, format_pi16, format_pi32, format_si64, format_ps, format_pf, format_nosimd>
             (std::forward<F>(func), std::forward<A>(args)...);
+    }
+
+    // Invoke a SIMD pipeline or single stage using the format and arguments
+    // unpacked from simd_return data.
+    template<simd flags, typename F, simd_return_type... A>
+    [[gnu::flatten, gnu::hot]] auto simd_apply(F&& func, A&&... args)
+    {
+        constexpr auto get_format = []<typename B, typename... C>(std::type_identity<std::tuple<B, C...>>)
+        {
+            return typename B::format { };
+        };
+        using Fmt = decltype(get_format(std::type_identity<std::tuple<A...>> { }));
+        static_assert ((std::same_as<Fmt, typename A::format> and ...), "Conflicting formats in arguments");
+
+        auto invoke = [&func]<typename... A2>(A2&&... args)
+        {
+            return simd_run<flags, Fmt>(std::forward<F>(func), std::forward<A2>(args)...);
+        };
+        return std::apply(invoke, std::forward<A>(args).data...);
     }
 }
