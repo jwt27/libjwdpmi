@@ -422,6 +422,36 @@ namespace jw
         std::tuple<I...> iterators;
     };
 
+    // Convert input directly to SIMD data via simd_load.  This is only
+    // possible for types where the returned SIMD vector represents one
+    // element of T.  For regular arithmetic types, only format_nosimd
+    // satisfies this constraint.
+    struct simd_in
+    {
+        template<simd flags, simd_format F, typename T>
+        requires (can_load<const T*, F> and simd_type_traits<T, F>::delta == 1)
+        auto operator()(F, const T& value)
+        {
+            return simd_data<T>(simd_load(F { }, &value));
+        }
+    };
+
+    // Convert SIMD data directly to output value via simd_store.  As with
+    // simd_in, this only possible when the SIMD vector represents a single
+    // element of the output type.
+    struct simd_out
+    {
+        template<simd flags, simd_format F, simd_data_type D>
+        requires (can_store<simd_type<D>*, F> and simd_type_traits<simd_type<D>, F>::delta == 1
+                  and std::is_default_constructible_v<simd_type<D>>)
+        auto operator()(F, D data)
+        {
+            simd_type<D> value;
+            simd_store(F { }, &value, data);
+            return value;
+        }
+    };
+
     // Reinterpret simd_data as a different type.
     template<typename... T>
     struct simd_reinterpret
@@ -488,6 +518,7 @@ namespace jw
                 using result = typename result_id::type;
                 if constexpr (simd_return_type<result>)
                 {
+                    // This stage returns via simd_return(fmt, simd_data<T>(result)...)
                     using r_format = typename result::format;
                     using r_data = decltype(result::data);
                     using cumulative_data = decltype(std::tuple_cat(std::declval<std::tuple<R...>>(), std::declval<r_data>()));
@@ -503,8 +534,25 @@ namespace jw
                     {
                         if constexpr (stage + 1 < sizeof...(T))
                         {
-                            using arg_type = simd_type<std::tuple_element_t<first_arg, std::tuple<A...>>>;
-                            using wrapped_result = std::conditional_t<simd_data_type<result>, result, decltype(simd_data<arg_type>(std::declval<result>()))>;
+                            static_assert (stage > 0 or simd_data_type<result>, "First stage must return via simd_data()");
+                            constexpr auto check_arg_type = []
+                            {
+                                // Get the simd_type of the argument (only one is allowed here)
+                                using arg_type = std::tuple_element_t<first_arg, std::tuple<A...>>;
+                                if constexpr (simd_data_type<arg_type>) return std::type_identity<simd_type<arg_type>> { };
+                                else return std::type_identity<std::remove_cvref_t<arg_type>> { };
+                            };
+                            using arg_type = decltype(check_arg_type())::type;
+
+                            constexpr auto wrap_result = []
+                            {
+                                // Wrap result in simd_data() if not done already
+                                if constexpr (simd_data_type<result>) return std::type_identity<result> { };
+                                else return std::type_identity<decltype(simd_data<arg_type>(std::declval<result>()))> { };
+                            };
+                            using wrapped_result = decltype(wrap_result())::type;
+
+                            // Run result through simd_return() to convert it to the type specified in simd_type_traits
                             using converted_result = std::tuple_element_t<0, decltype(simd_return(std::declval<Fmt>(), std::declval<wrapped_result>()).data)>;
 
                             return invocable_recurse<flags, Fmt, stage, next_arg, Fmt>(tuple_id<R..., converted_result> { }, args, seq);
