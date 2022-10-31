@@ -131,40 +131,64 @@ namespace jw
         static constexpr std::size_t delta = 1;
     };
 
-    template<typename I, typename Fmt> concept can_load = requires (Fmt t, I p) { { simd_load(t, p) } -> std::same_as<typename simd_type_traits<std::remove_cv_t<std::iter_value_t<I>>, Fmt>::data_type>; };
-    template<typename O, typename Fmt> concept can_store = requires (Fmt t, O p, typename simd_type_traits<std::remove_cv_t<std::iter_value_t<O>>, Fmt>::data_type v) { simd_store(t, p, v); };
+    // Check if the given type was produced by simd_data().
+    template<typename T> concept simd_data_type = requires (T r)
+    {
+        typename T::type;
+        typename T::data_type;
+        { r.data } -> std::convertible_to<typename T::data_type>;
+    };
 
-    template<std::indirectly_readable I> requires (std::is_arithmetic_v<std::iter_value_t<I>>)
+    // Check if the given type was produced by simd_return().
+    template<typename T> concept simd_return_type = requires (T r)
+    {
+        typename T::format;
+        requires simd_format<typename T::format>;
+        { r.data };
+        { std::tuple_size_v<decltype(r.data)> } -> std::convertible_to<std::size_t>;
+    };
+
+    // Read the type name stored by simd_data().
+    template<typename D> using simd_type = typename std::decay_t<D>::type;
+
+    // Check if the simd_type of D matches T.
+    template<typename D, typename T>
+    concept simd_data_for = simd_data_type<D> and std::same_as<simd_type<D>, T>;
+
+    template<typename I, simd flags, typename Fmt> concept simd_loadable = requires (Fmt t, I p) { { simd_load<flags>(t, p) } -> std::same_as<typename simd_type_traits<std::remove_cv_t<std::iter_value_t<I>>, Fmt>::data_type>; };
+    template<typename O, simd flags, typename Fmt> concept simd_storable = requires (Fmt t, O p, typename simd_type_traits<std::remove_cv_t<std::iter_value_t<O>>, Fmt>::data_type v) { simd_store<flags>(t, p, v); };
+
+    template<simd, std::indirectly_readable I> requires (std::is_arithmetic_v<std::iter_value_t<I>>)
     [[gnu::always_inline]] inline auto simd_load(format_nosimd, I src)
     {
         return *src;
     }
 
-    template<typename T, std::indirectly_writable<T> O> requires (std::is_arithmetic_v<std::iter_value_t<O>>)
+    template<simd, typename T, std::indirectly_writable<T> O> requires (std::is_arithmetic_v<std::iter_value_t<O>>)
     [[gnu::always_inline]] inline void simd_store(format_nosimd, O dst, T src)
     {
         *dst = src;
     }
 
-    template<std::integral T> requires (sizeof(T) == 1)
+    template<simd, std::integral T> requires (sizeof(T) == 1)
     [[gnu::always_inline]] inline __m64 simd_load(format_pi8, const T* src)
     {
         return *reinterpret_cast<const __m64*>(src);
     }
 
-    template<std::integral T> requires (sizeof(T) == 1)
+    template<simd, std::integral T> requires (sizeof(T) == 1)
     [[gnu::always_inline]] inline void simd_store(format_pi8, T* dst, __m64 src)
     {
         *reinterpret_cast<__m64*>(dst) = src;
     }
 
-    template<std::integral T> requires (sizeof(T) <= 2)
+    template<simd flags, std::integral T> requires (sizeof(T) <= 2)
     [[gnu::always_inline]] inline __m64 simd_load(format_pi16, const T* src)
     {
         if constexpr (sizeof(T) == 2) return *reinterpret_cast<const __m64*>(src);
         else
         {
-            __m64 data = simd_load(pi8, src);
+            __m64 data = simd_load<flags>(pi8, src);
             __m64 sign = _mm_setzero_si64();
             if constexpr (std::is_signed_v<T>) sign = _mm_cmpgt_pi8(sign, data);
             data = _mm_unpacklo_pi8(data, sign);
@@ -172,26 +196,26 @@ namespace jw
         }
     }
 
-    template<std::integral T> requires (sizeof(T) == 2)
+    template<simd, std::integral T> requires (sizeof(T) == 2)
     [[gnu::always_inline]] inline void simd_store(format_pi16, T* dst, __m64 src)
     {
         *reinterpret_cast<__m64*>(dst) = src;
     }
 
-    template<std::integral T> requires (sizeof(T) == 1)
+    template<simd, std::integral T> requires (sizeof(T) == 1)
     [[gnu::always_inline]] inline void simd_store(format_pi16, T* dst, __m64 src)
     {
         const __m64 a = std::is_signed_v<T> ? _mm_packs_pi16(src, src) : _mm_packs_pu16(src, src);
         *reinterpret_cast<std::uint32_t*>(dst) = _mm_cvtsi64_si32(a);
     }
 
-    template<std::integral T> requires (sizeof(T) <= 4)
+    template<simd flags, std::integral T> requires (sizeof(T) <= 4)
     [[gnu::always_inline]] inline __m64 simd_load(format_pi32, const T* src)
     {
         if constexpr (sizeof(T) == 4) return *reinterpret_cast<const __m64*>(src);
         else
         {
-            __m64 data = simd_load(pi16, src);
+            __m64 data = simd_load<flags>(pi16, src);
             __m64 sign = _mm_setzero_si64();
             if constexpr (std::is_signed_v<T>) sign = _mm_cmpgt_pi16(sign, data);
             data = _mm_unpacklo_pi16(data, sign);
@@ -199,20 +223,20 @@ namespace jw
         }
     }
 
-    template<std::integral T> requires (sizeof(T) == 4)
+    template<simd, std::integral T> requires (sizeof(T) == 4)
     [[gnu::always_inline]] inline void simd_store(format_pi32, T* dst, __m64 src)
     {
         *reinterpret_cast<__m64*>(dst) = src;
     }
 
-    template<std::signed_integral T> requires (sizeof(T) == 2)
+    template<simd, std::signed_integral T> requires (sizeof(T) == 2)
     [[gnu::always_inline]] inline void simd_store(format_pi32, T* dst, __m64 src)
     {
         const __m64 a = _mm_packs_pi32(src, src);
         *reinterpret_cast<std::uint32_t*>(dst) = _mm_cvtsi64_si32(a);
     }
 
-    template<std::integral T> requires (sizeof(T) == 1)
+    template<simd, std::integral T> requires (sizeof(T) == 1)
     [[gnu::always_inline]] inline void simd_store(format_pi32, T* dst, __m64 src)
     {
         __m64 data = _mm_packs_pi32(src, src);
@@ -220,13 +244,13 @@ namespace jw
         *reinterpret_cast<std::uint16_t*>(dst) = _mm_cvtsi64_si32(data);
     }
 
-    template<std::integral T> requires (sizeof(T) <= 8)
+    template<simd flags, std::integral T> requires (sizeof(T) <= 8)
     [[gnu::always_inline]] inline __m64 simd_load(format_si64, const T* src)
     {
         if constexpr (sizeof(T) == 8) return *reinterpret_cast<const __m64*>(src);
         else
         {
-            __m64 data = simd_load(pi32, src);
+            __m64 data = simd_load<flags>(pi32, src);
             __m64 sign = _mm_setzero_si64();
             if constexpr (std::is_signed_v<T>) sign = _mm_cmpgt_pi32(sign, data);
             data = _mm_unpacklo_pi32(data, sign);
@@ -234,18 +258,19 @@ namespace jw
         }
     }
 
-    template<std::integral T> requires (sizeof(T) == 8)
+    template<simd, std::integral T> requires (sizeof(T) == 8)
     [[gnu::always_inline]] inline void simd_store(format_si64, T* dst, __m64 src)
     {
         *reinterpret_cast<__m64*>(dst) = src;
     }
 
+    template<simd>
     [[gnu::always_inline]] inline __m128 simd_load(format_ps, const float* src)
     {
         return *reinterpret_cast<const __m128*>(src);
     }
 
-    template<std::signed_integral T> requires (sizeof(T) == 4)
+    template<simd, std::signed_integral T> requires (sizeof(T) == 4)
     [[gnu::always_inline]] inline __m128 simd_load(format_ps, const T* src)
     {
         const __m64 lo = *reinterpret_cast<const __m64*>(src + 0);
@@ -253,24 +278,25 @@ namespace jw
         return _mm_cvtpi32x2_ps(lo, hi);
     }
 
-    template<std::integral T> requires (sizeof(T) <= 2)
+    template<simd, std::integral T> requires (sizeof(T) <= 2)
     [[gnu::always_inline]] inline __m128 simd_load(format_ps, const T* src)
     {
         const __m64 data = simd_load(pi16, src);
         return std::is_signed_v<T> ? _mm_cvtpi16_ps(data) : _mm_cvtpu16_ps(data);
     }
 
+    template<simd>
     [[gnu::always_inline]] inline void simd_store(format_ps, float* dst, __m128 src)
     {
         *reinterpret_cast<__m128*>(dst) = src;
     }
 
-    template<std::integral T> requires (sizeof(T) <= 4 and (std::is_signed_v<T> or sizeof(T) == 1))
+    template<simd flags, std::integral T> requires (sizeof(T) <= 4 and (std::is_signed_v<T> or sizeof(T) == 1))
     [[gnu::always_inline]] inline void simd_store(format_ps, T* dst, __m128 src)
     {
         const __m64 lo = _mm_cvtps_pi32(src);
         const __m64 hi = _mm_cvtps_pi32(_mm_movehl_ps(src, src));
-        if constexpr (can_store<T, format_pi16>)
+        if constexpr (simd_storable<T*, flags, format_pi16>)
             simd_store(pi16, dst, _mm_packs_pi32(lo, hi));
         else
         {
@@ -279,23 +305,25 @@ namespace jw
         }
     }
 
+    template<simd>
     [[gnu::always_inline]] inline __m64 simd_load(format_pf, const float* src)
     {
         return *reinterpret_cast<const __m64*>(src);
     }
 
-    template<std::integral T> requires (sizeof(T) <= 4 and (std::is_signed_v<T> or sizeof(T) <= 2))
+    template<simd, std::integral T> requires (sizeof(T) <= 4 and (std::is_signed_v<T> or sizeof(T) <= 2))
     [[gnu::always_inline]] inline __m64 simd_load(format_pf, const T* src)
     {
         return _m_pi2fd(simd_load(pi32, src));
     }
 
+    template<simd>
     [[gnu::always_inline]] inline void simd_store(format_pf, float* dst, __m64 src)
     {
         *reinterpret_cast<__m64*>(dst) = src;
     }
 
-    template<std::integral T> requires (sizeof(T) <= 4 and (std::is_signed_v<T> or sizeof(T) == 1))
+    template<simd, std::integral T> requires (sizeof(T) <= 4 and (std::is_signed_v<T> or sizeof(T) == 1))
     [[gnu::always_inline]] inline void simd_store(format_pf, T* dst, __m64 src)
     {
         simd_store(pi32, dst, _m_pf2id(src));
@@ -334,9 +362,6 @@ namespace jw
             return impl { std::forward<D>(data) };
     }
 
-    // Read the type name stored by simd_data().
-    template<typename D> using simd_type = typename std::decay_t<D>::type;
-
     // Wrap simd_data in a struct with the specified format info.  All data is
     // converted to the data_type specified in simd_type_traits.
     template<simd_format F, typename... D>
@@ -354,23 +379,6 @@ namespace jw
         return make(simd_data<simd_type<D>>(static_cast<simd_type_traits<simd_type<D>, F>::data_type>(std::forward<D>(data).data))...);
     }
 
-    // Check if the given type was produced by simd_return().
-    template<typename T> concept simd_return_type = requires (T r)
-    {
-        typename T::format;
-        requires simd_format<typename T::format>;
-        { r.data };
-        { std::tuple_size_v<decltype(r.data)> } -> std::convertible_to<std::size_t>;
-    };
-
-    // Check if the given type was produced by simd_data().
-    template<typename T> concept simd_data_type = requires (T r)
-    {
-        typename T::type;
-        typename T::data_type;
-        { r.data } -> std::convertible_to<typename T::data_type>;
-    };
-
 #   pragma GCC diagnostic pop
 
     // Increment an iterator by the amount specified in simd_type_traits.
@@ -387,10 +395,10 @@ namespace jw
     // simd_type_traits.
     struct simd_source
     {
-        template<simd flags, simd_format F, typename... I> requires (can_load<I, F> and ...)
+        template<simd flags, simd_format F, typename... I> requires (simd_loadable<I, flags, F> and ...)
         auto operator()(F, I*... iterators)
         {
-            auto ret = simd_return(F { }, simd_data<std::iter_value_t<I>>(simd_load(F { }, *iterators))...);
+            auto ret = simd_return(F { }, simd_data<std::iter_value_t<I>>(simd_load<flags>(F { }, *iterators))...);
             (increment_simd_iterator<F>(iterators), ...);
             return ret;
         }
@@ -404,18 +412,18 @@ namespace jw
 
         template<simd flags, simd_format F, typename... D>
         requires (sizeof...(D) == sizeof...(I) and
-                  (can_store<I, F> and ...) and
+                  (simd_storable<I, flags, F> and ...) and
                   (std::output_iterator<I, simd_type<D>> and ...))
         void operator()(F, D&&... data)
         {
-            store(F { }, std::index_sequence_for<D...> { }, std::forward_as_tuple(std::forward<D>(data)...));
+            store<flags>(F { }, std::index_sequence_for<D...> { }, std::forward_as_tuple(std::forward<D>(data)...));
         }
 
     private:
-        template<simd_format F, std::size_t... N>
+        template<simd flags, simd_format F, std::size_t... N>
         void store(F, std::index_sequence<N...>, auto data)
         {
-            (simd_store(F { }, std::get<N>(iterators), std::get<N>(data)), ...);
+            (simd_store<flags>(F { }, std::get<N>(iterators), std::get<N>(data)), ...);
             (increment_simd_iterator<F>(&std::get<N>(iterators)), ...);
         }
 
@@ -429,10 +437,10 @@ namespace jw
     struct simd_in
     {
         template<simd flags, simd_format F, typename T>
-        requires (can_load<const T*, F> and simd_type_traits<T, F>::delta == 1)
+        requires (simd_loadable<const T*, flags, F> and simd_type_traits<T, F>::delta == 1)
         auto operator()(F, const T& value)
         {
-            return simd_data<T>(simd_load(F { }, &value));
+            return simd_data<T>(simd_load<flags>(F { }, &value));
         }
     };
 
@@ -442,12 +450,12 @@ namespace jw
     struct simd_out
     {
         template<simd flags, simd_format F, simd_data_type D>
-        requires (can_store<simd_type<D>*, F> and simd_type_traits<simd_type<D>, F>::delta == 1
+        requires (simd_storable<simd_type<D>*, flags, F> and simd_type_traits<simd_type<D>, F>::delta == 1
                   and std::is_default_constructible_v<simd_type<D>>)
         auto operator()(F, D data)
         {
             simd_type<D> value;
-            simd_store(F { }, &value, data);
+            simd_store<flags>(F { }, &value, data);
             return value;
         }
     };
