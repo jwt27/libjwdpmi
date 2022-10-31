@@ -358,8 +358,9 @@ namespace jw
             const data_type data;
 
             constexpr operator data_type() const noexcept { return data; }
+            constexpr const data_type& get() const noexcept { return data; }
         };
-        if constexpr (requires { typename std::decay_t<D>::data_type; })
+        if constexpr (simd_data_type<std::decay_t<D>>)
             return simd_data<T, typename std::decay_t<D>::data_type>(std::forward<D>(data));
         else
             return impl { std::forward<D>(data) };
