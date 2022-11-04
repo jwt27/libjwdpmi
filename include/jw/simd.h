@@ -539,8 +539,8 @@ namespace jw
                 }
                 else
                 {
-                    static_assert (stage == sizeof...(T) - 1 or (sizeof...(N) == 1 and not std::same_as<result, void>),
-                                   "Intermediate pipeline stages with multiple inputs must return via simd_return()");
+                    static_assert (stage == sizeof...(T) - 1 or simd_data_type<result> or (sizeof...(N) == 1 and not std::same_as<result, void>),
+                                   "Intermediate pipeline stages with multiple inputs must return via simd_data()");
 
                     if constexpr (not std::same_as<result, void>)
                     {
