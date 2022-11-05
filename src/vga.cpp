@@ -35,9 +35,10 @@ namespace jw
             {
                 mmx_function<default_simd()>([pal]
                 {
+                    simd_pipeline pipe { simd_in, px_convert<pxvga>, simd_out };
                     for (const auto& i : pal)
                     {
-                        const auto p = pxvga::convert<default_simd()>(i);
+                        const auto p = simd_run<default_simd()>(pipe, i);
                         dac_data.write(p.r);
                         dac_data.write(p.g);
                         dac_data.write(p.b);
@@ -63,12 +64,13 @@ namespace jw
             {
                 mmx_function<default_simd()>([p = result.data()]
                 {
+                    simd_pipeline pipe { simd_in, px_convert<px32n>, simd_out };
                     for (auto i = 0; i < 256; ++i)
                     {
                         auto r = dac_data.read();
                         auto g = dac_data.read();
                         auto b = dac_data.read();
-                        p[i] = px32n::convert<default_simd()>(pxvga::rgb(r, g, b));
+                        p[i] = simd_run<default_simd()>(pipe, pxvga { r, g, b });
                     }
                 });
             }
