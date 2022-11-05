@@ -397,7 +397,7 @@ namespace jw
     // Load from one or more iterators, passed by pointer, and return
     // simd_data.  The iterators are incremented by the amount specified in
     // simd_type_traits.
-    struct simd_source
+    struct simd_source_t
     {
         template<simd flags, simd_format F, typename... I> requires (simd_loadable<I, flags, F> and ...)
         auto operator()(F, I*... iterators)
@@ -406,7 +406,7 @@ namespace jw
             (increment_simd_iterator<F>(iterators), ...);
             return ret;
         }
-    };
+    } constexpr inline simd_source;
 
     // Store the incoming simd_data in a contained set of iterators.
     template<typename... I>
@@ -438,7 +438,7 @@ namespace jw
     // possible for types where the returned SIMD vector represents one
     // element of T.  For regular arithmetic types, only format_nosimd
     // satisfies this constraint.
-    struct simd_in
+    struct simd_in_t
     {
         template<simd flags, simd_format F, typename T>
         requires (simd_loadable<const T*, flags, F> and simd_type_traits<T, F>::delta == 1)
@@ -446,12 +446,12 @@ namespace jw
         {
             return simd_data<T>(simd_load<flags>(F { }, &value));
         }
-    };
+    } constexpr inline simd_in;
 
     // Convert SIMD data directly to output value via simd_store.  As with
     // simd_in, this only possible when the SIMD vector represents a single
     // element of the output type.
-    struct simd_out
+    struct simd_out_t
     {
         template<simd flags, simd_format F, simd_data_type D>
         requires (simd_storable<simd_type<D>*, flags, F> and simd_type_traits<simd_type<D>, F>::delta == 1
@@ -462,7 +462,7 @@ namespace jw
             simd_store<flags>(F { }, &value, data);
             return value;
         }
-    };
+    } constexpr inline simd_out;
 
     // Reinterpret simd_data as a different type.
     template<typename... T>
