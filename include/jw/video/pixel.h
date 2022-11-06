@@ -634,19 +634,6 @@ namespace jw::video
         }
     } inline constexpr px_clamp;
 
-    struct [[gnu::packed]] px8
-    {
-        byte value { };
-
-        constexpr px8() noexcept = default;
-        constexpr px8(byte v) : value(v) { }
-        constexpr px8& operator=(byte p) { value = (p == 0 ? value : p); return *this; }
-        constexpr px8& operator=(const px8& p) { value = (p.value == 0 ? value : p.value); return *this; }
-        constexpr operator byte() { return value; }
-
-        template<typename T> constexpr auto cast(const auto& pal) { const auto& p = pal[value]; return T { p.r, p.g, p.b }; }
-    };
-
     template<std::size_t bbits, std::size_t gbits, std::size_t rbits, std::size_t abits, std::size_t align = 1, bool is_byte_aligned = false>
     struct alignas(align) [[gnu::packed]] bgra
     {
