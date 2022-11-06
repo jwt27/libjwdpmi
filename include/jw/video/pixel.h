@@ -588,6 +588,52 @@ namespace jw::video
         }
     } inline constexpr px_blend_premultiplied;
 
+    // Clamp component levels to maximum values allowed by layout.
+    struct px_clamp_t
+    {
+        template<simd, pixel_data D>
+        auto operator()(format_nosimd, D dsrc)
+        {
+            using P = simd_type<D>;
+            using proxy = pixel_proxy_for<P>;
+            proxy dst = dsrc;
+            using T = proxy::type;
+            for (unsigned i = 0; i < 3 + P::has_alpha(); ++i)
+                dst.array[i] = std::clamp(dst.array[i], static_cast<T>(0), static_cast<T>(P::max[i]));
+            return dst;
+        }
+
+        template<simd, pixel_data D>
+        auto operator()(format_pi16, D dsrc)
+        {
+            using P = simd_type<D>;
+            constexpr auto max = reinterpret_cast<__m64>(simd_vector<std::uint16_t, 4> { P::bx, P::gx, P::rx, P::ax });
+
+            const __m64 not_hi = _mm_cmpgt_pi16(max, dsrc);
+            const __m64 not_lo = _mm_cmpgt_pi16(dsrc, _mm_setzero_si64());
+            __m64 dst = _mm_and_si64(dsrc, not_hi);
+            dst = _mm_and_si64(dst, not_lo);
+            dst = _mm_or_si64(dst, _mm_andnot_si64(not_hi, max));
+
+            return dst;
+        }
+
+        template<simd, pixel_data D>
+        auto operator()(format_ps, D dsrc)
+        {
+            using P = simd_type<D>;
+            constexpr __m128 max { P::bx, P::gx, P::rx, P::ax };
+
+            const __m128 not_hi = _mm_cmpgt_ps(max, dsrc);
+            const __m128 not_lo = _mm_cmpgt_ps(dsrc, _mm_setzero_ps());
+            __m128 dst = _mm_and_ps(dsrc, not_hi);
+            dst = _mm_and_ps(dst, not_lo);
+            dst = _mm_or_ps(dst, _mm_andnot_ps(not_hi, max));
+
+            return dst;
+        }
+    } inline constexpr px_clamp;
+
     struct [[gnu::packed]] px8
     {
         byte value { };
