@@ -191,6 +191,13 @@ namespace jw
     };
 
     template<typename P> requires (not std::floating_point<typename P::T>)
+    struct simd_type_traits<video::pixel<P>, format_pi8>
+    {
+        using data_type = m64_t;
+        static constexpr std::size_t delta = 2;
+    };
+
+    template<typename P> requires (not std::floating_point<typename P::T>)
     struct simd_type_traits<video::pixel<P>, format_pi16>
     {
         using data_type = m64_t;
@@ -217,6 +224,44 @@ namespace jw
         return proxy;
     }
 
+    template<simd flags, std::random_access_iterator I>
+    requires (video::pixel_type<std::iter_value_t<I>> and std::integral<typename std::iter_value_t<I>::T>)
+    [[gnu::always_inline]] inline auto simd_load(format_pi8, I src)
+    {
+        using P = std::iter_value_t<I>;
+        __m64 v;
+        if constexpr (P::byte_aligned())
+        {
+            if constexpr (sizeof(P) == 4 and std::contiguous_iterator<I>)
+                asm ("movq %0, %1" : "=y" (v) : "m" (*src));
+            else
+            {
+                __m64 lo = *reinterpret_cast<const __m64*>(&src[0]);
+                __m64 hi = *reinterpret_cast<const __m64*>(&src[1]);
+                v = _mm_unpacklo_pi32(lo, hi);
+            }
+        }
+        else
+        {
+            auto make = [](auto px)
+            {
+                __m64 v;
+                std::uint8_t a[4];
+                a[0] = px.b;
+                a[1] = px.g;
+                a[2] = px.r;
+                if constexpr (P::has_alpha()) a[4] = px.a;
+                auto b = *reinterpret_cast<std::uint32_t*>(a);
+                asm ("movd %0, %1" : "=y" (v) : "rm" (b));
+                return v;
+            };
+            auto lo = make(src[0]);
+            auto hi = make(src[1]);
+            v = _mm_unpacklo_pi32(lo, hi);
+        }
+        return v;
+    }
+
     template<simd flags, std::indirectly_readable I>
     requires (video::pixel_type<std::iter_value_t<I>> and std::integral<typename std::iter_value_t<I>::T>)
     [[gnu::always_inline]] inline auto simd_load(format_pi16, I src)
@@ -232,7 +277,7 @@ namespace jw
             a[1] = px.g;
             a[2] = px.r;
             if constexpr (P::has_alpha()) a[3] = px.a;
-            auto b = *reinterpret_cast<unsigned*>(a);
+            auto b = *reinterpret_cast<std::uint32_t*>(a);
             asm ("movd %0, %1" : "=y" (v) : "rm" (b));
         }
         v = _mm_unpacklo_pi8(v, _mm_setzero_si64());
@@ -261,6 +306,38 @@ namespace jw
         px.r = src.r;
         if constexpr (P::has_alpha()) px.a = src.a;
         *dst = std::move(px);
+    }
+
+    template<simd flags, std::random_access_iterator I> requires (video::pixel_type<std::iter_value_t<I>> and std::integral<typename std::iter_value_t<I>::T>)
+    [[gnu::always_inline]] inline void simd_store(format_pi8, I dst, __m64 src)
+    {
+        using P = std::iter_value_t<I>;
+        if constexpr (P::byte_aligned() and sizeof(P) == 4)
+        {
+            if constexpr (std::contiguous_iterator<I>)
+                asm ("movq %0, %1" : "=m" (*dst) : "y" (src));
+            else
+            {
+                P px[2];
+                *reinterpret_cast<__m64*>(px) = src;
+                dst[0] = std::move(px[0]);
+                dst[1] = std::move(px[1]);
+            }
+        }
+        else
+        {
+            auto make = [](const std::uint8_t* a)
+            {
+                P px;
+                px.b = a[0];
+                px.g = a[1];
+                px.r = a[2];
+                if constexpr (P::has_alpha()) px.a = a[3];
+            };
+            const auto* const a = reinterpret_cast<const std::uint8_t*>(&src);
+            dst[0] = make(a + 0);
+            dst[1] = make(a + 4);
+        }
     }
 
     template<simd flags, typename I> requires (video::pixel_type<std::iter_value_t<I>> and std::integral<typename std::iter_value_t<I>::T>)
