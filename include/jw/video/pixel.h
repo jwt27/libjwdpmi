@@ -680,19 +680,27 @@ namespace jw::video
             return dst;
         }
 
-        template<simd, pixel_data D>
+        template<simd flags, pixel_data D>
         auto operator()(format_pi16, D dsrc)
         {
             using P = simd_type<D>;
             constexpr auto max = reinterpret_cast<__m64>(simd_vector<std::uint16_t, 4> { P::bx, P::gx, P::rx, P::ax });
 
-            const __m64 not_hi = _mm_cmpgt_pi16(max, dsrc);
-            const __m64 not_lo = _mm_cmpgt_pi16(dsrc, _mm_setzero_si64());
-            __m64 dst = _mm_and_si64(dsrc, not_hi);
-            dst = _mm_and_si64(dst, not_lo);
-            dst = _mm_or_si64(dst, _mm_andnot_si64(not_hi, max));
-
-            return dst;
+            if constexpr (flags.match(simd::mmx2))
+            {
+                __m64 dst = mmx2_max_pi16(dsrc, _mm_setzero_si64());
+                dst = mmx2_min_pi16(dst, max);
+                return dst;
+            }
+            else
+            {
+                const __m64 not_hi = _mm_cmpgt_pi16(max, dsrc);
+                const __m64 not_lo = _mm_cmpgt_pi16(dsrc, _mm_setzero_si64());
+                __m64 dst = _mm_and_si64(dsrc, not_hi);
+                dst = _mm_and_si64(dst, not_lo);
+                dst = _mm_or_si64(dst, _mm_andnot_si64(not_hi, max));
+                return dst;
+            }
         }
 
         template<simd, pixel_data D>
@@ -701,11 +709,8 @@ namespace jw::video
             using P = simd_type<D>;
             constexpr __m128 max { P::bx, P::gx, P::rx, P::ax };
 
-            const __m128 not_hi = _mm_cmpgt_ps(max, dsrc);
-            const __m128 not_lo = _mm_cmpgt_ps(dsrc, _mm_setzero_ps());
-            __m128 dst = _mm_and_ps(dsrc, not_hi);
-            dst = _mm_and_ps(dst, not_lo);
-            dst = _mm_or_ps(dst, _mm_andnot_ps(not_hi, max));
+            __m128 dst = _mm_max_ps(dsrc, _mm_setzero_ps());
+            dst = _mm_min_ps(dst, max);
 
             return dst;
         }
