@@ -4,6 +4,7 @@
 #pragma once
 #include <bit>
 #include <array>
+#include <stdexcept>
 #include <mmintrin.h>
 #include <mm3dnow.h>
 #include <jw/simd.h>
@@ -127,6 +128,38 @@ namespace jw
     {
         mmx_guard<flags> guard { };
         return (std::forward<F>(func)(std::forward<A>(args)...));
+    }
+
+    // Copy num elements from src to dst, using a non-temporal cache hint.
+    // Both src and dst must be aligned on 16-byte boundaries, and the total
+    // number of bytes to transfer must be divisible by 8.
+    template<simd flags, typename T>
+    inline void mmx_stream(T* dst, const T* src, std::size_t num)
+    {
+        auto* const d = reinterpret_cast<std::byte*>(dst);
+        auto* const s = reinterpret_cast<const std::byte*>(src);
+        constexpr std::size_t element_size = [] { if constexpr (not std::same_as<T, void>) return sizeof(T); return sizeof(std::byte); }();
+        const std::size_t n = element_size * num;
+        std::size_t i = 0;
+        if (n & 7) throw std::invalid_argument { "byte count not a multiple of 8" };
+
+        if constexpr (flags.match(simd::sse))
+        {
+            for (; i + 16 <= n; i += 16)
+            {
+                const auto data = *reinterpret_cast<const __m128*>(s + i);
+                _mm_stream_ps(reinterpret_cast<float*>(d + i), data);
+            }
+        }
+        if constexpr (flags.match(simd::mmx2))
+        {
+            for (; i + 8 <= n; i += 8)
+            {
+                const auto data = *reinterpret_cast<const __m64*>(s + i);
+                mmx2_stream_pi(reinterpret_cast<__m64*>(d + i), data);
+            }
+        }
+        else std::memcpy(d, s, n);
     }
 
     template<simd flags, unsigned N>
