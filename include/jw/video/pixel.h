@@ -680,6 +680,22 @@ namespace jw::video
             return dst;
         }
 
+        template<simd flags, pixel_data D> requires (flags.match(simd::mmx2))
+        auto operator()(format_pi8, D dsrc)
+        {
+            using P = simd_type<D>;
+            constexpr auto max = reinterpret_cast<__m64>(simd_vector<std::uint8_t, 8>
+            {
+                P::bx, P::gx, P::rx, P::ax,
+                P::bx, P::gx, P::rx, P::ax
+            });
+
+            if constexpr (P::bx == 0xff and P::gx == 0xff and P::rx == 0xff and (P::ax == 0xff or not P::has_alpha()))
+                return dsrc;
+
+            return mmx2_min_pu8(dsrc, max);
+        }
+
         template<simd flags, pixel_data D>
         auto operator()(format_pi16, D dsrc)
         {
