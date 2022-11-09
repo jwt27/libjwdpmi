@@ -5,6 +5,12 @@
 #include <jw/io/io_error.h>
 #include <jw/chrono.h>
 #include <jw/thread.h>
+#include <string_view>
+#include <charconv>
+#include <system_error>
+#include <algorithm>
+#include <cstdlib>
+#include <cstring>
 
 namespace jw::audio::detail
 {
@@ -69,5 +75,50 @@ namespace jw::audio::detail
     {
         write(0x10);
         write(sample);
+    }
+}
+
+namespace jw::audio
+{
+    void soundblaster_config::read_blaster()
+    {
+        const char* const blaster = std::getenv("BLASTER");
+        if (blaster == nullptr or blaster[0] == '\0') throw std::runtime_error { "BLASTER unset" };
+        const char* const end = blaster + std::strlen(blaster);
+        for (const char* p = blaster; p < end;)
+        {
+            auto parse = [&](auto& value, int base)
+            {
+                const char* const q = std::find_if(p, end, [](char c) { return c == ' ' or (c >= 'A' and c <= 'Z'); });
+                auto r = std::from_chars(p, q, value, base);
+                if (auto err = std::make_error_code(r.ec)) throw std::system_error { err, "BLASTER malformed" };
+                p = r.ptr;
+            };
+
+            int value;
+            switch (*p++)
+            {
+            case 'A':
+                parse(value, 16);
+                if (value < 0x200 or value > 0x2f0) throw std::runtime_error { "BLASTER: Invalid base address" };
+                base = value;
+                break;
+            case 'I':
+                parse(value, 10);
+                if (value < 0 or value > 15) throw std::runtime_error { "BLASTER: Invalid IRQ" };
+                irq = value;
+                break;
+            case 'D':
+                parse(value, 10);
+                if (value < 0 or value > 3) throw std::runtime_error { "BLASTER: Invalid low DMA" };
+                low_dma = value;
+                break;
+            case 'H':
+                parse(value, 10);
+                if (value < 5 or value > 7) throw std::runtime_error { "BLASTER: Invalid high DMA" };
+                high_dma = value;
+                break;
+            }
+        }
     }
 }
