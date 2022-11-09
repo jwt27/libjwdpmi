@@ -2,6 +2,7 @@
 /* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
+#include <tuple>
 #include <type_traits>
 #include <concepts>
 #include <xmmintrin.h>
