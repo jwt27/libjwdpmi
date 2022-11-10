@@ -145,4 +145,89 @@ namespace jw::audio
 
     template<sample_type T>
     inline constexpr sample_convert_t<T> sample_convert;
+
+    // Interleave samples from left and right channels:
+    // { L0 L1 L2 L3 }, { R0 R1 R2 R3 } -> { L0 R0 L1 R1 }, { L2 R2 L3 R3 }
+    struct sample_interleave_t
+    {
+        template<simd flags, simd_format F, sample_data D>
+        auto operator()(F, D l, D r)
+        {
+            using T = simd_type<D>;
+            if constexpr (std::same_as<F, format_pi8>)
+            {
+                auto lo = _mm_unpacklo_pi8(l, r);
+                auto hi = _mm_unpackhi_pi8(l, r);
+                return simd_return(F { }, simd_data<T>(lo), simd_data<T>(hi));
+            }
+            else if constexpr (std::same_as<F, format_pi16>)
+            {
+                auto lo = _mm_unpacklo_pi16(l, r);
+                auto hi = _mm_unpackhi_pi16(l, r);
+                return simd_return(F { }, simd_data<T>(lo), simd_data<T>(hi));
+            }
+            else if constexpr (any_of<F, format_pi32, format_pf>)
+            {
+                auto lo = _mm_unpacklo_pi32(l, r);
+                auto hi = _mm_unpackhi_pi32(l, r);
+                return simd_return(F { }, simd_data<T>(lo), simd_data<T>(hi));
+            }
+            else if constexpr (std::same_as<F, format_ps>)
+            {
+                auto lo = _mm_unpacklo_ps(l, r);
+                auto hi = _mm_unpackhi_ps(l, r);
+                return simd_return(F { }, simd_data<T>(lo), simd_data<T>(hi));
+            }
+            else
+            {
+                return simd_return(F { }, simd_data<T>(l), simd_data<T>(r));
+            }
+        }
+    } inline constexpr sample_interleave;
+
+    // De-interleave samples to separate left and right channels:
+    // { L0 R0 L1 R1 }, { L2 R2 L3 R3 } -> { L0 L1 L2 L3 }, { R0 R1 R2 R3 }
+    struct sample_separate_t
+    {
+        template<simd flags, any_simd_format_of<format_nosimd, format_si64> F, sample_data D>
+        auto operator()(F, D lo, D hi)
+        {
+            using T = simd_type<D>;
+            return simd_return(F { }, simd_data<T>(lo), simd_data<T>(hi));
+        }
+
+        template<simd flags, sample_data D>
+        auto operator()(format_ps, D lo, D hi)
+        {
+            using T = simd_type<D>;
+            auto lr0 = _mm_unpacklo_ps(lo, hi);
+            auto lr1 = _mm_unpackhi_ps(lo, hi);
+            auto l = _mm_movelh_ps(lr0, lr1);
+            auto r = _mm_movehl_ps(lr1, lr0);
+            return simd_return(ps, simd_data<T>(l), simd_data<T>(r));
+        }
+
+        template<simd flags, any_simd_format_of<format_pi8, format_pi16, format_pi32, format_pf> F, sample_data D>
+        auto operator()(F, D lo, D hi)
+        {
+            using T = simd_type<D>;
+            __m64 x, l = lo, r = hi;
+            if constexpr (any_of<F, format_pi8>)
+            {
+                x = _mm_unpacklo_pi8(l, r);
+                r = _mm_unpackhi_pi8(l, r);
+                l = x;
+            }
+            if constexpr (any_of<F, format_pi8, format_pi16>)
+            {
+                x = _mm_unpacklo_pi16(l, r);
+                r = _mm_unpackhi_pi16(l, r);
+                l = x;
+            }
+            x = _mm_unpacklo_pi32(l, r);
+            r = _mm_unpackhi_pi32(l, r);
+            l = x;
+            return simd_return(F { }, simd_data<T>(l), simd_data<T>(r));
+        }
+    } inline constexpr sample_separate;
 }
