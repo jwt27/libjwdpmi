@@ -12,75 +12,87 @@
 #include <cstdlib>
 #include <cstring>
 
-namespace jw::audio::detail
+namespace jw::audio
 {
-    static bool dsp_read_ready(io::port_num base)
+    static bool dsp_read_ready(io::port_num dsp)
     {
-        return io::read_port<std::uint8_t>(base + 0x0e) & 0x80;
+        return io::read_port<std::uint8_t>(dsp | 0x0e) & 0x80;
     }
 
-    static bool dsp_write_ready(io::port_num base)
+    static bool dsp_write_ready(io::port_num dsp)
     {
-        return (io::read_port<std::uint8_t>(base + 0x0c) & 0x80) == 0;
+        return (io::read_port<std::uint8_t>(dsp | 0x0c) & 0x80) == 0;
     }
 
-    static std::uint8_t dsp_force_read(io::port_num base)
+    static std::uint8_t dsp_force_read(io::port_num dsp)
     {
-        return io::read_port<std::uint8_t>(base + 0x0a);
+        return io::read_port<std::uint8_t>(dsp | 0x0a);
     }
 
-    static void dsp_force_write(io::port_num base, std::uint8_t data)
+    static void dsp_force_write(io::port_num dsp, std::uint8_t data)
     {
-        io::write_port(base + 0x0c, data);
+        io::write_port(dsp | 0x0c, data);
     }
 
-    sb_dsp::sb_dsp(io::port_num p) : base { p }
+    static std::uint8_t dsp_read(io::port_num dsp)
     {
-        reset();
+        this_thread::yield_while([dsp] { return not dsp_read_ready(dsp); });
+        return dsp_force_read(dsp);
     }
 
-    void sb_dsp::reset()
+    static void dsp_write(io::port_num dsp, std::uint8_t data)
+    {
+        this_thread::yield_while([dsp] { return not dsp_write_ready(dsp); });
+        dsp_force_write(dsp, data);
+    }
+
+    static void dsp_reset(io::port_num dsp)
     {
         using namespace std::chrono_literals;
-        io::out_port<std::uint8_t> reset { base + 0x06 };
+        io::out_port<std::uint8_t> reset { dsp | 0x06 };
 
         reset.write(1);
         this_thread::yield_for(5us);
         reset.write(0);
 
-        bool timeout = this_thread::yield_while_for([p = base] { return not dsp_read_ready(p); }, 125us);
-        if (timeout or dsp_force_read(base) != 0xaa)
+        bool timeout = this_thread::yield_while_for([dsp] { return not dsp_read_ready(dsp); }, 125us);
+        if (timeout or dsp_force_read(dsp) != 0xaa)
             throw io::device_not_found { "Sound Blaster not detected" };
     }
 
-    std::uint8_t sb_dsp::read()
+    static split_uint16_t dsp_version(io::port_num dsp)
     {
-        this_thread::yield_while([p = base] { return not dsp_read_ready(p); });
-        return dsp_force_read(base);
+        dsp_write(dsp, 0xe1);
+        auto hi = dsp_read(dsp);
+        auto lo = dsp_read(dsp);
+        return { lo, hi };
     }
 
-    void sb_dsp::write(std::uint8_t data)
+    static void dsp_speaker_enable(io::port_num dsp, bool on)
     {
-        this_thread::yield_while([p = base] { return not dsp_write_ready(p); });
-        dsp_force_write(base, data);
+        dsp_write(dsp, 0xd1 | (on << 1));
     }
 
-    sample_u8 sb_dsp::direct_in()
+    sb_direct::sb_direct(io::port_num base)
+        : dsp { base }
     {
-        write(0x20);
-        return read();
+        dsp_reset(dsp);
+        dsp_speaker_enable(dsp, true);
     }
 
-    void sb_dsp::direct_out(sample_u8 sample)
+    void sb_direct::out(sample_u8 sample)
     {
-        write(0x10);
-        write(sample);
+        dsp_write(dsp, 0x10);
+        dsp_write(dsp, sample);
     }
-}
 
-namespace jw::audio
-{
-    void soundblaster_config::read_blaster()
+    sample_u8 sb_direct::in()
+    {
+        dsp_write(dsp, 0x20);
+        return dsp_read(dsp);
+    }
+
+    void sb_config::read_blaster()
     {
         const char* const blaster = std::getenv("BLASTER");
         if (blaster == nullptr or blaster[0] == '\0') throw std::runtime_error { "BLASTER unset" };
