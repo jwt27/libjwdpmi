@@ -650,11 +650,11 @@ namespace jw
                 auto* ptr = static_cast<const void*>(pal.data());
                 if (dac_bits < 8)
                 {
-                    mmx_function<default_simd()>([out = copy.begin(), size, pal]
+                    mmx_function<default_simd()>([out = copy.begin(), size, pal]<simd flags>()
                     {
                         simd_pipeline pipe { simd_source, px_convert<pxvga>, simd_sink { out } };
                         for (auto p = pal.begin(); p != pal.end();)
-                            simd_run<default_simd()>(pipe, &p);
+                            simd_run<flags>(pipe, &p);
                     });
                     ptr = static_cast<const void*>(copy.data());
                 }
@@ -680,11 +680,11 @@ namespace jw
                 auto& dos_data = get_dos_data();
                 if (dac_bits < 8)
                 {
-                    mmx_function<default_simd()>([out = dos_data->palette.data(), size, pal]
+                    mmx_function<default_simd()>([out = dos_data->palette.data(), size, pal]<simd flags>()
                     {
                         simd_pipeline pipe { simd_source, px_convert<pxvga>, simd_sink { reinterpret_cast<pxvga*>(out) } };
                         for (auto p = pal.begin(); p != pal.end();)
-                            simd_run<default_simd()>(pipe, &p);
+                            simd_run<flags>(pipe, &p);
                     });
                 }
                 else
@@ -714,11 +714,11 @@ namespace jw
             auto* ptr = static_cast<const void*>(pal.data());
             if (dac_bits < 8)
             {
-                mmx_function<default_simd()>([out = copy.data(), pal, size]
+                mmx_function<default_simd()>([out = copy.data(), pal, size]<simd flags>()
                 {
                     simd_pipeline pipe { simd_source, px_convert<pxvga>, simd_sink { out } };
                     for (auto p = pal.begin(); p != pal.end();)
-                        simd_run<default_simd()>(pipe, &p);
+                        simd_run<flags>(pipe, &p);
                 });
                 ptr = static_cast<const void*>(copy.data());
             }
@@ -755,11 +755,11 @@ namespace jw
             auto* ptr = dos_data->palette.data();
             if (dac_bits < 8)
             {
-                mmx_function<default_simd()>([out = result.data(), ptr]
+                mmx_function<default_simd()>([out = result.data(), ptr]<simd flags>()
                 {
                     simd_pipeline pipe { simd_in, px_convert<px32n>, simd_out };
                     for (auto i = 0; i < 256; ++i)
-                        out[i] = simd_run<default_simd()>(pipe, reinterpret_cast<const pxvga*>(ptr)[i]);
+                        out[i] = simd_run<flags>(pipe, reinterpret_cast<const pxvga*>(ptr)[i]);
                 });
             }
             else for (auto i = 0; i < 256; ++i) result[i] = ptr[i];

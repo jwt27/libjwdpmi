@@ -127,7 +127,7 @@ namespace jw
     [[gnu::noinline]] inline decltype(auto) mmx_function(F&& func, A&&... args)
     {
         mmx_guard<flags> guard { };
-        return (std::forward<F>(func)(std::forward<A>(args)...));
+        return (std::forward<F>(func).template operator()<flags>(std::forward<A>(args)...));
     }
 
     // Copy num elements from src to dst, using a non-temporal cache hint.

@@ -33,12 +33,12 @@ namespace jw
             }
             else
             {
-                mmx_function<default_simd()>([pal]
+                mmx_function<default_simd()>([pal]<simd flags>()
                 {
                     simd_pipeline pipe { simd_in, px_convert<pxvga>, simd_out };
                     for (const auto& i : pal)
                     {
-                        const auto p = simd_run<default_simd()>(pipe, i);
+                        const auto p = simd_run<flags>(pipe, i);
                         dac_data.write(p.r);
                         dac_data.write(p.g);
                         dac_data.write(p.b);
@@ -62,7 +62,7 @@ namespace jw
             }
             else
             {
-                mmx_function<default_simd()>([p = result.data()]
+                mmx_function<default_simd()>([p = result.data()]<simd flags>()
                 {
                     simd_pipeline pipe { simd_in, px_convert<px32n>, simd_out };
                     for (auto i = 0; i < 256; ++i)
@@ -70,7 +70,7 @@ namespace jw
                         auto r = dac_data.read();
                         auto g = dac_data.read();
                         auto b = dac_data.read();
-                        p[i] = simd_run<default_simd()>(pipe, pxvga { r, g, b });
+                        p[i] = simd_run<flags>(pipe, pxvga { r, g, b });
                     }
                 });
             }
