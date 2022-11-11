@@ -4,6 +4,7 @@
 #pragma once
 #include <jw/audio/sample.h>
 #include <jw/io/ioport.h>
+#include <jw/split_int.h>
 
 namespace jw::audio
 {
@@ -18,6 +19,25 @@ namespace jw::audio
         // Throws std::runtime_error if BLASTER is unset or malformed.
         void read_blaster();
     };
+
+    enum class sb_model
+    {
+        none,   // Not detected
+        sb1,    // Sound Blaster 1.x
+        sb2,    // Sound Blaster 2.0
+        sbpro,  // Sound Blaster Pro or Pro2
+        sb16    // Sound Blaster 16
+    };
+
+    struct sb_capabilities
+    {
+        sb_model model;
+        split_uint16_t dsp_version;
+        bool stereo;
+    };
+
+    // Detect capabilities of Sound Blaster at specified address.
+    sb_capabilities detect_sb(io::port_num);
 
     // Basic Sound Blaster driver for "direct mode".  In this mode, you simply
     // write samples directly to the DAC.  This is typically done from the

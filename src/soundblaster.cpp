@@ -46,7 +46,7 @@ namespace jw::audio
         dsp_force_write(dsp, data);
     }
 
-    static void dsp_reset(io::port_num dsp)
+    static bool dsp_reset(io::port_num dsp)
     {
         using namespace std::chrono_literals;
         io::out_port<std::uint8_t> reset { dsp | 0x06 };
@@ -56,8 +56,7 @@ namespace jw::audio
         reset.write(0);
 
         bool timeout = this_thread::yield_while_for([dsp] { return not dsp_read_ready(dsp); }, 125us);
-        if (timeout or dsp_force_read(dsp) != 0xaa)
-            throw io::device_not_found { "Sound Blaster not detected" };
+        return not timeout and dsp_force_read(dsp) == 0xaa;
     }
 
     static split_uint16_t dsp_version(io::port_num dsp)
@@ -70,13 +69,31 @@ namespace jw::audio
 
     static void dsp_speaker_enable(io::port_num dsp, bool on)
     {
-        dsp_write(dsp, 0xd1 | (on << 1));
+        dsp_write(dsp, on ? 0xd1 : 0xd3);
+    }
+
+    sb_capabilities detect_sb(io::port_num base)
+    {
+        if (not dsp_reset(base))
+            return { };
+
+        const auto v = dsp_version(base);
+        sb_capabilities c;
+        c.dsp_version = v;
+        if (v.hi == 4) c.model = sb_model::sb16;
+        else if (v.hi == 3) c.model = sb_model::sbpro;
+        else if (v.hi == 2 and v.lo > 0) c.model = sb_model::sb2;
+        else c.model = sb_model::sb1;
+        c.stereo = v.hi >= 3;
+        return c;
     }
 
     sb_direct::sb_direct(io::port_num base)
         : dsp { base }
     {
-        dsp_reset(dsp);
+        if (not dsp_reset(dsp))
+            throw io::device_not_found { "Sound Blaster not detected" };
+
         dsp_speaker_enable(dsp, true);
     }
 
