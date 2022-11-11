@@ -130,6 +130,19 @@ namespace jw
         return (std::forward<F>(func).template operator()<flags>(std::forward<A>(args)...));
     }
 
+    // Wraps a simd-invocable lambda function and invokes it via mmx_function.
+    template<typename F>
+    struct mmx_lambda
+    {
+        F func;
+
+        template<simd flags, typename... A>
+        decltype(auto) operator()(A&&... args)
+        {
+            return (mmx_function<flags>(func, std::forward<A>(args)...));
+        }
+    };
+
     // Copy num elements from src to dst, using a non-temporal cache hint.
     // Both src and dst must be aligned on 16-byte boundaries, and the total
     // number of bytes to transfer must be divisible by 8.
