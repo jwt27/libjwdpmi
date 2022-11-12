@@ -75,17 +75,9 @@ namespace jw::audio
     sb_capabilities detect_sb(io::port_num base)
     {
         if (not dsp_reset(base))
-            return { };
+            return { 0 };
 
-        const auto v = dsp_version(base);
-        sb_capabilities c;
-        c.dsp_version = v;
-        if (v.hi == 4) c.model = sb_model::sb16;
-        else if (v.hi == 3) c.model = sb_model::sbpro;
-        else if (v.hi == 2 and v.lo > 0) c.model = sb_model::sb2;
-        else c.model = sb_model::sb1;
-        c.stereo = v.hi >= 3;
-        return c;
+        return { dsp_version(base) };
     }
 
     sb_direct::sb_direct(io::port_num base)

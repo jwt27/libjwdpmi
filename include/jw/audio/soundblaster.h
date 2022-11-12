@@ -31,9 +31,24 @@ namespace jw::audio
 
     struct sb_capabilities
     {
-        sb_model model;
         split_uint16_t dsp_version;
-        bool stereo;
+
+        sb_model model() const noexcept
+        {
+            switch (dsp_version.hi)
+            {
+            case 4: return sb_model::sb16;
+            case 3: return sb_model::sbpro;
+            case 2: if (dsp_version.lo > 0) return sb_model::sb2;
+            case 1: return sb_model::sb1;
+            default: return sb_model::none;
+            }
+        }
+
+        bool stereo() const noexcept
+        {
+            return dsp_version.hi >= 3;
+        }
     };
 
     // Detect capabilities of Sound Blaster at specified address.
