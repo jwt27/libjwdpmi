@@ -16,10 +16,10 @@ namespace jw::audio
     using sample_f32 = float;
 
     template<typename T>
-    concept sample_type = any_of<T, sample_u8, sample_i16, sample_i32, sample_f32>;
+    concept sample_type = any_of<std::remove_const_t<T>, sample_u8, sample_i16, sample_i32, sample_f32>;
 
     template<typename T, typename... U>
-    concept any_sample_type_of = sample_type<T> and (sample_type<U> and ...) and any_of<T, U...>;
+    concept any_sample_type_of = sample_type<T> and (sample_type<U> and ...) and any_of<std::remove_const_t<T>, U...>;
 
     template<typename D>
     concept sample_data = sample_type<simd_type<D>>;
