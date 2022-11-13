@@ -32,10 +32,17 @@ namespace jw::audio
 
     struct start_parameters
     {
+        // Desired sample rate.
         unsigned sample_rate;
-        std::size_t channels;
-        bool output;
-        bool input;
+
+        struct
+        {
+            // DMA buffer size in frames.
+            std::size_t buffer_size;
+
+            // Numver of audio channels.
+            std::size_t channels;
+        } in, out;
     };
 
     // Universal interface for all DMA-driven PCM audio devices.
@@ -47,7 +54,8 @@ namespace jw::audio
 
         struct driver
         {
-            virtual void start(start_parameters*) = 0;
+            virtual ~driver() { }
+            virtual void start(const start_parameters&) = 0;
             virtual void stop() = 0;
             virtual buffer_type buffer() = 0;
 
@@ -63,7 +71,7 @@ namespace jw::audio
         void start(F&& callback, P params)
         {
             drv->callback = std::forward<F>(callback);
-            drv->start(&params);
+            drv->start(params);
         }
 
         void stop() { drv->stop(); }
