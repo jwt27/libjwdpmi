@@ -67,8 +67,8 @@ namespace jw::audio
 
         // Begin playback and/or recording.  Specify nullptr as callback to
         // enable polling mode.
-        template<typename F, std::derived_from<start_parameters> P>
-        void start(F&& callback, P params)
+        template<typename F>
+        void start(start_parameters params, F&& callback)
         {
             drv->callback = std::forward<F>(callback);
             drv->start(params);
