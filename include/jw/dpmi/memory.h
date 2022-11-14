@@ -480,11 +480,7 @@ namespace jw::dpmi
         memory_base(mapped_dos_memory_base&&) = delete;
         memory_base(dos_memory_base&&) = delete;
 
-        virtual void resize(std::size_t num_bytes, bool committed = true)
-        {
-            if (dpmi10_alloc_supported) dpmi10_resize(num_bytes, committed);
-            else dpmi09_resize(num_bytes);
-        }
+        virtual void resize(std::size_t num_bytes, bool committed = true);
 
         std::uint32_t get_handle() const noexcept { return handle; }
         virtual operator bool() const noexcept { return handle != 0; }
@@ -494,49 +490,8 @@ namespace jw::dpmi
         memory_base(no_alloc_tag, const linear_memory& mem) noexcept : linear_memory(mem) { }
         memory_base(no_alloc_tag, std::size_t num_bytes) noexcept : memory_base(no_alloc_tag { }, linear_memory { 0, num_bytes }) { }
 
-        void allocate(bool committed = true, std::uintptr_t desired_address = 0)
-        {
-            try
-            {
-                if (dpmi10_alloc_supported)
-                {
-                    auto error = dpmi10_alloc(committed, desired_address);
-                    if (not error) return;
-                    switch (error->code().value())
-                    {
-                    case unsupported_function:
-                    case 0x0504:
-                        dpmi10_alloc_supported = false;
-                        break;
-                    default: throw *error;
-                    }
-                }
-                dpmi09_alloc();
-            }
-            catch (...)
-            {
-                std::throw_with_nested(std::bad_alloc { });
-            }
-        }
-
-        virtual void deallocate()
-        {
-            if (handle == 0) return;
-            split_uint32_t _handle { handle };
-            std::uint16_t ax { 0x0502 };
-            [[maybe_unused]] bool c;
-            asm volatile
-            (
-                "int 0x31"
-                : "=@ccc" (c), "+a" (ax)
-                : "S" (_handle.hi), "D" (_handle.lo)
-                :
-            );
-#           ifndef NDEBUG
-            if (c) throw dpmi_error { ax, __PRETTY_FUNCTION__ };
-#           endif
-            handle = 0;
-        }
+        void allocate(bool committed = true, std::uintptr_t desired_address = 0);
+        virtual void deallocate();
 
         static inline bool dpmi10_alloc_supported = true;
         std::uint32_t handle { 0 };
@@ -575,53 +530,23 @@ namespace jw::dpmi
         virtual void resize(std::size_t, bool = true) override { throw dpmi_error { unsupported_function, __PRETTY_FUNCTION__ }; }
         virtual operator bool() const noexcept override
         {
-            if (device_map_supported) return base::operator bool();
+            if (device_map_supported()) return base::operator bool();
             else return addr != 0;
         };
 
+        static bool device_map_supported()
+        {
+            static bool sup = []
+            {
+                capabilities c { };
+                return c.supported and c.flags.device_mapping;
+            }();
+            return sup;
+        }
+
     protected:
-        static inline bool device_map_supported { true };
-
-        void allocate(std::uintptr_t physical_address, bool use_dpmi09_alloc)
-        {
-            if (not use_dpmi09_alloc)
-            {
-                if (device_map_supported)
-                {
-                    capabilities c { };
-                    if (not c.supported or not c.flags.device_mapping) device_map_supported = false;
-                }
-                if (device_map_supported)
-                {
-                    base::allocate(false);
-                    dpmi10_alloc(physical_address);
-                    return;
-                }
-            }
-            dpmi09_alloc(physical_address);
-        }
-
-        virtual void deallocate() override
-        {
-            if (device_map_supported)
-            {
-                base::deallocate();
-                return;
-            }
-            else
-            {
-                split_uint32_t old_addr { addr };
-                asm volatile
-                (
-                    "int 0x31"
-                    :
-                    : "a" (0x0801)
-                    , "b" (old_addr.hi), "c" (old_addr.lo)
-                    :
-                );
-                // This is an optional dpmi 1.0 function.  Don't care if this fails.
-            }
-        }
+        void allocate(std::uintptr_t physical_address, bool use_dpmi09_alloc);
+        virtual void deallocate() override;
 
     private:
         void dpmi09_alloc(std::uintptr_t physical_address);
@@ -662,28 +587,10 @@ namespace jw::dpmi
     protected:
         mapped_dos_memory_base(no_alloc_tag, std::size_t num_bytes) : base(no_alloc_tag { }, round_up_to_page_size(num_bytes) + page_size) { }
 
-        static inline bool dos_map_supported { true };
         std::ptrdiff_t offset { 0 };
         far_ptr16 dos_addr;
 
-        void allocate(std::uintptr_t dos_physical_address)
-        {
-            if (dos_map_supported)
-            {
-                capabilities c { };
-                if (not c.supported or not c.flags.conventional_memory_mapping) dos_map_supported = false;
-            }
-            if (dos_map_supported)
-            {
-                base::allocate(false);
-                alloc(dos_physical_address);
-                return;
-            }
-            throw dpmi_error { unsupported_function, __PRETTY_FUNCTION__ };
-        }
-
-    private:
-        void alloc(std::uintptr_t dos_physical_address);
+        void allocate(std::uintptr_t dos_physical_address);
     };
 
     struct dos_memory_base : public mapped_dos_memory_base
@@ -708,39 +615,15 @@ namespace jw::dpmi
             return *this;
         }
 
-        virtual void resize(std::size_t num_bytes, bool = true) override
-        {
-            num_bytes = round_up_to_paragraph_size(num_bytes);
-            const bool remap = num_bytes > bytes;
-            if (remap) base::deallocate();
-            dos_resize(dos_handle, num_bytes);
-            bytes = num_bytes;
-            assume(dos_addr.offset == 0);
-            if (remap) base::allocate(conventional_to_physical(dos_addr));
-        }
+        virtual void resize(std::size_t num_bytes, bool = true) override;
 
         selector get_selector() const noexcept { return dos_handle; }
 
         virtual operator bool() const noexcept override { return dos_handle != 0; };
 
     protected:
-        void allocate()
-        {
-            deallocate();
-            auto result = dpmi::dos_allocate(bytes);
-            dos_handle = result.handle;
-            dos_addr = result.pointer;
-            assume(dos_addr.offset == 0);
-            base::allocate(conventional_to_physical(dos_addr));
-        }
-
-        virtual void deallocate() override
-        {
-            base::deallocate();
-            if (dos_handle == 0) return;
-            dos_free(dos_handle);
-            dos_handle = 0;
-        }
+        void allocate();
+        virtual void deallocate() override;
 
     private:
         selector dos_handle { 0 };
