@@ -192,7 +192,7 @@ namespace jw::audio
         return { dsp_version(base) };
     }
 
-    sb_direct::sb_direct(io::port_num base)
+    soundblaster_pio::soundblaster_pio(io::port_num base)
         : dsp { base }
     {
         dsp_init(dsp);
@@ -200,16 +200,16 @@ namespace jw::audio
         mixer_set_stereo(dsp, false);
     }
 
-    void sb_direct::out(sample_u8 sample)
+    void soundblaster_pio::out(std::array<sample_u8, 1> sample)
     {
         dsp_write<true>(dsp, 0x10);
-        dsp_write<true>(dsp, sample);
+        dsp_write<true>(dsp, sample[0]);
     }
 
-    sample_u8 sb_direct::in()
+    std::array<sample_u8, 1> soundblaster_pio::in()
     {
         dsp_write<true>(dsp, 0x20);
-        return dsp_read<true>(dsp);
+        return { dsp_read<true>(dsp) };
     }
 }
 

@@ -54,7 +54,7 @@ namespace jw::audio
 
         struct driver
         {
-            virtual ~driver() { }
+            virtual ~driver() = default;
             virtual void start(const start_parameters&) = 0;
             virtual void stop() = 0;
             virtual buffer_type buffer() = 0;
@@ -84,5 +84,15 @@ namespace jw::audio
 
     private:
         std::unique_ptr<driver> drv;
+    };
+
+    // Universal interface for PIO audio devices.
+    template<sample_type T, std::size_t channels>
+    struct pio_device
+    {
+        virtual std::array<T, channels> in() = 0;
+        virtual void out(std::array<T, channels>) = 0;
+
+        virtual ~pio_device() = default;
     };
 }

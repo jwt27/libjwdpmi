@@ -68,6 +68,7 @@ namespace jw::audio
         return -256e6L / ((tc << 8) - 0x10000) / ch;
     }
 }
+
 namespace jw::audio::detail
 {
     enum class sb_state
@@ -122,14 +123,16 @@ namespace jw::audio
     // write samples directly to the DAC.  This is typically done from the
     // timer interrupt, to achieve a stable sample rate.  Only 8-bit mono
     // samples are supported in this mode.
-    struct sb_direct
+    struct soundblaster_pio final : pio_device<sample_u8, 1>
     {
-        explicit sb_direct(io::port_num base);
-        explicit sb_direct(sb_config cfg)
-            : sb_direct { cfg.base } { }
+        explicit soundblaster_pio(io::port_num base);
+        explicit soundblaster_pio(sb_config cfg)
+            : soundblaster_pio { cfg.base } { }
 
-        sample_u8 in();
-        void out(sample_u8 smp);
+        virtual ~soundblaster_pio() = default;
+
+        virtual std::array<sample_u8, 1> in() override;
+        virtual void out(std::array<sample_u8, 1> smp) override;
 
     private:
         const io::port_num dsp;
