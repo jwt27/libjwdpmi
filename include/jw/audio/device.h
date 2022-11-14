@@ -50,7 +50,7 @@ namespace jw::audio
     struct device final
     {
         using buffer_type = io_buffer<T>;
-        using callback_type = void(buffer_type);
+        using callback_type = void(const buffer_type&);
 
         struct driver
         {
