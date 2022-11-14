@@ -3,8 +3,13 @@
 
 #pragma once
 #include <jw/audio/sample.h>
+#include <jw/audio/device.h>
 #include <jw/io/ioport.h>
+#include <jw/io/dma.h>
+#include <jw/dpmi/irq_handler.h>
 #include <jw/split_int.h>
+#include <jw/function.h>
+#include <optional>
 
 namespace jw::audio
 {
@@ -53,6 +58,65 @@ namespace jw::audio
 
     // Detect capabilities of Sound Blaster at specified address.
     sb_capabilities detect_sb(io::port_num);
+
+    // Calculate effective sample rate for SB Pro 2 and earlier models, which
+    // do not support exact sample rates.
+    constexpr long double sb_sample_rate(unsigned rate, bool stereo)
+    {
+        const unsigned ch = stereo ? 2 : 1;
+        const unsigned tc = ((0x10080 - (256'000'000 / (ch * rate))) >> 8) & 0xff;
+        return -256e6L / ((tc << 8) - 0x10000) / ch;
+    }
+}
+namespace jw::audio::detail
+{
+    enum class sb_state
+    {
+        idle,
+        dma8_single,
+        dma8,
+        dma8_highspeed,
+        dma16,
+        stopping
+    };
+
+    template<any_sample_type_of<sample_u8, sample_i16> T>
+    struct sb_driver final : device<T>::driver
+    {
+        sb_driver(sb_config cfg);
+        virtual ~sb_driver();
+
+        virtual void start(const start_parameters&) override;
+        virtual void stop() override;
+        virtual device<T>::buffer_type buffer() override;
+
+        const split_uint16_t version;
+        const io::port_num dsp;
+        dpmi::irq_handler irq;
+        io::dma8_channel dma8;
+        std::optional<io::dma16_channel> dma16;
+        std::optional<io::dma_buffer<T>> buf;
+        sb_state state { sb_state::idle };
+        bool stereo;
+        bool recording;
+        bool buffer_page_high;
+        bool buffer_pending;
+    };
+}
+
+namespace jw::audio
+{
+    template<sample_type T>
+    inline auto soundblaster(sb_config cfg)
+    {
+        return device<T> { new (locked) detail::sb_driver<T> { cfg } };
+    }
+
+    // Driver for all Sound Blaster models.
+    inline auto soundblaster_8 (sb_config cfg) { return soundblaster<sample_u8 >(cfg); }
+
+    // Driver for Sound Blaster 16 only.
+    inline auto soundblaster_16(sb_config cfg) { return soundblaster<sample_i16>(cfg); }
 
     // Basic Sound Blaster driver for "direct mode".  In this mode, you simply
     // write samples directly to the DAC.  This is typically done from the

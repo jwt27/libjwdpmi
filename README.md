@@ -14,6 +14,7 @@ Current features include:
 * Integrated GDB remote debugging backend.
 * Access to PIT, RTC and RDTSC clocks using `std::chrono` interface.
 * Yamaha OPL2/OPL3 driver with automatic channel allocation.
+* Sound Blaster driver (all models).
 * ~~MIDI protocol implementation.~~ (moved to [jwmidi](https://github.com/jwt27/libjwmidi))
 * VESA VBE3 graphics interface.
 * Accurate analog game port driver.
