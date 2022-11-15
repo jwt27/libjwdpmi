@@ -225,14 +225,15 @@ namespace jw::audio
         template<opl_type t, bool force, unsigned I, unsigned N, unsigned... Next, typename T>
         void do_write(const reg<T>&, reg<T>&, unsigned);
         template<opl_type t>
-        void do_write(std::uint16_t reg, std::byte value);
+        void do_write(unsigned, std::byte);
         void init();
         opl_type detect();
 
         io::out_port<std::uint8_t> index(bool hi) const noexcept { return { base + hi * 2 }; }
-        io::io_port<std::byte> data(bool hi) const noexcept { return { base + hi * 2 + 1 }; }
+        io::io_port<std::byte> data() const noexcept { return { base + 1 }; }
 
-        io::port_num base;
+        const io::port_num base;
+        unsigned last_index { 0 };
         reg<setup> reg_setup;
         reg<timer> reg_timer;
         reg<mode_4op> reg_4op;

@@ -94,7 +94,7 @@ namespace jw::audio
 
         w_opl3(0x02, 0xa5);     // write a distinctive value to timer 0
         this_thread::yield_for(2235ns);
-        if (data(0).read() == std::byte { 0xa5 }) return opl_type::opl3_l;
+        if (data().read() == std::byte { 0xa5 }) return opl_type::opl3_l;
         else return opl_type::opl3;
     }
 
@@ -172,30 +172,34 @@ namespace jw::audio
     }
 
     template<opl_type t>
-    inline void basic_opl::do_write(std::uint16_t reg, std::byte value)
+    inline void basic_opl::do_write(unsigned reg, std::byte value)
     {
         using namespace std::chrono_literals;
         constexpr bool opl2 = t == opl_type::opl2;
         constexpr bool opl3 = t == opl_type::opl3;
         constexpr bool opl3_l = t == opl_type::opl3_l;
 
-        const bool hi = (reg & 0x100) != 0;
+        assume(reg < 0x200);
+        const bool hi = reg > 0xff;
         if constexpr (opl2) if (hi) return;
-        reg &= 0xff;
 
         if constexpr (opl3_l) do { } while (status().busy);
         else if constexpr (opl3) do { } while (clock::now() < last_access + 2235ns);
         else this_thread::yield_until(last_access + 23us);
 
-        index(hi).write(reg);
-
-        if constexpr (opl2)
+        if (last_index != reg)
         {
-            const auto now = clock::now();
-            do { } while (clock::now() < now + 3300ns);
+            index(hi).write(reg);
+            last_index = reg;
+
+            if constexpr (opl2)
+            {
+                const auto now = clock::now();
+                do { } while (clock::now() < now + 3300ns);
+            }
         }
 
-        data(hi).write(value);
+        data().write(value);
         if constexpr (not opl3_l) last_access = clock::now();
     }
 
