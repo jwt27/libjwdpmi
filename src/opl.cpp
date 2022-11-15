@@ -22,26 +22,35 @@ namespace jw::audio
         reg<channel> c_tmp;
         for (auto j : { 0, 0x100 })
             for (unsigned i = 0; i < 9; ++i)
-                write<true, 0xc0, 0xa0, 0xb0>(c, c_tmp, i + j);
+                write<true, 0xc0, 0xa0, 0xb0>(c, c_tmp, i | j);
 
         oscillator o { };
         reg<oscillator> o_tmp;
         for (auto j : { 0, 0x100 })
             for (unsigned i = 0; i < 18; ++i)
-                write<true, 0x20, 0x40, 0x60, 0x80, 0xe0>(o, o_tmp, i + j);
+                write<true, 0x20, 0x40, 0x60, 0x80, 0xe0>(o, o_tmp, i | j);
     }
 
     inline void basic_opl::init()
     {
-        common_registers c { };
-        c.mask_timer0 = true;
-        c.mask_timer1 = true;
-        c.enable_waveform_select = type == opl_type::opl2;
-        c.enable_opl3 = type != opl_type::opl2;
-        c.enable_opl3_l = type == opl_type::opl3_l;
-        write<true, 0x01, 0x02, 0x03, 0x04, 0x08, 0xbd, 0x101, 0x104, 0x105>(c, common, 0);
-        c.reset_irq = true;
-        write(c);
+        setup s { };
+        s.enable_waveform_select = type == opl_type::opl2;
+        s.enable_opl3 = type != opl_type::opl2;
+        s.enable_opl3_l = type == opl_type::opl3_l;
+        write<true, 0x01, 0x08, 0x101, 0x105>(s, reg_setup, 0);
+
+        timer t { };
+        t.mask_timer0 = true;
+        t.mask_timer1 = true;
+        write<true, 0x02, 0x03, 0x04>(t, reg_timer, 0);
+        t.reset_irq = true;
+        write(t);
+
+        mode_4op m { };
+        write<true, 0x104>(m, reg_4op, 0);
+
+        percussion p { };
+        write<true, 0xbd>(p, reg_percussion, 0);
     }
 
     void basic_opl::reset()
@@ -89,10 +98,25 @@ namespace jw::audio
         else return opl_type::opl3;
     }
 
-    void basic_opl::write(const common_registers& value)
+    void basic_opl::write(const setup& value)
     {
-        write<false, 0x01, 0x02, 0x03, 0x04, 0x08, 0xbd, 0x101, 0x104, 0x105>(value, common, 0);
-        common.value.reset_irq = false;
+        write<false, 0x01, 0x08, 0x101, 0x105>(value, reg_setup, 0);
+    }
+
+    void basic_opl::write(const timer& value)
+    {
+        write<false, 0x02, 0x03, 0x04>(value, reg_timer, 0);
+        reg_timer.value.reset_irq = false;
+    }
+
+    void basic_opl::write(const mode_4op& value)
+    {
+        write<false, 0x104>(value, reg_4op, 0);
+    }
+
+    void basic_opl::write(const percussion& value)
+    {
+        write<false, 0xbd>(value, reg_percussion, 0);
     }
 
     void basic_opl::write(const oscillator& value, std::uint8_t slot)
@@ -147,17 +171,6 @@ namespace jw::audio
             return do_write<t, force, I + 1, Next...>(value, cache, offset);
     }
 
-    inline void basic_opl::write(std::uint16_t reg, std::byte value)
-    {
-        switch (type)
-        {
-        case opl_type::opl2: return do_write<opl_type::opl2>(reg, value);
-        case opl_type::opl3: return do_write<opl_type::opl3>(reg, value);
-        case opl_type::opl3_l: return do_write<opl_type::opl3_l>(reg, value);
-        default: __builtin_unreachable();
-        }
-    }
-
     template<opl_type t>
     inline void basic_opl::do_write(std::uint16_t reg, std::byte value)
     {
@@ -188,12 +201,11 @@ namespace jw::audio
 
     void basic_opl::set_4op(std::uint8_t n, bool v)
     {
-        reg enable_4op { common.value.enable_4op };
-        auto bits = enable_4op.value.bitset();
+        auto r = read_4op();
+        auto bits = r.bitset();
         bits[n] = v;
-        enable_4op.value.bitset(bits);
-        if (common.value.enable_4op.bitset() != bits) write(0x104, enable_4op.raw[0]);
-        common.value.enable_4op = enable_4op.value;
+        r.bitset(bits);
+        write(r);
     }
 
     opl::~opl()
@@ -219,11 +231,13 @@ namespace jw::audio
 
     void opl::update_config()
     {
-        auto r = base::read();
+        auto r = base::read_setup();
+        auto p = base::read_percussion();
         r.note_sel = cfg.note_select;
-        r.tremolo_depth = cfg.tremolo_depth;
-        r.vibrato_depth = cfg.vibrato_depth;
+        p.tremolo_depth = cfg.tremolo_depth;
+        p.vibrato_depth = cfg.vibrato_depth;
         base::write(r);
+        base::write(p);
     }
 
     template<unsigned N> void opl::start(channel<N>* ch)
@@ -399,13 +413,13 @@ namespace jw::audio
                 switch (cfg.prioritize_4op)
                 {
                 case opl_config::auto_force:
-                    if (read().enable_4op.bitset().none()) break;
+                    if (read_4op().bitset().none()) break;
                     [[fallthrough]];
                 case opl_config::force:
                     if (best.i != 0xff) return insert_at(best.i, ch);
                     return false;
                 case opl_config::automatic:
-                    if (read().enable_4op.bitset().none()) break;
+                    if (read_4op().bitset().none()) break;
                     [[fallthrough]];
                 case opl_config::yes:
                     if (best.i != 0xff and not best.key_on and best.off_time < clock::now()) return insert_at(best.i, ch);
@@ -515,7 +529,7 @@ namespace jw::audio
 
         const clock::time_point infinity = clock::time_point::max();
         const bool key_on = read_channel(N == 4 ? lookup_4to2_pri(ch->channel_num) : ch->channel_num).key_on;
-        const std::uint8_t freq_msb = (ch->freq_num >> (9 - read().note_sel)) & 1;
+        const std::uint8_t freq_msb = (ch->freq_num >> (9 - read_setup().note_sel)) & 1;
         const std::uint8_t freq_rate = (ch->freq_block << 1) | freq_msb;
 
         clock::time_point off_time = clock::time_point::min();

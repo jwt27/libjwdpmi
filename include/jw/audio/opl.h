@@ -25,11 +25,24 @@ namespace jw::audio
     {
         using clock = config::midi_clock;
 
-        struct [[gnu::packed]] common_registers
+        struct [[gnu::packed]] setup
         {
             unsigned test0 : 5;
             bool enable_waveform_select : 1;        // OPL2 only
             unsigned test1 : 2;
+            unsigned : 6;
+            bool note_sel : 1;
+            bool enable_composite_sine_mode : 1;    // OPL2 only
+            unsigned test_opl3 : 6;
+            unsigned : 2;
+            bool enable_opl3 : 1;
+            unsigned : 1;
+            bool enable_opl3_l : 1;
+            unsigned : 5;
+        };
+
+        struct [[gnu::packed]] timer
+        {
             unsigned timer0 : 8;
             unsigned timer1 : 8;
             bool start_timer0 : 1;
@@ -38,9 +51,24 @@ namespace jw::audio
             bool mask_timer1 : 1;
             bool mask_timer0 : 1;
             bool reset_irq : 1;
-            unsigned : 6;
-            bool note_sel : 1;
-            bool enable_composite_sine_mode : 1;    // OPL2 only
+        };
+
+        struct [[gnu::packed]] mode_4op
+        {
+            bool ch0 : 1;
+            bool ch1 : 1;
+            bool ch2 : 1;
+            bool ch9 : 1;
+            bool chA : 1;
+            bool chB : 1;
+            unsigned : 2;
+
+            void bitset(std::bitset<6> value) noexcept { *reinterpret_cast<std::uint8_t*>(this) = value.to_ulong(); }
+            constexpr std::bitset<6> bitset() const noexcept { return { *reinterpret_cast<const std::uint8_t*>(this) }; }
+        };
+
+        struct [[gnu::packed]] percussion
+        {
             bool hihat : 1;
             bool top_cymbal : 1;
             bool tomtom : 1;
@@ -49,27 +77,7 @@ namespace jw::audio
             bool enable_percussion : 1;
             unsigned vibrato_depth : 1;
             unsigned tremolo_depth : 1;
-            unsigned test_opl3 : 6;
-            unsigned : 2;
-            struct [[gnu::packed]]
-            {
-                bool ch0 : 1;
-                bool ch1 : 1;
-                bool ch2 : 1;
-                bool ch9 : 1;
-                bool chA : 1;
-                bool chB : 1;
-                unsigned : 2;
-
-                void bitset(std::bitset<6> value) noexcept { *reinterpret_cast<std::uint8_t*>(this) = value.to_ulong(); }
-                constexpr std::bitset<6> bitset() const noexcept { return { *reinterpret_cast<const std::uint8_t*>(this) }; }
-            } enable_4op;
-            bool enable_opl3 : 1;
-            unsigned : 1;
-            bool enable_opl3_l : 1;
-            unsigned : 5;
         };
-        static_assert(sizeof(common_registers) == 9);
 
         struct [[gnu::packed]] oscillator
         {
@@ -87,7 +95,6 @@ namespace jw::audio
             unsigned waveform : 3;
             unsigned : 5;
         };
-        static_assert(sizeof(oscillator) == 5);
 
         struct [[gnu::packed]] channel
         {
@@ -122,7 +129,6 @@ namespace jw::audio
             void output(std::bitset<4> value) noexcept;
             constexpr std::bitset<4> output() const noexcept;
         };
-        static_assert(sizeof(channel) == 3);
 
         struct [[gnu::packed]] status_t
         {
@@ -134,22 +140,34 @@ namespace jw::audio
             bool timer0 : 1;
             bool irq : 1;
         };
-        static_assert(sizeof(status_t) == 1);
+
+        static_assert (sizeof(setup) == 4);
+        static_assert (sizeof(timer) == 3);
+        static_assert (sizeof(mode_4op) == 1);
+        static_assert (sizeof(percussion) == 1);
+        static_assert (sizeof(oscillator) == 5);
+        static_assert (sizeof(channel) == 3);
 
         basic_opl(io::port_num port);
         virtual ~basic_opl() { reset(); }
 
-        void write(const common_registers& value);
-        void write(const oscillator& value, std::uint8_t slot);
-        void write(const oscillator& value, std::uint8_t ch, std::uint8_t osc) { write(value, oscillator_slot(ch, osc)); }
-        void write(const channel& value, std::uint8_t ch);
+        void write(const setup&);
+        void write(const timer&);
+        void write(const mode_4op&);
+        void write(const percussion&);
+        void write(const channel&, std::uint8_t ch);
+        void write(const oscillator&, std::uint8_t slot);
+        void write(const oscillator& o, std::uint8_t ch, std::uint8_t osc) { write(o, oscillator_slot(ch, osc)); }
 
-        const common_registers& read() const noexcept { return common.value; }
-        const channel& read_channel(std::uint8_t ch) const noexcept { return channels[ch].value; }
+        const setup&      read_setup() const noexcept { return reg_setup.value; }
+        const timer&      read_timer() const noexcept { return reg_timer.value; }
+        const mode_4op&   read_4op() const noexcept { return reg_4op.value; }
+        const percussion& read_percussion() const noexcept { return reg_percussion.value; }
+        const channel&    read_channel(std::uint8_t ch) const noexcept { return channels[ch].value; }
         const oscillator& read_oscillator(std::uint8_t osc) const noexcept { return oscillators[osc].value; }
         const oscillator& read_oscillator(std::uint8_t ch, std::uint8_t osc) const noexcept { return read_oscillator(oscillator_slot(ch, osc)); }
 
-        bool is_4op(std::uint8_t ch_4op) const noexcept { return read().enable_4op.bitset()[ch_4op]; };
+        bool is_4op(std::uint8_t ch_4op) const noexcept { return read_4op().bitset()[ch_4op]; };
         void set_4op(std::uint8_t ch_4op, bool enable);
 
         status_t status() const noexcept { return io::read_port<status_t>(base); }
@@ -208,7 +226,6 @@ namespace jw::audio
         void do_write(const reg<T>&, reg<T>&, unsigned);
         template<opl_type t>
         void do_write(std::uint16_t reg, std::byte value);
-        void write(std::uint16_t reg, std::byte value);
         void init();
         opl_type detect();
 
@@ -216,7 +233,10 @@ namespace jw::audio
         io::io_port<std::byte> data(bool hi) const noexcept { return { base + hi * 2 + 1 }; }
 
         io::port_num base;
-        reg<common_registers> common;
+        reg<setup> reg_setup;
+        reg<timer> reg_timer;
+        reg<mode_4op> reg_4op;
+        reg<percussion> reg_percussion;
         std::array<reg<oscillator>, 36> oscillators;
         std::array<reg<channel>, 18> channels;
         clock::time_point last_access { clock::time_point::min() };
@@ -307,7 +327,10 @@ namespace jw::audio
         const opl_config& config() const noexcept { return cfg; }
         void config(const opl_config& c) { cfg = c; update_config(); };
 
-        using base::read;
+        using base::read_setup;
+        using base::read_timer;
+        using base::read_4op;
+        using base::read_percussion;
         using base::read_channel;
         using base::read_oscillator;
         using base::type;
