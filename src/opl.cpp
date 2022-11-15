@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 
@@ -9,12 +10,38 @@
 namespace jw::audio
 {
     basic_opl::basic_opl(io::port_num port)
-        : status_register { port }
-        , index { port + 0, port + 2 }
-        , data { port + 1, port + 3 }
+        : base { port }
         , type { detect() }
     {
-        reset();
+        channels = { };
+        oscillators = { };
+
+        init();
+
+        channel c { };
+        reg<channel> c_tmp;
+        for (auto j : { 0, 0x100 })
+            for (unsigned i = 0; i < 9; ++i)
+                write<true, 0xc0, 0xa0, 0xb0>(c, c_tmp, i + j);
+
+        oscillator o { };
+        reg<oscillator> o_tmp;
+        for (auto j : { 0, 0x100 })
+            for (unsigned i = 0; i < 18; ++i)
+                write<true, 0x20, 0x40, 0x60, 0x80, 0xe0>(o, o_tmp, i + j);
+    }
+
+    inline void basic_opl::init()
+    {
+        common_registers c { };
+        c.mask_timer0 = true;
+        c.mask_timer1 = true;
+        c.enable_waveform_select = type == opl_type::opl2;
+        c.enable_opl3 = type != opl_type::opl2;
+        c.enable_opl3_l = type == opl_type::opl3_l;
+        write<true, 0x01, 0x02, 0x03, 0x04, 0x08, 0xbd, 0x101, 0x104, 0x105>(c, common, 0);
+        c.reset_irq = true;
+        write(c);
     }
 
     void basic_opl::reset()
@@ -34,18 +61,10 @@ namespace jw::audio
             c.freq_num = 0;
             write(c, i);
         }
-        common_registers c { };
-        c.mask_timer0 = true;
-        c.mask_timer1 = true;
-        c.enable_waveform_select = type == opl_type::opl2;
-        c.enable_opl3 = type != opl_type::opl2;
-        c.enable_opl3_l = type == opl_type::opl3_l;
-        write(c);
-        c.reset_irq = true;
-        write(c);
+        init();
     }
 
-    opl_type basic_opl::detect()
+    inline opl_type basic_opl::detect()
     {
         using namespace std::chrono_literals;
         auto w = [this] (unsigned r, unsigned v) { do_write<opl_type::opl2>(r, static_cast<std::byte>(v)); };
@@ -66,13 +85,13 @@ namespace jw::audio
 
         w_opl3(0x02, 0xa5);     // write a distinctive value to timer 0
         this_thread::yield_for(2235ns);
-        if (data[0].read() == std::byte { 0xa5 }) return opl_type::opl3_l;
+        if (data(0).read() == std::byte { 0xa5 }) return opl_type::opl3_l;
         else return opl_type::opl3;
     }
 
     void basic_opl::write(const common_registers& value)
     {
-        write<0x01, 0x02, 0x03, 0x04, 0x08, 0xbd, 0x101, 0x104, 0x105>(value, common, 0);
+        write<false, 0x01, 0x02, 0x03, 0x04, 0x08, 0xbd, 0x101, 0x104, 0x105>(value, common, 0);
         common.value.reset_irq = false;
     }
 
@@ -82,7 +101,7 @@ namespace jw::audio
         const bool hi = slot >= 18;
         const unsigned n = slot - (hi ? 18 : 0);
         const unsigned offset = n + 2 * (n / 6) + (hi ? 0x100 : 0);
-        write<0x20, 0x40, 0x60, 0x80, 0xe0>(value, oscillators[slot], offset);
+        write<false, 0x20, 0x40, 0x60, 0x80, 0xe0>(value, oscillators[slot], offset);
     }
 
     void basic_opl::write(const channel& value, std::uint8_t ch)
@@ -94,42 +113,53 @@ namespace jw::audio
             auto ch_4op = lookup_2to4(ch);
             if (ch_4op != 0xff and ch == lookup_4to2_sec(ch_4op) and is_4op(ch_4op))
             {
-                write<0xc0>(value, channels[ch], offset);
+                write<false, 0xc0>(value, channels[ch], offset);
                 return;
             }
         }
 
-        write<0xc0, 0xa0, 0xb0>(value, channels[ch], offset);
+        write<false, 0xc0, 0xa0, 0xb0>(value, channels[ch], offset);
     }
 
-    template<unsigned... R, typename T>
-    void basic_opl::write(const T& v, cached_reg<T>& cache, unsigned offset)
+    template<bool force, unsigned... N, typename T>
+    inline void basic_opl::write(const T& v, reg<T>& cache, unsigned offset)
     {
-        static_assert(sizeof...(R) <= sizeof(T));
-        static constexpr unsigned regnum[] { R... };
+        static_assert(sizeof...(N) <= sizeof(T));
         const reg<T> value { v };
-        for (unsigned i = 0; i < sizeof...(R); ++i)
+        switch (type)
         {
-            std::unique_lock lock { mutex };
-            if (value.raw[i] == cache.raw[i] and cache.written[i]) continue;
-            write(regnum[i] + offset, value.raw[i]);
-            cache.raw[i] = value.raw[i];
-            cache.written[i] = true;
+        case opl_type::opl2:   return do_write<opl_type::opl2  , force, 0, N...>(value, cache, offset);
+        case opl_type::opl3:   return do_write<opl_type::opl3  , force, 0, N...>(value, cache, offset);
+        case opl_type::opl3_l: return do_write<opl_type::opl3_l, force, 0, N...>(value, cache, offset);
+        default: __builtin_unreachable();
         }
     }
 
-    void basic_opl::write(std::uint16_t reg, std::byte value)
+    template<opl_type t, bool force, unsigned I, unsigned N, unsigned... Next, typename T>
+    inline void basic_opl::do_write(const reg<T>& value, reg<T>& cache, unsigned offset)
+    {
+        if (force or value.raw[I] != cache.raw[I])
+        {
+            cache.raw[I] = value.raw[I];
+            do_write<t>(N + offset, value.raw[I]);
+        }
+        if constexpr (sizeof...(Next) > 0)
+            return do_write<t, force, I + 1, Next...>(value, cache, offset);
+    }
+
+    inline void basic_opl::write(std::uint16_t reg, std::byte value)
     {
         switch (type)
         {
         case opl_type::opl2: return do_write<opl_type::opl2>(reg, value);
         case opl_type::opl3: return do_write<opl_type::opl3>(reg, value);
         case opl_type::opl3_l: return do_write<opl_type::opl3_l>(reg, value);
+        default: __builtin_unreachable();
         }
     }
 
     template<opl_type t>
-    void basic_opl::do_write(std::uint16_t reg, std::byte value)
+    inline void basic_opl::do_write(std::uint16_t reg, std::byte value)
     {
         using namespace std::chrono_literals;
         constexpr bool opl2 = t == opl_type::opl2;
@@ -140,14 +170,19 @@ namespace jw::audio
         if constexpr (opl2) if (hi) return;
         reg &= 0xff;
 
-        if constexpr (opl3_l) this_thread::yield_while([this] { return status().busy; });
-        else this_thread::yield_until(last_access + (opl3 ? 2235ns : 23us));
+        if constexpr (opl3_l) do { } while (status().busy);
+        else if constexpr (opl3) do { } while (clock::now() < last_access + 2235ns);
+        else this_thread::yield_until(last_access + 23us);
 
-        index[hi].write(reg);
+        index(hi).write(reg);
 
-        if constexpr (opl2) this_thread::yield_for<clock>(3300ns);
+        if constexpr (opl2)
+        {
+            const auto now = clock::now();
+            do { } while (clock::now() < now + 3300ns);
+        }
 
-        data[hi].write(value);
+        data(hi).write(value);
         if constexpr (not opl3_l) last_access = clock::now();
     }
 

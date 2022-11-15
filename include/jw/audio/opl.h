@@ -1,4 +1,5 @@
 ﻿/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 
@@ -151,7 +152,7 @@ namespace jw::audio
         bool is_4op(std::uint8_t ch_4op) const noexcept { return read().enable_4op.bitset()[ch_4op]; };
         void set_4op(std::uint8_t ch_4op, bool enable);
 
-        status_t status() const noexcept { return status_register.read(); }
+        status_t status() const noexcept { return io::read_port<status_t>(base); }
         void reset();
 
         // Returns absolute oscillator slot number for given operator in given channel.
@@ -201,25 +202,24 @@ namespace jw::audio
             constexpr reg(const T& v) noexcept : value { v } { }
         };
 
-        template <typename T>
-        struct cached_reg : reg<T>
-        {
-            std::bitset<sizeof(T)> written { };
-        };
-
-        template<unsigned... R, typename T> void write(const T& v, cached_reg<T>& cache, unsigned offset);
-        template<opl_type t> void do_write(std::uint16_t reg, std::byte value);
+        template<bool force, unsigned... N, typename T>
+        void write(const T&, reg<T>&, unsigned);
+        template<opl_type t, bool force, unsigned I, unsigned N, unsigned... Next, typename T>
+        void do_write(const reg<T>&, reg<T>&, unsigned);
+        template<opl_type t>
+        void do_write(std::uint16_t reg, std::byte value);
         void write(std::uint16_t reg, std::byte value);
+        void init();
         opl_type detect();
 
-        jw::mutex mutex { };
-        cached_reg<common_registers> common { };
-        std::array<cached_reg<oscillator>, 36> oscillators { };
-        std::array<cached_reg<channel>, 18> channels { };
+        io::out_port<std::uint8_t> index(bool hi) const noexcept { return { base + hi * 2 }; }
+        io::io_port<std::byte> data(bool hi) const noexcept { return { base + hi * 2 + 1 }; }
+
+        io::port_num base;
+        reg<common_registers> common;
+        std::array<reg<oscillator>, 36> oscillators;
+        std::array<reg<channel>, 18> channels;
         clock::time_point last_access { clock::time_point::min() };
-        io::in_port<status_t> status_register;
-        std::array<io::out_port<std::uint8_t>, 2> index;
-        std::array<io::io_port<std::byte>, 2> data;
 
     public:
         const opl_type type;
