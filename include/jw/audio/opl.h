@@ -113,10 +113,15 @@ namespace jw::audio
             constexpr void freq(float) noexcept;
             constexpr void freq(const basic_opl& opl, float) noexcept;
 
-            template<unsigned sample_rate, unsigned A4 = 440>
-            void note(std::uint8_t) noexcept;
-            template<unsigned A4 = 440>
-            void note(const basic_opl&, std::uint8_t) noexcept;
+            template<unsigned sample_rate, long double A4 = 440.L>
+            void note(int) noexcept;
+            template<long double A4 = 440.L>
+            void note(const basic_opl&, int) noexcept;
+
+            template<unsigned sample_rate, long double A4 = 440.L>
+            void note(long double) noexcept;
+            template<long double A4 = 440.L>
+            void note(const basic_opl&, long double) noexcept;
 
             template<unsigned sample_rate>
             static constexpr unsigned fnum(std::uint8_t blk, float f) noexcept
@@ -296,11 +301,12 @@ namespace jw::audio
             channel& operator=(channel&& c) noexcept;
 
             void freq(const opl& o, float f) noexcept           { base::freq(o, f); }
-            void note(const opl& o, std::uint8_t n) noexcept    { base::note(o, n); }
+            void note(const opl& o, int n) noexcept             { base::note(o, n); }
+            void note(const opl& o, long double n) noexcept     { base::note(o, n); }
             bool key_on(opl& o)                                 { return o.insert(this); }
             void key_off()                                      { if (allocated()) owner->stop(this); }
             void update()                                       { if (allocated()) owner->update(this); }
-            bool silent() const noexcept                        { return silent_at(clock::now()); }
+            bool silent() const noexcept                        { return not allocated() or (not key_on() and off_time < clock::now()); }
             bool silent_at(clock::time_point t) const noexcept  { return not allocated() or (not key_on() and off_time < t); }
             bool allocated() const noexcept                     { return owner != nullptr; }
 
@@ -371,12 +377,13 @@ namespace jw::audio
         freq_num = fnum<sample_rate>(b, freq);
     }
 
-    template<unsigned sample_rate, unsigned A4>
-    inline void basic_opl::channel::note(std::uint8_t midi_note) noexcept
+    // Set fnum from MIDI note number, using a lookup table.
+    template<unsigned sample_rate, long double A4>
+    inline void basic_opl::channel::note(int midi_note) noexcept
     {
         assume(midi_note < 128);
-        static constexpr std::uint8_t block0_max_note = jw::log2(fnum_to_freq<sample_rate>(0, 1023) / static_cast<long double>(A4)) * 12 + 69;
-        static constexpr std::uint8_t offset = block0_max_note - 11;
+        constexpr std::uint8_t max_note = log2(fnum_to_freq<sample_rate>(0, 1023) / A4) * 12 + 69;
+        constexpr std::uint8_t offset = max_note - 11;
         static constexpr auto scale = []
         {
             std::array<std::uint16_t, 12> array;
@@ -388,7 +395,7 @@ namespace jw::audio
         constexpr std::uint8_t adjust = 12 - (offset % 12);
         constexpr std::uint8_t adjust_div = (12 + offset) / 12;
         const unsigned n = midi_note + adjust;
-        std::uint16_t f = scale[n % 12];
+        unsigned f = scale[n % 12];
         std::int8_t b = n / 12 - adjust_div;
         if (b < 0)
         {
@@ -399,14 +406,33 @@ namespace jw::audio
         freq_block = b;
     }
 
+    // Set fnum from floating-point MIDI note.
+    template<unsigned sample_rate, long double A4>
+    inline void basic_opl::channel::note(long double midi_note) noexcept
+    {
+        const auto exp = (midi_note - 69) / 12 + 20 + log2(A4 / sample_rate);
+        const auto b = std::clamp(static_cast<int>(std::ceil(exp - log2(1023.L))), 0, 7);
+
+        const auto f = __builtin_exp2l(exp - b);
+        freq_num = round(f);
+        freq_block = b;
+    }
+
     inline constexpr void basic_opl::channel::freq(const basic_opl& opl, float f) noexcept
     {
         if (opl.type == opl_type::opl3_l) freq<49518>(f);
         else freq<49716>(f);
     }
 
-    template<unsigned A4>
-    inline void basic_opl::channel::note(const basic_opl& opl, std::uint8_t midi_note) noexcept
+    template<long double A4>
+    inline void basic_opl::channel::note(const basic_opl& opl, int midi_note) noexcept
+    {
+        if (opl.type == opl_type::opl3_l) note<49518, A4>(midi_note);
+        else note<49716, A4>(midi_note);
+    }
+
+    template<long double A4>
+    inline void basic_opl::channel::note(const basic_opl& opl, long double midi_note) noexcept
     {
         if (opl.type == opl_type::opl3_l) note<49518, A4>(midi_note);
         else note<49716, A4>(midi_note);
