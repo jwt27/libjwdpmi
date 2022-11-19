@@ -265,7 +265,7 @@ namespace jw::audio
         bool ignore_priority { false };
 
         // Determines if key scale rate/level is calculated by highest or second highest bit in freq_num.
-        bool note_select { false };
+        bool note_select { true };
 
         // For tremolo: low = 1dB, high = 4.8dB.  For vibrato: low = 7%, high = 14%.
         enum : unsigned { low, high } tremolo_depth : 1 { low }, vibrato_depth : 1 { low };

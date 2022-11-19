@@ -37,6 +37,7 @@ namespace jw::audio
         s.enable_waveform_select = type == opl_type::opl2;
         s.enable_opl3 = type != opl_type::opl2;
         s.enable_opl3_l = type == opl_type::opl3_l;
+        s.note_sel = true;
         write<true, 0x01, 0x08, 0x101, 0x105>(s, reg_setup, 0);
 
         timer t { };
