@@ -393,7 +393,7 @@ namespace jw::chrono
         } while (a.value != b.value);
 
         a += ns_per_pit_count * (pit_counter_max - counter);
-        return time_point { duration { static_cast<std::int64_t>(a) + pit_ns_offset } };
+        return time_point { duration { static_cast<std::uint64_t>(a) + pit_ns_offset } };
     }
 
     fixed<std::uint32_t, 6> pit::irq_delta() noexcept { return ns_per_pit_tick; }
@@ -443,7 +443,7 @@ namespace jw::chrono
         const std::uint32_t tsc = rdtsc();
         const std::uint32_t count = tsc - last;
         const auto ns = pit + static_cast<decltype(pit_ns)>(fixed_ns_per_tsc_tick * count);
-        return time_point { duration { static_cast<std::int64_t>(ns) + pit_ns_offset } };
+        return time_point { duration { static_cast<std::uint64_t>(ns) + pit_ns_offset } };
     }
 
     tsc::duration tsc::to_duration(tsc_count count)
