@@ -553,9 +553,9 @@ namespace jw::audio
             if (o.enable_sustain) t = key_off + d;
             else
             {
-                d += attack_time((o.attack << 2) | key_scale);
+                const auto a = attack_time((o.attack << 2) | key_scale);
                 if (o.decay != 0) d += release_time((o.decay << 2) | key_scale);
-                t = ch->on_time + d;
+                t = std::min(ch->on_time + a, key_off) + d;
             }
             off_time = std::max(off_time, t);
         }
