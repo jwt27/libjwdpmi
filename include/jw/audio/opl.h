@@ -293,7 +293,7 @@ namespace jw::audio
             friend struct opl;
 
             constexpr channel() noexcept = default;
-            ~channel() { if (owner != nullptr) owner->remove(this); }
+            ~channel() { if (allocated()) owner->remove(this); }
 
             channel(const channel&) noexcept;
             channel& operator=(const channel&) noexcept;
@@ -306,8 +306,8 @@ namespace jw::audio
             bool key_on(opl& o)                                 { return o.insert(this); }
             void key_off()                                      { if (allocated()) owner->stop(this); }
             void update()                                       { if (allocated()) owner->update(this); }
-            bool silent() const noexcept                        { return not allocated() or (not key_on() and off_time < clock::now()); }
-            bool silent_at(clock::time_point t) const noexcept  { return not allocated() or (not key_on() and off_time < t); }
+            bool silent() const noexcept                        { return not allocated() or off_time < clock::now(); }
+            bool silent_at(clock::time_point t) const noexcept  { return not allocated() or off_time < t; }
             bool allocated() const noexcept                     { return owner != nullptr; }
 
             static channel from_bytes(std::span<std::byte, sizeof(base)>) noexcept;
@@ -316,8 +316,8 @@ namespace jw::audio
         private:
             channel(const base& c) noexcept : base { c } { };
 
-            bool key_on() const noexcept { return static_cast<const base*>(this)->key_on; }
-            void key_on(bool v) noexcept { static_cast<base*>(this)->key_on = v; }
+            bool key_on() const noexcept { return base::key_on; }
+            void key_on(bool v) noexcept { base::key_on = v; }
 
             opl* owner { nullptr };
             unsigned channel_num { };

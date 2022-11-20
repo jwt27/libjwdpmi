@@ -251,15 +251,14 @@ namespace jw::audio
         write(ch);
         ch->on_time = clock::now();
         ch->off_time = off_time(ch, clock::time_point::max());
-        if (ch->off_time != clock::time_point::max()) ch->key_on(false);
     }
 
     template<unsigned N> void opl::stop(channel<N>* ch)
     {
-        const auto key_on = ch->key_on();
+        const auto was_on = ch->key_on();
         ch->key_on(false);
         write(ch);
-        if (key_on) ch->off_time = off_time(ch, clock::now());
+        if (was_on) ch->off_time = off_time(ch, clock::now());
     }
 
     template<unsigned N> bool opl::insert_at(std::uint8_t n, channel<N>* ch)
@@ -295,8 +294,7 @@ namespace jw::audio
     {
         if (ch->owner == this)
         {
-            auto pri = N == 4 ? lookup_4to2_pri(ch->channel_num) : ch->channel_num;
-            if (read_channel(pri).key_on)
+            if (ch->key_on())
             {
                 ch->key_on(false);
                 write(ch);
@@ -305,9 +303,13 @@ namespace jw::audio
             return true;
         }
 
+        const auto now = clock::now();
+
+        constexpr std::uint8_t npos { 0xff };
+
         struct
         {
-            std::uint8_t i { 0xff };
+            std::uint8_t i { npos };
             bool key_on { true };
             int priority { std::numeric_limits<int>::max() };
             clock::time_point on_time { clock::time_point::max() };
@@ -316,7 +318,7 @@ namespace jw::audio
 
         auto check = [&](std::uint8_t i, bool key_on, auto prio, auto on_time, auto off_time)
         {
-            if (key_on)
+            if (key_on and now < off_time)
             {
                 if (not best.key_on) return;
                 if (not cfg.ignore_priority)
@@ -421,13 +423,13 @@ namespace jw::audio
                     if (read_4op().bitset().none()) break;
                     [[fallthrough]];
                 case opl_config::force:
-                    if (best.i != 0xff) return insert_at(best.i, ch);
+                    if (best.i != npos) return insert_at(best.i, ch);
                     return false;
                 case opl_config::automatic:
                     if (read_4op().bitset().none()) break;
                     [[fallthrough]];
                 case opl_config::yes:
-                    if (best.i != 0xff and not best.key_on and best.off_time < clock::now()) return insert_at(best.i, ch);
+                    if (best.i != npos and not best.key_on and best.off_time < now) return insert_at(best.i, ch);
                 case opl_config::no:
                     break;
                 }
@@ -435,7 +437,7 @@ namespace jw::audio
             if (search_4op(0, 1, 2, 3, 4, 5)) return true;
         }
 
-        if (best.i != 0xff) return insert_at(best.i, ch);
+        if (best.i != npos) return insert_at(best.i, ch);
         return false;
     }
 
