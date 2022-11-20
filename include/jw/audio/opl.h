@@ -310,7 +310,7 @@ namespace jw::audio
             bool silent_at(clock::time_point t) const noexcept  { return not allocated() or off_time < t; }
             bool allocated() const noexcept                     { return owner != nullptr; }
 
-            static channel from_bytes(std::span<std::byte, sizeof(base)>) noexcept;
+            static channel from_bytes(std::span<const std::byte, sizeof(base)>) noexcept;
             std::array<std::byte, sizeof(base)> to_bytes() const noexcept;
 
         private:

@@ -566,12 +566,17 @@ namespace jw::audio
 
     template<unsigned N>
     opl::channel<N>::channel(const channel& c) noexcept
-        : base { c } { }
+        : base { c }
+    {
+        base::key_on = false;
+    }
 
     template<unsigned N>
     opl::channel<N>& opl::channel<N>::operator=(const channel& c) noexcept
     {
+        const bool k = base::key_on;
         *static_cast<base*>(this) = c;
+        base::key_on = k;
         return *this;
     }
 
@@ -585,6 +590,7 @@ namespace jw::audio
     {
         if (owner != nullptr) owner->move(this);
         c.owner = nullptr;
+        c.base::key_on = false;
     }
 
     template<unsigned N>
@@ -595,7 +601,7 @@ namespace jw::audio
     }
 
     template<unsigned N>
-    opl::channel<N> opl::channel<N>::from_bytes(std::span<std::byte, sizeof(base)> bytes) noexcept
+    opl::channel<N> opl::channel<N>::from_bytes(std::span<const std::byte, sizeof(base)> bytes) noexcept
     {
         return *reinterpret_cast<const base*>(bytes.data());
     }
@@ -604,7 +610,8 @@ namespace jw::audio
     std::array<std::byte, sizeof(typename opl::channel<N>::base)> opl::channel<N>::to_bytes() const noexcept
     {
         std::array<std::byte, sizeof(base)> array;
-        std::copy_n(reinterpret_cast<const std::byte*>(this), array.size(), array.begin());
+        std::memcpy(array.data(), this, sizeof(base));
+        reinterpret_cast<base*>(array.data())->key_on = false;
         return array;
     }
 
