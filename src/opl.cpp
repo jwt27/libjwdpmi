@@ -547,7 +547,7 @@ namespace jw::audio
             if (o.release == 0) return infinity;
             if (o.enable_sustain and key_on) return infinity;
 
-            const std::uint8_t key_scale = freq_rate >> (o.key_scale_rate << 1);
+            const std::uint8_t key_scale = freq_rate >> ((not o.key_scale_rate) << 1);
             clock::time_point t;
             duration d = release_time((o.release << 2) | key_scale);
             if (o.enable_sustain) t = key_off + d;
