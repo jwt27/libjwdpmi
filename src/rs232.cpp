@@ -10,8 +10,11 @@
 
 namespace jw::io::detail
 {
+    static constexpr char xon = 0x11;
+    static constexpr char xoff = 0x13;
+
     rs232_streambuf::rs232_streambuf(const rs232_config& p)
-        : config(p),
+        : config { p }, irq { [this] { irq_handler(); } },
         rate_divisor(p.io_port), data_port(p.io_port),
         irq_enable(p.io_port + 1),
         irq_id(p.io_port + 2), fifo_control(p.io_port + 2),
@@ -55,8 +58,8 @@ namespace jw::io::detail
 
         if (irq_id.read().fifo_enabled != 0b11) throw device_not_found("16550A not detected"); // HACK
 
-        irq_handler.set_irq(config.irq);
-        irq_handler.enable();
+        irq.set_irq(config.irq);
+        irq.enable();
 
         irqen.data_available = true;
         irqen.transmitter_empty = true;
@@ -72,7 +75,7 @@ namespace jw::io::detail
     {
         modem_control.write({ });
         irq_enable.write({ });
-        irq_handler.disable();
+        irq.disable();
         ports_used.erase(config.io_port);
     }
 
@@ -184,5 +187,127 @@ namespace jw::io::detail
 
         if (traits_type::not_eof(c)) sputc(c);
         return ~traits_type::eof();
+    }
+
+    inline void rs232_streambuf::check_irq_exception()
+    {
+        if (irq_exception != nullptr) [[unlikely]]
+        {
+            auto e = std::move(irq_exception);
+            irq_exception = nullptr;
+            std::rethrow_exception(e);
+        }
+    }
+
+    inline void rs232_streambuf::set_rts() noexcept
+    {
+        if (config.force_dtr_rts_high) return;
+        auto r = modem_control.read();
+        auto r2 = r;
+        r2.dtr = true;
+        r2.rts = egptr() != rx_buf.end() - 8;
+        if (r.rts != r2.rts)
+        {
+            modem_control.write(r2);
+            //TODO: xon/xoff
+        }
+    }
+
+    inline uart_line_status_reg rs232_streambuf::read_status()
+    {
+        auto status = line_status.read();
+        if (status.overflow_error)       throw io::overflow { "RS232 FIFO overflow" };
+        if (status.parity_error)         throw parity_error { "RS232 parity error" };
+        if (status.framing_error)        throw framing_error { "RS232 framing error" };
+        if (status.line_break)           throw line_break { "RS232 line break detected" };
+        //if (status.fifo_contains_error)  throw io_error { "RS232 FIFO contains error" };
+        return status;
+    }
+
+    inline void rs232_streambuf::get(bool entire_fifo)
+    {
+        //irq_disable no_irq { this, irq_disable::get };
+        dpmi::interrupt_mask no_irq { };
+        auto size = std::min(entire_fifo ? 8 : 1, rx_buf.end() - rx_ptr);
+        for (auto i = 0; i < size or read_status().data_available; ++i)
+        {
+            if (rx_ptr >= rx_buf.end()) throw io::overflow { "RS232 receive buffer overflow" };
+            *(rx_ptr++) = get_one();
+        }
+        setg(rx_buf.begin(), gptr(), rx_ptr);
+    }
+
+    inline void rs232_streambuf::put()
+    {
+        //if (config.flow_control == rs232_config::xon_xoff && !cts) { put_one(xon); return; };
+        //irq_disable no_irq { this, irq_disable::put };
+        dpmi::interrupt_mask no_irq { };
+        std::unique_lock<recursive_mutex> locked { putting, std::try_to_lock };
+        if (not locked) return;
+        auto size = std::min(read_status().tx_fifo_empty ? 16 : 1, pptr() - tx_ptr);
+        for (auto i = 0; i < size or (tx_ptr < pptr() and read_status().transmitter_empty); ++tx_ptr, ++i)
+            if (not put_one(*tx_ptr)) break;
+    }
+
+    inline char rs232_streambuf::get_one()
+    {
+    retry:
+        try
+        {
+            do { } while (not read_status().data_available);
+        }
+        catch (const line_break&)
+        {
+            if (data_port.read() != 0) throw;
+            goto retry;
+        }
+        auto c = data_port.read();
+        if (config.flow_control == rs232_config::xon_xoff)
+        {
+            if (c == xon) { cts = true; goto retry; }
+            if (c == xoff) { cts = false; goto retry; }
+        }
+        if (config.echo) sputc(c);
+        return c;
+    }
+
+    inline bool rs232_streambuf::put_one(char_type c)
+    {
+        if (not read_status().transmitter_empty) return false;
+        if (config.flow_control == rs232_config::rts_cts and not modem_status.read().cts) return false;
+        this_thread::yield_while([this] { return not read_status().transmitter_empty; });
+        data_port.write(c);
+        return true;
+    }
+
+    inline void rs232_streambuf::irq_handler()
+    {
+        auto id = irq_id.read();
+        if (not id.no_irq_pending)
+        {
+            dpmi::irq_handler::acknowledge();
+            try
+            {
+                switch (id.id)
+                {
+                case uart_irq_id_reg::data_available:
+                    get(not id.timeout); break;
+                case uart_irq_id_reg::transmitter_empty:
+                    put(); break;
+                case uart_irq_id_reg::line_status:
+                    try { read_status(); }
+                    catch (const line_break&) { cts = false; break; }
+                    [[fallthrough]];
+                case uart_irq_id_reg::modem_status:
+                    modem_status.read();
+                    put(); break;
+                }
+            }
+            catch (...)
+            {
+                irq_exception = std::current_exception();
+            }
+        }
+        set_rts();
     }
 }
