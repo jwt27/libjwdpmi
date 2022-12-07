@@ -96,7 +96,7 @@ namespace jw::io::detail
         bool dcd : 1;
     };
 
-    struct rs232_streambuf : public std::streambuf, dpmi::class_lock<rs232_streambuf>
+    struct rs232_streambuf : std::streambuf
     {
         rs232_streambuf(const rs232_config& p);
         virtual ~rs232_streambuf();
@@ -105,6 +105,13 @@ namespace jw::io::detail
         rs232_streambuf(const rs232_streambuf&) = delete;
         rs232_streambuf(rs232_streambuf&& m) = delete;
         //rs232_streambuf(rs232_streambuf&& m) : rs232_streambuf(m.config) { m.irq_handler.disable(); } // TODO: move constructor
+
+        std::string_view view() const
+        {
+            const char* const p = gptr();
+            std::size_t size = egptr() - p;
+            return { p, size };
+        }
 
     protected:
         virtual int sync() override;

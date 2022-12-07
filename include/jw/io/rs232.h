@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <algorithm>
 #include <stdexcept>
+#include <jw/dpmi/bda.h>
 #include <jw/dpmi/alloc.h>
 #include <jw/dpmi/irq_handler.h>
 #include <jw/io/ioport.h>
@@ -71,7 +72,7 @@ namespace jw::io
         void set_baud_rate(auto rate)
         {
             auto d = std::div(115200, rate);
-            if (d.rem != 0 || d.quot > std::numeric_limits<std::uint16_t>::max())
+            if (d.rem != 0 or d.quot > std::numeric_limits<std::uint16_t>::max())
                 throw std::invalid_argument { "Invalid baud rate." };
             baud_rate_divisor = d.quot;
         }
@@ -80,11 +81,7 @@ namespace jw::io
         port_num find_io_port(com_port p)
         {
             port_num port { 0 };
-            if (p <= com4)
-            {
-                dpmi::gs_override gs { dpmi::dos_selector(0x0040) };
-                asm("mov %0, gs:[%1*2];": "=r"(port) : "ri" (p));
-            }
+            if (p <= com4) port = dpmi::bda->read<std::uint16_t>(static_cast<unsigned>(p) * 2);
             if (port == 0) throw std::invalid_argument { "Invalid COM port." };
             return port;
         }
@@ -105,17 +102,24 @@ namespace jw::io
 
 namespace jw::io
 {
-    struct rs232_stream : public std::iostream
+    struct rs232_stream : std::iostream
     {
-        rs232_stream(const rs232_config& c) : std::iostream(nullptr), streambuf(new detail::rs232_streambuf { c })
+        rs232_stream(const rs232_config& c)
+            : std::iostream { }
+            , streambuf { new (locked) detail::rs232_streambuf { c } }
         {
-            this->rdbuf(streambuf.get());
+            this->init(streambuf.get());
         }
 
-        // note: takes ownership of streambuf pointer.
-        rs232_stream(detail::rs232_streambuf* s) : std::iostream(s), streambuf(s) { }
+        std::string_view view() const
+        {
+            return streambuf->view();
+        }
 
-        rs232_stream(const rs232_stream&) = delete;
+        detail::rs232_streambuf* rdbuf() const noexcept
+        {
+            return streambuf.get();
+        }
 
     private:
         std::unique_ptr<detail::rs232_streambuf> streambuf;

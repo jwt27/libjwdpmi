@@ -39,13 +39,6 @@ namespace jw::debug::detail
     static bool is_fault_signal(std::int32_t) noexcept;
     static void uninstall_gdb_interface();
 
-    struct rs232_streambuf_internals : public io::detail::rs232_streambuf
-    {
-        using rs232_streambuf::rs232_streambuf;
-        const char* get_gptr() const { return gptr(); }
-        const char* get_egptr() const { return egptr(); }
-    };
-
     const bool debugmsg = config::enable_gdb_debug_messages;
 
     volatile bool debugger_reentry { false };
@@ -69,8 +62,7 @@ namespace jw::debug::detail
     std::map<int, void(*)(int)> signal_handlers { };
 
     std::array<std::unique_ptr<exception_handler>, 0x20> exception_handlers;
-    rs232_streambuf_internals* gdb_streambuf;
-    std::unique_ptr<std::iostream, allocator_delete<jw::dpmi::locking_allocator<std::iostream>>> gdb;
+    std::optional<io::rs232_stream> gdb;
     std::unique_ptr<dpmi::irq_handler> serial_irq;
 
     struct packet_string : public std::string_view
@@ -509,9 +501,7 @@ namespace jw::debug::detail
 
     static bool packet_available()
     {
-        auto* p = gdb_streambuf->get_gptr();
-        std::size_t size = gdb_streambuf->get_egptr() - p;
-        std::string_view str { p, size };
+        const auto str = gdb->view();
         for (auto i = str.begin(); i != str.end(); ++i)
         {
             if (*i == 3) return true;
@@ -1465,8 +1455,7 @@ namespace jw::debug::detail
         if (debug_mode) return;
         debug_mode = true;
 
-        gdb_streambuf = new rs232_streambuf_internals { cfg };
-        gdb = allocate_unique<io::rs232_stream>(dpmi::locking_allocator<io::rs232_stream> { }, gdb_streambuf);
+        gdb.emplace(cfg);
         gdb->exceptions(std::ios::failbit | std::ios::badbit);
 
         serial_irq = std::make_unique<irq_handler>([]
