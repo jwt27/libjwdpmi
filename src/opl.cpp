@@ -549,14 +549,15 @@ namespace jw::audio
             if (o.release == 0) return infinity;
             if (o.enable_sustain and key_on) return infinity;
 
-            const std::uint8_t key_scale = freq_rate >> ((not o.key_scale_rate) << 1);
+            const std::uint8_t key_scale_num = freq_rate >> ((not o.key_scale_rate) << 1);
+            auto key_scale = [key_scale_num](unsigned r) { return std::min((r << 2) + key_scale_num, 63u); };
             clock::time_point t;
-            duration d = release_time((o.release << 2) | key_scale);
+            duration d = release_time(key_scale(o.release));
             if (o.enable_sustain) t = key_off + d;
             else
             {
-                const auto a = attack_time((o.attack << 2) | key_scale);
-                if (o.decay != 0) d += release_time((o.decay << 2) | key_scale);
+                const auto a = attack_time(key_scale(o.attack));
+                if (o.decay != 0) d += release_time(key_scale(o.decay));
                 t = std::min(ch->on_time + a, key_off) + d;
             }
             off_time = std::max(off_time, t);
