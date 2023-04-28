@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
@@ -52,7 +53,6 @@ namespace jw
                 command<send_data, recv_kb_ack>({ cmd });
             }
 
-            keyboard_leds current_led_state;
             void set_leds(bool num, bool caps, bool scroll)
             {
                 set_leds(static_cast<keyboard_leds>(
@@ -63,9 +63,7 @@ namespace jw
 
             void set_leds(keyboard_leds state)
             {
-                if (state == current_led_state) return;
                 command<send_data, recv_kb_ack, send_data, recv_kb_ack>({ 0xED, state });
-                current_led_state = state;
             }
 
             template<typename F>
