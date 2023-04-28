@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
@@ -8,12 +9,27 @@
 #include <exception>
 #include <jw/io/keyboard.h>
 #include <jw/io/detail/keyboard_streambuf.h>
-#include <jw/dpmi/irq_mask.h>
+#include <jw/dpmi/bda.h>
 
 namespace jw
 {
     namespace io
     {
+        struct bda_kb_flags
+        {
+            bool right_shift : 1;
+            bool left_shift : 1;
+            bool ctrl : 1;
+            bool alt : 1;
+            bool scroll_lock : 1;
+            bool num_lock : 1;
+            bool caps_lock : 1;
+            bool insert : 1;
+
+            constexpr bda_kb_flags(std::byte b) noexcept { *this = std::bit_cast<bda_kb_flags>(b); }
+            constexpr operator std::byte() noexcept { return std::bit_cast<std::byte>(*this); }
+        };
+
         void keyboard::do_update(bool async)
         {
             try
@@ -45,6 +61,12 @@ namespace jw
                     ps2->set_leds(keys[key::num_lock_state],
                                   keys[key::caps_lock_state],
                                   keys[key::scroll_lock_state]);
+
+                    bda_kb_flags flags { dpmi::bda->read<std::byte>(0x17) };
+                    flags.scroll_lock = keys[key::scroll_lock_state];
+                    flags.num_lock = keys[key::num_lock_state];
+                    flags.caps_lock = keys[key::caps_lock_state];
+                    dpmi::bda->write<std::byte>(0x17, flags);
                 };
 
                 while (auto k = ps2->get_scancode())
@@ -106,6 +128,10 @@ namespace jw
         {
             ps2->init_keyboard();
             keys.reserve(128);
+            const bda_kb_flags flags { dpmi::bda->read<std::byte>(0x17) };
+            keys[key::scroll_lock_state] = flags.scroll_lock;
+            keys[key::num_lock_state] = flags.num_lock;
+            keys[key::caps_lock_state] = flags.caps_lock;
         }
 
         keyboard::~keyboard()
