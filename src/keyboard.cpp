@@ -36,7 +36,7 @@ namespace jw
             {
                 auto handle_key = [this](key_state_pair k)
                 {
-                    auto& s = keys[k.first];
+                    auto& s = keys(k.first);
                     if (s.is_down() and k.second.is_down()) k.second = key_state::repeat;
                     s = k.second;
                     key_changed(k.first, k.second);
@@ -49,23 +49,23 @@ namespace jw
                     for (auto&& i : list)
                     {
                         if (i == k.first) found = true;
-                        state |= keys[i];
+                        state |= keys(i);
                     }
                     if (found) handle_key({ vk, state });
                 };
 
                 auto set_lock_state = [this, &handle_key](key_state_pair k, key state_key)
                 {
-                    if (keys[k.first] == key_state::down) handle_key({ state_key, not keys[state_key] });
+                    if (keys(k.first) == key_state::down) handle_key({ state_key, not keys(state_key) });
 
-                    ps2->set_leds(keys[key::num_lock_state],
-                                  keys[key::caps_lock_state],
-                                  keys[key::scroll_lock_state]);
+                    ps2->set_leds(keys(key::num_lock_state),
+                                  keys(key::caps_lock_state),
+                                  keys(key::scroll_lock_state));
 
                     bda_kb_flags flags { dpmi::bda->read<std::byte>(0x17) };
-                    flags.scroll_lock = keys[key::scroll_lock_state];
-                    flags.num_lock = keys[key::num_lock_state];
-                    flags.caps_lock = keys[key::caps_lock_state];
+                    flags.scroll_lock = keys(key::scroll_lock_state);
+                    flags.num_lock = keys(key::num_lock_state);
+                    flags.caps_lock = keys(key::caps_lock_state);
                     dpmi::bda->write<std::byte>(0x17, flags);
                 };
 
@@ -127,11 +127,10 @@ namespace jw
         keyboard::keyboard()
         {
             ps2->init_keyboard();
-            keys.reserve(128);
             const bda_kb_flags flags { dpmi::bda->read<std::byte>(0x17) };
-            keys[key::scroll_lock_state] = flags.scroll_lock;
-            keys[key::num_lock_state] = flags.num_lock;
-            keys[key::caps_lock_state] = flags.caps_lock;
+            keys(key::scroll_lock_state) = flags.scroll_lock;
+            keys(key::num_lock_state) = flags.num_lock;
+            keys(key::caps_lock_state) = flags.caps_lock;
         }
 
         keyboard::~keyboard()
