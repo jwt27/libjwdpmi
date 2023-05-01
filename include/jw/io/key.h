@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
@@ -22,7 +23,7 @@ namespace jw
             using T = typename E::underlying_type;
             enum : T
             {
-                // 0000 - 00FF = defined keys
+                // 0000 - 00BF = defined keys
                 bad_key = 0,
                 esc, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12,
                 backtick, n1, n2, n3, n4, n5, n6, n7, n8, n9, n0, minus, equals, backspace,
@@ -48,12 +49,11 @@ namespace jw
                 web_home, web_favourites, web_search, web_mail,
                 pwr_on, pwr_sleep, pwr_wake,
 
+                // 00C0 - 00FF = virtual keys
+                any_shift = 0xC0, any_ctrl, any_alt, any_win, any_enter,
+                num_lock_state, caps_lock_state, scroll_lock_state,
+
                 // 0100 - 01FF = undefined keys
-
-                // 0200 - 02FF = virtual keys
-                any_shift = 0x200, any_ctrl, any_alt, any_win, any_enter,
-                num_lock_state = 0x280, caps_lock_state, scroll_lock_state,
-
                 // E000 - E1FF = undefined set2 extended keys
             };
             using E::E;
@@ -64,7 +64,7 @@ namespace jw
 
             char to_ascii(bool ctrl, bool alt, bool shift, bool caps_lock, bool num_lock) const;
             char to_ascii(const keyboard& kb) const;
-            bool is_virtual() const noexcept { return value >= 0x200 and value < 0x300; }
+            bool is_virtual() const noexcept { return value >= 0xC0 and value < 0x100; }
             std::string_view name() const;
 
         private:
