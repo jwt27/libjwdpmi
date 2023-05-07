@@ -94,6 +94,19 @@ namespace jw
             }
         }
 
+        modifier_keys keyboard::modifiers() const noexcept
+        {
+            return
+            {
+                .ctrl      = static_cast<bool>(get(key::any_ctrl)),
+                .alt       = static_cast<bool>(get(key::any_alt)),
+                .shift     = static_cast<bool>(get(key::any_shift)),
+                .win       = static_cast<bool>(get(key::any_win)),
+                .num_lock  = static_cast<bool>(get(key::num_lock_state)),
+                .caps_lock = static_cast<bool>(get(key::caps_lock_state))
+            };
+        }
+
         void keyboard::redirect_cin(bool echo, std::ostream& echo_stream)
         {
             if (std::cin.rdbuf() != streambuf.get())

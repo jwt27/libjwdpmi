@@ -26,6 +26,8 @@ namespace jw
             key_state get(key k) const { return const_cast<keyboard*>(this)->keys(k); }
             key_state operator[](key k) const { return get(k); }
 
+            modifier_keys modifiers() const noexcept;
+
             void redirect_cin(bool echo = true, std::ostream& echo_stream = std::cout);
             void restore_cin();
             void update() { do_update(false); }

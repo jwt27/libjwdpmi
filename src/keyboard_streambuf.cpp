@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
@@ -88,7 +89,7 @@ namespace jw
                     return true;
                 }
 
-                if (auto c = k.to_ascii(keyb))
+                if (auto c = k.to_ascii(keyb.modifiers()))
                 {
                     insert(c);
                     return true;

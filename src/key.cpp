@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
@@ -23,13 +24,13 @@ namespace jw
             else return nullptr;
         }
 
-        char key::to_ascii(bool ctrl, bool alt, bool shift, bool capslock, bool numlock) const
+        char key::to_ascii(modifier_keys mod) const
         {
-            if (alt) return 0;
-            if (ctrl and not shift) if (auto a = find(ascii_ctrl_table, value)) return *a;
-            if (shift xor numlock) if (auto a = find(ascii_num_table, value)) return *a;
-            if (shift xor capslock) if (auto a = find(ascii_caps_table, value)) return *a;
-            if (shift) if (auto a = find(ascii_shift_table, value)) return *a;
+            if (mod.alt or mod.win) return 0;
+            if (mod.ctrl and not mod.shift) if (auto a = find(ascii_ctrl_table, value)) return *a;
+            if (mod.shift xor mod.num_lock) if (auto a = find(ascii_num_table, value)) return *a;
+            if (mod.shift xor mod.caps_lock) if (auto a = find(ascii_caps_table, value)) return *a;
+            if (mod.shift) if (auto a = find(ascii_shift_table, value)) return *a;
             if (auto a = find(ascii_table, value)) return *a;
             return 0;
         }
@@ -45,15 +46,6 @@ namespace jw
 
             auto& a = name_table.emplace(value, fmt::format("{:0>4x}", value)).first->second;
             return a;
-        }
-
-        char key::to_ascii(const keyboard& kb) const
-        {
-            return key::to_ascii(kb.get(any_ctrl),
-                                 kb.get(any_alt),
-                                 kb.get(any_shift),
-                                 kb.get(caps_lock_state),
-                                 kb.get(num_lock_state));
         }
 
         const std::unordered_map<key, char> key::ascii_table

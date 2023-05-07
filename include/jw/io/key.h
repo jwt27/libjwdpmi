@@ -17,6 +17,16 @@ namespace jw
     {
         class keyboard;
 
+        struct modifier_keys
+        {
+            bool ctrl       : 1;
+            bool alt        : 1;
+            bool shift      : 1;
+            bool win        : 1;
+            bool num_lock   : 1;
+            bool caps_lock  : 1;
+        };
+
         struct key : public enum_struct<std::uint_fast16_t>
         {
             using E = enum_struct<std::uint_fast16_t>;
@@ -62,8 +72,7 @@ namespace jw
             constexpr key(const key&) = default;
             constexpr key& operator=(const key&) = default;
 
-            char to_ascii(bool ctrl, bool alt, bool shift, bool caps_lock, bool num_lock) const;
-            char to_ascii(const keyboard& kb) const;
+            char to_ascii(modifier_keys) const;
             bool is_virtual() const noexcept { return value >= 0xC0 and value < 0x100; }
             std::string_view name() const;
 
@@ -96,7 +105,7 @@ namespace jw
             constexpr key_state& operator|=(const key_state& other) { this->value |= other.value; return *this; }
 
             constexpr bool is_up() const noexcept { return value == up; }
-            constexpr bool is_down() const noexcept { return not is_up(); }
+            constexpr bool is_down() const noexcept { return value & 1; }
             constexpr explicit operator bool() const noexcept { return is_down(); }
         };
 
