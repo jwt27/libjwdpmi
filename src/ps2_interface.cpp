@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
@@ -17,74 +18,71 @@
 // OSDev                    --> http://wiki.osdev.org/%228042%22_PS/2_Controller
 //                          --> http://wiki.osdev.org/PS/2_Keyboard
 
-namespace jw
+namespace jw::io
 {
-    namespace io
+    std::optional<key_state_pair> ps2_interface::get_scancode()
     {
-        std::optional<key_state_pair> ps2_interface::get_scancode()
-        {
-            dpmi::interrupt_mask no_irq { };
-            return detail::scancode::extract(scancode_queue, current_scancode_set);
-        }
+        dpmi::interrupt_mask no_irq { };
+        return detail::scancode::extract(scancode_queue, current_scancode_set);
+    }
 
-        void ps2_interface::reset()
-        {
-            irq_handler.disable();
-            irq_handler.set_irq(1);
-            config.translate_scancodes = false;
-            config.keyboard_interrupt = true;
-            write_config();
+    void ps2_interface::reset()
+    {
+        irq_handler.disable();
+        irq_handler.set_irq(1);
+        config.translate_scancodes = false;
+        config.keyboard_interrupt = true;
+        write_config();
 
-            initial_scancode_set = get_scancode_set();
-            enable_typematic(true);
+        initial_scancode_set = get_scancode_set();
+        enable_typematic(true);
 
-            irq_handler.enable();
-        }
+        irq_handler.enable();
+    }
 
-        ps2_interface::ps2_interface()
-        {
-            if (instantiated()) throw std::runtime_error("Only one ps2_interface instance allowed.");
-        }
+    ps2_interface::ps2_interface()
+    {
+        if (instantiated()) throw std::runtime_error("Only one ps2_interface instance allowed.");
+    }
 
-        ps2_interface::~ps2_interface()
-        {
-            reset_keyboard();
-        }
+    ps2_interface::~ps2_interface()
+    {
+        reset_keyboard();
+    }
 
-        void ps2_interface::init_keyboard()
-        {
-            if (keyboard_initialized) throw std::runtime_error("Only one keyboard instance allowed.");
-            dpmi::interrupt_mask no_irq { };
-            config.translate_scancodes = true;
-            read_config();
-            initial_config = config;
-            reset();
-            keyboard_initialized = true;
-        }
+    void ps2_interface::init_keyboard()
+    {
+        if (keyboard_initialized) throw std::runtime_error("Only one keyboard instance allowed.");
+        dpmi::interrupt_mask no_irq { };
+        config.translate_scancodes = true;
+        read_config();
+        initial_config = config;
+        reset();
+        keyboard_initialized = true;
+    }
 
-        void ps2_interface::reset_keyboard()
-        {
-            if (not keyboard_initialized) return;
-            irq_handler.disable();
-            set_scancode_set(initial_scancode_set);
-            config = initial_config;
-            config.translate_scancodes = true;
-            write_config();                 // restore PS/2 configuration data
-            keyboard_initialized = false;
-        }
+    void ps2_interface::reset_keyboard()
+    {
+        if (not keyboard_initialized) return;
+        irq_handler.disable();
+        set_scancode_set(initial_scancode_set);
+        config = initial_config;
+        config.translate_scancodes = true;
+        write_config();                 // restore PS/2 configuration data
+        keyboard_initialized = false;
+    }
 
-        scancode_set ps2_interface::get_scancode_set()
-        {
-            current_scancode_set = static_cast<scancode_set>(command<send_data, recv_kb_ack, send_data, recv_kb_ack, recv_kb_data>({ 0xF0, 0 }));
-            return current_scancode_set;
-        }
+    scancode_set ps2_interface::get_scancode_set()
+    {
+        current_scancode_set = static_cast<scancode_set>(command<send_data, recv_kb_ack, send_data, recv_kb_ack, recv_kb_data>({ 0xF0, 0 }));
+        return current_scancode_set;
+    }
 
-        void ps2_interface::set_scancode_set(byte set)
-        {
-            command<send_data, recv_kb_ack, send_data, recv_kb_ack>({ 0xF0, set });
-            get_scancode_set();
+    void ps2_interface::set_scancode_set(byte set)
+    {
+        command<send_data, recv_kb_ack, send_data, recv_kb_ack>({ 0xF0, set });
+        get_scancode_set();
 
-            if (current_scancode_set == set3) command<send_data, recv_kb_ack>({ 0xF8 });    // Enable make/break mode for all keys.
-        }
+        if (current_scancode_set == set3) command<send_data, recv_kb_ack>({ 0xF8 });    // Enable make/break mode for all keys.
     }
 }
