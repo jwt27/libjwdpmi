@@ -431,11 +431,10 @@ namespace jw::audio::detail
         const unsigned n = buf->size() / 2;
         T* const p = buf->pointer() + (buffer_page_high ? n : 0u);
 
-        return
-        {
-            { p, recording ? n : 0u, ch },
-            { p, recording ? 0u : n, ch }
-        };
+        if (recording)
+            return { { p, n, ch }, { } };
+        else
+            return { { }, { p, n, ch } };
     }
 
     template struct sb_driver<sample_u8>;
