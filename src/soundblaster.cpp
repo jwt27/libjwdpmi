@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 
 #include <jw/audio/soundblaster.h>
@@ -16,22 +17,22 @@ namespace jw::audio
 {
     static bool dsp_read_ready(io::port_num dsp)
     {
-        return io::read_port<std::uint8_t>(dsp | 0x0e) & 0x80;
+        return io::read_port<std::uint8_t>(dsp + 0x0e) & 0x80;
     }
 
     static bool dsp_write_ready(io::port_num dsp)
     {
-        return (io::read_port<std::uint8_t>(dsp | 0x0c) & 0x80) == 0;
+        return (io::read_port<std::uint8_t>(dsp + 0x0c) & 0x80) == 0;
     }
 
     static std::uint8_t dsp_force_read(io::port_num dsp)
     {
-        return io::read_port<std::uint8_t>(dsp | 0x0a);
+        return io::read_port<std::uint8_t>(dsp + 0x0a);
     }
 
     static void dsp_force_write(io::port_num dsp, std::uint8_t data)
     {
-        io::write_port(dsp | 0x0c, data);
+        io::write_port(dsp + 0x0c, data);
     }
 
     template<bool yield>
@@ -55,7 +56,7 @@ namespace jw::audio
     static bool dsp_reset(io::port_num dsp)
     {
         using namespace std::chrono_literals;
-        io::out_port<std::uint8_t> reset { dsp | 0x06 };
+        io::out_port<std::uint8_t> reset { dsp + 0x06 };
 
         reset.write(1);
         this_thread::yield_for(5us);
@@ -157,17 +158,17 @@ namespace jw::audio
 
     static void mixer_index(io::port_num mx, std::uint8_t i)
     {
-        io::write_port(mx | 0x04, i);
+        io::write_port(mx + 0x04, i);
     }
 
     static std::uint8_t mixer_read(io::port_num mx)
     {
-        return io::read_port<std::uint8_t>(mx | 0x05);
+        return io::read_port<std::uint8_t>(mx + 0x05);
     }
 
     static void mixer_write(io::port_num mx, std::uint8_t data)
     {
-        io::write_port(mx | 0x05, data);
+        io::write_port(mx + 0x05, data);
     }
 
     static void mixer_set_stereo(io::port_num mx, bool stereo)
@@ -231,9 +232,9 @@ namespace jw::audio::detail
             mixer_index(dsp, 0x82);
             std::bitset<8> irq_status = mixer_read(dsp);
             if (state == sb_state::dma8 and irq_status[0])
-                io::read_port<bool>(dsp | 0x0e);
+                io::read_port<bool>(dsp + 0x0e);
             else if (state == sb_state::dma16 and irq_status[1])
-                io::read_port<bool>(dsp | 0x0f);
+                io::read_port<bool>(dsp + 0x0f);
             else return;
         }
 
