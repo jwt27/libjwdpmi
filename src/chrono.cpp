@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
@@ -102,9 +103,10 @@ namespace jw::chrono
             if (++bios_time >= ticks_per_day) [[unlikely]]
             {
                 bios_time = 0;
-                dpmi::bda->write(0x70, dpmi::bda->read<std::uint8_t>(0x70) + 1);    // Update BIOS day counter
+                const auto day = dpmi::bda->read<std::uint8_t>(0x70);
+                dpmi::bda->write<std::uint8_t>(0x70, day + 1);              // Update BIOS day counter
             }
-            dpmi::bda->write(0x6c, bios_time);                                      // Update BIOS timer
+            dpmi::bda->write(0x6c, bios_time);                              // Update BIOS timer
 
             auto motor_enable = dpmi::bda->read<std::uint8_t>(0x40);
             if (motor_enable > 0)
@@ -113,7 +115,8 @@ namespace jw::chrono
                 {
                     // Turn off floppy drive motors and update status bits.
                     io::write_port<std::uint8_t>(0x3f2, 0x0c);
-                    dpmi::bda->write(0x3f, dpmi::bda->read<std::uint8_t>(0x3f) & 0xf0);
+                    const auto status = dpmi::bda->read<std::uint8_t>(0x3f);
+                    dpmi::bda->write<std::uint8_t>(0x3f, status & 0xf0);
                 }
                 dpmi::bda->write(0x40, motor_enable);
             }
