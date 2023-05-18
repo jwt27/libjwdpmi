@@ -89,18 +89,21 @@ namespace jw::io::detail
 
         // Undo scancode translation and insert break codes on a sequence of bytes. This behaves much like std::back_inserter.
         template<typename Container>
-        static auto undo_translation_inserter(Container& c) { return undo_translation_iterator<Container>(std::addressof(c)); }
+        static auto undo_translation_inserter(Container& c) { return undo_translation_iterator { c }; }
 
         template<typename C>
         struct undo_translation_iterator
         {
+            using container_type = C;
             using value_type = void;
-            using difference_type = void;
+            using difference_type = std::ptrdiff_t;
             using pointer = void;
             using reference = void;
             using iterator_category = std::output_iterator_tag;
 
-            undo_translation_iterator(C* c) : container(c) { }
+            explicit undo_translation_iterator(C& c) : container(std::addressof(c)) { }
+            undo_translation_iterator(const undo_translation_iterator&) = default;
+            undo_translation_iterator(undo_translation_iterator&&) = default;
 
             auto& operator=(raw_scancode c)
             {
