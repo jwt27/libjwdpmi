@@ -36,7 +36,7 @@ namespace jw::audio
     }
 
     template<bool yield>
-    static std::uint8_t dsp_read(io::port_num dsp)
+    static std::uint8_t do_dsp_read(io::port_num dsp)
     {
         auto wait = [dsp] { return not dsp_read_ready(dsp); };
         if constexpr (yield) this_thread::yield_while(wait);
@@ -45,13 +45,19 @@ namespace jw::audio
     }
 
     template<bool yield>
-    static void dsp_write(io::port_num dsp, std::uint8_t data)
+    static void do_dsp_write(io::port_num dsp, std::uint8_t data)
     {
         auto wait = [dsp] { return not dsp_write_ready(dsp); };
         if constexpr (yield) this_thread::yield_while(wait);
         else do { } while (wait());
         dsp_force_write(dsp, data);
     }
+
+    static std::uint8_t dsp_read_async(io::port_num dsp) { return do_dsp_read<true>(dsp); }
+    static void dsp_write_async(io::port_num dsp, std::uint8_t data) { return do_dsp_write<true>(dsp, data); }
+
+    //static std::uint8_t dsp_read(io::port_num dsp) { return do_dsp_read<false>(dsp); } // unused
+    static void dsp_write(io::port_num dsp, std::uint8_t data) { return do_dsp_write<false>(dsp, data); }
 
     static bool dsp_reset(io::port_num dsp)
     {
@@ -68,7 +74,7 @@ namespace jw::audio
 
     static void dsp_speaker_enable(io::port_num dsp, bool on)
     {
-        dsp_write<true>(dsp, on ? 0xd1 : 0xd3);
+        dsp_write_async(dsp, on ? 0xd1 : 0xd3);
     }
 
     static void dsp_init(io::port_num dsp)
@@ -82,78 +88,78 @@ namespace jw::audio
 
     static split_uint16_t dsp_version(io::port_num dsp)
     {
-        dsp_write<true>(dsp, 0xe1);
-        auto hi = dsp_read<true>(dsp);
-        auto lo = dsp_read<true>(dsp);
+        dsp_write_async(dsp, 0xe1);
+        auto hi = dsp_read_async(dsp);
+        auto lo = dsp_read_async(dsp);
         return { lo, hi };
     }
 
     static void dsp_dma_time_constant(io::port_num dsp, std::uint8_t tc)
     {
-        dsp_write<false>(dsp, 0x40);
-        dsp_write<false>(dsp, tc);
+        dsp_write(dsp, 0x40);
+        dsp_write(dsp, tc);
     }
 
     static void dsp_dma_block_size(io::port_num dsp, split_uint16_t size)
     {
-        dsp_write<false>(dsp, 0x48);
-        dsp_write<false>(dsp, size.lo);
-        dsp_write<false>(dsp, size.hi);
+        dsp_write(dsp, 0x48);
+        dsp_write(dsp, size.lo);
+        dsp_write(dsp, size.hi);
     }
 
     static void dsp_dma8_single(io::port_num dsp, bool input, split_uint16_t size)
     {
-        dsp_write<false>(dsp, input ?  0x24 : 0x14);
-        dsp_write<false>(dsp, size.lo);
-        dsp_write<false>(dsp, size.hi);
+        dsp_write(dsp, input ?  0x24 : 0x14);
+        dsp_write(dsp, size.lo);
+        dsp_write(dsp, size.hi);
     }
 
     static void dsp_dma8_auto(io::port_num dsp, bool input)
     {
-        dsp_write<false>(dsp, input ? 0x2c : 0x1c);
+        dsp_write(dsp, input ? 0x2c : 0x1c);
     }
 
     static void dsp_dma8_auto_highspeed(io::port_num dsp, bool input)
     {
-        dsp_write<false>(dsp, input ? 0x98 : 0x90);
+        dsp_write(dsp, input ? 0x98 : 0x90);
     }
 
     static void dsp_sb16_dma8_auto(io::port_num dsp, bool input, bool stereo, split_uint16_t size)
     {
-        dsp_write<false>(dsp, input ? 0xce : 0xc6);
-        dsp_write<false>(dsp, stereo ? 0x20 : 0x00);
-        dsp_write<false>(dsp, size.lo);
-        dsp_write<false>(dsp, size.hi);
+        dsp_write(dsp, input ? 0xce : 0xc6);
+        dsp_write(dsp, stereo ? 0x20 : 0x00);
+        dsp_write(dsp, size.lo);
+        dsp_write(dsp, size.hi);
     }
 
     static void dsp_sb16_dma16_auto(io::port_num dsp, bool input, bool stereo, split_uint16_t size)
     {
-        dsp_write<false>(dsp, input ? 0xbe : 0xb6);
-        dsp_write<false>(dsp, stereo ? 0x30 : 0x10);
-        dsp_write<false>(dsp, size.lo);
-        dsp_write<false>(dsp, size.hi);
+        dsp_write(dsp, input ? 0xbe : 0xb6);
+        dsp_write(dsp, stereo ? 0x30 : 0x10);
+        dsp_write(dsp, size.lo);
+        dsp_write(dsp, size.hi);
     }
 
     static void dsp_dma8_auto_stop(io::port_num dsp)
     {
-        dsp_write<false>(dsp, 0xda);
+        dsp_write(dsp, 0xda);
     }
 
     static void dsp_dma16_auto_stop(io::port_num dsp)
     {
-        dsp_write<false>(dsp, 0xd9);
+        dsp_write(dsp, 0xd9);
     }
 
     static void dsp_input_stereo(io::port_num dsp, bool stereo)
     {
-        dsp_write<false>(dsp, stereo ? 0xa8 : 0xa0);
+        dsp_write(dsp, stereo ? 0xa8 : 0xa0);
     }
 
     static void dsp_sb16_sample_rate(io::port_num dsp, bool input, split_uint16_t rate)
     {
-        dsp_write<false>(dsp, input ? 0x42 : 0x41);
-        dsp_write<false>(dsp, rate.hi);
-        dsp_write<false>(dsp, rate.lo);
+        dsp_write(dsp, input ? 0x42 : 0x41);
+        dsp_write(dsp, rate.hi);
+        dsp_write(dsp, rate.lo);
     }
 
     static void mixer_index(io::port_num mx, std::uint8_t i)
@@ -203,14 +209,14 @@ namespace jw::audio
 
     void soundblaster_pio::out(std::array<sample_u8, 1> sample)
     {
-        dsp_write<true>(dsp, 0x10);
-        dsp_write<true>(dsp, sample[0]);
+        dsp_write_async(dsp, 0x10);
+        dsp_write_async(dsp, sample[0]);
     }
 
     std::array<sample_u8, 1> soundblaster_pio::in()
     {
-        dsp_write<true>(dsp, 0x20);
-        return { dsp_read<true>(dsp) };
+        dsp_write_async(dsp, 0x20);
+        return { dsp_read_async(dsp) };
     }
 }
 
@@ -432,9 +438,9 @@ namespace jw::audio::detail
         T* const p = buf->pointer() + (buffer_page_high ? n : 0u);
 
         if (recording)
-            return { { p, n, ch }, { } };
+            return { .in = { p, n, ch }, .out = { } };
         else
-            return { { }, { p, n, ch } };
+            return { .in = { }, .out = { p, n, ch } };
     }
 
     template struct sb_driver<sample_u8>;
