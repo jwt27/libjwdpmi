@@ -8,9 +8,10 @@
 
 #pragma once
 #include <optional>
-
 #include <jw/common.h>
 #include <jw/io/key.h>
+#include <jw/circular_queue.h>
+#include "jwdpmi_config.h"
 
 namespace jw::io
 {
@@ -23,14 +24,15 @@ namespace jw::io
 namespace jw::io::detail
 {
     // Single scancode
-    using raw_scancode = byte;
+    using raw_scancode = std::uint8_t;
+
+    using scancode_queue = circular_queue<raw_scancode, config::scancode_buffer_size, queue_sync::write_irq>;
 
     struct scancode
     {
         // Extract and decode one scancode sequence from a sequence of bytes
         // NOTE: parameter will be modified, extracted sequences are removed
-        template <typename Container>
-        static std::optional<key_state_pair> extract(Container& bytes, scancode_set set)
+        static std::optional<key_state_pair> extract(scancode_queue& bytes, scancode_set set)
         {
             key k = key::bad_key;
             key_state state = key_state::down;
@@ -48,7 +50,7 @@ namespace jw::io::detail
                     if (c == 0xF0) { state = key_state::up; continue; }
                 }
 
-                bytes.erase(bytes.begin(), i + 1);
+                bytes.pop_to(i + 1);
 
                 switch (set)
                 {

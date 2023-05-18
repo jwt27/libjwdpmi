@@ -22,8 +22,7 @@ namespace jw::io
 {
     std::optional<key_state_pair> ps2_interface::get_scancode()
     {
-        dpmi::interrupt_mask no_irq { };
-        return detail::scancode::extract(scancode_queue, current_scancode_set);
+        return detail::scancode::extract(scancodes, current_scancode_set);
     }
 
     void ps2_interface::reset()

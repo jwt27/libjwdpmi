@@ -9,7 +9,6 @@
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
-#include <atomic>
 #include <mutex>
 #include <jw/main.h>
 #include <jw/io/detail/scancode.h>
@@ -261,8 +260,7 @@ namespace jw::io
 
         jw::trivial_function<void()> callback { };
 
-        dpmi::locked_pool_resource memres { 1_KB };
-        std::pmr::deque<detail::raw_scancode> scancode_queue { &memres };
+        detail::scancode_queue scancodes { };
 
         dpmi::irq_handler irq_handler { [this]()
         {
@@ -271,8 +269,8 @@ namespace jw::io
                 do
                 {
                     auto c = data_port.read();
-                    if (config.translate_scancodes) *detail::scancode::undo_translation_inserter(scancode_queue) = c;
-                    else scancode_queue.push_back(c);
+                    if (config.translate_scancodes) *detail::scancode::undo_translation_inserter(scancodes) = c;
+                    else scancodes.push_back(c);
                 } while (get_status().data_available);
 
                 dpmi::irq_handler::acknowledge<1>();

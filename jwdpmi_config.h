@@ -65,6 +65,9 @@ namespace jw
         constexpr bool save_fpu_on_realmode_callback = true;
 #       endif
 
+        // Maximum size of the keyboard scancode queue.
+        constexpr std::size_t scancode_buffer_size = 128;
+
         // Set up cpu exception handlers to throw C++ exceptions instead.
         constexpr bool enable_throwing_from_cpu_exceptions = true;
 
