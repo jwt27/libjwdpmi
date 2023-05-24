@@ -30,7 +30,7 @@ namespace jw::io::detail
         0xF0, 0xF1, 0xF2, 0xF3, 0xF4, 0xF5, 0xF6, 0xF7, 0xF8, 0xF9, 0xFA, 0xFB, 0xFC, 0xFD, 0xFE, 0x00
     };
 
-    const std::array<raw_scancode, 0x80> scancode::set1_to_set2_table
+    static constexpr std::array<raw_scancode, 0x80> set1_to_set2_table
     {
         0x00, 0x76, 0x16, 0x1E, 0x26, 0x25, 0x2E, 0x36, 0x3D, 0x3E, 0x46, 0x45, 0x4E, 0x55, 0x66, 0x0D,
         0x15, 0x1D, 0x24, 0x2D, 0x2C, 0x35, 0x3C, 0x43, 0x44, 0x4D, 0x54, 0x5B, 0x5A, 0x14, 0x1C, 0x1B,
@@ -42,7 +42,7 @@ namespace jw::io::detail
         0x13, 0x19, 0x39, 0x51, 0x53, 0x5C, 0x5F, 0x62, 0x63, 0x64, 0x65, 0x67, 0x68, 0x6A, 0x6D, 0x6E
     };
 
-    const std::array<raw_scancode, 0x100> scancode::set2_to_set3_table
+    static constexpr std::array<raw_scancode, 0x100> set2_to_set3_table
     {
         0x00, 0x47, 0x00, 0x27, 0x17, 0x07, 0x0F, 0x5E, 0x00, 0x4F, 0x3F, 0x2F, 0x1F, 0x00, 0x00, 0x00,
         0x00, 0x19, 0x00, 0x00, 0x11, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -62,7 +62,7 @@ namespace jw::io::detail
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
     };
 
-    const std::array<raw_scancode, 0x100> scancode::set2_e0_to_set3_table
+    static constexpr std::array<raw_scancode, 0x100> set2_e0_to_set3_table
     {
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x00, 0x39, 0x00, 0x00, 0x58, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x8B,
@@ -82,7 +82,7 @@ namespace jw::io::detail
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
     };
 
-    const std::array<byte, 0x100> scancode::set3_to_key_table
+    static constexpr std::array<byte, 0x100> set3_to_key_table
     {
         key::bad_key,               // 0x00
         key::bad_key,               // 0x01
@@ -229,4 +229,56 @@ namespace jw::io::detail
         key::bad_key,               // 0x8E
         key::bad_key                // 0x8F
     };
+
+    std::optional<key_state_pair> scancode::extract(scancode_queue::reader* bytes, scancode_set set)
+    {
+        key k = key::bad_key;
+        key_state state = key_state::down;
+        byte ext = 0;
+
+        for (auto i = bytes->cbegin(); i != bytes->cend(); ++i)
+        {
+            auto c = *i;
+            if (set == set1 or set == set2)
+            {
+                if ((c & 0xF0) == 0xE0) { ext = c; continue; }
+            }
+            if (set == set2 or set == set3)
+            {
+                if (c == 0xF0) { state = key_state::up; continue; }
+            }
+
+            bytes->pop_front_to(i + 1);
+
+            switch (set)
+            {
+            case set1:
+                if ((c & 0x80) != 0) { state = key_state::up; }
+                c = set1_to_set2_table[c & 0x7F];
+                [[fallthrough]];
+            case set2:
+                if (ext == 0xE0)
+                {
+                    if (c == 0x37) { k = key::pwr_on; break; }
+                    if (c == 0x5E) { k = key::pwr_wake; break; }
+                    if (auto p = set2_e0_to_set3_table[c]) { c = p; }
+                    else { k = 0xE000 | c; break; }
+                }
+                else if (ext == 0xE1)
+                {
+                    if (c == 0x14) { k = key::pause; break; }
+                    else { k = 0xE100 | c; break; }
+                }
+                else if (ext != 0) { k = (ext << 8) | c; break; }
+                else if (auto p = set2_to_set3_table[c]) { c = p; }
+                [[fallthrough]];
+            case set3:
+                k = set3_to_key_table[c];
+            }
+            if (k == key::bad_key) k = 0x0100 | c;
+            return key_state_pair { k, state };
+        }
+
+        return std::nullopt;
+    }
 }
