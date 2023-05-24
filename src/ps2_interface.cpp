@@ -22,7 +22,7 @@ namespace jw::io
 {
     std::optional<key_state_pair> ps2_interface::get_scancode()
     {
-        return detail::scancode::extract(scancodes, current_scancode_set);
+        return detail::scancode::extract(scancodes.read(), current_scancode_set);
     }
 
     void ps2_interface::reset()

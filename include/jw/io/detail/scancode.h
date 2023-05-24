@@ -26,19 +26,19 @@ namespace jw::io::detail
     // Single scancode
     using raw_scancode = std::uint8_t;
 
-    using scancode_queue = circular_queue<raw_scancode, config::scancode_buffer_size, queue_sync::write_irq>;
+    using scancode_queue = static_circular_queue<raw_scancode, config::scancode_buffer_size, queue_sync::write_irq>;
 
     struct scancode
     {
         // Extract and decode one scancode sequence from a sequence of bytes
         // NOTE: parameter will be modified, extracted sequences are removed
-        static std::optional<key_state_pair> extract(scancode_queue& bytes, scancode_set set)
+        static std::optional<key_state_pair> extract(scancode_queue::reader* bytes, scancode_set set)
         {
             key k = key::bad_key;
             key_state state = key_state::down;
             byte ext = 0;
 
-            for (auto i = bytes.begin(); i != bytes.end(); ++i)
+            for (auto i = bytes->cbegin(); i != bytes->cend(); ++i)
             {
                 auto c = *i;
                 if (set == set1 or set == set2)
@@ -50,7 +50,7 @@ namespace jw::io::detail
                     if (c == 0xF0) { state = key_state::up; continue; }
                 }
 
-                bytes.pop_to(i + 1);
+                bytes->pop_front_to(i + 1);
 
                 switch (set)
                 {

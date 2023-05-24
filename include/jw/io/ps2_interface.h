@@ -269,8 +269,8 @@ namespace jw::io
                 do
                 {
                     auto c = data_port.read();
-                    if (config.translate_scancodes) *detail::scancode::undo_translation_inserter(scancodes) = c;
-                    else scancodes.push_back(c);
+                    if (config.translate_scancodes) *detail::scancode::undo_translation_inserter(*scancodes.write()) = c;
+                    else scancodes.write()->push_back(c);
                 } while (get_status().data_available);
 
                 dpmi::irq_handler::acknowledge<1>();
