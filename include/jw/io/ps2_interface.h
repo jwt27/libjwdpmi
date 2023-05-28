@@ -221,9 +221,9 @@ namespace jw::io
         };
 
         static inline std::unique_ptr<ps2_interface> instance_ptr;
-        const in_port<controller_status> status_port { 0x64 };
-        const out_port<byte> command_port { 0x64 };
-        const io_port<byte> data_port { 0x60 };
+        static constexpr in_port<controller_status> status_port { 0x64 };
+        static constexpr out_port<byte> command_port { 0x64 };
+        static constexpr io_port<byte> data_port { 0x60 };
         jw::mutex mutex;
         inline static bool keyboard_initialized { false };
         scancode_set initial_scancode_set;
