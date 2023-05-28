@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
+/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
@@ -50,6 +50,9 @@ namespace jw::io
         void operator()(T value) const { return write(value); }
         io_port& operator>>(T& value) const { value = read(); return *this; }
         io_port& operator<<(const T& value) const { write(value); return *this; }
+
+        constexpr operator in_port<T>() const noexcept { return { port }; }
+        constexpr operator out_port<T>() const noexcept { return { port }; }
 
         const port_num port;
     };
