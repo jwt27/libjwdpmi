@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
@@ -31,12 +32,18 @@
 
 using namespace jw;
 
-int _crt0_startup_flags = 0
-| config::user_crt0_startup_flags
-| _CRT0_FLAG_NMI_SIGNAL
-| _CRT0_DISABLE_SBRK_ADDRESS_WRAP
-| _CRT0_FLAG_NONMOVE_SBRK
-| _CRT0_FLAG_LOCK_MEMORY;
+extern "C"
+{
+    int _crt0_startup_flags = 0
+        | config::user_crt0_startup_flags
+        | _CRT0_FLAG_NMI_SIGNAL
+        | _CRT0_DISABLE_SBRK_ADDRESS_WRAP
+        | _CRT0_FLAG_NONMOVE_SBRK
+        | _CRT0_FLAG_LOCK_MEMORY;
+
+    extern unsigned __djgpp_stack_top;
+    extern unsigned __djgpp_stack_limit;
+}
 
 int jwdpmi_main(std::span<std::string_view>);
 
@@ -124,7 +131,6 @@ namespace jw
 [[gnu::force_align_arg_pointer]]
 int main(int argc, const char** argv)
 {
-    _crt0_startup_flags &= ~_CRT0_FLAG_LOCK_MEMORY;
     try
     {
         std::string_view args[argc];
@@ -197,6 +203,15 @@ namespace jw
             using namespace jw::dpmi::detail;
 
             std::set_terminate(terminate_handler);
+
+            // We can lock memory ourselves from this point on.
+            _crt0_startup_flags &= ~_CRT0_FLAG_LOCK_MEMORY;
+
+            // Stack has been allocated in locked memory, no need for that.
+            const auto stack_begin = round_up_to_page_size(near_to_linear(__djgpp_stack_limit));
+            const auto stack_end = round_down_to_page_size(near_to_linear(__djgpp_stack_top));
+            if (stack_end > stack_begin)
+                dpmi::linear_memory { stack_begin, stack_end - stack_begin }.unlock();
 
             if constexpr (not config::support_virtual_interrupt_flag)
             {
