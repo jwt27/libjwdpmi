@@ -183,26 +183,30 @@ namespace jw::io
         if (flow_control == rs232_config::rtr_cts)
             irq_enable_reg |= irq_enable::modem_status;
 
-        irq_enable_port(base).write(irq_enable_reg);
-
-        uart_irq_id id;
-        do
         {
-            line_status_port(base).read();
-            modem_status_port(base).read();
-            data_port(base).read();
-            id = irq_id_port(base).read();
-        } while (not id.no_irq_pending);
-        if (id.fifo_enabled != 0b11) throw device_not_found { "16550A not detected" };
+            dpmi::interrupt_mask no_irq { };
 
-        irq.set_irq(cfg.irq);
-        irq.enable();
+            irq_enable_port(base).write(irq_enable_reg);
 
-        set_rts(true);
+            uart_irq_id id;
+            do
+            {
+                line_status_port(base).read();
+                modem_status_port(base).read();
+                data_port(base).read();
+                id = irq_id_port(base).read();
+            } while (not id.no_irq_pending);
+            if (id.fifo_enabled != 0b11) throw device_not_found { "16550A not detected" };
 
-        modem_control_reg = modem_control::rts | modem_control::dtr | modem_control::aux_out2;
-        if (cfg.enable_aux_out1) modem_control_reg |= modem_control::aux_out1;
-        modem_control_port(base).write(modem_control_reg);
+            irq.set_irq(cfg.irq);
+            irq.enable();
+
+            set_rts(true);
+
+            modem_control_reg = modem_control::rts | modem_control::dtr | modem_control::aux_out2;
+            if (cfg.enable_aux_out1) modem_control_reg |= modem_control::aux_out1;
+            modem_control_port(base).write(modem_control_reg);
+        }
 
         ports_used.insert(base);
     }
