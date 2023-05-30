@@ -152,8 +152,8 @@ namespace jw::chrono
         dpmi::irq_handler::acknowledge<8>();
     }
 
-    static dpmi::irq_handler pit_irq { 0, [] { }, dpmi::always_call | dpmi::no_auto_eoi };
-    static dpmi::irq_handler rtc_irq { 8, [] { irq8(); }, dpmi::always_call | dpmi::no_interrupts };
+    static dpmi::irq_handler pit_irq { 0, [] { }, dpmi::no_auto_eoi };
+    static dpmi::irq_handler rtc_irq { 8, [] { irq8(); }, dpmi::no_interrupts };
 
     static void select_irq0_handler()
     {

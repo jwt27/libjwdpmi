@@ -1472,7 +1472,7 @@ namespace jw::debug::detail
         {
             if (debugger_reentry) return;
             if (packet_available()) break_with_signal(packet_received);
-        }, dpmi::always_call);
+        });
 
         for (auto&& s : { SIGHUP, SIGABRT, SIGTERM, SIGKILL, SIGQUIT, SIGILL, SIGINT })
             signal_handlers[s] = std::signal(s, csignal);

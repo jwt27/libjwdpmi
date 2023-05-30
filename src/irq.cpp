@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
@@ -176,22 +177,26 @@ namespace jw::dpmi::detail
                 if (not data->resizing_stack.test_and_set())
                     this_thread::invoke_next([data = data] { data->resize_stack(data->stack.size() * 2); });
         }
-
-        asm("cli");
     }
 
     void irq_controller::call()
     {
         auto* id = interrupt_id::get();
-        for (const auto* p = first; p != nullptr; p = p->next)
+
         {
-            if (p->enabled and (p->flags & always_call or id->acknowledged != ack::yes))
-                p->call();
+            local_destructor cli { [] { asm ("cli"); } };
+
+            for (const auto* p = first; p != nullptr; p = p->next)
+            {
+                if (p->enabled) [[likely]]
+                    p->call();
+            }
         }
-        if (flags & always_chain or id->acknowledged == ack::no)
+
+        if ((flags & always_chain) or id->acknowledged == ack::no) [[unlikely]]
         {
-            interrupt_mask no_ints_here { };
             call_far_iret(prev_handler);
+            id->acknowledged = ack::eoi_sent;
         }
     }
 
