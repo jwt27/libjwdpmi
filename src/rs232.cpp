@@ -11,7 +11,7 @@
 #include <bit>
 #include <unordered_set>
 
-namespace jw::io::detail
+namespace jw::io
 {
     struct [[gnu::packed]] uart_irq_id
     {
@@ -570,10 +570,7 @@ namespace jw::io::detail
             do_sync(id.timeout ? 1 : 14);
         }
     }
-}
 
-namespace jw::io
-{
     rs232_stream& rs232_stream::force_flush()
     {
         std::ostream::sentry ok { *this };

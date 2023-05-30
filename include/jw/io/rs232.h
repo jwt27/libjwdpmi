@@ -8,13 +8,17 @@
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
-#include <iostream>
-#include <algorithm>
 #include <jw/dpmi/bda.h>
 #include <jw/dpmi/alloc.h>
 #include <jw/dpmi/irq_handler.h>
 #include <jw/io/ioport.h>
 #include <jw/io/io_error.h>
+#include <jw/allocator_adaptor.h>
+#include <jw/io/realtime_streambuf.h>
+#include <jw/circular_queue.h>
+#include <iostream>
+#include <algorithm>
+#include <deque>
 
 namespace jw::io
 {
@@ -116,22 +120,97 @@ namespace jw::io
             }
         }
     };
-}
 
-#include <jw/io/detail/rs232.h>
+    // 16550A UART driver, implemented as std::streambuf.  This must be
+    // allocated in locked memory, which rs232_stream will do for you.
+    // Transmission errors are reported via exceptions - underflow() may throw
+    // one of the following: io::overflow, io::framing_error, io::parity_error.
+    // The error applies to the first character read after clearing the
+    // exception state.
+    // A break, where the line is held low for longer than one character, is
+    // reported by returning EOF.
+    struct rs232_streambuf final : realtime_streambuf
+    {
+        rs232_streambuf(const rs232_config&);
+        virtual ~rs232_streambuf();
 
-namespace jw::io
-{
+        rs232_streambuf() = delete;
+        rs232_streambuf(const rs232_streambuf&) = delete;
+        rs232_streambuf(rs232_streambuf&&) = delete;
+
+        // Ignores flow control.
+        virtual void put_realtime(char_type) override;
+
+        // Blocks until the entire output buffer is flushed, regardless of the
+        // async_flush option.
+        int force_sync();
+
+    protected:
+        virtual std::streamsize showmanyc() override;
+        virtual int_type underflow() override;
+        virtual int_type pbackfail(int_type = traits_type::eof()) override;
+        virtual int_type overflow(int_type = traits_type::eof()) override;
+        virtual int sync() override;
+
+    private:
+        template<typename T>
+        using allocator = default_constructing_allocator_adaptor<dpmi::global_locked_pool_allocator<T>>;
+
+        using tx_queue = dynamic_circular_queue<char_type, queue_sync::read_irq, allocator<char_type>>;
+        using rx_queue = dynamic_circular_queue<char_type, queue_sync::write_irq, allocator<char_type>>;
+
+        struct error_mark
+        {
+            rx_queue::const_iterator pos;
+            std::uint8_t status;
+        };
+
+        using error_queue = std::deque<error_mark, allocator<error_mark>>;
+
+        int sync(bool);
+        void do_setp(tx_queue::iterator) noexcept;
+        void set_tx(bool) noexcept;
+        void set_rts(bool) noexcept;
+        std::uint8_t read_status() noexcept;
+        void do_sync(std::size_t = 0) noexcept;
+        void irq_handler() noexcept;
+
+        const port_num base;
+        tx_queue tx_buf;
+        rx_queue rx_buf;
+        error_queue errors;
+        error_mark* first_error { nullptr };
+        tx_queue::const_iterator tx_stop;
+        bool can_tx { true };
+        bool can_rx { false };
+        std::uint8_t modem_control_reg { };
+        std::uint8_t line_status_reg { };
+        std::uint8_t irq_enable_reg { };
+        const bool async_flush;
+        const decltype(rs232_config::flow_control) flow_control;
+        const std::size_t putback_reserve;
+        dpmi::irq_handler irq;
+
+        struct irq_disable
+        {
+            irq_disable(rs232_streambuf*) noexcept;
+            ~irq_disable() noexcept;
+
+            rs232_streambuf* const self;
+        };
+    };
+
+    // Serial port stream, using the rs232_streambuf.
     struct rs232_stream : std::iostream
     {
         rs232_stream(const rs232_config& c)
             : std::iostream { }
-            , streambuf { new (locked) detail::rs232_streambuf { c } }
+            , streambuf { new (locked) rs232_streambuf { c } }
         {
             this->init(streambuf.get());
         }
 
-        detail::rs232_streambuf* rdbuf() const noexcept
+        rs232_streambuf* rdbuf() const noexcept
         {
             return streambuf.get();
         }
@@ -139,6 +218,6 @@ namespace jw::io
         rs232_stream& force_flush();
 
     private:
-        std::unique_ptr<detail::rs232_streambuf> streambuf;
+        std::unique_ptr<rs232_streambuf> streambuf;
     };
 }
