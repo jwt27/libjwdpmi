@@ -209,6 +209,7 @@ namespace jw::io::detail
 
     rs232_streambuf::~rs232_streambuf()
     {
+        can_tx = true;
         force_sync();
         irq_enable_port(base).write({ });
         modem_control_reg &= ~(modem_control::dtr | modem_control::rts);
