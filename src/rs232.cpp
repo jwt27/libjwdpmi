@@ -116,36 +116,39 @@ namespace jw::io::detail
 
     static std::unordered_set<port_num> ports_used;
 
-    static io_port<std::uint16_t>       rate_divisor_port(const rs232_config& c)     { return { c.io_port + 0 }; }
-    static io_port<char>                data_port(const rs232_config& c)             { return { c.io_port + 0 }; }
-    static io_port<std::uint8_t>        irq_enable_port(const rs232_config& c)       { return { c.io_port + 1 }; }
-    static in_port<uart_irq_id>         irq_id_port(const rs232_config& c)           { return { c.io_port + 2 }; }
-    static out_port<uart_fifo_control>  fifo_control_port(const rs232_config& c)     { return { c.io_port + 2 }; }
-    static io_port<uart_line_control>   line_control_port(const rs232_config& c)     { return { c.io_port + 3 }; }
-    static io_port<std::uint8_t>        modem_control_port(const rs232_config& c)    { return { c.io_port + 4 }; }
-    static in_port<std::uint8_t>        line_status_port(const rs232_config& c)      { return { c.io_port + 5 }; }
-    static in_port<uart_modem_status>   modem_status_port(const rs232_config& c)     { return { c.io_port + 6 }; }
+    static io_port<std::uint16_t>       rate_divisor_port(port_num base)     { return { base + 0 }; }
+    static io_port<char>                data_port(port_num base)             { return { base + 0 }; }
+    static io_port<std::uint8_t>        irq_enable_port(port_num base)       { return { base + 1 }; }
+    static in_port<uart_irq_id>         irq_id_port(port_num base)           { return { base + 2 }; }
+    static out_port<uart_fifo_control>  fifo_control_port(port_num base)     { return { base + 2 }; }
+    static io_port<uart_line_control>   line_control_port(port_num base)     { return { base + 3 }; }
+    static io_port<std::uint8_t>        modem_control_port(port_num base)    { return { base + 4 }; }
+    static in_port<std::uint8_t>        line_status_port(port_num base)      { return { base + 5 }; }
+    static in_port<uart_modem_status>   modem_status_port(port_num base)     { return { base + 6 }; }
 
     inline rs232_streambuf::irq_disable::irq_disable(rs232_streambuf* p) noexcept
         : self { p }
     {
-        irq_enable_port(self->cfg).write({ });
+        irq_enable_port(self->base).write({ });
     }
 
     inline rs232_streambuf::irq_disable::~irq_disable() noexcept
     {
-        irq_enable_port(self->cfg).write(self->irq_enable_reg);
+        irq_enable_port(self->base).write(self->irq_enable_reg);
     }
 
-    rs232_streambuf::rs232_streambuf(const rs232_config& c)
-        : cfg { c }
+    rs232_streambuf::rs232_streambuf(const rs232_config& cfg)
+        : base { cfg.io_port }
         , tx_buf { cfg.transmit_buffer_size }
         , rx_buf { cfg.receive_buffer_size }
+        , async_flush { cfg.async_flush }
+        , flow_control { cfg.flow_control }
+        , putback_reserve { cfg.putback_reserve }
         , irq { [this] { irq_handler(); }, dpmi::no_auto_eoi }
     {
-        if (ports_used.contains(cfg.io_port)) throw std::invalid_argument { "COM port already in use." };
+        if (ports_used.contains(base)) throw std::invalid_argument { "COM port already in use." };
 
-        irq_enable_port(cfg).write({ });
+        irq_enable_port(base).write({ });
 
         auto* const rx = rx_buf.read();
         auto* const tx = tx_buf.write();
@@ -161,34 +164,34 @@ namespace jw::io::detail
         lctrl.char_bits = cfg.char_bits;
         lctrl.parity = cfg.parity;
         lctrl.stop_bits = cfg.stop_bits;
-        line_control_port(cfg).write(lctrl);
+        line_control_port(base).write(lctrl);
 
-        rate_divisor_port(cfg).write(cfg.baud_rate_divisor);
+        rate_divisor_port(base).write(cfg.baud_rate_divisor);
 
         lctrl.divisor_access = false;
-        line_control_port(cfg).write(lctrl);
+        line_control_port(base).write(lctrl);
 
         uart_fifo_control fctrl { };
-        fifo_control_port(cfg).write(fctrl);
+        fifo_control_port(base).write(fctrl);
         fctrl.enable_fifo = true;
         fctrl.clear_rx = true;
         fctrl.clear_tx = true;
         fctrl.irq_threshold = uart_fifo_control::bytes_14;
-        fifo_control_port(cfg).write(fctrl);
+        fifo_control_port(base).write(fctrl);
 
         irq_enable_reg = 0 | irq_enable::data_available;
-        if (cfg.flow_control == rs232_config::rtr_cts)
+        if (flow_control == rs232_config::rtr_cts)
             irq_enable_reg |= irq_enable::modem_status;
 
-        irq_enable_port(cfg).write(irq_enable_reg);
+        irq_enable_port(base).write(irq_enable_reg);
 
         uart_irq_id id;
         do
         {
-            line_status_port(cfg).read();
-            modem_status_port(cfg).read();
-            data_port(cfg).read();
-            id = irq_id_port(cfg).read();
+            line_status_port(base).read();
+            modem_status_port(base).read();
+            data_port(base).read();
+            id = irq_id_port(base).read();
         } while (not id.no_irq_pending);
         if (id.fifo_enabled != 0b11) throw device_not_found { "16550A not detected" };
 
@@ -199,25 +202,25 @@ namespace jw::io::detail
 
         modem_control_reg = modem_control::rts | modem_control::dtr | modem_control::aux_out2;
         if (cfg.enable_aux_out1) modem_control_reg |= modem_control::aux_out1;
-        modem_control_port(cfg).write(modem_control_reg);
+        modem_control_port(base).write(modem_control_reg);
 
-        ports_used.insert(cfg.io_port);
+        ports_used.insert(base);
     }
 
     rs232_streambuf::~rs232_streambuf()
     {
         force_sync();
-        irq_enable_port(cfg).write({ });
+        irq_enable_port(base).write({ });
         modem_control_reg &= ~(modem_control::dtr | modem_control::rts);
-        modem_control_port(cfg).write(modem_control_reg);
-        ports_used.erase(cfg.io_port);
+        modem_control_port(base).write(modem_control_reg);
+        ports_used.erase(base);
     }
 
     void rs232_streambuf::put_realtime(char_type c)
     {
         irq_disable no_irq { this };
         do { } while (not (read_status() & line_status::transmitter_empty));
-        data_port(cfg).write(c);
+        data_port(base).write(c);
     }
 
     std::streamsize rs232_streambuf::showmanyc()
@@ -239,7 +242,7 @@ namespace jw::io::detail
     {
         auto* const rx = rx_buf.read();
         const auto end = rx->iterator_from_pointer(gptr());
-        rx->pop_front_to(clamp_add(end, -cfg.putback_reserve, rx->begin(), end));
+        rx->pop_front_to(clamp_add(end, -putback_reserve, rx->begin(), end));
         auto new_end = rx->contiguous_end(end);
 
         if (auto* err = volatile_load(&first_error)) [[unlikely]]
@@ -372,7 +375,7 @@ namespace jw::io::detail
 
     int rs232_streambuf::sync()
     {
-        return sync(cfg.async_flush);
+        return sync(async_flush);
     }
 
     inline int rs232_streambuf::sync(bool force)
@@ -411,7 +414,7 @@ namespace jw::io::detail
     inline void rs232_streambuf::do_setp(tx_queue::iterator i) noexcept
     {
         auto* const tx = tx_buf.write();
-        setp(&*i, &*clamp_add(i, cfg.transmit_buffer_size / 4, i, tx->contiguous_end(i)));
+        setp(&*i, &*clamp_add(i, (tx->max_size() + 1) / 4, i, tx->contiguous_end(i)));
     }
 
     // Enable or disable the TX interrupt.
@@ -431,20 +434,20 @@ namespace jw::io::detail
     // Assumes IRQ is disabled!
     inline void rs232_streambuf::set_rts(bool rts) noexcept
     {
-        if (cfg.flow_control == rs232_config::continuous) return;
+        if (flow_control == rs232_config::continuous) return;
 
         if (can_rx == rts) return;
         can_rx = rts;
-        if (cfg.flow_control == rs232_config::xon_xoff)
+        if (flow_control == rs232_config::xon_xoff)
         {
             do { } while (not (read_status() & line_status::transmitter_empty));
-            data_port(cfg).write(rts ? xon : xoff);
+            data_port(base).write(rts ? xon : xoff);
         }
-        else if (cfg.flow_control == rs232_config::rtr_cts)
+        else if (flow_control == rs232_config::rtr_cts)
         {
             if (rts) modem_control_reg |= modem_control::rts;
             else modem_control_reg &= ~modem_control::rts;
-            modem_control_port(cfg).write(modem_control_reg);
+            modem_control_port(base).write(modem_control_reg);
         }
     }
 
@@ -452,7 +455,7 @@ namespace jw::io::detail
     // Assumes IRQ is disabled!
     inline std::uint8_t rs232_streambuf::read_status() noexcept
     {
-        const auto s = line_status_port(cfg).read();
+        const auto s = line_status_port(base).read();
         line_status_reg |= s & line_status::any_errors;
         return line_status_reg | s;
     };
@@ -477,7 +480,7 @@ namespace jw::io::detail
 
         auto not_xon_xoff = [&](char c)
         {
-            if (cfg.flow_control != rs232_config::xon_xoff) [[likely]] return true;
+            if (flow_control != rs232_config::xon_xoff) [[likely]] return true;
             if (status & line_status::any_errors) return true;
             if (not (c == xon or c == xoff)) [[likely]] return true;
             can_tx = c == xon;
@@ -504,7 +507,7 @@ namespace jw::io::detail
             while ((status = read_status()) & line_status::data_available) [[likely]]
             {
             get:
-                const auto c = data_port(cfg).read();
+                const auto c = data_port(base).read();
                 line_status_reg = 0;
 
                 if (not_xon_xoff(c)) [[likely]]
@@ -524,7 +527,7 @@ namespace jw::io::detail
             if (not (status & line_status::transmitter_empty)) continue;
             if (not can_tx) continue;
             if (tx->begin() == tx_end) continue;
-            data_port(cfg).write(tx->front());
+            data_port(base).write(tx->front());
             tx->pop_front();
         } while (received < rx_minimum);
 
@@ -540,7 +543,7 @@ namespace jw::io::detail
 
     inline void rs232_streambuf::irq_handler() noexcept
     {
-        const auto id = irq_id_port(cfg).read();
+        const auto id = irq_id_port(base).read();
         if (id.no_irq_pending) [[unlikely]]
             return;
 
@@ -551,7 +554,7 @@ namespace jw::io::detail
         {
         case uart_irq_id::modem_status:
             {
-                const auto status = modem_status_port(cfg).read();
+                const auto status = modem_status_port(base).read();
                 if (not status.delta_cts) break;
                 can_tx = status.cts;
             }

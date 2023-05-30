@@ -61,7 +61,7 @@ namespace jw::io::detail
         void do_sync(std::size_t = 0) noexcept;
         void irq_handler() noexcept;
 
-        const rs232_config cfg;
+        const port_num base;
         tx_queue tx_buf;
         rx_queue rx_buf;
         error_queue errors;
@@ -72,6 +72,9 @@ namespace jw::io::detail
         std::uint8_t modem_control_reg { };
         std::uint8_t line_status_reg { };
         std::uint8_t irq_enable_reg { };
+        const bool async_flush;
+        const decltype(rs232_config::flow_control) flow_control;
+        const std::size_t putback_reserve;
         dpmi::irq_handler irq;
 
         struct irq_disable
