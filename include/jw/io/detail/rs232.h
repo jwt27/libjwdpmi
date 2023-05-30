@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
@@ -6,14 +7,15 @@
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
-#include <mutex>
-#include <unordered_set>
-#include <jw/thread.h>
-#include <jw/mutex.h>
+#include <jw/allocator_adaptor.h>
+#include <jw/dpmi/alloc.h>
+#include <jw/io/realtime_streambuf.h>
+#include <jw/circular_queue.h>
+#include <deque>
 
 namespace jw::io::detail
 {
-    struct rs232_streambuf : std::streambuf
+    struct rs232_streambuf final : realtime_streambuf
     {
         rs232_streambuf(const rs232_config&);
         virtual ~rs232_streambuf();
@@ -22,40 +24,62 @@ namespace jw::io::detail
         rs232_streambuf(const rs232_streambuf&) = delete;
         rs232_streambuf(rs232_streambuf&&) = delete;
 
-        std::string_view view() const
-        {
-            const char* const p = gptr();
-            std::size_t size = egptr() - p;
-            return { p, size };
-        }
+        // Ignores flow control.
+        virtual void put_realtime(char_type) override;
+
+        // Blocks until the entire output buffer is flushed, regardless of the
+        // async_flush option.
+        int force_sync();
 
     protected:
-        virtual int sync() override;
-        virtual std::streamsize xsgetn(char_type*, std::streamsize) override;
+        virtual std::streamsize showmanyc() override;
         virtual int_type underflow() override;
-        virtual std::streamsize xsputn(const char_type*, std::streamsize) override;
+        virtual int_type pbackfail(int_type = traits_type::eof()) override;
         virtual int_type overflow(int_type = traits_type::eof()) override;
+        virtual int sync() override;
 
     private:
-        void check_irq_exception();
-        void set_rts() noexcept;
-        void get(bool entire_fifo = false);
-        void put();
-        char_type get_one();
-        bool put_one(char_type c);
-        void irq_handler();
+        template<typename T>
+        using allocator = default_constructing_allocator_adaptor<dpmi::global_locked_pool_allocator<T>>;
+
+        using tx_queue = dynamic_circular_queue<char_type, queue_sync::read_irq, allocator<char_type>>;
+        using rx_queue = dynamic_circular_queue<char_type, queue_sync::write_irq, allocator<char_type>>;
+
+        struct error_mark
+        {
+            rx_queue::const_iterator pos;
+            std::uint8_t status;
+        };
+
+        using error_queue = std::deque<error_mark, allocator<error_mark>>;
+
+        int sync(bool);
+        void do_setp(tx_queue::iterator) noexcept;
+        void set_tx(bool) noexcept;
+        void set_rts(bool) noexcept;
+        std::uint8_t read_status() noexcept;
+        void do_sync(std::size_t = 0) noexcept;
+        void irq_handler() noexcept;
 
         const rs232_config cfg;
+        tx_queue tx_buf;
+        rx_queue rx_buf;
+        error_queue errors;
+        error_mark* first_error { nullptr };
+        tx_queue::const_iterator tx_stop;
+        bool can_tx { true };
+        bool can_rx { false };
+        std::uint8_t modem_control_reg { };
+        std::uint8_t line_status_reg { };
+        std::uint8_t irq_enable_reg { };
         dpmi::irq_handler irq;
-        recursive_mutex getting, putting;
-        std::exception_ptr irq_exception;
-        bool cts { false };
 
-        std::array<char_type, 1_KB> rx_buf;
-        std::array<char_type, 1_KB> tx_buf;
-        char_type* rx_ptr { rx_buf.data() };
-        char_type* tx_ptr { tx_buf.data() };
+        struct irq_disable
+        {
+            irq_disable(rs232_streambuf*) noexcept;
+            ~irq_disable() noexcept;
 
-        inline static std::unordered_set<port_num> ports_used;
+            rs232_streambuf* const self;
+        };
     };
 }

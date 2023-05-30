@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
@@ -8,10 +9,7 @@
 
 #pragma once
 #include <iostream>
-#include <vector>
-#include <unordered_map>
 #include <algorithm>
-#include <stdexcept>
 #include <jw/dpmi/bda.h>
 #include <jw/dpmi/alloc.h>
 #include <jw/dpmi/irq_handler.h>
@@ -32,20 +30,19 @@ namespace jw::io
     {
         port_num io_port;
         dpmi::irq_level irq;
-        std::uint16_t baud_rate_divisor { 1 };
-        enum char_bits_t
+        enum char_bits_t : std::uint8_t
         {
             char_5,
             char_6,
             char_7,
             char_8
         } char_bits { char_8 };
-        enum stop_bits_t
+        enum stop_bits_t : std::uint8_t
         {
             stop_1,
             stop_2
         } stop_bits { stop_1 };
-        enum parity_t
+        enum parity_t : std::uint8_t
         {
             none = 0b000,
             odd = 0b001,
@@ -53,15 +50,38 @@ namespace jw::io
             mark = 0b101,
             space = 0b111
         } parity { none };
-        enum
+        std::uint16_t baud_rate_divisor { 1 };
+
+        enum : std::uint8_t
         {
+            // No flow control.  RTS and DTR are held high to supply power
+            // to a serial mouse.
             continuous,
+
+            // Symmetric in-band flow control, not suitable for binary
+            // transmission.  The XON/XOFF bytes are consumed and do not
+            // appear in the input stream.  RTS and DTR are held high.
             xon_xoff,
-            rts_cts
+
+            // Symmetric flow control, used with null-modem cables.  RTS (used
+            // as RTR) is asserted while there is free space in the receive
+            // buffer, and transmission only occurs when CTS is active.
+            rtr_cts
         } flow_control { continuous };
-        bool force_dtr_rts_high { false };
+
+        // On some boards, may select a secondary clock crystal.
         bool enable_aux_out1 { false };
-        bool echo { false };
+
+        // When set, flush() enables the transmit interrupt and returns
+        // immediately.  Otherwise, waits until the transmit buffer is
+        // completely flushed.
+        bool async_flush { true };
+
+        std::size_t transmit_buffer_size { 4_KB };
+        std::size_t receive_buffer_size { 4_KB };
+
+        // Try to reserve this much space for putback() / unget() operations.
+        std::size_t putback_reserve { 0 };
 
         void set_com_port(com_port p)
         {
@@ -111,15 +131,12 @@ namespace jw::io
             this->init(streambuf.get());
         }
 
-        std::string_view view() const
-        {
-            return streambuf->view();
-        }
-
         detail::rs232_streambuf* rdbuf() const noexcept
         {
             return streambuf.get();
         }
+
+        rs232_stream& force_flush();
 
     private:
         std::unique_ptr<detail::rs232_streambuf> streambuf;

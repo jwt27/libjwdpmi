@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
@@ -27,6 +28,7 @@
 #include <jw/alloc.h>
 #include <jw/dpmi/ring0.h>
 #include <jw/allocator_adaptor.h>
+#include <jw/thread.h>
 #include "jwdpmi_config.h"
 
 using namespace std::literals;
@@ -501,19 +503,7 @@ namespace jw::debug::detail
 
     static bool packet_available()
     {
-        const auto str = gdb->view();
-        for (auto i = str.begin(); i != str.end(); ++i)
-        {
-            if (*i == 3) return true;
-            if (*i != '$') continue;
-            for (; i != str.end(); ++i)
-            {
-                if (*i == 3) return true;
-                if (*i == '#') return true;
-            }
-            return false;
-        }
-        return false;
+        return gdb->rdbuf()->in_avail() != 0;
     }
 
     // not used
@@ -576,33 +566,53 @@ namespace jw::debug::detail
     {
         char sum_data[2];
         std::string_view sum { sum_data, 2 };
+        bool bad = false;
 
     retry:
-        recv_ack();
-        switch (gdb->peek())
+        gdb->clear();
+        try
         {
-        default: gdb->get();
-        case '+':
-        case '-':
+            recv_ack();
+            switch (gdb->peek())
+            {
+            default: gdb->get();
+            case '+':
+            case '-':
+                goto retry;
+            case 0x03:
+                gdb->get();
+                raw_packet_string = "vCtrlC";
+                goto parse;
+            case '$':
+                gdb->get();
+                break;
+            }
+
+            replied = false;
+            raw_packet_string.clear();
+            std::getline(*gdb, raw_packet_string, '#');
+            sum_data[0] = gdb->get();
+            sum_data[1] = gdb->get();
+        }
+        catch (const std::exception& e)
+        {
+            fmt::print(stderr, FMT_STRING("Error while receiving gdb packet: {}\n"), e.what());
+            bad |= gdb->bad();
+            if (gdb->rdbuf()->in_avail() != -1)
+            {
+                fmt::print(stderr, FMT_STRING("Received so far: \"{}\"\n"), raw_packet_string);
+                if (bad)
+                    fmt::print(stderr, FMT_STRING("Malformed character: \'{}\'\n"), gdb->get());
+                gdb->put('-');
+                bad = false;
+            }
             goto retry;
-        case 0x03:
-            gdb->get();
-            raw_packet_string = "vCtrlC";
-            goto parse;
-        case '$':
-            gdb->get();
-            break;
         }
 
-        replied = false;
-        raw_packet_string.clear();
-        std::getline(*gdb, raw_packet_string, '#');
-        sum_data[0] = gdb->get();
-        sum_data[1] = gdb->get();
         if (decode(sum) == checksum(raw_packet_string)) *gdb << '+';
         else
         {
-            fmt::print(stderr, FMT_STRING("BAD CHECKSUM: {}: {}, calculated: {:0>2x}\n"),
+            fmt::print(stderr, FMT_STRING("Bad checksum: \"{}\": {}, calculated: {:0>2x}\n"),
                         raw_packet_string, sum, checksum(raw_packet_string));
             gdb->put('-');
             goto retry;
@@ -1418,7 +1428,7 @@ namespace jw::debug::detail
             {
                 try
                 {
-                    if (packet_available()) handle_packet();
+                    handle_packet();
                 }
                 catch (...)
                 {
@@ -1456,7 +1466,7 @@ namespace jw::debug::detail
         debug_mode = true;
 
         gdb.emplace(cfg);
-        gdb->exceptions(std::ios::failbit | std::ios::badbit);
+        gdb->exceptions(std::ios::failbit | std::ios::badbit | std::ios::eofbit);
 
         serial_irq = std::make_unique<irq_handler>([]
         {

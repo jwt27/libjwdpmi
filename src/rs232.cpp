@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
@@ -6,23 +7,13 @@
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #include <jw/io/rs232.h>
-#include <jw/dpmi/irq_mask.h>
+#include <jw/thread.h>
+#include <bit>
+#include <unordered_set>
 
 namespace jw::io::detail
 {
-    static constexpr char xon = 0x11;
-    static constexpr char xoff = 0x13;
-
-    struct [[gnu::packed]] uart_irq_enable_reg
-    {
-        bool data_available : 1;
-        bool transmitter_empty : 1;
-        bool line_status : 1;
-        bool modem_status : 1;
-        unsigned : 4;
-    };
-
-    struct [[gnu::packed]] uart_irq_id_reg
+    struct [[gnu::packed]] uart_irq_id
     {
         bool no_irq_pending : 1;
         enum
@@ -37,7 +28,7 @@ namespace jw::io::detail
         unsigned fifo_enabled : 2;
     };
 
-    struct [[gnu::packed]] uart_fifo_control_reg
+    struct [[gnu::packed]] uart_fifo_control
     {
         bool enable_fifo : 1;
         bool clear_rx : 1;
@@ -53,38 +44,7 @@ namespace jw::io::detail
         } irq_threshold : 2;
     };
 
-    struct [[gnu::packed]] uart_line_control_reg
-    {
-        rs232_config::char_bits_t char_bits : 2;
-        rs232_config::stop_bits_t stop_bits : 1;
-        rs232_config::parity_t parity : 3;
-        bool force_break : 1;
-        bool divisor_access : 1;
-    };
-
-    struct [[gnu::packed]] uart_modem_control_reg
-    {
-        bool dtr : 1;
-        bool rts : 1;
-        bool aux_out1 : 1;
-        bool aux_out2 : 1;
-        bool loopback_mode : 1;
-        unsigned : 3;
-    };
-
-    struct [[gnu::packed]] uart_line_status_reg
-    {
-        bool data_available : 1;
-        bool overflow_error : 1;
-        bool parity_error : 1;
-        bool framing_error : 1;
-        bool line_break : 1;
-        bool transmitter_empty : 1;
-        bool tx_fifo_empty : 1;
-        unsigned fifo_contains_error : 1;
-    };
-
-    struct [[gnu::packed]] uart_modem_status_reg
+    struct [[gnu::packed]] uart_modem_status
     {
         bool delta_cts : 1;
         bool delta_dts : 1;
@@ -96,306 +56,537 @@ namespace jw::io::detail
         bool dcd : 1;
     };
 
-    static io_port<std::uint16_t>           rate_divisor(const rs232_config& c)     { return { c.io_port + 0 }; }
-    static io_port<char>                    data(const rs232_config& c)             { return { c.io_port + 0 }; }
-    static io_port<uart_irq_enable_reg>     irq_enable(const rs232_config& c)       { return { c.io_port + 1 }; }
-    static in_port<uart_irq_id_reg>         irq_id(const rs232_config& c)           { return { c.io_port + 2 }; }
-    static out_port<uart_fifo_control_reg>  fifo_control(const rs232_config& c)     { return { c.io_port + 2 }; }
-    static io_port<uart_line_control_reg>   line_control(const rs232_config& c)     { return { c.io_port + 3 }; }
-    static io_port<uart_modem_control_reg>  modem_control(const rs232_config& c)    { return { c.io_port + 4 }; }
-    static in_port<uart_line_status_reg>    line_status(const rs232_config& c)      { return { c.io_port + 5 }; }
-    static in_port<uart_modem_status_reg>   modem_status(const rs232_config& c)     { return { c.io_port + 6 }; }
-
-    static uart_line_status_reg read_status(const rs232_config& cfg)
+    struct [[gnu::packed]] uart_line_control
     {
-        auto status = line_status(cfg).read();
-        if (status.overflow_error)       throw io::overflow { "RS232 FIFO overflow" };
-        if (status.parity_error)         throw parity_error { "RS232 parity error" };
-        if (status.framing_error)        throw framing_error { "RS232 framing error" };
-        if (status.line_break)           throw line_break { "RS232 line break detected" };
-        //if (status.fifo_contains_error)  throw io_error { "RS232 FIFO contains error" };
-        return status;
+        rs232_config::char_bits_t char_bits : 2;
+        rs232_config::stop_bits_t stop_bits : 1;
+        rs232_config::parity_t parity : 3;
+        bool force_break : 1;
+        bool divisor_access : 1;
+    };
+
+    enum class modem_control
+    {
+        dtr                 = 0b00000001,
+        rts                 = 0b00000010,
+        aux_out1            = 0b00000100,
+        aux_out2            = 0b00001000,   // Disables IRQ line
+        loopback_mode       = 0b00010000
+    };
+
+    enum class line_status : std::uint8_t
+    {
+        data_available      = 0b00000001,
+        overflow_error      = 0b00000010,
+        parity_error        = 0b00000100,
+        framing_error       = 0b00001000,
+        line_break          = 0b00010000,
+        transmitter_empty   = 0b00100000,
+        tx_fifo_empty       = 0b01000000,
+        fifo_contains_error = 0b10000000,
+
+        any_errors = overflow_error | parity_error | framing_error | line_break
+    };
+
+    enum class irq_enable
+    {
+        data_available      = 0b00000001,
+        transmitter_empty   = 0b00000010,
+        line_status         = 0b00000100,
+        modem_status        = 0b00001000
+    };
+
+#   define MAKE_ENUM_BITOPS(T) \
+    static constexpr std::uint8_t operator~ (T a) noexcept { return ~static_cast<std::uint8_t>(a); } \
+    static constexpr std::uint8_t operator& (T a, T b) noexcept { return static_cast<std::uint8_t>(a) & static_cast<std::uint8_t>(b); } \
+    static constexpr std::uint8_t operator| (T a, T b) noexcept { return static_cast<std::uint8_t>(a) | static_cast<std::uint8_t>(b); } \
+    static constexpr std::uint8_t operator& (std::uint8_t a, T b) noexcept { return a & static_cast<std::uint8_t>(b); } \
+    static constexpr std::uint8_t operator| (std::uint8_t a, T b) noexcept { return a | static_cast<std::uint8_t>(b); } \
+    static constexpr std::uint8_t& operator&=(std::uint8_t& a, T b) noexcept { return a = a & static_cast<std::uint8_t>(b); } \
+    static constexpr std::uint8_t& operator|=(std::uint8_t& a, T b) noexcept { return a = a | static_cast<std::uint8_t>(b); }
+
+    MAKE_ENUM_BITOPS(line_status);
+    MAKE_ENUM_BITOPS(modem_control);
+    MAKE_ENUM_BITOPS(irq_enable);
+
+#   undef MAKE_ENUM_BITOPS
+
+    static constexpr char xon = 0x11;
+    static constexpr char xoff = 0x13;
+
+    static std::unordered_set<port_num> ports_used;
+
+    static io_port<std::uint16_t>       rate_divisor_port(const rs232_config& c)     { return { c.io_port + 0 }; }
+    static io_port<char>                data_port(const rs232_config& c)             { return { c.io_port + 0 }; }
+    static io_port<std::uint8_t>        irq_enable_port(const rs232_config& c)       { return { c.io_port + 1 }; }
+    static in_port<uart_irq_id>         irq_id_port(const rs232_config& c)           { return { c.io_port + 2 }; }
+    static out_port<uart_fifo_control>  fifo_control_port(const rs232_config& c)     { return { c.io_port + 2 }; }
+    static io_port<uart_line_control>   line_control_port(const rs232_config& c)     { return { c.io_port + 3 }; }
+    static io_port<std::uint8_t>        modem_control_port(const rs232_config& c)    { return { c.io_port + 4 }; }
+    static in_port<std::uint8_t>        line_status_port(const rs232_config& c)      { return { c.io_port + 5 }; }
+    static in_port<uart_modem_status>   modem_status_port(const rs232_config& c)     { return { c.io_port + 6 }; }
+
+    inline rs232_streambuf::irq_disable::irq_disable(rs232_streambuf* p) noexcept
+        : self { p }
+    {
+        irq_enable_port(self->cfg).write({ });
+    }
+
+    inline rs232_streambuf::irq_disable::~irq_disable() noexcept
+    {
+        irq_enable_port(self->cfg).write(self->irq_enable_reg);
     }
 
     rs232_streambuf::rs232_streambuf(const rs232_config& c)
-        : cfg { c }, irq { [this] { irq_handler(); } }
+        : cfg { c }
+        , tx_buf { cfg.transmit_buffer_size }
+        , rx_buf { cfg.receive_buffer_size }
+        , irq { [this] { irq_handler(); }, dpmi::no_auto_eoi }
     {
-        if (ports_used.contains(cfg.io_port)) throw std::runtime_error("COM port already in use.");
+        if (ports_used.contains(cfg.io_port)) throw std::invalid_argument { "COM port already in use." };
 
-        uart_irq_enable_reg irqen { };
-        irq_enable(cfg).write(irqen);
+        irq_enable_port(cfg).write({ });
 
-        setg(rx_buf.begin(), rx_buf.begin(), rx_buf.begin());
-        setp(tx_buf.begin(), tx_buf.end());
+        auto* const rx = rx_buf.read();
+        auto* const tx = tx_buf.write();
+        const auto rx_begin = rx->begin();
+        const auto tx_begin = tx->fill();
 
-        uart_line_control_reg lctrl { };
+        setg(&*rx_begin, &*rx_begin, &*rx_begin);
+        do_setp(tx_begin);
+        tx_stop = tx_begin;
+
+        uart_line_control lctrl { };
         lctrl.divisor_access = true;
         lctrl.char_bits = cfg.char_bits;
         lctrl.parity = cfg.parity;
         lctrl.stop_bits = cfg.stop_bits;
-        line_control(cfg).write(lctrl);
+        line_control_port(cfg).write(lctrl);
 
-        rate_divisor(cfg).write(cfg.baud_rate_divisor);
+        rate_divisor_port(cfg).write(cfg.baud_rate_divisor);
 
         lctrl.divisor_access = false;
-        line_control(cfg).write(lctrl);
+        line_control_port(cfg).write(lctrl);
 
-        uart_modem_control_reg mctrl { };
-        mctrl.dtr = not cfg.force_dtr_rts_high; // note: dtr/rts are inverted
-        mctrl.rts = not cfg.force_dtr_rts_high;
-        mctrl.aux_out1 = cfg.enable_aux_out1;
-        mctrl.aux_out2 = true;
-        modem_control(cfg).write(mctrl);
-
-        uart_fifo_control_reg fctrl { };
-        fifo_control(cfg).write(fctrl);
+        uart_fifo_control fctrl { };
+        fifo_control_port(cfg).write(fctrl);
         fctrl.enable_fifo = true;
         fctrl.clear_rx = true;
         fctrl.clear_tx = true;
-        fctrl.irq_threshold = uart_fifo_control_reg::bytes_8;
-        fifo_control(cfg).write(fctrl);
+        fctrl.irq_threshold = uart_fifo_control::bytes_14;
+        fifo_control_port(cfg).write(fctrl);
 
-        if (irq_id(cfg).read().fifo_enabled != 0b11) throw device_not_found("16550A not detected"); // HACK
+        irq_enable_reg = 0 | irq_enable::data_available;
+        if (cfg.flow_control == rs232_config::rtr_cts)
+            irq_enable_reg |= irq_enable::modem_status;
+
+        irq_enable_port(cfg).write(irq_enable_reg);
+
+        uart_irq_id id;
+        do
+        {
+            line_status_port(cfg).read();
+            modem_status_port(cfg).read();
+            data_port(cfg).read();
+            id = irq_id_port(cfg).read();
+        } while (not id.no_irq_pending);
+        if (id.fifo_enabled != 0b11) throw device_not_found { "16550A not detected" };
 
         irq.set_irq(cfg.irq);
         irq.enable();
 
-        irqen.data_available = true;
-        irqen.transmitter_empty = true;
-        irqen.line_status = (cfg.flow_control == rs232_config::xon_xoff);
-        irqen.modem_status = (cfg.flow_control == rs232_config::rts_cts);
-        irq_enable(cfg).write(irqen);
+        set_rts(true);
 
-        set_rts();
+        modem_control_reg = modem_control::rts | modem_control::dtr | modem_control::aux_out2;
+        if (cfg.enable_aux_out1) modem_control_reg |= modem_control::aux_out1;
+        modem_control_port(cfg).write(modem_control_reg);
+
         ports_used.insert(cfg.io_port);
     }
 
     rs232_streambuf::~rs232_streambuf()
     {
-        modem_control(cfg).write({ });
-        irq_enable(cfg).write({ });
-        irq.disable();
+        force_sync();
+        irq_enable_port(cfg).write({ });
+        modem_control_reg &= ~(modem_control::dtr | modem_control::rts);
+        modem_control_port(cfg).write(modem_control_reg);
         ports_used.erase(cfg.io_port);
+    }
+
+    void rs232_streambuf::put_realtime(char_type c)
+    {
+        irq_disable no_irq { this };
+        do { } while (not (read_status() & line_status::transmitter_empty));
+        data_port(cfg).write(c);
+    }
+
+    std::streamsize rs232_streambuf::showmanyc()
+    {
+        auto* const rx = rx_buf.read();
+        const auto pos = rx->iterator_from_pointer(gptr());
+        auto end = rx->cend();
+
+        if (auto* err = volatile_load(&first_error)) [[unlikely]]
+        {
+            if (pos == err->pos)
+                return -1;
+            end = min(end, err->pos);
+        }
+        return pos.distance_to(end);
+    }
+
+    rs232_streambuf::int_type rs232_streambuf::underflow()
+    {
+        auto* const rx = rx_buf.read();
+        const auto end = rx->iterator_from_pointer(gptr());
+        rx->pop_front_to(clamp_add(end, -cfg.putback_reserve, rx->begin(), end));
+        auto new_end = rx->contiguous_end(end);
+
+        if (auto* err = volatile_load(&first_error)) [[unlikely]]
+        {
+            auto pop = [this, err]
+            {
+                if (err->status & line_status::any_errors)
+                    return;
+
+                dpmi::interrupt_mask no_irq { };
+                errors.pop_front();
+                if (not errors.empty())
+                    first_error = &errors.front();
+                else
+                    first_error = nullptr;
+            };
+
+            if (end != err->pos)
+            {
+                new_end = min(new_end, err->pos);
+            }
+            else if (err->status & line_status::overflow_error)
+            {
+                err->status &= ~line_status::overflow_error;
+                pop();
+                throw io::overflow { "RS-232 receive buffer overflow" };
+            }
+            else if (err->status & line_status::framing_error)
+            {
+                err->status &= ~line_status::framing_error;
+                pop();
+                throw framing_error { "RS-232 framing error" };
+            }
+            else if (err->status & line_status::parity_error)
+            {
+                err->status &= ~line_status::parity_error;
+                pop();
+                throw parity_error { "RS-232 parity errror" };
+            }
+            else if (err->status & line_status::line_break)
+            {
+                // Skip zero byte.
+                new_end = end + 1;
+                setg(&*rx->contiguous_begin(new_end), &*new_end, &*new_end);
+                pop();
+                return traits_type::eof();
+            }
+        }
+
+        if (new_end == end)
+        {
+#       ifndef NDEBUG
+            if (dpmi::in_irq_context()) [[unlikely]]
+            {
+                irq_disable no_irq { this };
+                do_sync();
+            }
+            else
+#       endif
+            {
+                this_thread::yield();
+            }
+            return underflow();
+        }
+        setg(&*rx->contiguous_begin(end), &*end, &*new_end);
+        return *gptr();
+    }
+
+    rs232_streambuf::int_type rs232_streambuf::pbackfail(int_type c)
+    {
+        if (eback() < gptr())
+        {
+            gbump(-1);
+            *gptr() = traits_type::to_char_type(c);
+            return 0;
+        }
+
+        auto* const rx = rx_buf.read();
+        auto i = rx->iterator_from_pointer(gptr());
+        if (rx->begin().distance_to(i) > 0)
+        {
+            --i;
+            setg(&*rx->contiguous_begin(i), &*i, &*rx->contiguous_end(i));
+            *gptr() = traits_type::to_char_type(c);
+            return 0;
+        }
+        return traits_type::eof();
+    }
+
+    rs232_streambuf::int_type rs232_streambuf::overflow(int_type c)
+    {
+        auto* const tx = tx_buf.write();
+        const auto end = tx->iterator_from_pointer(pptr());
+
+        {
+            irq_disable no_irq { this };
+            tx_stop = end;
+            set_tx(tx->begin() != end);
+        }
+
+        while (tx->full())
+        {
+#       ifndef NDEBUG
+            if (dpmi::in_irq_context()) [[unlikely]]
+            {
+                irq_disable no_irq { this };
+                do_sync();
+            }
+            else
+#       endif
+            {
+                this_thread::yield();
+            }
+        }
+        tx->fill();
+        do_setp(end);
+
+        if (traits_type::not_eof(c))
+        {
+            *pptr() = c;
+            pbump(1);
+        }
+        return c;
+    }
+
+    int rs232_streambuf::force_sync()
+    {
+        return sync(true);
     }
 
     int rs232_streambuf::sync()
     {
-        this_thread::yield_while([this]
+        return sync(cfg.async_flush);
+    }
+
+    inline int rs232_streambuf::sync(bool force)
+    {
+        auto* const tx = tx_buf.write();
+        const auto end = tx->iterator_from_pointer(pptr());
+
         {
+            irq_disable no_irq { this };
+            tx_stop = end;
+            set_tx(tx->begin() != end);
+        }
+
+        if (force)
+        {
+            while (tx->begin() != end)
             {
-                std::unique_lock lock { getting };
-                if (read_status(cfg).data_available) underflow();
+#       ifndef NDEBUG
+                if (dpmi::in_irq_context()) [[unlikely]]
+                {
+                    irq_disable no_irq { this };
+                    do_sync();
+                }
+                else
+#       endif
+                {
+                    this_thread::yield();
+                }
             }
-            overflow();
-            return tx_ptr < pptr();
-        });
+        }
+        tx->fill();
+        do_setp(end);
         return 0;
     }
 
-    std::streamsize rs232_streambuf::xsgetn(char_type* s, std::streamsize n)
+    inline void rs232_streambuf::do_setp(tx_queue::iterator i) noexcept
     {
-        std::unique_lock lock { getting };
-        std::streamsize max_n;
-        this_thread::yield_while([&]
-        {
-            max_n = std::min(egptr() - gptr(), n);
-            return max_n < n and underflow() != traits_type::eof();
-        });
-        {
-            dpmi::interrupt_mask no_irq { };
-            std::copy_n(gptr(), max_n, s);
-            setg(rx_buf.begin(), gptr() + max_n, egptr());
-        }
-        return max_n;
+        auto* const tx = tx_buf.write();
+        setp(&*i, &*clamp_add(i, cfg.transmit_buffer_size / 4, i, tx->contiguous_end(i)));
     }
 
-    // rx_buf:  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-    //          ^               ^       ^       ^
-    //          rx_buf.begin()  gptr()  rx_ptr  tx_buf.end()
-    //          == eback()      |       |
-    //                          |       +- one past last received char (== egptr())
-    //                          +- next char to get
-
-    rs232_streambuf::int_type rs232_streambuf::underflow()
+    // Enable or disable the TX interrupt.
+    // Assumes IRQ is disabled!
+    inline void rs232_streambuf::set_tx(bool enable) noexcept
     {
-        std::unique_lock lock { getting };
-        auto qsize = rx_buf.size() / 4;
-        if (rx_ptr > rx_buf.begin() + qsize * 3)
-        {
-            dpmi::interrupt_mask no_irq { };
-            auto offset = gptr() - (rx_buf.begin() + qsize);
-            std::copy(rx_buf.begin() + offset, rx_ptr, rx_buf.begin());
-            rx_ptr -= offset;
-            setg(rx_buf.begin(), rx_buf.begin() + qsize, rx_ptr);
-        }
-        set_rts();
-        do
-        {
-            check_irq_exception();
-            if ((not dpmi::interrupts_enabled()
-                    or not irq_enable(cfg).read().data_available
-                    or not dpmi::irq_mask::enabled(cfg.irq))
-                and read_status(cfg).data_available) get();
-            else this_thread::yield();
-        } while (gptr() == rx_ptr);
-        return *gptr();
+        enable &= can_tx;
+        if (enable)
+            irq_enable_reg |= irq_enable::transmitter_empty;
+        else
+            irq_enable_reg &= ~irq_enable::transmitter_empty;
+
+        // Will be written out by ~irq_disable().
     }
 
-    std::streamsize rs232_streambuf::xsputn(const char_type* s, std::streamsize n)
+    // Update the RTS pin or send XON/XOFF.
+    // Assumes IRQ is disabled!
+    inline void rs232_streambuf::set_rts(bool rts) noexcept
     {
-        std::unique_lock lock { putting };
-        std::streamsize max_n;
-        while ((max_n = std::min(tx_buf.end() - pptr(), n)) < n)
-            overflow();
-        {
-            dpmi::interrupt_mask no_irq { };
-            std::copy_n(s, max_n, pptr());
-            setp(pptr() + max_n, tx_buf.end());
-        }
-        return max_n;
-    }
+        if (cfg.flow_control == rs232_config::continuous) return;
 
-    // tx_buf:  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-    //          ^               ^       ^       ^
-    //          tx_buf.begin()  tx_ptr  pptr()  epptr()
-    //                          |       |
-    //                          |       +- current put pointer
-    //                          +- next character to send
-
-    rs232_streambuf::int_type rs232_streambuf::overflow(int_type c)
-    {
-        std::unique_lock lock { putting };
-        this_thread::yield_while([this]
-        {
-            check_irq_exception();
-            {
-                dpmi::interrupt_mask no_irq { };
-                put();
-            }
-            return tx_ptr < pptr();
-        });
-
-        auto hsize = tx_buf.size() / 2;
-        if (pptr() > tx_buf.begin() + hsize)
-        {
-            dpmi::interrupt_mask no_irq { };
-            std::copy(tx_ptr, pptr(), tx_buf.begin());
-            setp(tx_buf.begin() + (pptr() - tx_ptr), tx_buf.end());
-            tx_ptr = tx_buf.begin();
-        }
-
-        if (traits_type::not_eof(c)) sputc(c);
-        return ~traits_type::eof();
-    }
-
-    inline void rs232_streambuf::check_irq_exception()
-    {
-        if (irq_exception != nullptr) [[unlikely]]
-        {
-            auto e = std::move(irq_exception);
-            irq_exception = nullptr;
-            std::rethrow_exception(e);
-        }
-    }
-
-    inline void rs232_streambuf::set_rts() noexcept
-    {
-        if (cfg.force_dtr_rts_high) return;
-        auto r = modem_control(cfg).read();
-        auto r2 = r;
-        r2.dtr = true;
-        r2.rts = egptr() != rx_buf.end() - 8;
-        if (r.rts != r2.rts)
-        {
-            modem_control(cfg).write(r2);
-            //TODO: xon/xoff
-        }
-    }
-
-    inline void rs232_streambuf::get(bool entire_fifo)
-    {
-        //irq_disable no_irq { this, irq_disable::get };
-        dpmi::interrupt_mask no_irq { };
-        auto size = std::min(entire_fifo ? 8 : 1, rx_buf.end() - rx_ptr);
-        for (auto i = 0; i < size or read_status(cfg).data_available; ++i)
-        {
-            if (rx_ptr >= rx_buf.end()) throw io::overflow { "RS232 receive buffer overflow" };
-            *(rx_ptr++) = get_one();
-        }
-        setg(rx_buf.begin(), gptr(), rx_ptr);
-    }
-
-    inline void rs232_streambuf::put()
-    {
-        //if (cfg.flow_control == rs232_config::xon_xoff && !cts) { put_one(xon); return; };
-        //irq_disable no_irq { this, irq_disable::put };
-        dpmi::interrupt_mask no_irq { };
-        std::unique_lock<recursive_mutex> locked { putting, std::try_to_lock };
-        if (not locked) return;
-        auto size = std::min(read_status(cfg).tx_fifo_empty ? 16 : 1, pptr() - tx_ptr);
-        for (auto i = 0; i < size or (tx_ptr < pptr() and read_status(cfg).transmitter_empty); ++tx_ptr, ++i)
-            if (not put_one(*tx_ptr)) break;
-    }
-
-    inline char rs232_streambuf::get_one()
-    {
-    retry:
-        try
-        {
-            do { } while (not read_status(cfg).data_available);
-        }
-        catch (const line_break&)
-        {
-            if (data(cfg).read() != 0) throw;
-            goto retry;
-        }
-        auto c = data(cfg).read();
+        if (can_rx == rts) return;
+        can_rx = rts;
         if (cfg.flow_control == rs232_config::xon_xoff)
         {
-            if (c == xon) { cts = true; goto retry; }
-            if (c == xoff) { cts = false; goto retry; }
+            do { } while (not (read_status() & line_status::transmitter_empty));
+            data_port(cfg).write(rts ? xon : xoff);
         }
-        if (cfg.echo) sputc(c);
-        return c;
-    }
-
-    inline bool rs232_streambuf::put_one(char_type c)
-    {
-        if (not read_status(cfg).transmitter_empty) return false;
-        if (cfg.flow_control == rs232_config::rts_cts and not modem_status(cfg).read().cts) return false;
-        this_thread::yield_while([this] { return not read_status(cfg).transmitter_empty; });
-        data(cfg).write(c);
-        return true;
-    }
-
-    inline void rs232_streambuf::irq_handler()
-    {
-        auto id = irq_id(cfg).read();
-        if (not id.no_irq_pending)
+        else if (cfg.flow_control == rs232_config::rtr_cts)
         {
-            dpmi::irq_handler::acknowledge();
-            try
-            {
-                switch (id.id)
-                {
-                case uart_irq_id_reg::data_available:
-                    get(not id.timeout); break;
-                case uart_irq_id_reg::transmitter_empty:
-                    put(); break;
-                case uart_irq_id_reg::line_status:
-                    try { read_status(cfg); }
-                    catch (const line_break&) { cts = false; break; }
-                    [[fallthrough]];
-                case uart_irq_id_reg::modem_status:
-                    modem_status(cfg).read();
-                    put(); break;
-                }
-            }
-            catch (...)
-            {
-                irq_exception = std::current_exception();
-            }
+            if (rts) modem_control_reg |= modem_control::rts;
+            else modem_control_reg &= ~modem_control::rts;
+            modem_control_port(cfg).write(modem_control_reg);
         }
-        set_rts();
+    }
+
+    // Read the line status register.
+    // Assumes IRQ is disabled!
+    inline std::uint8_t rs232_streambuf::read_status() noexcept
+    {
+        const auto s = line_status_port(cfg).read();
+        line_status_reg |= s & line_status::any_errors;
+        return line_status_reg | s;
+    };
+
+    // Assumes IRQ is disabled!
+    void rs232_streambuf::do_sync(std::size_t rx_minimum) noexcept
+    {
+        auto* const rx = rx_buf.write();
+        auto* const tx = tx_buf.read();
+        const auto tx_end = tx_stop;
+        bool overflow = false;
+        std::size_t received = 0;
+        std::uint8_t status = read_status();
+
+        auto add_error_mark = [&](auto pos, auto status)
+        {
+            if (errors.empty() or errors.back().pos != pos)
+                errors.emplace_back(pos, static_cast<std::uint8_t>(status));
+            else
+                errors.back().status |= static_cast<std::uint8_t>(status);
+        };
+
+        auto not_xon_xoff = [&](char c)
+        {
+            if (cfg.flow_control != rs232_config::xon_xoff) [[likely]] return true;
+            if (status & line_status::any_errors) return true;
+            if (not (c == xon or c == xoff)) [[likely]] return true;
+            can_tx = c == xon;
+            return false;
+        };
+
+        if (status & line_status::overflow_error) [[unlikely]]
+        {
+            // Overflow bit applies to the end of the FIFO.  We must
+            // now read the whole FIFO and place an error mark at the
+            // end.
+            rx_minimum = 16;
+            overflow = true;
+            status &= ~line_status::overflow_error;
+            goto get;
+        }
+        else if (status & line_status::data_available) [[likely]]
+            goto get;
+        else
+            goto put;
+
+        do
+        {
+            while ((status = read_status()) & line_status::data_available) [[likely]]
+            {
+            get:
+                const auto c = data_port(cfg).read();
+                line_status_reg = 0;
+
+                if (not_xon_xoff(c)) [[likely]]
+                {
+                    const auto i = rx->try_append(1, c);
+
+                    if (not i) [[unlikely]]
+                        add_error_mark(rx->end(), line_status::overflow_error);
+                    else if (status & line_status::any_errors) [[unlikely]]
+                        add_error_mark(*i, status);
+                }
+
+                ++received;
+            }
+
+            put:
+            if (not (status & line_status::transmitter_empty)) continue;
+            if (not can_tx) continue;
+            if (tx->begin() == tx_end) continue;
+            data_port(cfg).write(tx->front());
+            tx->pop_front();
+        } while (received < rx_minimum);
+
+        if (overflow) [[unlikely]]
+            add_error_mark(rx->end() - (received - 16), line_status::overflow_error);
+
+        if (not errors.empty() and first_error == nullptr) [[unlikely]]
+            first_error = &errors.front();
+
+        set_rts(rx->max_size() - rx->size() > 32);
+        set_tx(tx->begin() != tx_end);
+    }
+
+    inline void rs232_streambuf::irq_handler() noexcept
+    {
+        const auto id = irq_id_port(cfg).read();
+        if (id.no_irq_pending) [[unlikely]]
+            return;
+
+        irq_disable no_irq { this };
+        dpmi::irq_handler::acknowledge();
+
+        switch (id.id)
+        {
+        case uart_irq_id::modem_status:
+            {
+                const auto status = modem_status_port(cfg).read();
+                if (not status.delta_cts) break;
+                can_tx = status.cts;
+            }
+            [[fallthrough]];
+
+        case uart_irq_id::line_status:
+        case uart_irq_id::transmitter_empty:
+            do_sync();
+            break;
+
+        case uart_irq_id::data_available:
+            do_sync(id.timeout ? 1 : 14);
+        }
+    }
+}
+
+namespace jw::io
+{
+    rs232_stream& rs232_stream::force_flush()
+    {
+        std::ostream::sentry ok { *this };
+        if (not ok) return *this;
+        try
+        {
+            streambuf->force_sync();
+        }
+        catch (const jw::detail::abort_thread&)
+        {
+            _M_setstate(badbit);
+            throw;
+        }
+        catch (...)
+        {
+            _M_setstate(badbit);
+        }
+        return *this;
     }
 }
