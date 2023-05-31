@@ -534,12 +534,16 @@ namespace jw::io
                 ++received;
             }
 
-            put:
+        put:
             if (not (status & line_status::transmitter_empty)) continue;
             if (not can_tx) continue;
-            if (tx->begin() == tx_end) continue;
-            data_port(base).write(tx->front());
-            tx->pop_front();
+
+            const auto n = std::min(16u, tx->begin().distance_to(tx_end));
+            for (unsigned i = 0; i < n; ++i)
+            {
+                data_port(base).write(tx->front());
+                tx->pop_front();
+            }
         } while (received < rx_minimum);
 
         if (overflow) [[unlikely]]
