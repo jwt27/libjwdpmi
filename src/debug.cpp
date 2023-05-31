@@ -29,6 +29,7 @@
 #include <jw/dpmi/ring0.h>
 #include <jw/allocator_adaptor.h>
 #include <jw/thread.h>
+#include <jw/dpmi/async_signal.h>
 #include "jwdpmi_config.h"
 
 using namespace std::literals;
@@ -66,6 +67,7 @@ namespace jw::debug::detail
     std::array<std::unique_ptr<exception_handler>, 0x20> exception_handlers;
     std::optional<io::rs232_stream> gdb;
     std::unique_ptr<dpmi::irq_handler> serial_irq;
+    std::optional<dpmi::async_signal> irq_signal;
 
     struct packet_string : public std::string_view
     {
@@ -1468,10 +1470,17 @@ namespace jw::debug::detail
         gdb.emplace(cfg);
         gdb->exceptions(std::ios::failbit | std::ios::badbit | std::ios::eofbit);
 
+        irq_signal.emplace([](const exception_info& e)
+        {
+            current_signal = packet_received;
+            handle_exception(exception_num::breakpoint, e);
+        });
+
         serial_irq = std::make_unique<irq_handler>([]
         {
             if (debugger_reentry) return;
-            if (packet_available()) break_with_signal(packet_received);
+            if (not packet_available()) return;
+            irq_signal->raise();
         });
 
         for (auto&& s : { SIGHUP, SIGABRT, SIGTERM, SIGKILL, SIGQUIT, SIGILL, SIGINT })
