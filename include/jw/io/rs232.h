@@ -81,6 +81,7 @@ namespace jw::io
         // completely flushed.
         bool async_flush { true };
 
+        std::size_t realtime_buffer_size { 128 };
         std::size_t transmit_buffer_size { 4_KB };
         std::size_t receive_buffer_size { 4_KB };
 
@@ -169,13 +170,15 @@ namespace jw::io
 
         int sync(bool);
         void do_setp(tx_queue::iterator) noexcept;
-        void set_tx(bool) noexcept;
+        tx_queue::iterator update_tx_stop() noexcept;
+        void set_tx() noexcept;
         void set_rts(bool) noexcept;
         std::uint8_t read_status() noexcept;
         void do_sync(std::size_t = 0) noexcept;
         void irq_handler() noexcept;
 
         const port_num base;
+        tx_queue realtime_buf;
         tx_queue tx_buf;
         rx_queue rx_buf;
         error_queue errors;
