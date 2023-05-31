@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
@@ -110,9 +111,9 @@ namespace jw::dpmi
 
     using exception_frame = dpmi09_exception_frame; // can be static_cast to dpmi10_exception_frame type
 
-    struct exception_num : public enum_struct<std::uint32_t>
+    struct exception_num : public enum_struct<std::uint8_t>
     {
-        using E = enum_struct<std::uint32_t>;
+        using E = enum_struct<std::uint8_t>;
         using T = typename E::underlying_type;
         enum : T
         {

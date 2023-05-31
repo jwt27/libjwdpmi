@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
@@ -34,28 +35,28 @@ namespace jw::dpmi::detail
     {
         fpu_registers* const fpu;
         const std::uint64_t id { id_count++ };
-        const std::uint32_t num;
-        const interrupt_type type;
         interrupt_id_data* const next;
-        ack acknowledged { type == interrupt_type::irq ? ack::no : ack::yes };
         jw::detail::jw_cxa_eh_globals eh_globals;
+        const std::uint8_t num;
+        const interrupt_type type;
+        ack acknowledged { type == interrupt_type::irq ? ack::no : ack::yes };
 
     protected:
         friend struct jw::init;
         friend struct interrupt_id;
         static inline constinit std::uint64_t id_count { 0 };
 
-        interrupt_id_data() noexcept : fpu { nullptr }, num { 0 }, type { interrupt_type::none }, next { nullptr } { }
+        interrupt_id_data() noexcept : fpu { nullptr }, next { nullptr }, num { 0 }, type { interrupt_type::none } { }
 
-        interrupt_id_data(fpu_registers* f, std::uint32_t n, interrupt_type t, interrupt_id_data* current) noexcept
-            : fpu { f }, num { n }, type { t }, next { current } { }
+        interrupt_id_data(fpu_registers* f, std::uint8_t n, interrupt_type t, interrupt_id_data* current) noexcept
+            : fpu { f }, next { current }, num { n }, type { t } { }
     };
 
     struct interrupt_id : interrupt_id_data
     {
-        interrupt_id(empty*, std::uint32_t n, interrupt_type t) noexcept : interrupt_id { static_cast<fpu_context*>(nullptr), n, t } { }
+        interrupt_id(empty*, std::uint8_t n, interrupt_type t) noexcept : interrupt_id { static_cast<fpu_context*>(nullptr), n, t } { }
 
-        interrupt_id(fpu_context* f, std::uint32_t n, interrupt_type t) noexcept : interrupt_id_data { &f->registers, n, t, current }
+        interrupt_id(fpu_context* f, std::uint8_t n, interrupt_type t) noexcept : interrupt_id_data { &f->registers, n, t, current }
         {
             ++interrupt_count;
             next->eh_globals = jw::detail::get_eh_globals();
