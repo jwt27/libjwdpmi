@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
@@ -20,9 +21,8 @@
 namespace jw::dpmi
 {
     // Main IRQ handler class
-    class irq_handler
+    struct irq_handler final
     {
-    public:
         template<typename F>
         irq_handler(irq_level i, F&& func, irq_config_flags flags = { })
             : irq_handler { std::forward<F>(func), flags }

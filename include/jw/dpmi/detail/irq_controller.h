@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
@@ -105,22 +106,20 @@ namespace jw::dpmi::detail
             return std::bitset<8> { pic0_cmd.read() }[i];
         }
 
-        static void acknowledge(interrupt_id_data* id, std::uint8_t irq) noexcept
-        {
-            if (id->acknowledged == ack::no)
-                send_eoi(irq);
-            id->acknowledged = ack::yes;
-        }
+        static void acknowledge(interrupt_id_data*, std::uint8_t) noexcept;
 
-        static void send_eoi_without_acknowledge()
+        static void send_eoi(irq_level i) noexcept
         {
-            auto* id = interrupt_id::get();
-            if (id->acknowledged != ack::no) return;
-            send_eoi(id->num);
-            id->acknowledged = ack::eoi_sent;
+            if (i < 8)
+            {
+                pic0_cmd.write(i | 0x60);
+            }
+            else
+            {
+                pic1_cmd.write((i & 7) | 0x60);
+                pic0_cmd.write(0x62);
+            }
         }
-
-        static void send_eoi(irq_level i) noexcept;
 
         [[gnu::cdecl, gnu::hot]]
         static std::byte* get_stack_ptr() noexcept;
@@ -133,8 +132,6 @@ namespace jw::dpmi::detail
         irq_controller& operator=(irq_controller&& m) = delete;
         irq_controller& operator=(const irq_controller& m) = delete;
         ~irq_controller();
-
-        [[gnu::hot]] void call();
 
         irq_handler_data* first { nullptr };
         irq_handler_data* last { nullptr };
@@ -198,14 +195,13 @@ namespace jw::dpmi::detail
         std::atomic_flag resizing_stack { false };
     };
 
-    inline void irq_controller::send_eoi(irq_level i) noexcept
+    inline void irq_controller::acknowledge(interrupt_id_data* id, std::uint8_t irq) noexcept
     {
-        if (data->get(i)->flags & always_chain) return;
-        if (i >= 8)
-        {
-            pic1_cmd.write((i % 8) | 0x60);
-            pic0_cmd.write(0x62);
-        }
-        else pic0_cmd.write(i | 0x60);
+        if (data->get(irq)->flags & (late_eoi | always_chain))
+            return;
+
+        if (id->acknowledged == ack::no)
+            send_eoi(irq);
+        id->acknowledged = ack::yes;
     }
 }

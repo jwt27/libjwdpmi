@@ -144,20 +144,41 @@ namespace jw::dpmi::detail
 
         try
         {
-            std::optional<irq_mask> mask;
-            auto* entry = data->get(i);
-            auto flags = entry->flags;
-            if (not (flags & no_interrupts)) asm("sti");
-            else if (flags & no_reentry) mask.emplace(i);
-            if (not (flags & no_auto_eoi)) send_eoi_without_acknowledge();
+            auto* const entry = data->get(i);
+            const auto flags = entry->flags;
+            if (not (flags & (always_chain | no_auto_eoi | late_eoi)))
+            {
+                send_eoi(i);
+                id.acknowledged = ack::eoi_sent;
+            }
 
-            entry->call();
+            {
+                std::optional<irq_mask> mask;
+                local_destructor cli { [] { asm ("cli"); } };
+                if (not (flags & no_interrupts)) asm ("sti");
+                else if (flags & no_reentry) mask.emplace(i);
+
+                for (const auto* p = entry->first; p != nullptr; p = p->next)
+                {
+                    if (p->enabled) [[likely]]
+                        p->call();
+                }
+            }
+
+            if ((flags & always_chain) or id.acknowledged == ack::no) [[unlikely]]
+            {
+                call_far_iret(entry->prev_handler);
+                id.acknowledged = ack::eoi_sent;
+            }
+            else if (flags & late_eoi)
+            {
+                send_eoi(i);
+            }
         }
         catch (...)
         {
             fmt::print(stderr, "Exception while servicing IRQ {:d}\n", i);
-            try { throw; }
-            catch (...) { print_exception(); }
+            print_exception();
             halt();
         }
 
@@ -176,27 +197,6 @@ namespace jw::dpmi::detail
             if (stack_left <= config::interrupt_minimum_stack_size) [[unlikely]]
                 if (not data->resizing_stack.test_and_set())
                     this_thread::invoke_next([data = data] { data->resize_stack(data->stack.size() * 2); });
-        }
-    }
-
-    void irq_controller::call()
-    {
-        auto* id = interrupt_id::get();
-
-        {
-            local_destructor cli { [] { asm ("cli"); } };
-
-            for (const auto* p = first; p != nullptr; p = p->next)
-            {
-                if (p->enabled) [[likely]]
-                    p->call();
-            }
-        }
-
-        if ((flags & always_chain) or id->acknowledged == ack::no) [[unlikely]]
-        {
-            call_far_iret(prev_handler);
-            id->acknowledged = ack::eoi_sent;
         }
     }
 
