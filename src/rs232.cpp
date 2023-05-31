@@ -276,6 +276,15 @@ namespace jw::io
                 pop();
                 throw io::overflow { "RS-232 receive buffer overflow" };
             }
+            else if (err->status & line_status::line_break)
+            {
+                // Skip zero byte.
+                const auto i = pos + 1;
+                setg(rx->contiguous_begin(i), &*i, &*i);
+                err->status = 0;
+                pop();
+                return traits_type::eof();
+            }
             else if (err->status & line_status::framing_error)
             {
                 err->status &= ~line_status::framing_error;
@@ -287,15 +296,6 @@ namespace jw::io
                 err->status &= ~line_status::parity_error;
                 pop();
                 throw parity_error { "RS-232 parity errror" };
-            }
-            else if (err->status & line_status::line_break)
-            {
-                // Skip zero byte.
-                const auto i = pos + 1;
-                setg(rx->contiguous_begin(i), &*i, &*i);
-                err->status = 0;
-                pop();
-                return traits_type::eof();
             }
         }
 
