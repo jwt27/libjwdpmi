@@ -161,7 +161,7 @@ namespace jw::io
 
         struct error_mark
         {
-            rx_queue::const_iterator pos;
+            rx_queue::iterator pos;
             std::uint8_t status;
         };
 

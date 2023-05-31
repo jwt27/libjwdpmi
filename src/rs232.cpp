@@ -234,7 +234,7 @@ namespace jw::io
         const auto pos = rx->iterator_from_pointer(gptr());
         auto end = rx->cend();
 
-        if (auto* err = volatile_load(&first_error)) [[unlikely]]
+        if (const auto* const err = volatile_load(&first_error)) [[unlikely]]
         {
             if (pos == err->pos)
                 return -1;
@@ -246,11 +246,11 @@ namespace jw::io
     rs232_streambuf::int_type rs232_streambuf::underflow()
     {
         auto* const rx = rx_buf.read();
-        const auto end = rx->iterator_from_pointer(gptr());
-        rx->pop_front_to(clamp_add(end, -putback_reserve, rx->begin(), end));
-        auto new_end = rx->contiguous_end(end);
+        const auto pos = rx->iterator_from_pointer(gptr());
+        rx->pop_front_to(clamp_add(pos, -putback_reserve, rx->begin(), pos));
+        auto* new_end = rx->contiguous_end(pos);
 
-        if (auto* err = volatile_load(&first_error)) [[unlikely]]
+        if (auto* const err = volatile_load(&first_error)) [[unlikely]]
         {
             auto pop = [this, err]
             {
@@ -265,9 +265,10 @@ namespace jw::io
                     first_error = nullptr;
             };
 
-            if (end != err->pos)
+            if (pos != err->pos)
             {
-                new_end = min(new_end, err->pos);
+                if (pos.distance_to(err->pos) < pos.distance_to(rx->iterator_from_pointer(new_end)))
+                    new_end = &*err->pos;
             }
             else if (err->status & line_status::overflow_error)
             {
@@ -290,14 +291,15 @@ namespace jw::io
             else if (err->status & line_status::line_break)
             {
                 // Skip zero byte.
-                new_end = end + 1;
-                setg(&*rx->contiguous_begin(new_end), &*new_end, &*new_end);
+                const auto i = pos + 1;
+                setg(rx->contiguous_begin(i), &*i, &*i);
+                err->status = 0;
                 pop();
                 return traits_type::eof();
             }
         }
 
-        if (new_end == end)
+        if (new_end == &*pos)
         {
 #       ifndef NDEBUG
             if (dpmi::in_irq_context()) [[unlikely]]
@@ -312,7 +314,7 @@ namespace jw::io
             }
             return underflow();
         }
-        setg(&*rx->contiguous_begin(end), &*end, &*new_end);
+        setg(rx->contiguous_begin(pos), &*pos, new_end);
         return *gptr();
     }
 
@@ -330,7 +332,7 @@ namespace jw::io
         if (rx->begin().distance_to(i) > 0)
         {
             --i;
-            setg(&*rx->contiguous_begin(i), &*i, &*rx->contiguous_end(i));
+            setg(rx->contiguous_begin(i), &*i, rx->contiguous_end(i));
             *gptr() = traits_type::to_char_type(c);
             return 0;
         }
@@ -340,12 +342,12 @@ namespace jw::io
     rs232_streambuf::int_type rs232_streambuf::overflow(int_type c)
     {
         auto* const tx = tx_buf.write();
-        const auto end = tx->iterator_from_pointer(pptr());
+        const auto pos = tx->iterator_from_pointer(pptr());
 
         {
             irq_disable no_irq { this };
-            tx_stop = end;
-            set_tx(tx->begin() != end);
+            tx_stop = pos;
+            set_tx(tx->begin() != pos);
         }
 
         while (tx->full())
@@ -363,14 +365,15 @@ namespace jw::io
             }
         }
         tx->fill();
-        do_setp(end);
+        do_setp(pos);
 
         if (traits_type::not_eof(c))
         {
             *pptr() = c;
             pbump(1);
         }
-        return c;
+
+        return 0;
     }
 
     int rs232_streambuf::force_sync()
@@ -386,17 +389,17 @@ namespace jw::io
     inline int rs232_streambuf::sync(bool force)
     {
         auto* const tx = tx_buf.write();
-        const auto end = tx->iterator_from_pointer(pptr());
+        const auto pos = tx->iterator_from_pointer(pptr());
 
         {
             irq_disable no_irq { this };
-            tx_stop = end;
-            set_tx(tx->begin() != end);
+            tx_stop = pos;
+            set_tx(tx->begin() != pos);
         }
 
         if (force)
         {
-            while (tx->begin() != end)
+            while (tx->begin() != pos)
             {
 #       ifndef NDEBUG
                 if (dpmi::in_irq_context()) [[unlikely]]
@@ -412,14 +415,17 @@ namespace jw::io
             }
         }
         tx->fill();
-        do_setp(end);
+        do_setp(pos);
         return 0;
     }
 
     inline void rs232_streambuf::do_setp(tx_queue::iterator i) noexcept
     {
+        // Split the TX buffer into smaller chunks, so tx_stop is updated more
+        // frequently.
         auto* const tx = tx_buf.write();
-        setp(&*i, &*clamp_add(i, (tx->max_size() + 1) / 4, i, tx->contiguous_end(i)));
+        auto* const p = &*i;
+        setp(p, std::min(p + std::max((tx->max_size() + 1) / 8, 1u), tx->contiguous_end(i)));
     }
 
     // Enable or disable the TX interrupt.
@@ -475,7 +481,7 @@ namespace jw::io
         std::size_t received = 0;
         std::uint8_t status = read_status();
 
-        auto add_error_mark = [&](auto pos, auto status)
+        auto add_error_mark = [this](auto pos, auto status)
         {
             if (errors.empty() or errors.back().pos != pos)
                 errors.emplace_back(pos, static_cast<std::uint8_t>(status));
