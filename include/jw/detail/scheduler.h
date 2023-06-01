@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
@@ -135,7 +136,7 @@ namespace jw::detail
         void (*destroy)(void*);
         const std::span<std::byte> stack;
         thread_context* context; // points to esp during context switch
-        jw_cxa_eh_globals eh_globals { };
+        abi::__cxa_eh_globals eh_globals { };
         int errno { 0 };
         thread_state state { starting };
         bool suspended { false };

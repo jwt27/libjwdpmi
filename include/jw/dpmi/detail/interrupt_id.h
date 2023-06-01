@@ -36,7 +36,7 @@ namespace jw::dpmi::detail
         fpu_registers* const fpu;
         const std::uint64_t id { id_count++ };
         interrupt_id_data* const next;
-        jw::detail::jw_cxa_eh_globals eh_globals;
+        abi::__cxa_eh_globals eh_globals;
         const std::uint8_t num;
         const interrupt_type type;
         ack acknowledged { type == interrupt_type::irq ? ack::no : ack::yes };
@@ -59,15 +59,15 @@ namespace jw::dpmi::detail
         interrupt_id(fpu_context* f, std::uint8_t n, interrupt_type t) noexcept : interrupt_id_data { &f->registers, n, t, current }
         {
             ++interrupt_count;
-            next->eh_globals = jw::detail::get_eh_globals();
-            jw::detail::set_eh_globals({ });
+            next->eh_globals = *abi::__cxa_get_globals();
+            *abi::__cxa_get_globals() = { };
             current = this;
         }
 
         ~interrupt_id()
         {
             current = next;
-            jw::detail::set_eh_globals(next->eh_globals);
+            *abi::__cxa_get_globals() = next->eh_globals;
             --interrupt_count;
         }
 

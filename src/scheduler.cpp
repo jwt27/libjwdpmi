@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
@@ -190,7 +191,7 @@ namespace jw::detail
         auto& it = iterator;
         thread* ct = current_thread();
 
-        ct->eh_globals = get_eh_globals();
+        ct->eh_globals = *abi::__cxa_get_globals();
         ct->errno = errno;
 
         for(std::size_t n = 0; ; ++n)
@@ -220,7 +221,7 @@ namespace jw::detail
                 n = 0;
             }
         }
-        set_eh_globals(ct->eh_globals);
+        *abi::__cxa_get_globals() = ct->eh_globals;
         errno = ct->errno;
 
         return ct->context;
