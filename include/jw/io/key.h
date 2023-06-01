@@ -1,11 +1,12 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2016 - 2025 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2016 - 2026 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <jw/enum_struct.h>
 #include <cstdint>
 #include <string_view>
 #include <unordered_map>
+#include <span>
 
 namespace jw::io
 {
@@ -53,8 +54,18 @@ namespace jw::io
             web_home, web_favourites, web_search, web_mail,
             pwr_on, pwr_sleep, pwr_wake,
 
+            // Aliases
+            hyphen = minus,
+            dash = minus,
+            plus = equals,
+            brace_left = bracket_left,
+            brace_right = bracket_right,
+            colon = semicolon,
+            apostrophe = quote,
+            period = dot,
+
             // 00C0 - 00FF = virtual keys
-            any_shift = 0xC0, any_ctrl, any_alt, any_win, any_enter,
+            any_enter = 0xC0, any_ctrl, any_alt, any_shift, any_win,
             num_lock_state, caps_lock_state, scroll_lock_state,
 
             // 0100 - 01FF = undefined keys
@@ -79,29 +90,12 @@ namespace jw::io
         static std::unordered_map<key, std::string> name_table;
     };
 
-
-    struct key_state : public enum_struct<std::uint_fast8_t>
+    struct key_event
     {
-        using E = enum_struct<std::uint_fast8_t>;
-        using T = typename E::underlying_type;
-        enum : T
-        {
-            up = 0b00,
-            down = 0b01,
-            repeat = 0b11
-        };
-        using E::E;
-        using E::operator=;
-
-        constexpr key_state(const key_state&) = default;
-        constexpr key_state& operator=(const key_state&) = default;
-
-        constexpr key_state& operator|=(const key_state& other) { this->value |= other.value; return *this; }
-
-        constexpr bool is_up() const noexcept { return value == up; }
-        constexpr bool is_down() const noexcept { return value & 1; }
-        constexpr explicit operator bool() const noexcept { return is_down(); }
+        io::key key;
+        bool pressed;
+        bool repeat;
+        std::uint8_t scancode_set;
+        std::span<std::uint8_t> scancode;
     };
-
-    using key_state_pair = std::pair<key, key_state>;
 }

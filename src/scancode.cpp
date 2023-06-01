@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2016 - 2023 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2016 - 2026 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <jw/io/detail/scancode.h>
 
@@ -225,33 +225,37 @@ namespace jw::io::detail
         key::bad_key                // 0x8F
     };
 
-    std::optional<key_state_pair> scancode::extract(scancode_queue::consumer_type* bytes, scancode_set set)
+    std::optional<key_event> scancode::extract(scancode_queue::consumer_type* bytes, std::uint8_t set)
     {
         key k = key::bad_key;
-        key_state state = key_state::down;
-        byte ext = 0;
+        bool on = true;
+        std::uint8_t ext = 0;
+        static std::array<raw_scancode, 16> buf; // HACK
+        std::size_t n = 0;
 
         for (auto i = bytes->cbegin(); i != bytes->cend(); ++i)
         {
-            auto c = *i;
-            if (set == set1 or set == set2)
+            auto c = buf[n++] = *i;
+            if (set <= 2 and (c & 0xF0) == 0xE0)
             {
-                if ((c & 0xF0) == 0xE0) { ext = c; continue; }
+                ext = c;
+                continue;
             }
-            if (set == set2 or set == set3)
+            if (set >= 2 and c == 0xF0)
             {
-                if (c == 0xF0) { state = key_state::up; continue; }
+                on = false;
+                continue;
             }
 
             bytes->pop_front_to(i + 1);
 
             switch (set)
             {
-            case set1:
-                if ((c & 0x80) != 0) { state = key_state::up; }
-                c = set1_to_set2_table[c & 0x7F];
+            case 1:
+                on = not (c >> 7);
+                c = set1_to_set2_table[c & 0x7f];
                 [[fallthrough]];
-            case set2:
+            case 2:
                 if (ext == 0xE0)
                 {
                     if (c == 0x37) { k = key::pwr_on; break; }
@@ -267,11 +271,24 @@ namespace jw::io::detail
                 else if (ext != 0) { k = (ext << 8) | c; break; }
                 else if (auto p = set2_to_set3_table[c]) { c = p; }
                 [[fallthrough]];
-            case set3:
+            case 3:
                 k = set3_to_key_table[c];
+                break;
+
+            default:
+                throw std::invalid_argument { "invalid scancode set" };
             }
-            if (k == key::bad_key) k = 0x0100 | c;
-            return key_state_pair { k, state };
+            if (k == key::bad_key)
+                k = 0x0100 | c;
+
+            return key_event
+            {
+                .key = k,
+                .pressed = on,
+                .repeat = false,
+                .scancode_set = set,
+                .scancode = { buf.data(), n }
+            };
         }
 
         return std::nullopt;

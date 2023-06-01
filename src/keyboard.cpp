@@ -1,10 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2016 - 2026 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <exception>
 #include <jw/io/keyboard.h>
@@ -32,63 +27,72 @@ namespace jw::io
     {
         try
         {
-            auto handle_key = [this](key_state_pair k)
+            auto handle_event = [&](key_event& e)
             {
-                auto& s = keys(k.first);
-                if (s.is_down() and k.second.is_down()) k.second = key_state::repeat;
-                s = k.second;
-                key_changed(k.first, k.second);
+                auto bit = keys(e.key);
+                e.repeat = e.pressed == bit;
+                bit = e.pressed;
+                key_changed(e);
             };
 
-            auto handle_virtual_key = [this, &handle_key](key_state_pair k, key vk, std::initializer_list<key> list)
+            auto handle_virtual_key = [&](key k, key vk, auto... list)
             {
-                bool found { false };
-                key_state state { };
-                for (auto&& i : list)
-                {
-                    if (i == k.first) found = true;
-                    state |= keys(i);
-                }
-                if (found) handle_key({ vk, state });
+                if (((k != list) and ...))
+                    return;
+
+                key_event e { };
+                e.key = vk;
+                e.pressed = (keys(list) | ...);
+                handle_event(e);
             };
 
-            auto set_lock_state = [this, &handle_key](key_state_pair k, key state_key)
+            auto toggle_lock_state = [&](key vk)
             {
-                if (keys(k.first) == key_state::down) handle_key({ state_key, not keys(state_key) });
+                key_event e { };
+                e.key = vk;
+                e.pressed = not keys(vk);
+                handle_event(e);
 
-                ps2->set_leds(keys(key::num_lock_state),
-                                keys(key::caps_lock_state),
-                                keys(key::scroll_lock_state));
+                const bool scroll = keys(key::scroll_lock_state);
+                const bool num = keys(key::num_lock_state);
+                const bool caps = keys(key::caps_lock_state);
+
+                ps2->set_leds(num, caps, scroll);
 
                 bda_kb_flags flags { dpmi::bda->read<std::byte>(0x17) };
-                flags.scroll_lock = keys(key::scroll_lock_state);
-                flags.num_lock = keys(key::num_lock_state);
-                flags.caps_lock = keys(key::caps_lock_state);
+                flags.scroll_lock = scroll;
+                flags.num_lock = num;
+                flags.caps_lock = caps;
                 dpmi::bda->write<std::byte>(0x17, flags);
             };
 
-            while (auto k = ps2->get_scancode())
+            while (auto e = ps2->get_scancode())
             {
-                handle_key(*k);
+                handle_event(*e);
 
-                handle_virtual_key(*k, key::any_ctrl,  { key::ctrl_left,  key::ctrl_right  });
-                handle_virtual_key(*k, key::any_alt,   { key::alt_left,   key::alt_right   });
-                handle_virtual_key(*k, key::any_shift, { key::shift_left, key::shift_right });
-                handle_virtual_key(*k, key::any_win,   { key::win_left,   key::win_right   });
-                handle_virtual_key(*k, key::any_enter, { key::enter,      key::num_enter   });
+                handle_virtual_key(e->key, key::any_ctrl,  key::ctrl_left,  key::ctrl_right );
+                handle_virtual_key(e->key, key::any_alt,   key::alt_left,   key::alt_right  );
+                handle_virtual_key(e->key, key::any_shift, key::shift_left, key::shift_right);
+                handle_virtual_key(e->key, key::any_win,   key::win_left,   key::win_right  );
+                handle_virtual_key(e->key, key::any_enter, key::enter,      key::num_enter  );
 
-                switch (k->first)
+                if (e->pressed & not e->repeat) switch (e->key)
                 {
-                case key::num_lock:    set_lock_state(*k, key::num_lock_state);    break;
-                case key::caps_lock:   set_lock_state(*k, key::caps_lock_state);   break;
-                case key::scroll_lock: set_lock_state(*k, key::scroll_lock_state); break;
+                case key::num_lock:    toggle_lock_state(key::num_lock_state);    break;
+                case key::caps_lock:   toggle_lock_state(key::caps_lock_state);   break;
+                case key::scroll_lock: toggle_lock_state(key::scroll_lock_state); break;
                 }
             }
         }
         catch (...)
         {
-            if (not async) throw;
-            this_thread::invoke_main([e = std::current_exception()] { std::rethrow_exception(e); });
+            if (not async)
+                throw;
+
+            this_thread::invoke_main([e = std::current_exception()]
+            {
+                std::rethrow_exception(e);
+            });
         }
     }
 
@@ -96,12 +100,12 @@ namespace jw::io
     {
         return
         {
-            .ctrl      = static_cast<bool>(get(key::any_ctrl)),
-            .alt       = static_cast<bool>(get(key::any_alt)),
-            .shift     = static_cast<bool>(get(key::any_shift)),
-            .win       = static_cast<bool>(get(key::any_win)),
-            .num_lock  = static_cast<bool>(get(key::num_lock_state)),
-            .caps_lock = static_cast<bool>(get(key::caps_lock_state))
+            .ctrl      = get(key::any_ctrl),
+            .alt       = get(key::any_alt),
+            .shift     = get(key::any_shift),
+            .win       = get(key::any_win),
+            .num_lock  = get(key::num_lock_state),
+            .caps_lock = get(key::caps_lock_state)
         };
     }
 

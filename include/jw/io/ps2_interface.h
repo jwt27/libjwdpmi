@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2016 - 2023 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2016 - 2026 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <mutex>
@@ -28,7 +28,7 @@ namespace jw::io
 
     struct ps2_interface
     {
-        std::optional<key_state_pair> get_scancode();
+        std::optional<key_event> get_scancode();
 
         scancode_set current_scancode_set;
         scancode_set get_scancode_set();

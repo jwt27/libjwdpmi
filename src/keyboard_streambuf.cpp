@@ -1,8 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2017 - 2026 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <jw/io/detail/keyboard_streambuf.h>
 
@@ -10,7 +7,8 @@ namespace jw::io::detail
 {
     int keyboard_streambuf::sync()
     {
-        if (egptr() >= buffer.end() && gptr() == buffer.begin()) gbump(1);
+        if (egptr() >= buffer.end() and gptr() == buffer.begin())
+            gbump(1);
         std::copy(gptr(), ptr, buffer.begin());
         ptr = buffer.begin() + (ptr - gptr());
         setg(buffer.begin(), buffer.begin(), ptr);
@@ -21,7 +19,8 @@ namespace jw::io::detail
     std::streamsize keyboard_streambuf::xsgetn(char_type* s, std::streamsize n)
     {
         std::streamsize max_n = 0;
-        while (max_n < n && underflow() != traits_type::eof()) max_n = std::min(egptr() - gptr(), n);
+        while (max_n < n and underflow() != traits_type::eof())
+            max_n = std::min(egptr() - gptr(), n);
         std::copy_n(gptr(), max_n, s);
         setg(buffer.begin(), gptr() + max_n, egptr());
         return max_n;
@@ -33,7 +32,7 @@ namespace jw::io::detail
         return *gptr();
     }
 
-    bool keyboard_streambuf::event_handler(key k, key_state s)
+    bool keyboard_streambuf::event_handler(key_event e)
     {
         auto insert = [this](char c)
         {
@@ -41,28 +40,35 @@ namespace jw::io::detail
             if (echo)
             {
                 *echo_stream << c;
-                if (c == '\b') *echo_stream << " \b";
+                if (c == '\b')
+                    *echo_stream << " \b";
                 *echo_stream << std::flush;
             }
             setg(buffer.begin(), gptr(), ptr);
         };
 
-        if (egptr() >= buffer.end()) sync();
+        if (egptr() >= buffer.end())
+            sync();
 
-        if (k == key::any_alt and s == key_state::up)
+        if (not e.pressed)
         {
-            if (alt_sequence <= 0xff) insert(alt_sequence);
-            alt_sequence = 0x80000000;
-            return true;
+            if (e.key == key::any_alt)
+            {
+                if (alt_sequence <= 0xff)
+                    insert(alt_sequence);
+                alt_sequence = 0x80000000;
+                return true;
+            }
+            else return false;
         }
-
-        if (s.is_up()) return false;
 
         if (keyb[key::any_alt])
         {
-            if (not (keyb[key::any_shift] xor keyb[key::num_lock_state])) return false;
-            if (keyb[key::any_ctrl]) return false;
-            auto n = [k]
+            if (not (keyb[key::any_shift] xor keyb[key::num_lock_state]))
+                return false;
+            if (keyb[key::any_ctrl])
+                return false;
+            auto n = [k = e.key]
             {
                 switch (k)
                 {
@@ -79,13 +85,14 @@ namespace jw::io::detail
                 default: return -1;
                 }
             }();
-            if (n == -1) return false;
+            if (n == -1)
+                return false;
             alt_sequence *= 10;
             alt_sequence += n;
             return true;
         }
 
-        if (auto c = k.to_ascii(keyb.modifiers()))
+        if (auto c = e.key.to_ascii(keyb.modifiers()))
         {
             insert(c);
             return true;

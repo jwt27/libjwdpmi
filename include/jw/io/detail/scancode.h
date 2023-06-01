@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2016 - 2023 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2016 - 2026 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <optional>
@@ -27,7 +27,7 @@ namespace jw::io::detail
     {
         // Extract and decode one scancode sequence from a sequence of bytes
         // NOTE: parameter will be modified, extracted sequences are removed
-        static std::optional<key_state_pair> extract(scancode_queue::consumer_type*, scancode_set);
+        static std::optional<key_event> extract(scancode_queue::consumer_type*, std::uint8_t scancode_set);
 
         // Undo scancode translation for a single byte. No break code handling.
         static raw_scancode undo_translation(raw_scancode c) noexcept { return undo_translation_table[c]; }

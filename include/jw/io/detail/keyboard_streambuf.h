@@ -1,8 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2017 - 2026 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <functional>
@@ -32,8 +29,8 @@ namespace jw::io::detail
         virtual int_type underflow() override;
 
     private:
-        callback<bool(key, key_state)> event_callback { std::bind_front(&keyboard_streambuf::event_handler, this) };
-        bool event_handler(key k, key_state s);
+        callback<bool(key_event)> event_callback { std::bind_front(&keyboard_streambuf::event_handler, this) };
+        bool event_handler(key_event);
 
         std::array<char_type, 1_KB> buffer;
         std::uint32_t alt_sequence { 0x80000000 };
