@@ -321,7 +321,7 @@ namespace jw::io
             return underflow();
         }
         setg(rx->contiguous_begin(pos), &*pos, new_end);
-        return *gptr();
+        return traits_type::to_int_type(*gptr());
     }
 
     rs232_streambuf::int_type rs232_streambuf::pbackfail(int_type c)
@@ -329,8 +329,8 @@ namespace jw::io
         if (eback() < gptr())
         {
             gbump(-1);
-            *gptr() = traits_type::to_char_type(c);
-            return 0;
+            traits_type::assign(*gptr(), traits_type::to_char_type(c));
+            return traits_type::not_eof(c);
         }
 
         auto* const rx = rx_buf.read();
@@ -339,8 +339,8 @@ namespace jw::io
         {
             --i;
             setg(rx->contiguous_begin(i), &*i, rx->contiguous_end(i));
-            *gptr() = traits_type::to_char_type(c);
-            return 0;
+            traits_type::assign(*gptr(), traits_type::to_char_type(c));
+            return traits_type::not_eof(c);
         }
         return traits_type::eof();
     }
@@ -367,13 +367,13 @@ namespace jw::io
         tx->fill();
         do_setp(pos);
 
-        if (traits_type::not_eof(c))
+        if (not traits_type::eq_int_type(c, traits_type::eof()))
         {
-            *pptr() = c;
+            traits_type::assign(*pptr(), traits_type::to_char_type(c));
             pbump(1);
         }
 
-        return 0;
+        return traits_type::not_eof(c);
     }
 
     int rs232_streambuf::force_sync()
