@@ -10,6 +10,8 @@
 
 #include <algorithm>
 #include <memory_resource>
+#include <cxxabi.h>
+#include <unwind.h>
 #include <fmt/format.h>
 #include <jw/main.h>
 #include <jw/dpmi/irq_mask.h>
@@ -31,6 +33,11 @@ extern "C" void __wrap___dpmi_yield()
 namespace jw::detail
 {
     static constinit std::optional<dpmi::realmode_interrupt_handler> int2f_handler { std::nullopt };
+    static constinit bool terminating { false };
+    static _Unwind_Ptr last_ip;
+
+    static constexpr _Unwind_Exception_Class defused_class = 0;
+    static constexpr _Unwind_Exception_Class active_class = 1;
 
     void scheduler::setup()
     {
@@ -65,7 +72,7 @@ namespace jw::detail
         auto* main = get_thread(thread::main_thread_id);
         atexit(main);
         if (threads->size() == 1) [[likely]] return;
-        fmt::print(stderr, "Warning: exiting with active threads.\n");
+        fmt::print(stderr, FMT_STRING("Warning: exiting with active threads.\n"));
         std::vector<thread_id> ids;
         ids.reserve(threads->size());
         for (auto& ct : *threads)
@@ -82,9 +89,8 @@ namespace jw::detail
             do
             {
                 try { this_thread::yield(); }
-                catch (const jw::terminate_exception& e) { e.defuse(); }
-                t = get_thread(id);
-            } while (t != nullptr and t->active());
+                catch (const abi::__forced_unwind&) { catch_forced_unwind(); }
+            } while ((t = get_thread(id)) and t->active());
         }
     }
 
@@ -139,7 +145,7 @@ namespace jw::detail
 
         if (terminating) [[unlikely]]
             if (std::uncaught_exceptions() == 0)
-                terminate();
+                forced_unwind();
 
         while (ct->invoke_list.size() > 0) [[unlikely]]
         {
@@ -154,7 +160,7 @@ namespace jw::detail
 
         if (ct->canceled) [[unlikely]]
             if (ct->state != thread::finishing and std::uncaught_exceptions() == 0)
-                throw cancel_thread { };
+                forced_unwind();
     }
 
     // The actual thread.
@@ -163,12 +169,23 @@ namespace jw::detail
         auto* const t = current_thread();
         t->state = thread::running;
 
-        try { (*t)(); }
-        catch (const cancel_thread& e) { e.defuse(); }
-        catch (const terminate_exception& e) { terminating = true; e.defuse(); }
+        try
+        {
+            local_destructor finish { [t]
+            {
+                t->state = thread::finishing;
+                atexit(t);
+                t->state = thread::finished;
+
+                debug::detail::notify_gdb_thread_event(debug::detail::thread_finished);
+            } };
+
+            (*t)();
+        }
+        catch (const abi::__forced_unwind& e) { }
         catch (...)
         {
-            fmt::print(stderr, FMT_STRING("caught exception from thread {:d}"), t->id);
+            fmt::print(stderr, FMT_STRING("Caught exception from thread {:d}"), t->id);
 #           ifndef NDEBUG
             fmt::print(stderr, FMT_STRING(" ({})"), t->name);
 #           endif
@@ -176,12 +193,6 @@ namespace jw::detail
             print_exception();
             terminating = true;
         }
-
-        t->state = thread::finishing;
-        atexit(t);
-        t->state = thread::finished;
-
-        debug::detail::notify_gdb_thread_event(debug::detail::thread_finished);
 
         while (true) yield();
     }
@@ -213,6 +224,7 @@ namespace jw::detail
 #               endif
                 void* const esp = (ct->stack.data() + ct->stack.size_bytes() - 4) - sizeof(thread_context);
                 ct->context = new (esp) thread_context { *threads->begin()->context };    // clone context from main thread
+                ct->context->ebp = 0;
                 ct->context->return_address = reinterpret_cast<std::uintptr_t>(run_thread);
             }
 
@@ -229,16 +241,16 @@ namespace jw::detail
         return ct->context;
     }
 
-    void scheduler::atexit(thread* t)
+    void scheduler::atexit(thread* t) noexcept
     {
         for (const auto& f : t->atexit_list)
         {
             if (terminating) break;
             try { f(); }
-            catch (const terminate_exception& e) { terminating = true; e.defuse(); }
+            catch (const abi::__forced_unwind& e) { catch_forced_unwind(); }
             catch (...)
             {
-                fmt::print(stderr, FMT_STRING("caught exception while processing atexit handlers on thread {:d}"), t->id);
+                fmt::print(stderr, FMT_STRING("Caught exception while processing atexit handlers on thread {:d}"), t->id);
 #               ifndef NDEBUG
                 fmt::print(stderr, FMT_STRING(" ({})"), t->name);
 #               endif
@@ -248,5 +260,56 @@ namespace jw::detail
             }
         }
         t->atexit_list.clear();
+    }
+
+    static void cleanup_forced_unwind(_Unwind_Reason_Code, _Unwind_Exception* exc) noexcept
+    {
+        if (exc->exception_class == defused_class) return;
+
+        if (terminating)
+        {
+            fmt::print(stderr, FMT_STRING("Forced unwind got stuck at 0x{:x}.\n"), last_ip);
+            std::terminate();
+        }
+        terminating = true;
+    }
+
+    static _Unwind_Reason_Code stop_forced_unwind(int, _Unwind_Action action, _Unwind_Exception_Class, _Unwind_Exception*, _Unwind_Context* context, void* param) noexcept
+    {
+        auto* const t = static_cast<detail::thread*>(param);
+
+        last_ip = _Unwind_GetIP(context);
+
+        if (not t->active())
+            while (true) this_thread::yield();
+
+        if (action & _UA_END_OF_STACK)
+            std::terminate();
+
+        return _URC_NO_REASON;
+    }
+
+    void scheduler::forced_unwind()
+    {
+        auto* const t = current_thread();
+        t->unwind_exception.exception_class = active_class;
+        t->unwind_exception.exception_cleanup = cleanup_forced_unwind;
+        _Unwind_ForcedUnwind(&t->unwind_exception, stop_forced_unwind, t);
+        __builtin_unreachable();
+    }
+
+    void scheduler::catch_forced_unwind() noexcept
+    {
+        current_thread()->unwind_exception.exception_class = defused_class;
+    }
+}
+
+namespace jw
+{
+    void terminate()
+    {
+        detail::terminating = true;
+        fmt::print(stderr, FMT_STRING("terminate() called at 0x{}.\n"), fmt::ptr(__builtin_return_address(0)));
+        detail::scheduler::forced_unwind();
     }
 }

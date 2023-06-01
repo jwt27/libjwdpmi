@@ -608,15 +608,8 @@ namespace jw::io
         {
             streambuf->force_sync();
         }
-        catch (const jw::detail::cancel_thread&)
-        {
-            _M_setstate(badbit);
-            throw;
-        }
-        catch (...)
-        {
-            _M_setstate(badbit);
-        }
+        catch (const abi::__forced_unwind&) { throw; }
+        catch (...) { _M_setstate(badbit); }
         return *this;
     }
 }

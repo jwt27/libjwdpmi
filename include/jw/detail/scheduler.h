@@ -9,16 +9,17 @@
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
-#include <functional>
-#include <memory>
-#include <deque>
-#include <set>
-#include <optional>
 #include <jw/dpmi/irq_check.h>
 #include <jw/dpmi/alloc.h>
 #include <jw/function.h>
 #include <jw/main.h>
 #include <jw/detail/eh_globals.h>
+#include <functional>
+#include <memory>
+#include <deque>
+#include <set>
+#include <optional>
+#include <unwind.h>
 
 namespace jw
 {
@@ -137,6 +138,7 @@ namespace jw::detail
         const std::span<std::byte> stack;
         thread_context* context; // points to esp during context switch
         abi::__cxa_eh_globals eh_globals { };
+        ::_Unwind_Exception unwind_exception;
         int errno { 0 };
         thread_state state { starting };
         bool suspended { false };
@@ -168,6 +170,9 @@ namespace jw::detail
         static thread_id current_thread_id() noexcept;
         static thread* get_thread(thread_id) noexcept;
 
+        [[noreturn]] static void forced_unwind();
+        static void catch_forced_unwind() noexcept;
+
         template<typename F>
         static void invoke_main(F&& function);
         template<typename F>
@@ -183,7 +188,7 @@ namespace jw::detail
         using set_type = std::set<thread, std::less<void>, thread_allocator<thread>>;
         template<typename F>
         static thread* create_thread(F&& func, std::size_t stack_size);
-        static void atexit(thread*);
+        static void atexit(thread*) noexcept;
 
         [[gnu::hot]]
         static void yield();
@@ -203,17 +208,6 @@ namespace jw::detail
         inline static constinit std::optional<dpmi::locked_pool_resource> memres { std::nullopt };
         inline static constinit std::optional<set_type> threads { std::nullopt };
         inline static constinit std::optional<set_type::iterator> iterator { std::nullopt };
-        inline static constinit bool terminating { false };
-    };
-
-    struct cancel_thread
-    {
-        ~cancel_thread() noexcept(false) { if (not defused) throw terminate_exception { }; }
-        virtual const char* what() const noexcept { return "Thread canceled."; }
-    private:
-        friend struct scheduler;
-        void defuse() const noexcept { defused = true; }
-        mutable bool defused { false };
     };
 
     inline bool scheduler::is_current_thread(const thread* t) noexcept { return current_thread() == t; }

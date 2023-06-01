@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
@@ -20,16 +21,11 @@ namespace jw
     // Print the current exception to stderr, including any nested exceptions.
     void print_exception() noexcept;
 
-    struct terminate_exception final
-    {
-        ~terminate_exception() { if (not defused) std::terminate(); }
-        const char* what() const noexcept { return "Terminating."; }
-        void defuse() const noexcept { defused = true; }
-    private:
-        mutable bool defused { false };
-    };
-
-    [[noreturn]] inline void terminate() { throw terminate_exception { }; }
+    // Terminate via forced unwinding.  The idea is to clean up as much as
+    // possible, and hopefully restore the system to a usable state.  The OS
+    // won't do it for you.
+    // If unwinding fails, std::terminate() is called.
+    [[noreturn]] void terminate();
 
     [[noreturn]] inline void halt() { do { asm ("cli; hlt"); } while (true); }
 

@@ -141,6 +141,9 @@ namespace jw::this_thread
 {
     inline jw::thread::id get_id() noexcept { return detail::scheduler::current_thread_id(); }
 
+    // Check if the current thread is being canceled.
+    inline bool canceled() noexcept { return detail::scheduler::current_thread()->is_canceled(); }
+
     // Yields execution to the next thread in the queue.
     inline void yield()
     {

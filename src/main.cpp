@@ -71,6 +71,7 @@ namespace jw
     {
         try { throw; }
         catch (const std::exception& e) { do_print_exception(e); }
+        catch (const abi::__forced_unwind&) { fmt::print(stderr, "Exception: __forced_unwind\n"); }
         catch (...) { fmt::print(stderr, "Exception: unknown exception\n"); }
     }
 
@@ -94,11 +95,6 @@ namespace jw
         {
             fmt::print(stderr, "std::terminate called after throwing an exception:\n");
             try { std::rethrow_exception(exc); }
-            catch (const terminate_exception& e)
-            {
-                e.defuse();
-                fmt::print(stderr, "terminate_exception\n");
-            }
             catch (...) { print_exception(); }
         }
         else fmt::print(stderr, "Terminating.\n");
@@ -113,7 +109,7 @@ namespace jw
             {
             case interrupt_type::realmode_irq:  fmt::print(stderr, "real-mode IRQ callback"); break;
             case interrupt_type::exception:     fmt::print(stderr, "CPU exception 0x{:0>2x}", id->num); break;
-            case interrupt_type::irq:           fmt::print(stderr, "IRQ 0x{:0>2x}", id->num); break;
+            case interrupt_type::irq:           fmt::print(stderr, "IRQ {:d}", id->num); break;
             case interrupt_type::none:          fmt::print(stderr, "no interrupt (?)"); break;
             }
             fmt::print(stderr, ", unable to terminate.\n");
@@ -165,8 +161,16 @@ int main(int argc, const char** argv)
         const std::size_t n = a - args;
         jw::exit_code = jwdpmi_main({ args, n });
     }
-    catch (const jw::terminate_exception& e) { e.defuse(); fmt::print(stderr, "{}\n", e.what()); }
-    catch (...) { fmt::print(stderr, "Caught exception in main()!\n"); jw::print_exception(); }
+    catch (const abi::__forced_unwind&)
+    {
+        detail::scheduler::catch_forced_unwind();
+        fmt::print(stderr, "Terminating via forced unwind.\n");
+    }
+    catch (...)
+    {
+        fmt::print(stderr, "Caught exception in main()!\n");
+        jw::print_exception();
+    }
 
     jw::detail::scheduler::kill_all();
 

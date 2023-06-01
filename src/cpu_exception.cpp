@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
@@ -7,6 +8,7 @@
 /* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
 
 #include <jw/main.h>
+#include <jw/detail/scheduler.h>
 #include <jw/dpmi/cpu_exception.h>
 #include <jw/dpmi/async_signal.h>
 #include <jw/debug/debug.h>
@@ -58,6 +60,7 @@ namespace jw::dpmi::detail
     {
         auto e = std::move(pending_exceptions->back());
         pending_exceptions->pop_back();
+        if (not e) terminate();
         std::rethrow_exception(e);
     }
 
@@ -103,6 +106,7 @@ namespace jw::dpmi::detail
         }
         catch (...)
         {
+            jw::detail::scheduler::catch_forced_unwind();
             if (config::enable_throwing_from_cpu_exceptions and
                 redirect_exception(info, detail::rethrow_cpu_exception))
             {
