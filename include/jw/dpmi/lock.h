@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
@@ -67,7 +68,7 @@ namespace jw
 
         // Locks the memory occupied by a class (in Data Segment) that derives from this.
         template <typename T>
-        class class_lock : public detail::memory_lock
+        class [[deprecated]] class_lock : public detail::memory_lock
         {
             friend T;
             class_lock() : memory_lock(static_cast<const void*>(this), sizeof(T)) { }
