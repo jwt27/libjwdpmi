@@ -73,7 +73,7 @@ namespace jw::detail
             if (ct.id == thread::main_thread_id) continue;
             ids.push_back(ct.id);
             auto& t = const_cast<thread&>(ct);
-            t.abort();
+            t.cancel();
         }
         main->state = thread::running;
         for (auto id : ids)
@@ -90,7 +90,7 @@ namespace jw::detail
 
     // Save the current task context, switch to a new task, and restore its context.
     void scheduler::context_switch(thread_context**)
-    {   // &current_thread->context is a parameter so the shared_ptr access is resolved on the call site
+    {
         asm volatile
         (
             "                   .cfi_def_cfa esp, 4; .cfi_rel_offset eip, 0;"
@@ -152,9 +152,9 @@ namespace jw::detail
             f();
         }
 
-        if (ct->aborted) [[unlikely]]
+        if (ct->canceled) [[unlikely]]
             if (ct->state != thread::finishing and std::uncaught_exceptions() == 0)
-                throw abort_thread { };
+                throw cancel_thread { };
     }
 
     // The actual thread.
@@ -162,8 +162,9 @@ namespace jw::detail
     {
         auto* const t = current_thread();
         t->state = thread::running;
+
         try { (*t)(); }
-        catch (const abort_thread& e) { e.defuse(); }
+        catch (const cancel_thread& e) { e.defuse(); }
         catch (const terminate_exception& e) { terminating = true; e.defuse(); }
         catch (...)
         {
@@ -175,6 +176,7 @@ namespace jw::detail
             print_exception();
             terminating = true;
         }
+
         t->state = thread::finishing;
         atexit(t);
         t->state = thread::finished;

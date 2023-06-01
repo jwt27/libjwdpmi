@@ -608,7 +608,7 @@ namespace jw::io
         {
             streambuf->force_sync();
         }
-        catch (const jw::detail::abort_thread&)
+        catch (const jw::detail::cancel_thread&)
         {
             _M_setstate(badbit);
             throw;

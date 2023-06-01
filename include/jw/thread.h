@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
@@ -55,7 +56,7 @@ namespace jw
         [[nodiscard]] id get_id() const noexcept { return ptr ? ptr->id : 0; };
         [[nodiscard]] native_handle_type native_handle() { return ptr; };
 
-        void abort() { ptr->abort(); };
+        void cancel() { ptr->cancel(); };
         [[nodiscard]] bool active() const noexcept { return ptr and ptr->active(); }
 
         template<typename F>
@@ -109,7 +110,7 @@ namespace jw
         [[nodiscard]] id get_id() const noexcept { return t.get_id(); }
         [[nodiscard]] native_handle_type native_handle() { return t.native_handle(); }
 
-        void abort() { return t.abort(); };
+        void cancel() { return t.cancel(); };
         [[nodiscard]] bool active() const noexcept { return t.active(); }
 
         template<typename F>

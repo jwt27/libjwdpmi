@@ -997,7 +997,7 @@ namespace jw::debug::detail
                     case jw::detail::thread::finished:    msg += "Finished"sv;    break;
                     }
                     if (t->is_suspended()) msg += " (suspended)"sv;
-                    if (t->is_aborted()) msg += " (aborted)"sv;
+                    if (t->is_canceled()) msg += " (canceled)"sv;
                 }
                 else msg = "invalid thread"sv;
                 encode(str, msg.c_str(), msg.size());

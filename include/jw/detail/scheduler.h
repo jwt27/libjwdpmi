@@ -58,7 +58,7 @@ namespace jw::detail
 
         static constexpr inline thread_id main_thread_id = 1;
 
-        enum thread_state
+        enum thread_state : std::uint8_t
         {
             starting,
             running,
@@ -71,10 +71,10 @@ namespace jw::detail
         bool active() const noexcept { return state != finished; }
         void suspend() noexcept { suspended = true; }
         void resume() noexcept { suspended = false; }
-        void abort() noexcept { aborted = true; }
+        void cancel() noexcept { canceled = true; }
         void detach() noexcept { detached = true; }
         auto get_state() const noexcept { return state; }
-        bool is_aborted() const noexcept { return aborted; }
+        bool is_canceled() const noexcept { return canceled; }
         bool is_suspended() const noexcept { return suspended; }
 
         template<typename F> void invoke(F&& function) { invoke_list.emplace_back(std::forward<F>(function)); }
@@ -140,7 +140,7 @@ namespace jw::detail
         int errno { 0 };
         thread_state state { starting };
         bool suspended { false };
-        bool aborted { false };
+        bool canceled { false };
         bool detached { false };
 
         std::deque<jw::function<void(), 4>, thread_allocator<jw::function<void(), 4>>> invoke_list;
@@ -206,10 +206,10 @@ namespace jw::detail
         inline static constinit bool terminating { false };
     };
 
-    struct abort_thread
+    struct cancel_thread
     {
-        ~abort_thread() noexcept(false) { if (not defused) throw terminate_exception { }; }
-        virtual const char* what() const noexcept { return "Thread aborted."; }
+        ~cancel_thread() noexcept(false) { if (not defused) throw terminate_exception { }; }
+        virtual const char* what() const noexcept { return "Thread canceled."; }
     private:
         friend struct scheduler;
         void defuse() const noexcept { defused = true; }
