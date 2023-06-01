@@ -7,126 +7,91 @@
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
-#include <iostream>
-#include <unordered_set>
 #include <jw/io/ioport.h>
-#include <jw/dpmi/irq_handler.h>
-#include <jw/common.h>
 #include <jw/io/io_error.h>
 #include <jw/io/realtime_streambuf.h>
+#include <jw/dpmi/irq_handler.h>
+#include <jw/allocator_adaptor.h>
+#include <jw/circular_queue.h>
+#include <jw/common.h>
+#include <iostream>
+#include <deque>
 
 namespace jw::io
 {
     struct mpu401_config
     {
         port_num port { 0x330 };
-        dpmi::irq_level irq { 9 };
-        bool use_irq { true };
-    };
-}
-namespace jw::io::detail
-{
-    struct [[gnu::packed]] mpu401_status
-    {
-        unsigned : 6;
-        bool dont_send_data : 1;
-        bool no_data_available : 1;
+
+        // If not set, only polling is used.
+        std::optional<dpmi::irq_level> irq { 9 };
+
+        std::size_t receive_buffer_size { 1_KB };
+        std::size_t transmit_buffer_size { 1_KB };
+
+        // Try to reserve this much space for putback() / unget() operations.
+        std::size_t putback_reserve { 0 };
     };
 
+    // Roland MPU-401 driver, operating in UART mode.  If mpu401_config.irq is
+    // set, this must be allocated in locked memory, which mpu401_stream will
+    // do for you.
     struct mpu401_streambuf final : realtime_streambuf
     {
         mpu401_streambuf(const mpu401_config& c);
         virtual ~mpu401_streambuf();
 
-        mpu401_streambuf(const mpu401_streambuf&) = delete;
-        mpu401_streambuf(mpu401_streambuf&&) = delete;
-        mpu401_streambuf& operator=(const mpu401_streambuf&) = delete;
-        mpu401_streambuf& operator=(mpu401_streambuf&&) = delete;
-
-        virtual void put_realtime(char_type out) override;
+        virtual void put_realtime(char_type) override;
 
     protected:
-        virtual int sync() override;
-        virtual std::streamsize xsgetn(char_type* s, std::streamsize n) override;
+        virtual std::streamsize showmanyc() override;
         virtual int_type underflow() override;
-        virtual std::streamsize xsputn(const char_type* s, std::streamsize n) override;
-        virtual int_type overflow(int_type c = traits_type::eof()) override;
+        virtual int_type pbackfail(int_type = traits_type::eof()) override;
+        virtual int_type overflow(int_type = traits_type::eof()) override;
+        virtual int sync() override;
 
     private:
-        void check_irq_exception();
+        template<typename T>
+        using allocator = default_constructing_allocator_adaptor<std::pmr::polymorphic_allocator<T>>;
 
-        mpu401_status get()
-        {
-            const auto qsize = rx_buf.size() / 4;
-            const auto offset = gptr() - (rx_buf.begin() + qsize);
-            if (rx_ptr > rx_buf.begin() + qsize * 3 and offset > 0) [[unlikely]]
-            {
-                std::copy(rx_buf.begin() + offset, rx_ptr, rx_buf.begin());
-                rx_ptr -= offset;
-                setg(rx_buf.begin(), rx_buf.begin() + qsize, rx_ptr);
-            }
+        using rx_queue = dynamic_circular_queue<char_type, queue_sync::write_irq, allocator<char_type>>;
+        using tx_queue = dynamic_circular_queue<char_type, queue_sync::read_irq, allocator<char_type>>;
+        using error_queue = std::deque<rx_queue::iterator, allocator<rx_queue::iterator>>;
 
-            auto status = status_port.read();
-            while (not status.no_data_available)
-            {
-                if (rx_ptr == rx_buf.end()) throw io::overflow { "MPU401 receive buffer overflow" };
-                *rx_ptr++ = data_port.read();
-                status = status_port.read();
-            }
-            setg(rx_buf.begin(), gptr(), rx_ptr);
-            return status;
-        }
+        void do_setp(tx_queue::iterator) noexcept;
+        void get_one() noexcept;
+        std::uint8_t try_get() noexcept;
+        void do_sync() noexcept;
+        void do_sync(std::uint8_t) noexcept;
+        void irq_handler() noexcept;
 
-        void do_sync()
-        {
-            while (true)
-            {
-                auto status = get();
-                if (status.dont_send_data or tx_ptr == pptr()) break;
-                data_port.write(*tx_ptr++);
-            }
-        }
-
-        dpmi::irq_handler irq_handler { [this]()
-        {
-            dpmi::interrupt_mask no_irq { };
-            try
-            {
-                if (not status_port.read().no_data_available)
-                    dpmi::irq_handler::acknowledge();
-
-                do { do_sync(); } while (not status_port.read().no_data_available);
-            }
-            catch (...) { irq_exception = std::current_exception(); }
-        } };
-
-        mpu401_config cfg;
-        out_port<byte> cmd_port;
-        in_port<mpu401_status> status_port;
-        io_port<byte> data_port;
-        std::exception_ptr irq_exception;
-
-        std::array<char_type, 1_KB> rx_buf;
-        std::array<char_type, 1_KB> tx_buf;
-        char_type* rx_ptr { rx_buf.data() };
-        char_type* tx_ptr { tx_buf.data() };
-
-        inline static std::unordered_set<port_num> ports_used { };
+        const port_num base;
+        rx_queue rx_buf;
+        tx_queue tx_buf;
+        error_queue errors;
+        rx_queue::iterator* first_error;
+        tx_queue::atomic_const_iterator tx_stop;
+        const std::size_t putback_reserve;
+        dpmi::irq_handler irq;
     };
-}
 
-namespace jw::io
-{
     struct mpu401_stream : std::iostream
     {
-        mpu401_stream(mpu401_config c = { }) : std::iostream(nullptr), streambuf(new detail::mpu401_streambuf { c })
+        mpu401_stream(mpu401_config cfg)
+            : std::iostream { }
+            , streambuf { cfg.irq ? new (locked) mpu401_streambuf { cfg } : new mpu401_streambuf { cfg } }
         {
-            this->rdbuf(streambuf.get());
+            init(streambuf.get());
+        }
+
+        mpu401_streambuf* rdbuf() const noexcept
+        {
+            return streambuf.get();
         }
 
         mpu401_stream(const mpu401_stream&) = delete;
 
     private:
-        std::unique_ptr<detail::mpu401_streambuf> streambuf;
+        std::unique_ptr<mpu401_streambuf> streambuf;
     };
 }
