@@ -263,6 +263,7 @@ namespace jw::io
                     return;
 
                 dpmi::interrupt_mask no_irq { };
+                asm ("" ::: "memory");
                 errors.pop_front();
                 if (not errors.empty())
                     first_error = &errors.front();
