@@ -27,7 +27,7 @@ namespace jw
     // If unwinding fails, std::terminate() is called.
     [[noreturn]] void terminate();
 
-    [[noreturn]] inline void halt() { do { asm ("cli; hlt"); } while (true); }
+    [[noreturn]] inline void halt() { do { asm ("cli"); } while (true); }
 
     [[nodiscard]] void* realloc(void* pointer, std::size_t new_size, std::size_t alignment);
 
