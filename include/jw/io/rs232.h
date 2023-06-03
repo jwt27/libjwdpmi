@@ -81,6 +81,11 @@ namespace jw::io
         // completely flushed.
         bool async_flush { true };
 
+        // When set, a break condition (line held low for longer than one
+        // character), is reported by returning EOF.  Otherwise, a '\0'
+        // character is inserted in the stream.
+        bool eof_on_break { true };
+
         std::size_t realtime_buffer_size { 128 };
         std::size_t transmit_buffer_size { 4_KB };
         std::size_t receive_buffer_size { 4_KB };
@@ -189,6 +194,7 @@ namespace jw::io
         std::uint8_t modem_control_reg { };
         std::uint8_t line_status_reg { };
         std::uint8_t irq_enable_reg { };
+        const bool eof_on_break;
         const bool async_flush;
         const decltype(rs232_config::flow_control) flow_control;
         const std::size_t putback_reserve;

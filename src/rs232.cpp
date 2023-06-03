@@ -142,6 +142,7 @@ namespace jw::io
         , realtime_buf { cfg.realtime_buffer_size }
         , tx_buf { cfg.transmit_buffer_size }
         , rx_buf { cfg.receive_buffer_size }
+        , eof_on_break { cfg.eof_on_break }
         , async_flush { cfg.async_flush }
         , flow_control { cfg.flow_control }
         , putback_reserve { cfg.putback_reserve }
@@ -286,7 +287,8 @@ namespace jw::io
             {
                 err->status = 0;
                 pop();
-                return traits_type::eof();
+                if (eof_on_break) return traits_type::eof();
+                else return underflow();
             }
             else if (err->status & line_status::framing_error)
             {
@@ -526,7 +528,7 @@ namespace jw::io
 
                 if (not_xon_xoff(c)) [[likely]]
                 {
-                    if (status & line_status::line_break)
+                    if ((status & line_status::line_break) and eof_on_break)
                         add_error_mark(rx->end(), status);
                     else
                     {
