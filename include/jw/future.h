@@ -45,8 +45,8 @@ namespace jw::detail
             i = index::exception;
         }
 
-        void make_ready() noexcept { ready = true; }
-        bool is_ready() noexcept { return ready; }
+        void make_ready() noexcept { ready.store(true, std::memory_order_relaxed); }
+        bool is_ready() noexcept { return ready.load(std::memory_order_acquire); }
         bool has_result() noexcept { return i != index::none; }
 
         T move_result()
@@ -81,7 +81,7 @@ namespace jw::detail
             exception,
             value
         } i { index::none };
-        bool ready;
+        std::atomic<bool> ready;
     };
 
     template <typename R> struct promise_result : promise_result_base<R> { };
