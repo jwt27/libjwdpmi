@@ -190,7 +190,7 @@ namespace jw::detail
         static thread* create_thread(F&& func, std::size_t stack_size);
         static void atexit(thread*) noexcept;
 
-        [[gnu::hot]]
+        [[gnu::hot, gnu::noinline]]
         static void yield();
 
         [[gnu::hot, gnu::noinline, gnu::noclone, gnu::naked]]
