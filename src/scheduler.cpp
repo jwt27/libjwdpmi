@@ -73,7 +73,7 @@ namespace jw::detail
         auto* main = get_thread(thread::main_thread_id);
         atexit(main);
         if (threads->size() == 1) [[likely]] return;
-        fmt::print(stderr, FMT_STRING("Warning: exiting with active threads.\n"));
+        fmt::print(stderr, "Warning: exiting with active threads.\n");
         std::vector<thread_id> ids;
         ids.reserve(threads->size());
         for (auto& ct : *threads)
@@ -186,9 +186,9 @@ namespace jw::detail
         catch (const abi::__forced_unwind& e) { }
         catch (...)
         {
-            fmt::print(stderr, FMT_STRING("Caught exception from thread {:d}"), t->id);
+            fmt::print(stderr, "Caught exception from thread {:d}", t->id);
 #           ifndef NDEBUG
-            fmt::print(stderr, FMT_STRING(" ({})"), t->name);
+            fmt::print(stderr, " ({})", t->name);
 #           endif
             fmt::print(stderr, "\n");
             print_exception();
@@ -251,9 +251,9 @@ namespace jw::detail
             catch (const abi::__forced_unwind& e) { catch_forced_unwind(); }
             catch (...)
             {
-                fmt::print(stderr, FMT_STRING("Caught exception while processing atexit handlers on thread {:d}"), t->id);
+                fmt::print(stderr, "Caught exception while processing atexit handlers on thread {:d}", t->id);
 #               ifndef NDEBUG
-                fmt::print(stderr, FMT_STRING(" ({})"), t->name);
+                fmt::print(stderr, " ({})", t->name);
 #               endif
                 fmt::print(stderr, "\n");
                 print_exception();
@@ -269,7 +269,7 @@ namespace jw::detail
 
         if (terminating)
         {
-            fmt::print(stderr, FMT_STRING("Forced unwind got stuck at 0x{:x}.\n"), last_ip);
+            fmt::print(stderr, "Forced unwind got stuck at 0x{:x}.\n", last_ip);
             std::terminate();
         }
         terminating = true;
@@ -317,7 +317,7 @@ namespace jw
     {
         if (detail::terminated) std::terminate();
         detail::terminating = true;
-        fmt::print(stderr, FMT_STRING("terminate() called at 0x{}.\n"), fmt::ptr(__builtin_return_address(0)));
+        fmt::print(stderr, "terminate() called at 0x{}.\n", fmt::ptr(__builtin_return_address(0)));
         detail::scheduler::forced_unwind();
     }
 }
