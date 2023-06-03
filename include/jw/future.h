@@ -349,6 +349,8 @@ namespace jw
     template <typename R>
     struct promise : detail::promise_base<R>
     {
+        using detail::promise_base<R>::promise_base;
+
         void set_value(const R& v) { this->template set(v); }
         void set_value(R&& v) { this->template set(std::move(v)); }
         void set_value_at_thread_exit(const R& v) { this->template set_atexit(v); }
@@ -358,6 +360,8 @@ namespace jw
     template <typename R>
     struct promise<R&> : detail::promise_base<R&>
     {
+        using detail::promise_base<R&>::promise_base;
+
         void set_value(R& v) { this->template set(std::reference_wrapper<R>{ v }); }
         void set_value_at_thread_exit(const R& v) { this->template set_atexit(std::reference_wrapper<R>{ v }); }
     };
@@ -365,6 +369,8 @@ namespace jw
     template <>
     struct promise<void> : detail::promise_base<void>
     {
+        using detail::promise_base<void>::promise_base;
+
         void set_value() { this->template set(empty { }); }
         void set_value_at_thread_exit() { this->template set_atexit(empty { }); }
     };
