@@ -19,7 +19,8 @@ namespace jw
     struct init;
 
     // Print the current exception to stderr, including any nested exceptions.
-    void print_exception() noexcept;
+    // If that exception is abi::__forced_unwind, it will be rethrown!
+    void print_exception();
 
     // Terminate via forced unwinding.  The idea is to clean up as much as
     // possible, and hopefully restore the system to a usable state.  The OS

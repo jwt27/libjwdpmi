@@ -116,7 +116,8 @@ namespace jw::dpmi::detail
             else
             {
                 fmt::print(stderr, "Caught exception while handling CPU exception 0x{:0>2x}\n", data->num.value);
-                print_exception();
+                try { print_exception(); }
+                catch (const abi::__forced_unwind&) { }
                 if (redirect_exception(info, kill)) success = true;
                 else std::terminate();
             }

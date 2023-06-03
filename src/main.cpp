@@ -67,11 +67,11 @@ namespace jw
         catch (...) { fmt::print(stderr, "Nested exception {:d}: unknown exception\n", level + 1); }
     }
 
-    void print_exception() noexcept
+    void print_exception()
     {
         try { throw; }
         catch (const std::exception& e) { do_print_exception(e); }
-        catch (const abi::__forced_unwind&) { fmt::print(stderr, "Exception: __forced_unwind\n"); }
+        catch (const abi::__forced_unwind&) { fmt::print(stderr, "Exception: __forced_unwind\n"); throw; }
         catch (...) { fmt::print(stderr, "Exception: unknown exception\n"); }
     }
 
@@ -91,11 +91,10 @@ namespace jw
         dpmi::ring0_privilege::force_leave();
         debug::break_with_signal(SIGTERM);
         if (io::ps2_interface::instantiated()) io::ps2_interface::instance().reset();
-        if (auto exc = std::current_exception())
+        if (std::uncaught_exceptions() != 0)
         {
             fmt::print(stderr, "std::terminate called after throwing an exception:\n");
-            try { std::rethrow_exception(exc); }
-            catch (...) { print_exception(); }
+            print_exception();
         }
         else fmt::print(stderr, "Terminating.\n");
         debug::print_backtrace();

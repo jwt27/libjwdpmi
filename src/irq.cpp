@@ -178,7 +178,8 @@ namespace jw::dpmi::detail
         catch (...)
         {
             fmt::print(stderr, "Exception while servicing IRQ {:d}\n", i);
-            print_exception();
+            try { print_exception(); }
+            catch (...) { halt(); }
             halt();
         }
 
