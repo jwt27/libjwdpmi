@@ -547,20 +547,28 @@ namespace jw::io
             if (status & line_status::transmitter_empty)
                 sent = 0;
 
-            const auto n = std::min(std::size_t { 16ul }, sent + realtime->size());
-            for (; sent < n; ++sent)
+            const auto n = std::min(tx_queue::size_type { 16u - sent }, realtime->size());
+            if (n > 0)
             {
-                data_port(base).write(realtime->front());
-                realtime->pop_front();
+                auto i = realtime->begin();
+                const auto end = i + n;
+                while (i != end)
+                    data_port(base).write(*i++);
+                realtime->pop_front(n);
+                sent += n;
             }
 
-            if (can_tx)
+            if (can_tx) [[likely]]
             {
-                const auto n = std::min(std::size_t { 16ul }, sent + tx->begin().distance_to(tx_stop));
-                for (; sent < n; ++sent)
+                const auto n = std::min(tx_queue::size_type { 16u - sent }, tx->begin().distance_to(tx_stop));
+                if (n > 0)
                 {
-                    data_port(base).write(tx->front());
-                    tx->pop_front();
+                    auto i = tx->begin();
+                    const auto end = i + n;
+                    while (i != end)
+                        data_port(base).write(*i++);
+                    tx->pop_front(n);
+                    sent += n;
                 }
             }
         } while (received < rx_minimum);
