@@ -284,9 +284,6 @@ namespace jw::io
             }
             else if (err->status & line_status::line_break)
             {
-                // Skip zero byte.
-                const auto i = pos + 1;
-                setg(rx->contiguous_begin(i), &*i, &*i);
                 err->status = 0;
                 pop();
                 return traits_type::eof();
@@ -497,8 +494,8 @@ namespace jw::io
 
         auto not_xon_xoff = [&](char c)
         {
-            if (flow_control != rs232_config::xon_xoff) [[likely]] return true;
             if (status & line_status::any_errors) return true;
+            if (flow_control != rs232_config::xon_xoff) [[likely]] return true;
             if (not (c == xon or c == xoff)) [[likely]] return true;
             can_tx = c == xon;
             return false;
@@ -529,12 +526,16 @@ namespace jw::io
 
                 if (not_xon_xoff(c)) [[likely]]
                 {
-                    const auto i = rx->try_append(1, c);
-
-                    if (not i) [[unlikely]]
-                        add_error_mark(rx->end(), line_status::overflow_error);
-                    else if (status & line_status::any_errors) [[unlikely]]
-                        add_error_mark(*i, status);
+                    if (status & line_status::line_break)
+                        add_error_mark(rx->end(), status);
+                    else
+                    {
+                        const auto i = rx->try_append(1, c);
+                        if (not i) [[unlikely]]
+                            add_error_mark(rx->end(), line_status::overflow_error);
+                        else if (status & line_status::any_errors) [[unlikely]]
+                            add_error_mark(*i, status);
+                    }
                 }
 
                 ++received;
