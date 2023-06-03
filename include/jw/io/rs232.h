@@ -30,30 +30,29 @@ namespace jw::io
         com4
     };
 
+    enum class rs232_parity : std::uint8_t
+    {
+        none  = 0b000,
+        odd   = 0b001,
+        even  = 0b011,
+        mark  = 0b101,
+        space = 0b111
+    };
+
     struct rs232_config
     {
         port_num io_port;
         dpmi::irq_level irq;
-        enum char_bits_t : std::uint8_t
-        {
-            char_5,
-            char_6,
-            char_7,
-            char_8
-        } char_bits { char_8 };
-        enum stop_bits_t : std::uint8_t
-        {
-            stop_1,
-            stop_2
-        } stop_bits { stop_1 };
-        enum parity_t : std::uint8_t
-        {
-            none = 0b000,
-            odd = 0b001,
-            even = 0b011,
-            mark = 0b101,
-            space = 0b111
-        } parity { none };
+
+        // Allowed values: 5, 6, 7, 8.
+        std::uint8_t char_bits { 8 };
+
+        // Allowed values: 1, 2.
+        // When char_bits is set to 5, a value of 2 means 1.5 stop bits.
+        std::uint8_t stop_bits { 1 };
+
+        rs232_parity parity { rs232_parity::none };
+
         std::uint16_t baud_rate_divisor { 1 };
 
         enum : std::uint8_t

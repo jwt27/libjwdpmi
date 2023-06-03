@@ -155,6 +155,12 @@ namespace jw::io
     {
         if (ports_used.contains(base)) throw std::invalid_argument { "COM port already in use." };
 
+        if (cfg.char_bits < 5 or cfg.char_bits > 8)
+            throw std::invalid_argument { "RS232: Invalid value for char_bits" };
+
+        if (cfg.stop_bits < 1 or cfg.stop_bits > 2)
+            throw std::invalid_argument { "RS232: Invalid value for stop_bits" };
+
         irq_enable_port(base).write({ });
 
         auto* const rx = rx_buf.read();
@@ -168,9 +174,9 @@ namespace jw::io
 
         uart_line_control lctrl { };
         lctrl.divisor_access = true;
-        lctrl.char_bits = cfg.char_bits;
+        lctrl.char_bits = cfg.char_bits - 5;
+        lctrl.stop_bits = cfg.stop_bits - 1;
         lctrl.parity = cfg.parity;
-        lctrl.stop_bits = cfg.stop_bits;
         line_control_port(base).write(lctrl);
 
         rate_divisor_port(base).write(cfg.baud_rate_divisor);
