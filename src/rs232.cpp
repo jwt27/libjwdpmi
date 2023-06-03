@@ -58,14 +58,19 @@ namespace jw::io
 
     struct [[gnu::packed]] uart_line_control
     {
-        rs232_config::char_bits_t char_bits : 2;
-        rs232_config::stop_bits_t stop_bits : 1;
-        rs232_config::parity_t parity : 3;
+        unsigned char_bits : 2;
+        unsigned stop_bits : 1;
+        rs232_parity parity : 3;
         bool force_break : 1;
         bool divisor_access : 1;
     };
 
-    enum class modem_control
+    static_assert (sizeof(uart_irq_id) == 1);
+    static_assert (sizeof(uart_fifo_control) == 1);
+    static_assert (sizeof(uart_modem_status) == 1);
+    static_assert (sizeof(uart_line_control) == 1);
+
+    enum class modem_control : std::uint8_t
     {
         dtr                 = 0b00000001,
         rts                 = 0b00000010,
@@ -88,7 +93,7 @@ namespace jw::io
         any_errors = overflow_error | parity_error | framing_error | line_break
     };
 
-    enum class irq_enable
+    enum class irq_enable : std::uint8_t
     {
         data_available      = 0b00000001,
         transmitter_empty   = 0b00000010,
