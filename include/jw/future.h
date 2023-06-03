@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
 
 #pragma once
@@ -372,10 +373,10 @@ namespace jw
     void swap(promise<R>& x, promise<R>& y) noexcept { x.swap(y); }
 }
 
-namespace jw::detail
+namespace jw
 {
     template <typename F, typename... A>
-    [[nodiscard]] auto do_async(std::launch, F&& func, A&&... args)
+    [[nodiscard]] auto async(std::launch, F&& func, A&&... args)
     {
         using result = std::invoke_result_t<std::decay_t<F>, std::decay_t<A>...>;
         callable_tuple call { std::forward<F>(func), std::forward<A>(args)... };
@@ -388,20 +389,18 @@ namespace jw::detail
                 if constexpr (std::is_void_v<result>) { call(); p.set_value(); }
                 else p.set_value(call());
             }
+            catch (const abi::__forced_unwind&) { throw; }
             catch (...) { p.set_exception(std::current_exception()); }
         } };
         t.detach();
         return f;
     }
-}
-
-namespace jw
-{
-    template <typename F, typename... A>
-    [[nodiscard]] auto async(std::launch policy, F&& f, A&&... args) { return detail::do_async(policy, std::forward<F>(f), std::forward<A>(args)...); }
 
     template <typename F, typename... A>
-    [[nodiscard]] auto async(F&& f, A&&... args) { return detail::do_async(std::launch::async, std::forward<F>(f), std::forward<A>(args)...); }
+    [[nodiscard]] auto async(F&& f, A&&... args)
+    {
+        return async(std::launch::async, std::forward<F>(f), std::forward<A>(args)...);
+    }
 }
 
 namespace std
