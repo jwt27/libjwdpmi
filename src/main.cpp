@@ -47,6 +47,11 @@ extern "C"
 
 int jwdpmi_main(std::span<std::string_view>);
 
+namespace jw::detail
+{
+    void stop_terminating() noexcept;
+}
+
 namespace jw
 {
     namespace debug::detail
@@ -77,6 +82,7 @@ namespace jw
 
     [[noreturn]] static void terminate_handler() noexcept
     {
+        detail::stop_terminating();
         static unsigned terminated = 0;
         ++terminated;
         if (terminated == 2)

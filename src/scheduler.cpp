@@ -34,6 +34,7 @@ namespace jw::detail
 {
     static constinit std::optional<dpmi::realmode_interrupt_handler> int2f_handler { std::nullopt };
     static constinit bool terminating { false };
+    static constinit bool terminated { false };
     static _Unwind_Ptr last_ip;
 
     static constexpr _Unwind_Exception_Class defused_class = 0;
@@ -302,12 +303,19 @@ namespace jw::detail
     {
         current_thread()->unwind_exception.exception_class = defused_class;
     }
+
+    void stop_terminating() noexcept
+    {
+        terminating = false;
+        terminated = true;
+    }
 }
 
 namespace jw
 {
     void terminate()
     {
+        if (detail::terminated) std::terminate();
         detail::terminating = true;
         fmt::print(stderr, FMT_STRING("terminate() called at 0x{}.\n"), fmt::ptr(__builtin_return_address(0)));
         detail::scheduler::forced_unwind();
