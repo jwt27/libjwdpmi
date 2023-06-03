@@ -183,7 +183,7 @@ namespace jw::detail
 
             (*t)();
         }
-        catch (const abi::__forced_unwind& e) { }
+        catch (const abi::__forced_unwind& e) { catch_forced_unwind(); }
         catch (...)
         {
             fmt::print(stderr, "Caught exception from thread {:d}", t->id);
