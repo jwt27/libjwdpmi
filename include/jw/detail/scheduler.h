@@ -26,11 +26,6 @@ namespace jw
     struct thread;
 }
 
-namespace jw::this_thread
-{
-    void yield();
-}
-
 namespace jw::detail
 {
     using thread_id = std::uint32_t;
@@ -160,9 +155,11 @@ namespace jw::detail
     struct scheduler
     {
         friend int ::main(int, const char**);
-        friend void ::jw::this_thread::yield();
         friend struct ::jw::thread;
         friend struct ::jw::init;
+
+        [[gnu::hot, gnu::noinline]]
+        static void yield();
 
         static bool is_current_thread(const thread* t) noexcept;
         static bool is_current_thread(thread_id) noexcept;
@@ -189,9 +186,6 @@ namespace jw::detail
         template<typename F>
         static thread* create_thread(F&& func, std::size_t stack_size);
         static void atexit(thread*) noexcept;
-
-        [[gnu::hot, gnu::noinline]]
-        static void yield();
 
         [[gnu::hot, gnu::noinline, gnu::noclone, gnu::naked]]
         static void context_switch(thread_context**);
