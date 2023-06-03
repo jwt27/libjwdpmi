@@ -9,7 +9,7 @@
 #include <jw/io/rs232.h>
 #include <jw/thread.h>
 #include <bit>
-#include <unordered_set>
+#include <set>
 
 namespace jw::io
 {
@@ -114,7 +114,7 @@ namespace jw::io
     static constexpr char xon = 0x11;
     static constexpr char xoff = 0x13;
 
-    static std::unordered_set<port_num> ports_used;
+    static std::set<port_num> ports_used;
 
     static io_port<std::uint16_t>       rate_divisor_port(port_num base)     { return { base + 0 }; }
     static io_port<char>                data_port(port_num base)             { return { base + 0 }; }
@@ -492,6 +492,7 @@ namespace jw::io
                 errors.emplace_back(pos, static_cast<std::uint8_t>(status));
             else
                 errors.back().status |= static_cast<std::uint8_t>(status);
+            first_error = &errors.front();
         };
 
         auto not_xon_xoff = [&](char c)
@@ -563,9 +564,6 @@ namespace jw::io
 
         if (overflow) [[unlikely]]
             add_error_mark(rx->end() - (received - 16), line_status::overflow_error);
-
-        if (not errors.empty() and first_error == nullptr) [[unlikely]]
-            first_error = &errors.front();
 
         set_rts(rx->max_size() - rx->size() > 32);
         set_tx();
