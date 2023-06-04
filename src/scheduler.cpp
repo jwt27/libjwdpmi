@@ -98,7 +98,7 @@ namespace jw::detail
     // Save the current task context, switch to a new task, and restore its context.
     void scheduler::context_switch(thread_context**)
     {
-        asm volatile
+        asm
         (
             "                   .cfi_def_cfa esp, 4; .cfi_rel_offset eip, 0;"
             "push ebp;          .cfi_adjust_cfa_offset 4; .cfi_rel_offset ebp, 0;"
@@ -108,7 +108,6 @@ namespace jw::detail
             "pushf;             .cfi_adjust_cfa_offset 4; .cfi_rel_offset eflags, 0;"
             "push fs;           .cfi_adjust_cfa_offset 4; .cfi_rel_offset fs, 0;"
             "push gs;           .cfi_adjust_cfa_offset 4; .cfi_rel_offset gs, 0;"
-            "mov eax, [esp+0x20];"
             "mov [eax], esp;"
             "call %0;"
             "mov esp, eax;"
@@ -121,7 +120,7 @@ namespace jw::detail
             "pop ebp;           .cfi_restore ebp;    .cfi_adjust_cfa_offset -4;"
             "ret;               .cfi_restore eip;    .cfi_adjust_cfa_offset -4;"
             :: "i" (switch_thread)
-            : "cc", "memory"
+            : "memory"
         );
     }
 
@@ -148,12 +147,12 @@ namespace jw::detail
             if (std::uncaught_exceptions() == 0)
                 forced_unwind();
 
-        while (ct->invoke_list.size() > 0) [[unlikely]]
+        while (not ct->invoke_list.empty()) [[unlikely]]
         {
-            decltype(thread::invoke_list)::value_type f;
+            auto f = std::move(ct->invoke_list.front());
             {
-                dpmi::interrupt_mask no_interrupts_please { };
-                f = std::move(ct->invoke_list.front());
+                local_destructor sti { [] { asm ("sti"); } };
+                asm ("cli");
                 ct->invoke_list.pop_front();
             }
             f();
@@ -202,7 +201,6 @@ namespace jw::detail
     thread_context* scheduler::switch_thread()
     {
         dpmi::async_signal_mask disable_signals { };
-        auto& it = iterator;
         thread* ct = current_thread();
 
         ct->eh_globals = *abi::__cxa_get_globals();
@@ -211,11 +209,19 @@ namespace jw::detail
         for(std::size_t n = 0; ; ++n)
         {
             {
-                dpmi::interrupt_mask no_interrupts_please { };
-                if (not ct->detached or ct->active()) [[likely]] ++*it;
-                else *it = threads->erase(*it);
-                if (*it == threads->end()) *it = threads->begin();
+                local_destructor sti { [] { asm ("sti"); } };
+                auto it = *iterator;
+                if (not ct->detached or ct->active()) [[likely]] ++it;
+                else
+                {
+                    // Interrupts are always enabled here (by yield()).
+                    asm ("cli");
+                    it = threads->erase(it);
+                }
+                if (it == threads->end()) it = threads->begin();
+                std::atomic_ref { *iterator }.store(it, std::memory_order_release);
             }
+
             ct = current_thread();
 
             if (ct->state == thread::starting) [[unlikely]]     // new thread, initialize new context on stack
