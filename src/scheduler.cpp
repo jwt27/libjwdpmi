@@ -34,11 +34,7 @@ namespace jw::detail
 {
     static constinit std::optional<dpmi::realmode_interrupt_handler> int2f_handler { std::nullopt };
     static constinit bool terminating { false };
-    static constinit bool terminated { false };
     static _Unwind_Ptr last_ip;
-
-    static constexpr _Unwind_Exception_Class defused_class = 0;
-    static constexpr _Unwind_Exception_Class active_class = 1;
 
     void scheduler::setup()
     {
@@ -144,7 +140,7 @@ namespace jw::detail
 #       endif
 
         if (terminating) [[unlikely]]
-            if (std::uncaught_exceptions() == 0)
+            if (not ct->unwinding and std::uncaught_exceptions() == 0)
                 forced_unwind();
 
         while (not ct->invoke_list.empty()) [[unlikely]]
@@ -159,7 +155,7 @@ namespace jw::detail
         }
 
         if (ct->canceled) [[unlikely]]
-            if (ct->state != thread::finishing and std::uncaught_exceptions() == 0)
+            if (ct->state != thread::finishing and not ct->unwinding and std::uncaught_exceptions() == 0)
                 forced_unwind();
     }
 
@@ -269,9 +265,9 @@ namespace jw::detail
         t->atexit_list.clear();
     }
 
-    static void cleanup_forced_unwind(_Unwind_Reason_Code, _Unwind_Exception* exc) noexcept
+    static void cleanup_forced_unwind(_Unwind_Reason_Code, _Unwind_Exception*) noexcept
     {
-        if (exc->exception_class == defused_class) return;
+        if (not scheduler::current_thread()->is_unwinding()) return;
 
         if (terminating)
         {
@@ -299,7 +295,8 @@ namespace jw::detail
     void scheduler::forced_unwind()
     {
         auto* const t = current_thread();
-        t->unwind_exception.exception_class = active_class;
+        t->unwinding = true;
+        t->unwind_exception.exception_class = 0;
         t->unwind_exception.exception_cleanup = cleanup_forced_unwind;
         _Unwind_ForcedUnwind(&t->unwind_exception, stop_forced_unwind, t);
         __builtin_unreachable();
@@ -307,13 +304,8 @@ namespace jw::detail
 
     void scheduler::catch_forced_unwind() noexcept
     {
-        current_thread()->unwind_exception.exception_class = defused_class;
-    }
-
-    void stop_terminating() noexcept
-    {
-        terminating = false;
-        terminated = true;
+        auto* const t = current_thread();
+        t->unwinding = false;
     }
 }
 
@@ -321,7 +313,6 @@ namespace jw
 {
     void terminate()
     {
-        if (detail::terminated) std::terminate();
         detail::terminating = true;
         fmt::print(stderr, "terminate() called at 0x{}.\n", fmt::ptr(__builtin_return_address(0)));
         detail::scheduler::forced_unwind();

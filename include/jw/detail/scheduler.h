@@ -72,6 +72,7 @@ namespace jw::detail
         auto get_state() const noexcept { return state; }
         bool is_canceled() const noexcept { return canceled; }
         bool is_suspended() const noexcept { return suspended; }
+        bool is_unwinding() const noexcept { return unwinding; }
 
         template<typename F> void invoke(F&& function) { invoke_list.emplace_back(std::forward<F>(function)); }
         template<typename F> void atexit(F&& function) { atexit_list.emplace_back(std::forward<F>(function)); }
@@ -139,6 +140,7 @@ namespace jw::detail
         bool suspended { false };
         bool canceled { false };
         bool detached { false };
+        bool unwinding { false };
 
         std::deque<jw::function<void(), 4>, thread_allocator<jw::function<void(), 4>>> invoke_list;
         std::deque<jw::function<void(), 4>> atexit_list { };
