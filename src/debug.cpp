@@ -61,7 +61,7 @@ namespace jw::debug::detail
 
     std::pmr::map<std::pmr::string, std::pmr::string> supported { &memres };
     std::pmr::map<std::uintptr_t, watchpoint> watchpoints { &memres };
-    std::pmr::map<std::uintptr_t, byte> breakpoints { &memres };
+    std::pmr::map<std::uintptr_t, std::byte> breakpoints { &memres };
     std::map<int, void(*)(int)> signal_handlers { };
 
     std::array<std::unique_ptr<exception_handler>, 0x20> exception_handlers;
@@ -405,18 +405,19 @@ namespace jw::debug::detail
 
     static void set_breakpoint(std::uintptr_t at)
     {
-        auto* ptr = reinterpret_cast<byte*>(at);
-        if (breakpoints.count(at) == 0) breakpoints[at] = *ptr;
-        *ptr = 0xcc;
+        auto* ptr = reinterpret_cast<std::byte*>(at);
+        breakpoints.try_emplace(at, *ptr);
+        *ptr = std::byte { 0xcc };
     }
 
     static bool clear_breakpoint(std::uintptr_t at)
     {
-        auto* ptr = reinterpret_cast<byte*>(at);
-        if (breakpoints.count(at) > 0)
+        auto* ptr = reinterpret_cast<std::byte*>(at);
+        const auto i = breakpoints.find(at);
+        if (i != breakpoints.end())
         {
-            *ptr = breakpoints[at];
-            breakpoints.erase(at);
+            *ptr = i->second;
+            breakpoints.erase(i);
             return true;
         }
         else return false;
@@ -424,10 +425,11 @@ namespace jw::debug::detail
 
     static bool disable_breakpoint(std::uintptr_t at)
     {
-        auto* ptr = reinterpret_cast<byte*>(at);
-        if (breakpoints.count(at) > 0)
+        auto* ptr = reinterpret_cast<std::byte*>(at);
+        const auto i = breakpoints.find(at);
+        if (i != breakpoints.end())
         {
-            *ptr = breakpoints[at];
+            *ptr = i->second;
             return true;
         }
         else return false;
@@ -436,7 +438,7 @@ namespace jw::debug::detail
     static void enable_all_breakpoints()
     {
         for (auto&& bp : breakpoints)
-            *reinterpret_cast<byte*>(bp.first) = 0xcc;
+            *reinterpret_cast<std::byte*>(bp.first) = std::byte { 0xcc };
     }
 
     // Decode big-endian hex string
@@ -489,11 +491,7 @@ namespace jw::debug::detail
 
     static void encode_null(string& out, std::size_t len)
     {
-        const auto size = out.size();
-        out.resize(size + len * 2);
-        auto it = out.data() + size;
-        for (std::size_t i = 0; i < len * 2; ++i)
-            *it++ = 'x';
+        out.append(len * 2, 'x');
     }
 
     static std::uint32_t checksum(const std::string_view& s)
@@ -1506,7 +1504,7 @@ namespace jw::debug::detail
         debug_mode = false;
         serial_irq.reset();
         watchpoints.clear();
-        for (auto&& bp : breakpoints) *reinterpret_cast<byte*>(bp.first) = bp.second;
+        for (auto&& bp : breakpoints) *reinterpret_cast<std::byte*>(bp.first) = bp.second;
         for (auto&& e : exception_handlers) e.reset();
         for (auto&& s : signal_handlers) std::signal(s.first, s.second);
     }
