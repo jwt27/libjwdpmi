@@ -32,7 +32,6 @@ extern "C" void __wrap___dpmi_yield()
 
 namespace jw::detail
 {
-    static constinit std::optional<dpmi::realmode_interrupt_handler> int2f_handler { std::nullopt };
     static constinit bool terminating { false };
     static _Unwind_Ptr last_ip;
 
@@ -48,16 +47,6 @@ namespace jw::detail
 
         iterator.emplace(threads->begin());
 
-        int2f_handler.emplace(0x2f, [](dpmi::realmode_registers* reg, dpmi::far_ptr32)
-        {
-            if (reg->ax != 0x1680) return false;
-            if (dpmi::in_irq_context()) return false;
-            [[maybe_unused]] std::conditional_t<config::save_fpu_on_realmode_callback, empty, dpmi::fpu_context> fpu { };
-            yield();
-            errno = 0;
-            reg->al = 0;
-            return true;
-        });
 #       ifdef JWDPMI_WITH_WATT32
         sock_yield(nullptr, yield);
 #       endif
@@ -65,7 +54,6 @@ namespace jw::detail
 
     void scheduler::kill_all()
     {
-        int2f_handler.reset();
         auto* main = get_thread(thread::main_thread_id);
         atexit(main);
         if (threads->size() == 1) [[likely]] return;

@@ -49,6 +49,8 @@ int jwdpmi_main(std::span<std::string_view>);
 
 namespace jw
 {
+    static constinit std::optional<dpmi::realmode_interrupt_handler> int2f_handler { std::nullopt };
+
     namespace debug::detail
     {
         void setup_gdb_interface(io::rs232_config);
@@ -88,9 +90,16 @@ namespace jw
         {
             halt();
         }
+
         dpmi::ring0_privilege::force_leave();
         debug::break_with_signal(SIGTERM);
-        if (io::ps2_interface::instantiated()) io::ps2_interface::instance().reset();
+
+        // Exit will crash if int 2f is still hooked.
+        int2f_handler.reset();
+
+        // Make sure at least the keyboard works.
+        io::ps2_interface::instance().reset();
+
         if (auto e = std::current_exception())
         {
             fmt::print(stderr, "std::terminate called after throwing an exception:\n");
@@ -121,6 +130,18 @@ namespace jw
         std::_Exit(-1);
     }
 
+    // DPMI yield function replacement: int 2f, ax=1680
+    static bool int2f(dpmi::realmode_registers* reg)
+    {
+        if (reg->ax != 0x1680) return false;
+        if (dpmi::in_irq_context()) return false;
+        [[maybe_unused]] std::conditional_t<config::save_fpu_on_realmode_callback, empty, dpmi::fpu_context> fpu { };
+        this_thread::yield();
+        errno = 0;
+        reg->al = 0;
+        return true;
+    }
+
     int exit_code { -1 };
 }
 
@@ -129,6 +150,8 @@ int main(int argc, const char** argv)
 {
     try
     {
+        int2f_handler.emplace(0x2f, [](dpmi::realmode_registers* reg, dpmi::far_ptr32) { return int2f(reg); });
+
         std::string_view args[argc];
         auto* a = args;
         new (a++) std::string_view { argv[0] };
@@ -172,6 +195,7 @@ int main(int argc, const char** argv)
         jw::print_exception();
     }
 
+    int2f_handler.reset();
     jw::detail::scheduler::kill_all();
 
     return jw::exit_code;
