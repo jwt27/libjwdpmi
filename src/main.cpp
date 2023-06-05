@@ -91,10 +91,11 @@ namespace jw
         dpmi::ring0_privilege::force_leave();
         debug::break_with_signal(SIGTERM);
         if (io::ps2_interface::instantiated()) io::ps2_interface::instance().reset();
-        if (std::uncaught_exceptions() != 0)
+        if (auto e = std::current_exception())
         {
             fmt::print(stderr, "std::terminate called after throwing an exception:\n");
-            print_exception();
+            try { std::rethrow_exception(e); }
+            catch (...) { print_exception(); }
         }
         else fmt::print(stderr, "Terminating.\n");
         debug::print_backtrace();
