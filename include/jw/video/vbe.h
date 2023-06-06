@@ -57,6 +57,7 @@ namespace jw::video
 
     protected:
         friend vbe* get_vbe_interface();
+        vbe() noexcept = default;
         virtual bool init();
     };
 
@@ -69,6 +70,7 @@ namespace jw::video
 
     protected:
         friend vbe* get_vbe_interface();
+        vbe2() noexcept = default;
         virtual bool init() override;
     };
 
@@ -95,6 +97,7 @@ namespace jw::video
 
     protected:
         friend vbe* get_vbe_interface();
+        vbe3() noexcept = default;
         virtual bool init() override;
     };
 }
