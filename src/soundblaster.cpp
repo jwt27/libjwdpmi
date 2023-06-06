@@ -276,7 +276,7 @@ namespace jw::audio::detail
     sb_driver<T>::sb_driver(sb_config cfg)
         : version { sb_init(cfg.base) }
         , dsp { cfg.base }
-        , irq { cfg.irq, [] { }, dpmi::no_auto_eoi }
+        , irq { cfg.irq, [] { }, dpmi::no_auto_eoi | (version.hi < 4 ? dpmi::fallback_handler : dpmi::irq_config_flags { }) }
         , dma8 { cfg.low_dma }
     {
         if constexpr (std::same_as<T, sample_i16>)
@@ -287,6 +287,7 @@ namespace jw::audio::detail
                 dma16.emplace(cfg.high_dma);
         }
     }
+
     template<typename T>
     sb_driver<T>::~sb_driver()
     {
