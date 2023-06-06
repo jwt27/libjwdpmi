@@ -324,11 +324,16 @@ namespace jw::audio::detail
         if (not buf or buf->size() != size * 2)
             buf.emplace(size * 2);
 
-        buffer_pending = false;
         buffer_page_high = true;
 
         if (not recording)
-            std::fill_n(buf->pointer(), buf->size(), sample_traits<T>::zero());
+        {
+            std::fill_n(buf->pointer(), buf->size() / 2, sample_traits<T>::zero());
+
+            buffer_pending = true;
+            if (this->callback) this->callback(buffer());
+        }
+        else buffer_pending = false;
 
         dsp_speaker_enable(dsp, not recording);
 
