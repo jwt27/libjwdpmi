@@ -135,6 +135,7 @@ namespace jw::dpmi::detail
 
         irq_handler_data* first { nullptr };
         irq_handler_data* last { nullptr };
+        irq_handler_data* fallback { nullptr };
         const irq_level irq;
         const far_ptr32 prev_handler { };
         irq_config_flags flags { };

@@ -32,7 +32,14 @@ namespace jw::dpmi
 
         // Mask all interrupts while this IRQ is being serviced, preventing
         // further interruption from both lower and higher priority IRQs.
-        no_interrupts = 0b10000
+        no_interrupts = 0b10000,
+
+        // Specifies that this IRQ handler may only be invoked if no other
+        // handler acknowledges the interrupt.  This is used for devices which
+        // do not provide a status flag to identify themselves as the
+        // interrupt source.
+        // Only one device per IRQ line may be registered with this flag.
+        fallback_handler = 0b100000
     };
     inline constexpr irq_config_flags operator| (irq_config_flags a, auto b) { return static_cast<irq_config_flags>(static_cast<int>(a) | static_cast<int>(b)); }
     inline constexpr irq_config_flags operator|= (irq_config_flags& a, auto b) { return a = (a | b); }

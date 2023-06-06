@@ -163,6 +163,12 @@ namespace jw::dpmi::detail
                     if (p->enabled) [[likely]]
                         p->call();
                 }
+
+                if ((flags & fallback_handler) and id.acknowledged != ack::yes)
+                {
+                    // No need to check entry->fallback->enabled here.
+                    entry->fallback->call();
+                }
             }
 
             if ((flags & always_chain) or id.acknowledged == ack::no) [[unlikely]]
@@ -272,6 +278,8 @@ namespace jw::dpmi::detail
         e->flags = { };
         for (auto* i = e->first; i != nullptr; i = i->next)
             if (i->enabled) e->flags |= i->flags;
+        if (e->fallback and e->fallback->enabled)
+            e->flags |= e->fallback->flags;
     }
 
     void irq_controller::assign(irq_handler_data* p, irq_level i)
@@ -283,10 +291,19 @@ namespace jw::dpmi::detail
         const bool enabled = p->enabled;
         interrupt_mask no_irqs_here { };
         p->irq = i;
-        if (e->first == nullptr) e->first = p;
-        if (e->last != nullptr) e->last->next = p;
-        p->prev = e->last;
-        e->last = p;
+        if (not (p->flags & fallback_handler))
+        {
+            if (e->first == nullptr) e->first = p;
+            if (e->last != nullptr) e->last->next = p;
+            p->prev = e->last;
+            e->last = p;
+        }
+        else
+        {
+            if (e->fallback != nullptr)
+                throw std::runtime_error { fmt::format("Multiple devices registered with fallback_handler on IRQ {}", i) };
+            e->fallback = p;
+        }
         if (enabled) enable(p);
     }
 
@@ -297,10 +314,14 @@ namespace jw::dpmi::detail
         auto* const e = data->get(i);
         interrupt_mask no_irqs_here { };
         disable(p);
-        if (e->first == p) e->first = p->next;
-        if (e->last  == p) e->last  = p->prev;
-        if (p->prev != nullptr) p->prev->next = p->next;
-        if (p->next != nullptr) p->next->prev = p->prev;
+        if (not (p->flags & fallback_handler))
+        {
+            if (e->first == p) e->first = p->next;
+            if (e->last == p) e->last = p->prev;
+            if (p->prev != nullptr) p->prev->next = p->next;
+            if (p->next != nullptr) p->next->prev = p->prev;
+        }
+        else e->fallback = nullptr;
         p->prev = p->next = nullptr;
         p->irq = 16;
 
