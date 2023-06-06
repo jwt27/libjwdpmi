@@ -133,13 +133,13 @@ namespace jw::detail
 
         while (not ct->invoke_list.empty()) [[unlikely]]
         {
-            auto f = std::move(ct->invoke_list.front());
+            local_destructor pop { [ct]
             {
-                local_destructor sti { [] { asm ("sti"); } };
                 asm ("cli");
                 ct->invoke_list.pop_front();
-            }
-            f();
+                asm ("sti");
+            } };
+            ct->invoke_list.front()();
         }
 
         if (ct->canceled) [[unlikely]]
