@@ -235,7 +235,6 @@ namespace jw::audio::detail
 
         if constexpr (sb16)
         {
-            mixer_index(dsp, 0x82);
             std::bitset<8> irq_status = mixer_read(dsp);
             if (state == sb_state::dma8 and irq_status[0])
                 io::read_port<bool>(dsp + 0x0e);
@@ -356,10 +355,10 @@ namespace jw::audio::detail
         if constexpr (sizeof(T) == 2)
         {
             irq = make_sb_irq<true, sb_state::dma16>(this);
-            irq.enable();
             state = sb_state::dma16;
             dsp_sb16_sample_rate(dsp, recording, params.sample_rate);
             dsp_sb16_dma16_auto(dsp, recording, stereo, size - 1);
+            mixer_index(dsp, 0x82);
         }
         else if (version.hi == 4)
         {
@@ -367,6 +366,7 @@ namespace jw::audio::detail
             state = sb_state::dma8;
             dsp_sb16_sample_rate(dsp, recording, params.sample_rate);
             dsp_sb16_dma8_auto(dsp, recording, stereo, size - 1);
+            mixer_index(dsp, 0x82);
         }
         else
         {
