@@ -299,7 +299,7 @@ namespace jw::audio::detail
     void sb_driver<T>::start(const start_parameters& params)
     {
         if (state != sb_state::idle and state != sb_state::stopping)
-            throw std::runtime_error { "Already started" };
+            throw std::logic_error { "Already started" };
 
         if (params.out.channels > 2 or params.in.channels > 2)
             throw std::invalid_argument { "Invalid number of channels" };
