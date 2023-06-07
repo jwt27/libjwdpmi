@@ -63,7 +63,7 @@ namespace jw::video
 
     static std::optional<dpmi::descriptor> video_bios_code;
     static dpmi::far_ptr32 vbe3_stack_ptr;
-    static dpmi::far_ptr32 vbe3_entry_point;
+    static dpmi::far_ptr16 vbe3_entry_point;
     static bool vbe3_pm { false };
 
     [[using gnu: naked, used, section(".text.low"), error("call only from asm")]]
@@ -73,22 +73,14 @@ namespace jw::video
     {
         asm
         (R"(
-            push es
-            push fs
-            push gs
             push ebp
             mov ebp, esp
             mov esi, ss
-            lss esp, fword ptr cs:[%0]
-            push esi
-            call fword ptr cs:[%1]
-            pop esi
+            lss esp, fword ptr ds:[%0]
+            data16 call fword ptr ds:[%1]
             mov ss, esi
             mov esp, ebp
             pop ebp
-            pop gs
-            pop fs
-            pop es
             ret
         )" : : "i" (&vbe3_stack_ptr), "i" (&vbe3_entry_point)
         );
@@ -138,7 +130,7 @@ namespace jw::video
             reg.di = dos_data.dos_pointer().offset;
             reg.call_int(0x10);
             check_error(reg.ax, __PRETTY_FUNCTION__);
-            if (mode_info->attr.is_supported) modes[num] = dos_data->mode;
+            modes[num] = dos_data->mode;
         };
 
         for (auto* mode_ptr = mode_list.near_pointer(); *mode_ptr != 0xffff; ++mode_ptr)
@@ -155,23 +147,21 @@ namespace jw::video
 
     vbe* get_vbe_interface()
     {
-        if (not vbe_interface) [[unlikely]]
-        {
-            vbe_interface.reset(new vbe3);
-            if (not vbe_interface->init())
-            {
-                vbe_interface.reset(new vbe2);
-                if (not vbe_interface->init())
-                {
-                    vbe_interface.reset(new vbe);
-                    if (not vbe_interface->init())
-                    {
-                        vbe_interface.reset();
-                        throw vbe::not_supported { "VBE not supported" };
-                    }
-                }
-            }
-        }
+        if (vbe_interface) [[likely]] goto ok;
+
+        vbe_interface.reset(new vbe3);
+        if (vbe_interface->init()) goto ok;
+
+        vbe_interface.reset(new vbe2);
+        if (not vbe_interface->init()) goto ok;
+
+        vbe_interface.reset(new vbe);
+        if (not vbe_interface->init()) goto ok;
+
+        vbe_interface.reset();
+        return nullptr;
+
+    ok:
         return vbe_interface.get();
     }
 
@@ -203,8 +193,7 @@ namespace jw::video
         reg.es = dos_data.dos_pointer().segment;
         reg.di = dos_data.dos_pointer().offset;
         reg.call_int(0x10);
-        if (reg.al != 0xf4) return false;
-        check_error(reg.ax, __PRETTY_FUNCTION__);
+        if (reg.ax != 0x004f) return false;
 
         info.vbe_signature.assign(ptr->vbe_signature, ptr->vbe_signature + 4);
         info.vbe_version = ptr->vbe_version;
@@ -230,8 +219,7 @@ namespace jw::video
         reg.es = dos_data.dos_pointer().segment;
         reg.di = dos_data.dos_pointer().offset;
         reg.call_int(0x10);
-        check_error(reg.ax, __PRETTY_FUNCTION__);
-        if (reg.al != 0xf4) return false;
+        if (reg.ax != 0x004f) return false;
         if (ptr->vbe_version < 0x0200) return false;
 
         info.vbe_signature.assign(ptr->vbe_signature, ptr->vbe_signature + 4);
@@ -260,11 +248,11 @@ namespace jw::video
         populate_mode_list(ptr->video_mode_list);
 
         if (vbe2_pm) return true;
-        reg = { };
         reg.ax = 0x4f0a;
         reg.bl = 0;
         reg.call_int(0x10);
-        check_error(reg.ax, __PRETTY_FUNCTION__);
+        if (reg.ax != 0x004f) return true;
+
         dpmi::mapped_dos_memory<byte> pm_table { reg.cx, dpmi::far_ptr16 { reg.es, reg.di } };
         byte* pm_table_ptr = pm_table.near_pointer();
         vbe2_pm_interface.assign(pm_table_ptr, pm_table_ptr + reg.cx);
@@ -315,13 +303,13 @@ namespace jw::video
             char* search_ptr = reinterpret_cast<char*>(video_bios_memory.get());
             const char* search_value = "PMID";
             search_ptr = std::search(search_ptr, search_ptr + bios_size, search_value, search_value + 4);
-            if (std::strncmp(search_ptr, search_value, 4) != 0) return true;
+            if (std::strncmp(search_ptr, search_value, 4) != 0) return false;
             pmid = reinterpret_cast<detail::vbe3_pm_info*>(search_ptr);
-            if (checksum8(*pmid) != 0) return true;
+            if (checksum8(*pmid) != 0) return false;
             pmid->in_protected_mode = true;
 
-            fake_bda_memory.reset(new std::byte[1_KB] { });
-            fake_bda.emplace(dpmi::linear_memory::from_pointer(fake_bda_memory.get(), 1_KB).create_segment());
+            fake_bda_memory.reset(new std::byte[2_KB] { });
+            fake_bda.emplace(dpmi::linear_memory::from_pointer(fake_bda_memory.get(), 2_KB).create_segment());
             auto segdata = fake_bda->read();
             segdata.segment.is_32_bit = false;
             fake_bda->write(segdata);
@@ -335,21 +323,21 @@ namespace jw::video
 
             video_bios_code.emplace(dpmi::descriptor::create());
             segdata.segment.code_segment.is_code_segment = true;
-            video_bios->write(segdata);
+            video_bios_code->write(segdata);
 
             vbe3_stack_memory.reset(new std::byte[4_KB]);
-            vbe3_stack.emplace(dpmi::linear_memory::from_pointer(vbe3_stack_memory.get(), bios_size).create_segment());
+            vbe3_stack.emplace(dpmi::linear_memory::from_pointer(vbe3_stack_memory.get(), 4_KB).create_segment());
             segdata = vbe3_stack->read();
             segdata.segment.is_32_bit = false;
             vbe3_stack->write(segdata);
-            vbe3_stack_ptr = { vbe3_stack->get_selector(), 4094 };
+            vbe3_stack_ptr = { vbe3_stack->get_selector(), 4_KB - 2 };
             vbe3_entry_point = { video_bios_code->get_selector(), pmid->init_entry_point };
 
             pmid->a000_selector = dpmi::dos_selector(0xa000);
             pmid->b000_selector = dpmi::dos_selector(0xb000);
             pmid->b800_selector = dpmi::dos_selector(0xb800);
 
-            asm volatile("call vbe3" ::: "eax", "ebx", "ecx", "edx", "esi", "edi", "cc");
+            asm volatile ("call vbe3" ::: "eax", "ebx", "ecx", "edx", "esi", "edi", "cc");
 
             vbe3_entry_point.offset = pmid->entry_point;
             vbe3_pm = true;
