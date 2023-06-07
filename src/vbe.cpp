@@ -17,12 +17,49 @@
 
 namespace jw::video
 {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpacked-not-aligned"
+    struct [[gnu::packed]] raw_vbe_info
+    {
+        char vbe_signature[4];
+        std::uint16_t vbe_version;
+        dpmi::far_ptr16 oem_string;
+        std::uint32_t capabilities;
+        dpmi::far_ptr16 video_mode_list;
+        std::uint16_t total_memory;
+        std::uint16_t oem_software_ver;
+        dpmi::far_ptr16 oem_vendor_name;
+        dpmi::far_ptr16 oem_product_name;
+        dpmi::far_ptr16 oem_product_version;
+        byte _reserved[222];
+        byte oem_data[256];
+    };
+
+    static_assert (sizeof(raw_vbe_info) == 0x200);
+#pragma GCC diagnostic pop
+
+    struct vbe3_pm_info
+    {
+        char pmid[4];
+        std::uint16_t entry_point;
+        std::uint16_t init_entry_point;
+        dpmi::selector bda_selector;
+        dpmi::selector a000_selector;
+        dpmi::selector b000_selector;
+        dpmi::selector b800_selector;
+        dpmi::selector data_selector;
+        bool in_protected_mode;
+        byte checksum;
+    };
+
+    static_assert (sizeof(vbe3_pm_info) == 0x14);
+
     union dos_data_t
     {
         std::array<px32n, 256> palette;
         vbe_mode_info mode;
         crtc_info crtc;
-        detail::raw_vbe_info raw_vbe;
+        raw_vbe_info raw_vbe;
     };
 
     static auto& get_dos_data()
@@ -59,7 +96,7 @@ namespace jw::video
     static std::optional<dpmi::descriptor> vbe3_stack;
     static std::optional<dpmi::descriptor> video_bios;
     static std::optional<dpmi::descriptor> fake_bda;
-    static detail::vbe3_pm_info* pmid { nullptr };
+    static vbe3_pm_info* pmid { nullptr };
 
     static std::optional<dpmi::descriptor> video_bios_code;
     static dpmi::far_ptr32 vbe3_stack_ptr;
@@ -180,7 +217,7 @@ namespace jw::video
     std::size_t vbe::get_lfb_size_in_pixels()
     {
         auto r = get_scanline_length();
-        return r.pixels_per_scanline * mode_info->resolution_y * mode_info->linear_num_image_pages;
+        return r.pixels_per_scanline * mode_info->resolution.y * mode_info->lfb_num_image_pages;
     }
 
     bool vbe::init()
@@ -304,7 +341,7 @@ namespace jw::video
             const char* search_value = "PMID";
             search_ptr = std::search(search_ptr, search_ptr + bios_size, search_value, search_value + 4);
             if (std::strncmp(search_ptr, search_value, 4) != 0) return false;
-            pmid = reinterpret_cast<detail::vbe3_pm_info*>(search_ptr);
+            pmid = reinterpret_cast<vbe3_pm_info*>(search_ptr);
             if (checksum8(*pmid) != 0) return false;
             pmid->in_protected_mode = true;
 
@@ -359,11 +396,11 @@ namespace jw::video
     {
         auto& reg = get_realmode_registers();
         reg.ax = 0x4f02;
-        reg.bx = m.raw_value;
+        reg.bx = m.mode;
         reg.call_int(0x10);
         check_error(reg.ax, __PRETTY_FUNCTION__);
         mode = m;
-        mode_info = &modes[m.mode];
+        mode_info = &modes[m.index];
         dac_bits = 6;
     }
 
@@ -372,7 +409,7 @@ namespace jw::video
         if (crtc == nullptr) m.use_custom_crtc_timings = false;
         auto& reg = get_realmode_registers();
         reg.ax = 0x4f02;
-        reg.bx = m.raw_value;
+        reg.bx = m.mode;
         if (m.use_custom_crtc_timings)
         {
             auto& dos_data = get_dos_data();
@@ -384,7 +421,7 @@ namespace jw::video
         else reg.call_int(0x10);
         check_error(reg.ax, __PRETTY_FUNCTION__);
         mode = m;
-        mode_info = &modes[m.mode];
+        mode_info = &modes[m.index];
         dac_bits = 6;
     }
 
@@ -470,7 +507,7 @@ namespace jw::video
     {
         if (!vbe2_pm) return vbe::set_display_start(pos, wait_for_vsync);
 
-        auto bps = (mode.use_lfb_mode && info.vbe_version >= 0x300) ? mode_info->linear_bytes_per_scanline : mode_info->bytes_per_scanline;
+        auto bps = (mode.use_lfb_mode && info.vbe_version >= 0x300) ? mode_info->lfb_bytes_per_scanline : mode_info->bytes_per_scanline;
         auto start = pos.x() * (mode_info->bits_per_pixel / 8) + pos.y() * bps;
         if (mode_info->bits_per_pixel >= 8) start = ((start & 3) << 30 | (start >> 2));
         split_uint32_t split_start { start };
@@ -530,7 +567,7 @@ namespace jw::video
     {
         if (not mode_info->attr.triple_buffering_supported) return set_display_start(pos);
 
-        auto bps = mode.use_lfb_mode ? mode_info->linear_bytes_per_scanline : mode_info->bytes_per_scanline;
+        auto bps = mode.use_lfb_mode ? mode_info->lfb_bytes_per_scanline : mode_info->bytes_per_scanline;
         auto start = pos.x() * (mode_info->bits_per_pixel / 8) + pos.y() * bps;
 
         if (vbe3_pm)

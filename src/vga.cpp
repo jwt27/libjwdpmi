@@ -1,4 +1,5 @@
 /* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
+/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
 /* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
@@ -12,10 +13,10 @@ namespace jw
     {
         void vga_bios::set_mode(vbe_mode m, const crtc_info *)
         {
-            if (m.dont_clear_video_memory) m.mode |= 0x80;
+            if (m.dont_clear_video_memory) m.index |= 0x80;
             dpmi::realmode_registers reg { };
             reg.ah = 0x00;
-            reg.al = m.mode;
+            reg.al = m.index;
             reg.call_int(0x10);
         }
 
