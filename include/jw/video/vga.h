@@ -20,9 +20,9 @@ namespace jw::video
 
     struct vga : public vga_bios
     {
-        virtual void set_palette(std::span<const px32n>, std::size_t first = 0, bool wait_for_vsync = false);
+        virtual void palette(std::span<const px32n>, std::size_t first = 0, bool wait_for_vsync = false);
 
-        virtual std::array<px32n, 256> get_palette();
+        virtual std::array<px32n, 256> palette();
 
     protected:
         std::size_t dac_bits { 6 };

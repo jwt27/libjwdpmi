@@ -23,7 +23,7 @@ namespace jw::video
         reg.call_int(0x10);
     }
 
-    void vga::set_palette(std::span<const px32n> pal, std::size_t first, bool)
+    void vga::palette(std::span<const px32n> pal, std::size_t first, bool)
     {
         dac_write_index.write(first);
         if (dac_bits == 8)
@@ -51,7 +51,7 @@ namespace jw::video
         }
     }
 
-    std::array<px32n, 256> vga::get_palette()
+    std::array<px32n, 256> vga::palette()
     {
         std::array<px32n, 256> result;
         dac_read_index.write(0);

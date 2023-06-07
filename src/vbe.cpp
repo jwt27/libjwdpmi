@@ -76,11 +76,11 @@ namespace jw::video
         return reg;
     }
 
-    std::aligned_union_t<0, vbe, vbe2, vbe3> instance;
+    static std::aligned_union_t<0, vbe, vbe2, vbe3> instance;
     static vbe* instance_ptr { nullptr };
 
-    static vbe_info info;
-    static std::map<std::uint_fast16_t, vbe_mode_info> modes { };
+    static vbe_info bios_info;
+    static std::map<std::uint_fast16_t, vbe_mode_info> mode_list { };
     static vbe_mode mode;
     static vbe_mode_info* mode_info { nullptr };
 
@@ -157,7 +157,7 @@ namespace jw::video
 
     static void populate_mode_list(dpmi::far_ptr16 list_ptr)
     {
-        dpmi::mapped_dos_memory<std::uint16_t> mode_list { 256, list_ptr };
+        dpmi::mapped_dos_memory<std::uint16_t> far_mode_list { 256, list_ptr };
         auto& dos_data = get_dos_data();
         auto get_mode = [&](std::uint16_t num)
         {
@@ -169,10 +169,10 @@ namespace jw::video
             reg.di = dos_data.dos_pointer().offset;
             reg.call_int(0x10);
             check_error(reg.ax, __PRETTY_FUNCTION__);
-            modes[num] = dos_data->mode;
+            mode_list[num] = dos_data->mode;
         };
 
-        for (auto* mode_ptr = mode_list.near_pointer(); *mode_ptr != 0xffff; ++mode_ptr)
+        for (auto* mode_ptr = far_mode_list.near_pointer(); *mode_ptr != 0xffff; ++mode_ptr)
             get_mode(*mode_ptr);
 
         for (auto n = 0; n < 0x7f; ++n)
@@ -184,7 +184,7 @@ namespace jw::video
         catch (const vbe::error&) { }
     }
 
-    vbe* get_vbe_interface()
+    vbe* vbe_interface()
     {
         if (instance_ptr) [[likely]] goto ok;
 
@@ -206,22 +206,26 @@ namespace jw::video
         return instance_ptr;
     }
 
-    const vbe_info& vbe::get_vbe_info()
+    const vbe_info& vbe::info()
     {
-        if (info.vbe_signature != "VESA") init();
-        return info;
+        return bios_info;
     }
 
-    const std::map<std::uint_fast16_t, vbe_mode_info>& vbe::get_modes()
+    const std::map<std::uint_fast16_t, vbe_mode_info>& vbe::modes()
     {
-        get_vbe_info();
-        return modes;
+        return mode_list;
     }
 
-    std::size_t vbe::get_lfb_size_in_pixels()
+    std::size_t vbe::lfb_size_in_pixels()
     {
-        auto r = get_scanline_length();
+        auto r = scanline_length();
         return r.pixels_per_scanline * mode_info->resolution.y * mode_info->lfb_num_image_pages;
+    }
+
+    std::size_t vbe::bits_per_pixel()
+    {
+        auto r = scanline_length();
+        return r.bytes_per_scanline * 8 / r.pixels_per_scanline;
     }
 
     bool vbe::init()
@@ -236,14 +240,14 @@ namespace jw::video
         reg.call_int(0x10);
         if (reg.ax != 0x004f) return false;
 
-        info.vbe_signature.assign(ptr->vbe_signature, ptr->vbe_signature + 4);
-        info.vbe_version = ptr->vbe_version;
+        bios_info.vbe_signature.assign(ptr->vbe_signature, ptr->vbe_signature + 4);
+        bios_info.vbe_version = ptr->vbe_version;
 
-        std::copy_n(&ptr->capabilities, 1, reinterpret_cast<std::uint32_t*>(&info.capabilities));
-        info.total_memory = ptr->total_memory;
+        std::copy_n(&ptr->capabilities, 1, reinterpret_cast<std::uint32_t*>(&bios_info.capabilities));
+        bios_info.total_memory = ptr->total_memory;
         {
             dpmi::mapped_dos_memory<char> str { 256, ptr->oem_string };
-            info.oem_string = str.near_pointer();
+            bios_info.oem_string = str.near_pointer();
         }
         populate_mode_list(ptr->video_mode_list);
         return true;
@@ -263,28 +267,28 @@ namespace jw::video
         if (reg.ax != 0x004f) return false;
         if (ptr->vbe_version < 0x0200) return false;
 
-        info.vbe_signature.assign(ptr->vbe_signature, ptr->vbe_signature + 4);
-        info.vbe_version = ptr->vbe_version;
+        bios_info.vbe_signature.assign(ptr->vbe_signature, ptr->vbe_signature + 4);
+        bios_info.vbe_version = ptr->vbe_version;
 
-        std::copy_n(&ptr->capabilities, 1, reinterpret_cast<std::uint32_t*>(&info.capabilities));
-        info.total_memory = ptr->total_memory;
-        info.oem_software_ver = ptr->oem_software_ver;
-        std::copy_n(ptr->oem_data, 256, info.oem_data.data());
+        std::copy_n(&ptr->capabilities, 1, reinterpret_cast<std::uint32_t*>(&bios_info.capabilities));
+        bios_info.total_memory = ptr->total_memory;
+        bios_info.oem_software_ver = ptr->oem_software_ver;
+        std::copy_n(ptr->oem_data, 256, bios_info.oem_data.data());
         {
             dpmi::mapped_dos_memory<char> str { 256, ptr->oem_string };
-            info.oem_string = str.near_pointer();
+            bios_info.oem_string = str.near_pointer();
         }
         {
             dpmi::mapped_dos_memory<char> str { 256, ptr->oem_vendor_name };
-            info.oem_vendor_name = str.near_pointer();
+            bios_info.oem_vendor_name = str.near_pointer();
         }
         {
             dpmi::mapped_dos_memory<char> str { 256, ptr->oem_product_name };
-            info.oem_product_name = str.near_pointer();
+            bios_info.oem_product_name = str.near_pointer();
         }
         {
             dpmi::mapped_dos_memory<char> str { 256, ptr->oem_product_version };
-            info.oem_product_version = str.near_pointer();
+            bios_info.oem_product_version = str.near_pointer();
         }
         populate_mode_list(ptr->video_mode_list);
 
@@ -328,7 +332,7 @@ namespace jw::video
     {
         using namespace dpmi;
         if (not vbe2::init()) return false;
-        if (info.vbe_version < 0x0300) return false;
+        if (info().vbe_version < 0x0300) return false;
         if (vbe3_pm) return true;
 
         try
@@ -404,7 +408,7 @@ namespace jw::video
         reg.call_int(0x10);
         check_error(reg.ax, __PRETTY_FUNCTION__);
         mode = m;
-        mode_info = &modes[m.index];
+        mode_info = &mode_list[m.index];
         dac_bits = 6;
     }
 
@@ -425,11 +429,11 @@ namespace jw::video
         else reg.call_int(0x10);
         check_error(reg.ax, __PRETTY_FUNCTION__);
         mode = m;
-        mode_info = &modes[m.index];
+        mode_info = &mode_list[m.index];
         dac_bits = 6;
     }
 
-    scanline_length vbe::set_scanline_length(std::size_t width, bool width_in_pixels)
+    scanline_info vbe::scanline_length(std::size_t width, bool width_in_pixels)
     {
         auto& reg = get_realmode_registers();
         reg.ax = 0x4f06;
@@ -440,9 +444,9 @@ namespace jw::video
         return { reg.cx, reg.bx, reg.dx };
     }
 
-    scanline_length vbe3::set_scanline_length(std::size_t width, bool width_in_pixels)
+    scanline_info vbe3::scanline_length(std::size_t width, bool width_in_pixels)
     {
-        if (!vbe3_pm) return vbe2::set_scanline_length(width, width_in_pixels);
+        if (not vbe3_pm) return vbe2::scanline_length(width, width_in_pixels);
 
         std::uint16_t ax, pixels_per_scanline, bytes_per_scanline, max_scanlines;
         asm volatile(
@@ -459,7 +463,7 @@ namespace jw::video
         return { pixels_per_scanline, bytes_per_scanline, max_scanlines };
     }
 
-    scanline_length vbe::get_scanline_length()
+    scanline_info vbe::scanline_length()
     {
         auto& reg = get_realmode_registers();
         reg.ax = 0x4f06;
@@ -469,7 +473,7 @@ namespace jw::video
         return { reg.cx, reg.bx, reg.dx };
     }
 
-    scanline_length vbe::get_max_scanline_length()
+    scanline_info vbe::max_scanline_length()
     {
         auto& reg = get_realmode_registers();
         reg.ax = 0x4f06;
@@ -479,9 +483,9 @@ namespace jw::video
         return { reg.cx, reg.bx, reg.dx };
     }
 
-    scanline_length vbe3::get_max_scanline_length()
+    scanline_info vbe3::max_scanline_length()
     {
-        if (!vbe3_pm) return vbe2::get_max_scanline_length();
+        if (not vbe3_pm) return vbe2::max_scanline_length();
 
         std::uint16_t ax, pixels_per_scanline, bytes_per_scanline, max_scanlines;
         asm("call vbe3"
@@ -496,7 +500,7 @@ namespace jw::video
         return { pixels_per_scanline, bytes_per_scanline, max_scanlines };
     }
 
-    void vbe::set_display_start(vector2i pos, bool wait_for_vsync)
+    void vbe::display_start(vector2i pos, bool wait_for_vsync)
     {
         auto& reg = get_realmode_registers();
         reg.ax = 0x4f07;
@@ -507,11 +511,11 @@ namespace jw::video
         check_error(reg.ax, __PRETTY_FUNCTION__);
     }
 
-    void vbe2::set_display_start(vector2i pos, bool wait_for_vsync)
+    void vbe2::display_start(vector2i pos, bool wait_for_vsync)
     {
-        if (!vbe2_pm) return vbe::set_display_start(pos, wait_for_vsync);
+        if (!vbe2_pm) return vbe::display_start(pos, wait_for_vsync);
 
-        auto bps = (mode.use_lfb_mode && info.vbe_version >= 0x300) ? mode_info->lfb_bytes_per_scanline : mode_info->bytes_per_scanline;
+        auto bps = (mode.use_lfb_mode && info().vbe_version >= 0x300) ? mode_info->lfb_bytes_per_scanline : mode_info->bytes_per_scanline;
         auto start = pos.x() * (mode_info->bits_per_pixel / 8) + pos.y() * bps;
         if (mode_info->bits_per_pixel >= 8) start = ((start & 3) << 30 | (start >> 2));
         split_uint32_t split_start { start };
@@ -534,9 +538,9 @@ namespace jw::video
             : "cc");
     }
 
-    void vbe3::set_display_start(vector2i pos, bool wait_for_vsync)
+    void vbe3::display_start(vector2i pos, bool wait_for_vsync)
     {
-        if (!vbe3_pm) return vbe2::set_display_start(pos, wait_for_vsync);
+        if (not vbe3_pm) return vbe2::display_start(pos, wait_for_vsync);
 
         std::uint16_t ax;
         asm volatile(
@@ -550,7 +554,7 @@ namespace jw::video
         check_error(ax, __PRETTY_FUNCTION__);
     }
 
-    vector2i vbe::get_display_start()
+    vector2i vbe::display_start()
     {
         auto& reg = get_realmode_registers();
         reg.ax = 0x4f07;
@@ -564,12 +568,12 @@ namespace jw::video
 
     void vbe::schedule_display_start(vector2i pos)
     {
-        return set_display_start(pos, false);
+        return display_start(pos, false);
     }
 
     void vbe3::schedule_display_start(vector2i pos)
     {
-        if (not mode_info->attr.triple_buffering_supported) return set_display_start(pos);
+        if (not mode_info->attr.triple_buffering_supported) return display_start(pos);
 
         auto bps = mode.use_lfb_mode ? mode_info->lfb_bytes_per_scanline : mode_info->bytes_per_scanline;
         auto start = pos.x() * (mode_info->bits_per_pixel / 8) + pos.y() * bps;
@@ -597,14 +601,14 @@ namespace jw::video
         }
     }
 
-    bool vbe::get_scheduled_display_start_status()
+    bool vbe::scheduled_display_start_status()
     {
         return true;
     }
 
-    bool vbe3::get_scheduled_display_start_status()
+    bool vbe3::scheduled_display_start_status()
     {
-        if (!mode_info->attr.triple_buffering_supported) return vbe2::get_scheduled_display_start_status();
+        if (!mode_info->attr.triple_buffering_supported) return vbe2::scheduled_display_start_status();
 
         if (vbe3_pm)
         {
@@ -629,7 +633,7 @@ namespace jw::video
         }
     }
 
-    std::uint8_t vbe::set_palette_format(std::uint8_t bits_per_channel)
+    std::uint8_t vbe::palette_format(std::uint8_t bits_per_channel)
     {
         auto& reg = get_realmode_registers();
         reg.ax = 0x4f08;
@@ -640,9 +644,9 @@ namespace jw::video
         return reg.bh;
     }
 
-    std::uint8_t vbe3::set_palette_format(std::uint8_t bits_per_channel)
+    std::uint8_t vbe3::palette_format(std::uint8_t bits_per_channel)
     {
-        if (!vbe3_pm) return vbe2::set_palette_format(bits_per_channel);
+        if (not vbe3_pm) return vbe2::palette_format(bits_per_channel);
 
         std::uint16_t ax;
         split_uint16_t bx;
@@ -658,7 +662,7 @@ namespace jw::video
         return bx.hi;
     }
 
-    std::uint8_t vbe::get_palette_format()
+    std::uint8_t vbe::palette_format()
     {
         auto& reg = get_realmode_registers();
         reg.ax = 0x4f08;
@@ -669,7 +673,7 @@ namespace jw::video
         return reg.bh;
     }
 
-    void vbe2::set_palette(std::span<const px32n> pal, std::size_t first, bool wait_for_vsync)
+    void vbe2::palette(std::span<const px32n> pal, std::size_t first, bool wait_for_vsync)
     {
         const auto size = std::min(pal.size(), 256ul);
         if (vbe2_pm)
@@ -733,9 +737,9 @@ namespace jw::video
         }
     }
 
-    void vbe3::set_palette(std::span<const px32n> pal, std::size_t first, bool wait_for_vsync)
+    void vbe3::palette(std::span<const px32n> pal, std::size_t first, bool wait_for_vsync)
     {
-        if (not vbe3_pm) return vbe2::set_palette(pal, first, wait_for_vsync);
+        if (not vbe3_pm) return vbe2::palette(pal, first, wait_for_vsync);
 
         const auto size = std::min(pal.size(), 256ul);
         std::array<pxvga, 256> copy;
@@ -764,7 +768,7 @@ namespace jw::video
         check_error(ax, __PRETTY_FUNCTION__);
     }
 
-    std::array<px32n, 256> vbe2::get_palette()
+    std::array<px32n, 256> vbe2::palette()
     {
         auto& dos_data = get_dos_data();
 
@@ -776,8 +780,8 @@ namespace jw::video
         reg.es = dos_data.dos_pointer().segment;
         reg.di = dos_data.dos_pointer().offset;
         reg.call_int(0x10);
-        if (info.vbe_version < 0x300) check_error(reg.ax, __PRETTY_FUNCTION__);
-        else if (reg.ax != 0x004f) return vga::get_palette();
+        if (info().vbe_version < 0x300) check_error(reg.ax, __PRETTY_FUNCTION__);
+        else if (reg.ax != 0x004f) return vga::palette();
 
         std::array<px32n, 256> result;
         auto* ptr = dos_data->palette.data();
@@ -794,7 +798,7 @@ namespace jw::video
         return result;
     }
 
-    std::uint32_t vbe3::get_closest_pixel_clock(std::uint32_t desired_clock, std::uint16_t mode_num)
+    std::uint32_t vbe3::closest_pixel_clock(std::uint32_t desired_clock, std::uint16_t mode_num)
     {
         if (vbe3_pm)
         {

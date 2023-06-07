@@ -163,6 +163,13 @@ namespace jw::video
         constexpr vbe_mode(std::uint16_t num) noexcept : mode { num } { }
     };
 
+    struct scanline_info
+    {
+        std::size_t pixels_per_scanline;
+        std::size_t bytes_per_scanline;
+        std::size_t max_scanlines;
+    };
+
     static_assert (sizeof(vbe_mode_info) == 0x100);
     static_assert (sizeof(crtc_info) == 0x3b);
     static_assert (sizeof(vbe_mode) == 0x2);
