@@ -429,9 +429,11 @@ namespace jw::dpmi
 {
     bool redirect_exception(const exception_info& info, void(*func)())
     {
-        if (info.frame->info_bits.redirect_elsewhere or
-            info.frame->fault_address.segment != detail::main_cs or
-            info.frame->flags.v86_mode) return false;
+        if (info.frame->info_bits.redirect_elsewhere) return false;
+        if (info.frame->fault_address.segment != detail::main_cs) return false;
+        if (info.frame->flags.v86_mode) return false;
+        if (info.frame->stack.segment != detail::main_ds and
+            info.frame->stack.segment != detail::safe_ds) return false;
 
         const std::uintptr_t ret = info.frame->fault_address.offset;
         const cpu_flags flags = info.frame->flags;
