@@ -18,6 +18,9 @@ namespace jw::video
 {
     struct vbe;
 
+    // Initialize VBE and return a pointer to the interface, or nullptr if
+    // initialization failed.  The pointer may be dynamic_cast in order to
+    // access VBE3-specific features.
     vbe* get_vbe_interface();
 
     struct scanline_length
@@ -58,6 +61,7 @@ namespace jw::video
     protected:
         friend vbe* get_vbe_interface();
         vbe() noexcept = default;
+        virtual ~vbe() = default;
         virtual bool init();
     };
 
@@ -71,6 +75,7 @@ namespace jw::video
     protected:
         friend vbe* get_vbe_interface();
         vbe2() noexcept = default;
+        virtual ~vbe2() = default;
         virtual bool init() override;
     };
 
@@ -93,11 +98,12 @@ namespace jw::video
         //virtual void disable_stereo()
         virtual std::uint8_t set_palette_format(std::uint8_t bits_per_channel) override;
         virtual void set_palette(std::span<const px32n>, std::size_t first = 0, bool wait_for_vsync = false) override;
-        virtual std::uint32_t get_closest_pixel_clock(std::uint32_t desired_clock, std::uint16_t mode_num);
+        std::uint32_t get_closest_pixel_clock(std::uint32_t desired_clock, std::uint16_t mode_num);
 
     protected:
         friend vbe* get_vbe_interface();
         vbe3() noexcept = default;
+        virtual ~vbe3() = default;
         virtual bool init() override;
     };
 }

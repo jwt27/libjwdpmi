@@ -76,7 +76,9 @@ namespace jw::video
         return reg;
     }
 
-    static std::unique_ptr<vbe> vbe_interface;
+    std::aligned_union_t<0, vbe, vbe2, vbe3> instance;
+    static vbe* instance_ptr { nullptr };
+
     static vbe_info info;
     static std::map<std::uint_fast16_t, vbe_mode_info> modes { };
     static vbe_mode mode;
@@ -184,22 +186,24 @@ namespace jw::video
 
     vbe* get_vbe_interface()
     {
-        if (vbe_interface) [[likely]] goto ok;
+        if (instance_ptr) [[likely]] goto ok;
 
-        vbe_interface.reset(new vbe3);
-        if (vbe_interface->init()) goto ok;
+        instance_ptr = new (&instance) vbe3;
+        if (instance_ptr->init()) goto ok;
 
-        vbe_interface.reset(new vbe2);
-        if (not vbe_interface->init()) goto ok;
+        instance_ptr->~vbe();
+        instance_ptr = new (&instance) vbe2;
+        if (instance_ptr->init()) goto ok;
 
-        vbe_interface.reset(new vbe);
-        if (not vbe_interface->init()) goto ok;
+        instance_ptr->~vbe();
+        instance_ptr = new (&instance) vbe;
+        if (instance_ptr->init()) goto ok;
 
-        vbe_interface.reset();
-        return nullptr;
+        instance_ptr->~vbe();
+        instance_ptr = nullptr;
 
     ok:
-        return vbe_interface.get();
+        return instance_ptr;
     }
 
     const vbe_info& vbe::get_vbe_info()
