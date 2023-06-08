@@ -23,6 +23,11 @@ namespace jw::io
         pci_device(class_tag, std::uint8_t class_code, std::initializer_list<std::uint8_t> subclass_codes, std::uint8_t interface_type);
         virtual ~pci_device();
 
+        pci_device(pci_device&&) = delete;
+        pci_device(const pci_device&) = delete;
+        pci_device& operator=(pci_device&&) = delete;
+        pci_device& operator=(const pci_device&) = delete;
+
         template<typename T>
         struct pci_register
         {
