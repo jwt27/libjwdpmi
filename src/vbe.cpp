@@ -438,25 +438,6 @@ namespace jw::video
         return { reg.cx, reg.bx, reg.dx };
     }
 
-    scanline_info vbe3::scanline_length(std::size_t width, bool width_in_pixels)
-    {
-        if (not vbe3_pm) return vbe2::scanline_length(width, width_in_pixels);
-
-        std::uint16_t ax, pixels_per_scanline, bytes_per_scanline, max_scanlines;
-        asm volatile(
-            "call vbe3"
-            : "=a" (ax)
-            , "=b" (bytes_per_scanline)
-            , "=c" (pixels_per_scanline)
-            , "=d" (max_scanlines)
-            : "a" (0x4f06)
-            , "b" (width_in_pixels ? 0 : 2)
-            , "c" (width)
-            : "edi", "esi", "cc");
-        check_error(ax, __PRETTY_FUNCTION__);
-        return { pixels_per_scanline, bytes_per_scanline, max_scanlines };
-    }
-
     scanline_info vbe::scanline_length()
     {
         auto& reg = get_realmode_registers();
@@ -475,23 +456,6 @@ namespace jw::video
         reg.call_int(0x10);
         check_error(reg.ax, __PRETTY_FUNCTION__);
         return { reg.cx, reg.bx, reg.dx };
-    }
-
-    scanline_info vbe3::max_scanline_length()
-    {
-        if (not vbe3_pm) return vbe2::max_scanline_length();
-
-        std::uint16_t ax, pixels_per_scanline, bytes_per_scanline, max_scanlines;
-        asm("call vbe3"
-            : "=a" (ax)
-            , "=b" (bytes_per_scanline)
-            , "=c" (pixels_per_scanline)
-            , "=d" (max_scanlines)
-            : "a" (0x4f06)
-            , "b" (3)
-            : "edi", "esi", "cc");
-        check_error(ax, __PRETTY_FUNCTION__);
-        return { pixels_per_scanline, bytes_per_scanline, max_scanlines };
     }
 
     void vbe::display_start(vector2i pos, bool wait_for_vsync)

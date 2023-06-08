@@ -29,9 +29,9 @@ namespace jw::video
         const vbe_info& info();
         const std::map<std::uint_fast16_t, vbe_mode_info>& modes();
         virtual void set_mode(vbe_mode m, const crtc_info* crtc = nullptr) override;
-        virtual scanline_info scanline_length(std::size_t width, bool width_in_pixels = true);
-        virtual scanline_info scanline_length();
-        virtual scanline_info max_scanline_length();
+        scanline_info scanline_length(std::size_t width, bool width_in_pixels = true);
+        scanline_info scanline_length();
+        scanline_info max_scanline_length();
         virtual void display_start(vector2i pos, bool wait_for_vsync = false);
         virtual vector2i display_start();
         virtual void schedule_display_start(vector2i pos);
@@ -64,8 +64,6 @@ namespace jw::video
     struct vbe3 final : vbe2
     {
         virtual void set_mode(vbe_mode m, const crtc_info* crtc = nullptr) override;
-        virtual scanline_info scanline_length(std::size_t width, bool width_in_pixels = true) override;
-        virtual scanline_info max_scanline_length() override;
         virtual void display_start(vector2i pos, bool wait_for_vsync = false) override;
         virtual void schedule_display_start(vector2i pos) override;
         virtual bool scheduled_display_start_status() override;
