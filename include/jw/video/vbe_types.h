@@ -26,7 +26,7 @@ namespace jw::video
         // VBE 1.1: //
         std::uint16_t total_memory;         // number of 64k blocks
         // VBE 2.0: //
-        std::uint16_t oem_software_ver;
+        std::uint16_t oem_software_version;
         std::string oem_vendor_name;
         std::string oem_product_name;
         std::string oem_product_version;

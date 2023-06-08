@@ -266,7 +266,7 @@ namespace jw::video
 
         std::copy_n(&ptr->capabilities, 1, reinterpret_cast<std::uint32_t*>(&bios_info.capabilities));
         bios_info.total_memory = ptr->total_memory;
-        bios_info.oem_software_ver = ptr->oem_software_ver;
+        bios_info.oem_software_version = ptr->oem_software_ver;
         std::copy_n(ptr->oem_data, 256, bios_info.oem_data.data());
         {
             dpmi::mapped_dos_memory<char> str { 256, ptr->oem_string };
