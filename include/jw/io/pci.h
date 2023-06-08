@@ -32,49 +32,24 @@ namespace jw::io
         struct pci_register
         {
             static_assert(sizeof(T) == 4, "PCI registers must be 32 bits wide.");
-            constexpr pci_register(const pci_device* device, std::uint8_t register_num) : dev(*device), reg(register_num)
-            {
-                if (reg % 4 != 0) throw bad_register { "PCI registers must be aligned to a 32-bit boundary." };
-            }
+            pci_register(const pci_device* dev, std::uint8_t reg) noexcept : regnum { get_regnum(dev, reg) } { }
 
-            auto read()
+            auto read() const noexcept
             {
-                index.write(get_regnum());
+                index.write(regnum);
                 return data.read();
             }
 
-            void write(const T& value)
+            void write(const T& value) const noexcept
             {
-                index.write(get_regnum());
+                index.write(regnum);
                 data.write(value);
             }
 
         private:
-            std::uint32_t get_regnum() const
-            {
-                union
-                {
-                    struct
-                    {
-                        unsigned register_num : 8;
-                        unsigned function : 3;
-                        unsigned device : 5;
-                        unsigned bus : 8;
-                        unsigned : 7;
-                        bool enable_config : 1;
-                    };
-                    std::uint32_t value { };
-                } x;
-                x.register_num = reg;
-                x.function = dev.function;
-                x.device = dev.device;
-                x.bus = dev.bus;
-                x.enable_config = true;
-                return x.value;
-            }
+            static std::uint32_t get_regnum(const pci_device* dev, std::uint8_t reg) noexcept;
 
-            const pci_device& dev { };
-            const std::uint8_t reg;
+            const std::uint32_t regnum;
             static constexpr out_port<std::uint32_t> index { 0xcf8 };
             static constexpr io_port<T> data { 0xcfc };
         };
@@ -134,40 +109,63 @@ namespace jw::io
             } self_test;
         };
 
-        pci_register<reg_id> id { this, 0x00 };
-        pci_register<reg_command_and_status> command_and_status { this, 0x04 };
-        pci_register<reg_type> type { this, 0x08 };
-        pci_register<reg_misc> misc { this, 0x0C };
-        pci_register<std::uintptr_t> base0 { this, 0x10 };
-        pci_register<std::uintptr_t> base1 { this, 0x14 };
-        pci_register<std::uintptr_t> base2 { this, 0x18 };
-        pci_register<std::uintptr_t> base3 { this, 0x1C };
-        pci_register<std::uintptr_t> base4 { this, 0x20 };
-        pci_register<std::uintptr_t> base5 { this, 0x24 };
-        pci_register<std::uintptr_t> cardbus_info { this, 0x28 };
-        pci_register<reg_id> subsystem_id { this, 0x2C };
-        pci_register<std::uintptr_t> expansion_rom_base { this, 0x30 };
-        pci_register<std::uint32_t> capabilities_list { this, 0x34 };
-        pci_register<reg_bus_info> bus_info { this, 0x3C };
+        auto id()                   const noexcept { return pci_register<reg_id>                 { this, 0x00 }; }
+        auto command_and_status()   const noexcept { return pci_register<reg_command_and_status> { this, 0x04 }; }
+        auto type()                 const noexcept { return pci_register<reg_type>               { this, 0x08 }; }
+        auto misc()                 const noexcept { return pci_register<reg_misc>               { this, 0x0C }; }
+        auto base0()                const noexcept { return pci_register<std::uintptr_t>         { this, 0x10 }; }
+        auto base1()                const noexcept { return pci_register<std::uintptr_t>         { this, 0x14 }; }
+        auto base2()                const noexcept { return pci_register<std::uintptr_t>         { this, 0x18 }; }
+        auto base3()                const noexcept { return pci_register<std::uintptr_t>         { this, 0x1C }; }
+        auto base4()                const noexcept { return pci_register<std::uintptr_t>         { this, 0x20 }; }
+        auto base5()                const noexcept { return pci_register<std::uintptr_t>         { this, 0x24 }; }
+        auto cardbus_info()         const noexcept { return pci_register<std::uintptr_t>         { this, 0x28 }; }
+        auto subsystem_id()         const noexcept { return pci_register<reg_id>                 { this, 0x2C }; }
+        auto expansion_rom_base()   const noexcept { return pci_register<std::uintptr_t>         { this, 0x30 }; }
+        auto capabilities_list()    const noexcept { return pci_register<std::uint32_t>          { this, 0x34 }; }
+        auto bus_info()             const noexcept { return pci_register<reg_bus_info>           { this, 0x3C }; }
 
-        auto read_status() { return command_and_status.read().status; }
+        auto read_status() { return command_and_status().read().status; }
         void clear_status(reg_status clear_bits)
         {
-            auto s = command_and_status.read();
+            auto s = command_and_status().read();
             s.status = clear_bits;
-            command_and_status.write(s);
+            command_and_status().write(s);
         }
 
-        auto current_command() { return command_and_status.read().command; }
+        auto current_command() { return command_and_status().read().command; }
         void send_command(reg_command cmd)
         {
             reg_command_and_status r { };
             r.command = cmd;
-            command_and_status.write(r);
+            command_and_status().write(r);
         }
 
     private:
-        std::uint16_t index;
         std::uint8_t bus, device, function;
     };
+
+    template <typename T>
+    std::uint32_t pci_device::pci_register<T>::get_regnum(const pci_device* dev, std::uint8_t reg) noexcept
+    {
+        union
+        {
+            struct
+            {
+                unsigned register_num : 8;
+                unsigned function : 3;
+                unsigned device : 5;
+                unsigned bus : 8;
+                unsigned : 7;
+                bool enable_config : 1;
+            };
+            std::uint32_t value { };
+        } x;
+        x.register_num = reg;
+        x.function = dev->function;
+        x.device = dev->device;
+        x.bus = dev->bus;
+        x.enable_config = true;
+        return x.value;
+    }
 }
