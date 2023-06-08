@@ -1,10 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
+#/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+#/*    Copyright (C) 2017 - 2023 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <limits>
@@ -17,22 +12,22 @@
 
 namespace jw::dpmi
 {
-    struct [[gnu::packed]] selector_bits
+    union selector_bits
     {
-        union
+        struct [[gnu::packed]]
         {
-            struct
-            {
-                mutable unsigned privilege_level : 2;
-                bool local : 1;
-                unsigned index : 13;
-            };
-            selector value;
+            unsigned privilege_level : 2;
+            bool local : 1;
+            unsigned index : 13;
         };
-        selector_bits() noexcept = default;
-        constexpr selector_bits(selector sel) noexcept : value(sel) { };
+        selector value;
+
+        constexpr selector_bits() noexcept = default;
+        constexpr selector_bits(selector sel) noexcept : value { sel } { };
         constexpr operator selector() const noexcept { return value; }
     };
+
+    static_assert (sizeof(selector_bits) == sizeof(selector));
 
     struct page_size_t final
     {
