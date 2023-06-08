@@ -3,29 +3,32 @@
 
 #include <jw/io/pci.h>
 #include <jw/dpmi/realmode.h>
+#include <map>
 
 namespace jw::io
 {
-    pci_device::map_type* pci_device::device_map;
+    using map_type = std::map<std::uint16_t, std::map<std::uint16_t, std::map<std::uint16_t, const pci_device*>>>;
+    // map indexed by: bus->device->function
+    static constinit std::unique_ptr<map_type> device_map;
 
-    void pci_device::init()
+    static void init()
     {
         dpmi::realmode_registers reg { };
         reg.ax = 0xb101;
         reg.edi = 0;
         reg.call_int(0x1a);
-        if (reg.flags.carry || reg.ah != 0 || reg.edx != 0x20494350) throw unsupported_function { "PCI BIOS not detected." };
-        if (device_map == nullptr) device_map = new map_type { };
+        if (reg.flags.carry or reg.ah != 0 or reg.edx != 0x20494350) throw pci_device::unsupported_function { "PCI BIOS not detected." };
+        if (not device_map) device_map.reset(new map_type);
     }
 
     pci_device::pci_device(device_tag, std::uint16_t vendor, std::initializer_list<std::uint16_t> devices, std::uint8_t function_id)
     {
         init();
+        dpmi::realmode_registers reg { };
         for (auto d : devices)
         {
             for (auto i = 0;; ++i)
             {
-                dpmi::realmode_registers reg { };
                 reg.ax = 0xb102;
                 reg.cx = d;
                 reg.dx = vendor;
@@ -39,9 +42,10 @@ namespace jw::io
                 device = reg.bl >> 3;
                 function = reg.bl & 0b111;
                 if (function_id != 0xff && function != function_id) continue;
-                if ((*device_map).count(bus) &&
-                    (*device_map)[bus].count(device) &&
-                    (*device_map)[bus][device].count(function)) continue;
+                if (auto b = device_map->find(bus); b != device_map->end())
+                    if (auto d = b->second.find(device); d != b->second.end())
+                        if (auto f = d->second.find(function); f != d->second.end())
+                            continue;
                 (*device_map)[bus][device][function] = this;
                 return;
             }
@@ -70,7 +74,7 @@ namespace jw::io
         for (auto c : subclass_codes)
         {
             ecx.subclass_c = c;
-            for (auto i = 0;; ++i)
+            for (auto i = 0; ; ++i)
             {
                 dpmi::realmode_registers reg { };
                 reg.ax = 0xb103;
@@ -82,9 +86,10 @@ namespace jw::io
                 bus = reg.bh;
                 device = reg.bl >> 3;
                 function = reg.bl & 0b111;
-                if ((*device_map).count(bus) &&
-                    (*device_map)[bus].count(device) &&
-                    (*device_map)[bus][device].count(function)) continue;
+                if (auto b = device_map->find(bus); b != device_map->end())
+                    if (auto d = b->second.find(device); d != b->second.end())
+                        if (auto f = d->second.find(function); f != d->second.end())
+                            continue;
                 (*device_map)[bus][device][function] = this;
                 return;
             }
@@ -97,10 +102,6 @@ namespace jw::io
         (*device_map)[bus][device].erase(function);
         if ((*device_map)[bus][device].empty()) (*device_map)[bus].erase(device);
         if ((*device_map)[bus].empty()) device_map->erase(bus);
-        if (device_map->empty())
-        {
-            delete device_map;
-            device_map = nullptr;
-        }
+        if (device_map->empty()) device_map.reset();
     }
 }

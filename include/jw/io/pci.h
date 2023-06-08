@@ -3,7 +3,6 @@
 
 #pragma once
 #include <initializer_list>
-#include <unordered_map>
 #include <stdexcept>
 #include <jw/io/ioport.h>
 #include <jw/common.h>
@@ -165,10 +164,5 @@ namespace jw::io
     private:
         std::uint16_t index;
         std::uint8_t bus, device, function;
-
-        using map_type = std::unordered_map<std::uint16_t, std::unordered_map<std::uint16_t, std::unordered_map<std::uint16_t, const pci_device*>>>;
-        // map indexed by: bus->device->function
-        static map_type* device_map;
-        static void init();
     };
 }
