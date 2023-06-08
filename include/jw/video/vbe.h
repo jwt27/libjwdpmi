@@ -44,8 +44,6 @@ namespace jw::video
     protected:
         friend vbe* vbe_interface();
         vbe() noexcept = default;
-        virtual ~vbe() = default;
-        virtual bool init();
     };
 
     struct vbe2 : vbe
@@ -57,8 +55,6 @@ namespace jw::video
     protected:
         friend vbe* vbe_interface();
         vbe2() noexcept = default;
-        virtual ~vbe2() = default;
-        virtual bool init() override;
     };
 
     struct vbe3 final : vbe2
@@ -84,7 +80,5 @@ namespace jw::video
     protected:
         friend vbe* vbe_interface();
         vbe3() noexcept = default;
-        virtual ~vbe3() = default;
-        virtual bool init() override;
     };
 }

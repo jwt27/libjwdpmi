@@ -64,7 +64,7 @@ namespace jw::video
 
     static auto& get_realmode_registers()
     {
-        static dpmi::realmode_registers reg { };
+        static constinit dpmi::realmode_registers reg { };
         reg.ss = reg.sp = 0;
         reg.flags.interrupt = true;
         return reg;
@@ -78,7 +78,7 @@ namespace jw::video
     static vbe_mode mode;
     static vbe_mode_info* mode_info { nullptr };
 
-    static std::vector<byte> vbe2_pm_interface { };
+    static std::vector<std::byte> vbe2_pm_interface { };
     static std::optional<dpmi::device_memory<byte>> vbe2_mmio_memory;
     static std::optional<dpmi::descriptor> vbe2_mmio;
     static std::uintptr_t vbe2_call_set_window;
@@ -149,108 +149,14 @@ namespace jw::video
         throw vbe::error { msg };
     }
 
-    static void populate_mode_list(dpmi::far_ptr16 list_ptr)
-    {
-        dpmi::mapped_dos_memory<std::uint16_t> far_mode_list { 256, list_ptr };
-        auto& dos_data = get_dos_data();
-        auto get_mode = [&](std::uint16_t num)
-        {
-            dos_data->mode = { };
-            auto& reg = get_realmode_registers();
-            reg.ax = 0x4f01;
-            reg.cx = num;
-            reg.es = dos_data.dos_pointer().segment;
-            reg.di = dos_data.dos_pointer().offset;
-            reg.call_int(0x10);
-            check_error(reg.ax, __PRETTY_FUNCTION__);
-            mode_list[num] = dos_data->mode;
-        };
-
-        for (auto* mode_ptr = far_mode_list.near_pointer(); *mode_ptr != 0xffff; ++mode_ptr)
-            get_mode(*mode_ptr);
-
-        for (auto n = 0; n < 0x7f; ++n)
-        {
-            try { get_mode(n); }
-            catch (const vbe::error&) { }
-        }
-        try { get_mode(0x81ff); }
-        catch (const vbe::error&) { }
-    }
-
     vbe* vbe_interface()
     {
-        if (instance_ptr) [[likely]] goto ok;
+        if (instance_ptr) [[likely]] return instance_ptr;
 
-        instance_ptr = new (&instance) vbe3;
-        if (instance_ptr->init()) goto ok;
-
-        instance_ptr->~vbe();
-        instance_ptr = new (&instance) vbe2;
-        if (instance_ptr->init()) goto ok;
-
-        instance_ptr->~vbe();
-        instance_ptr = new (&instance) vbe;
-        if (instance_ptr->init()) goto ok;
-
-        instance_ptr->~vbe();
-        instance_ptr = nullptr;
-
-    ok:
-        return instance_ptr;
-    }
-
-    const vbe_info& vbe::info()
-    {
-        return bios_info;
-    }
-
-    const std::map<std::uint_fast16_t, vbe_mode_info>& vbe::modes()
-    {
-        return mode_list;
-    }
-
-    std::size_t vbe::lfb_size_in_pixels()
-    {
-        auto r = scanline_length();
-        return r.pixels_per_scanline * mode_info->resolution.y * mode_info->lfb_num_image_pages;
-    }
-
-    std::size_t vbe::bits_per_pixel()
-    {
-        auto r = scanline_length();
-        return r.bytes_per_scanline * 8 / r.pixels_per_scanline;
-    }
-
-    bool vbe::init()
-    {
         auto& dos_data = get_dos_data();
         auto* ptr = &dos_data->raw_vbe;
 
-        auto& reg = get_realmode_registers();
-        reg.ax = 0x4f00;
-        reg.es = dos_data.dos_pointer().segment;
-        reg.di = dos_data.dos_pointer().offset;
-        reg.call_int(0x10);
-        if (reg.ax != 0x004f) return false;
-
-        bios_info.vbe_signature.assign(ptr->vbe_signature, ptr->vbe_signature + 4);
-        bios_info.vbe_version = ptr->vbe_version;
-
-        std::copy_n(&ptr->capabilities, 1, reinterpret_cast<std::uint32_t*>(&bios_info.capabilities));
-        bios_info.total_memory = ptr->total_memory;
-        {
-            dpmi::mapped_dos_memory<char> str { 256, ptr->oem_string };
-            bios_info.oem_string = str.near_pointer();
-        }
-        populate_mode_list(ptr->video_mode_list);
-        return true;
-    }
-
-    bool vbe2::init()
-    {
-        auto& dos_data = get_dos_data();
-        auto* ptr = &dos_data->raw_vbe;
+        // Request VBE 2+ information, if available.
         std::copy_n("VBE2", 4, ptr->vbe_signature);
 
         auto& reg = get_realmode_registers();
@@ -258,93 +164,110 @@ namespace jw::video
         reg.es = dos_data.dos_pointer().segment;
         reg.di = dos_data.dos_pointer().offset;
         reg.call_int(0x10);
-        if (reg.ax != 0x004f) return false;
-        if (ptr->vbe_version < 0x0200) return false;
 
+        // If this fails, VBE is not supported.
+        if (reg.ax != 0x004f) return nullptr;
+
+        // Set up the info block.
         bios_info.vbe_signature.assign(ptr->vbe_signature, ptr->vbe_signature + 4);
         bios_info.vbe_version = ptr->vbe_version;
+        bios_info.capabilities = std::bit_cast<decltype(vbe_info::capabilities)>(ptr->capabilities);
+        bios_info.total_memory = ptr->total_memory * 64_KB;
 
-        std::copy_n(&ptr->capabilities, 1, reinterpret_cast<std::uint32_t*>(&bios_info.capabilities));
-        bios_info.total_memory = ptr->total_memory;
-        bios_info.oem_software_version = ptr->oem_software_ver;
-        std::copy_n(ptr->oem_data, 256, bios_info.oem_data.data());
         {
-            dpmi::mapped_dos_memory<char> str { 256, ptr->oem_string };
+            dpmi::mapped_dos_memory<const char> str { 256, ptr->oem_string };
             bios_info.oem_string = str.near_pointer();
         }
+
+        // If this is a VBE 1.x implementation, we're done now.
+        if (ptr->vbe_version < 0x0200)
         {
-            dpmi::mapped_dos_memory<char> str { 256, ptr->oem_vendor_name };
+            instance_ptr = new (&instance) vbe;
+            goto done;
+        }
+
+        // Continue setting up info block with VBE 2+ data.
+        std::copy_n(ptr->oem_data, 256, bios_info.oem_data.data());
+        bios_info.oem_software_version = ptr->oem_software_ver;
+        {
+            dpmi::mapped_dos_memory<const char> str { 256, ptr->oem_vendor_name };
             bios_info.oem_vendor_name = str.near_pointer();
         }
         {
-            dpmi::mapped_dos_memory<char> str { 256, ptr->oem_product_name };
+            dpmi::mapped_dos_memory<const char> str { 256, ptr->oem_product_name };
             bios_info.oem_product_name = str.near_pointer();
         }
         {
-            dpmi::mapped_dos_memory<char> str { 256, ptr->oem_product_version };
+            dpmi::mapped_dos_memory<const char> str { 256, ptr->oem_product_version };
             bios_info.oem_product_version = str.near_pointer();
         }
-        populate_mode_list(ptr->video_mode_list);
 
-        if (vbe2_pm) return true;
+        // Now check for the VBE 2.0 protected-mode interface.  This may not
+        // be present in VBE 3.0.
         reg.ax = 0x4f0a;
         reg.bl = 0;
         reg.call_int(0x10);
-        if (reg.ax != 0x004f) return true;
-
-        dpmi::mapped_dos_memory<byte> pm_table { reg.cx, dpmi::far_ptr16 { reg.es, reg.di } };
-        byte* pm_table_ptr = pm_table.near_pointer();
-        vbe2_pm_interface.assign(pm_table_ptr, pm_table_ptr + reg.cx);
-        auto cs_limit = reinterpret_cast<std::size_t>(vbe2_pm_interface.data() + reg.cx);
-        if (dpmi::descriptor::get_limit(dpmi::get_cs()) < cs_limit)
-            dpmi::descriptor::set_limit(dpmi::get_cs(), cs_limit);
-
+        if (reg.ax == 0x004f)
         {
-            auto* ptr = reinterpret_cast<std::uint16_t*>(vbe2_pm_interface.data());
-            vbe2_call_set_window = reinterpret_cast<std::uintptr_t>(ptr) + *(ptr + 0);
-            vbe2_call_set_display_start = reinterpret_cast<std::uintptr_t>(ptr) + *(ptr + 1);
-            vbe2_call_set_palette = reinterpret_cast<std::uintptr_t>(ptr) + *(ptr + 2);
+            dpmi::mapped_dos_memory<const std::byte> pm_table { reg.cx, dpmi::far_ptr16 { reg.es, reg.di } };
+            const std::byte* const pm_table_ptr = pm_table.near_pointer();
+            vbe2_pm_interface.assign(pm_table_ptr, pm_table_ptr + reg.cx);
+            auto cs_limit = reinterpret_cast<std::size_t>(vbe2_pm_interface.data() + reg.cx);
+            if (dpmi::descriptor::get_limit(dpmi::get_cs()) < cs_limit)
+                dpmi::descriptor::set_limit(dpmi::get_cs(), cs_limit);
 
-            auto* io_list = reinterpret_cast<std::uint16_t*>(reinterpret_cast<std::uintptr_t>(ptr) + *(ptr + 3));
-            if (*io_list != 0)
             {
-                while (*io_list != 0xffff) ++io_list;
-                if (*++io_list != 0xffff)
+                auto* ptr = reinterpret_cast<std::uint16_t*>(vbe2_pm_interface.data());
+                vbe2_call_set_window = reinterpret_cast<std::uintptr_t>(ptr) + ptr[0];
+                vbe2_call_set_display_start = reinterpret_cast<std::uintptr_t>(ptr) + ptr[1];
+                vbe2_call_set_palette = reinterpret_cast<std::uintptr_t>(ptr) + ptr[2];
+
+                auto* io_list = reinterpret_cast<std::uint16_t*>(reinterpret_cast<std::uintptr_t>(ptr) + *(ptr + 3));
+                if (*io_list != 0)
                 {
-                    auto* addr = reinterpret_cast<std::uintptr_t*>(io_list);
-                    auto* size = io_list + 2;
-                    vbe2_mmio_memory.emplace(*size, *addr);
-                    vbe2_mmio.emplace(vbe2_mmio_memory->create_segment());
+                    while (*io_list != 0xffff) ++io_list;
+                    if (*++io_list != 0xffff)
+                    {
+                        auto* addr = reinterpret_cast<std::uintptr_t*>(io_list);
+                        auto* size = io_list + 2;
+                        vbe2_mmio_memory.emplace(*size, *addr);
+                        vbe2_mmio.emplace(vbe2_mmio_memory->create_segment());
+                    }
                 }
             }
+            vbe2_pm = true;
         }
-        vbe2_pm = true;
-        return true;
-    }
 
-    bool vbe3::init()
-    {
-        using namespace dpmi;
-        if (not vbe2::init()) return false;
-        if (info().vbe_version < 0x0300) return false;
-        if (vbe3_pm) return true;
+        if (ptr->vbe_version < 0x0300)
+        {
+            instance_ptr = new (&instance) vbe2;
+            goto done;
+        }
 
+        // We have a VBE 3.0 interface.
+        instance_ptr = new (&instance) vbe3;
+
+        // Now set up the (optional) VBE 3.0 protected-mode interface.
         try
         {
             std::size_t bios_size;
             {
-                mapped_dos_memory<std::byte> video_bios_remap { 128_KB, far_ptr16 { 0xC000, 0 } };
-                std::byte* ptr = video_bios_remap.near_pointer();
-                bios_size = reinterpret_cast<std::uint8_t*>(ptr)[2] * 512;
+                dpmi::mapped_dos_memory<const std::byte> video_bios_remap { 128_KB, dpmi::far_ptr16 { 0xC000, 0 } };
+                const std::byte* ptr = video_bios_remap.near_pointer();
+                bios_size = reinterpret_cast<const std::uint8_t*>(ptr)[2] * 512;
                 video_bios_memory.reset(new std::byte[bios_size]);
                 std::copy_n(ptr, bios_size, video_bios_memory.get());
             }
-            char* search_ptr = reinterpret_cast<char*>(video_bios_memory.get());
-            const char* search_value = "PMID";
-            search_ptr = std::search(search_ptr, search_ptr + bios_size, search_value, search_value + 4);
-            if (std::strncmp(search_ptr, search_value, 4) != 0) return false;
-            pmid = reinterpret_cast<vbe3_pm_info*>(search_ptr);
-            if (checksum8(*pmid) != 0) return false;
+            {
+                char* const begin = reinterpret_cast<char*>(video_bios_memory.get());
+                char* const end = begin + bios_size;
+                const char* const search_value = "PMID";
+                auto* const pos = std::search(begin, end, search_value, search_value + 4);
+                if (pos == end) goto done;
+                pmid = reinterpret_cast<vbe3_pm_info*>(pos);
+                if (checksum8(*pmid) != 0) goto done;
+            }
+
             pmid->in_protected_mode = true;
 
             fake_bda_memory.reset(new std::byte[2_KB] { });
@@ -391,7 +314,52 @@ namespace jw::video
             fake_bda_memory.reset();
             throw;
         }
-        return true;
+
+    done:
+        // Now see what video modes we have.
+        dpmi::mapped_dos_memory<std::uint16_t> far_mode_list { 256, ptr->video_mode_list };
+        auto get_mode = [&](std::uint16_t num)
+        {
+            dos_data->mode = { };
+            reg.ax = 0x4f01;
+            reg.cx = num;
+            reg.es = dos_data.dos_pointer().segment;
+            reg.di = dos_data.dos_pointer().offset;
+            reg.call_int(0x10);
+            if (reg.ax == 0x004f)
+                mode_list[num] = dos_data->mode;
+        };
+
+        for (auto* p = far_mode_list.near_pointer(); *p != 0xffff; ++p)
+            get_mode(*p);
+
+        // Also see if there is any info on regular VGA modes.
+        for (auto n = 0; n < 0x80; ++n)
+            get_mode(n);
+
+        return instance_ptr;
+    }
+
+    const vbe_info& vbe::info()
+    {
+        return bios_info;
+    }
+
+    const std::map<std::uint_fast16_t, vbe_mode_info>& vbe::modes()
+    {
+        return mode_list;
+    }
+
+    std::size_t vbe::lfb_size_in_pixels()
+    {
+        auto r = scanline_length();
+        return r.pixels_per_scanline * mode_info->resolution.y * mode_info->lfb_num_image_pages;
+    }
+
+    std::size_t vbe::bits_per_pixel()
+    {
+        auto r = scanline_length();
+        return r.bytes_per_scanline * 8 / r.pixels_per_scanline;
     }
 
     void vbe::set_mode(vbe_mode m, const crtc_info*)

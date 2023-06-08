@@ -10,21 +10,25 @@ namespace jw::video
     struct vbe_info
     {
         std::string vbe_signature;
-        std::uint16_t vbe_version;
+        split_uint16_t vbe_version;
         std::string oem_string;
         struct
         {
             bool dac_is_8bit : 1;           // 6-bit otherwise
+
             // VBE 2.0: //
             bool is_not_vga_compatible : 1;
             bool use_snow_checking : 1;     // set blank bit on function 09h
+
             // VBE 3.0: //
             bool stereo_supported : 1;
             bool stereo_via_vesa_evc : 1;   // "VESA EVC" if set, "external VESA" otherwise
             unsigned : 27;
         } capabilities;
+
         // VBE 1.1: //
-        std::uint16_t total_memory;         // number of 64k blocks
+        std::size_t total_memory;
+
         // VBE 2.0: //
         std::uint16_t oem_software_version;
         std::string oem_vendor_name;
