@@ -1,11 +1,10 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
+#/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+#/*    Copyright (C) 2017 - 2023 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <jw/video/vga.h>
 #include <jw/dpmi/realmode.h>
+#include <jw/io/ioport.h>
+#include <jw/io/pci.h>
 
 namespace jw::video
 {
@@ -17,10 +16,33 @@ namespace jw::video
     void vga_bios::set_mode(vbe_mode m, const crtc_info *)
     {
         if (m.dont_clear_video_memory) m.index |= 0x80;
-        dpmi::realmode_registers reg { };
+        dpmi::realmode_registers reg;
+        reg.ss = reg.sp = 0;
         reg.ah = 0x00;
         reg.al = m.index;
         reg.call_int(0x10);
+    }
+
+    std::optional<std::uint8_t> vga::find_irq()
+    {
+        struct vga : io::pci_device
+        {
+            vga() : pci_device { class_tag { }, 0x03, { 0x00, 0x01 }, 0 } { }
+
+            auto find_irq() const
+            {
+                return bus_info().read().irq;
+            }
+        };
+
+        try
+        {
+            return vga { }.find_irq();
+        }
+        catch (const io::pci_device::error&)
+        {
+            return std::nullopt;
+        }
     }
 
     void vga::palette(std::span<const px32n> pal, std::size_t first, bool)
