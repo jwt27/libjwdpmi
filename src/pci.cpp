@@ -11,7 +11,7 @@ namespace jw::io
     // map indexed by: bus->device->function
     static constinit std::unique_ptr<map_type> device_map;
 
-    static void init()
+    static void pci_init()
     {
         dpmi::realmode_registers reg { };
         reg.ax = 0xb101;
@@ -23,7 +23,7 @@ namespace jw::io
 
     pci_device::pci_device(device_tag, std::uint16_t vendor, std::initializer_list<std::uint16_t> devices, std::uint8_t function_id)
     {
-        init();
+        pci_init();
         dpmi::realmode_registers reg { };
         for (auto d : devices)
         {
@@ -55,7 +55,7 @@ namespace jw::io
 
     pci_device::pci_device(class_tag, std::uint8_t class_code, std::initializer_list<std::uint8_t> subclass_codes, std::uint8_t interface_type)
     {
-        init();
+        pci_init();
 
         union
         {
@@ -71,12 +71,13 @@ namespace jw::io
         ecx.prog_if = interface_type;
         ecx.class_c = class_code;
 
+        dpmi::realmode_registers reg { };
+
         for (auto c : subclass_codes)
         {
             ecx.subclass_c = c;
             for (auto i = 0; ; ++i)
             {
-                dpmi::realmode_registers reg { };
                 reg.ax = 0xb103;
                 reg.si = i;
                 reg.ecx = ecx.value;
