@@ -503,13 +503,13 @@ namespace jw::debug::detail
     // not used
     void send_notification(const std::string_view& output)
     {
-        if (config::enable_gdb_protocol_dump) fmt::print(stderr, FMT_STRING("note --> \"{}\"\n"), output);
-        fmt::print(*gdb, FMT_STRING("%{}#{:0>2x}"), output, checksum(output));
+        if (config::enable_gdb_protocol_dump) fmt::print(stderr, "note --> \"{}\"\n", output);
+        fmt::print(*gdb, "%{}#{:0>2x}", output, checksum(output));
     }
 
     static void send_packet(const std::string_view& output)
     {
-        if (config::enable_gdb_protocol_dump) fmt::print(stderr, FMT_STRING("send --> \"{}\"\n"), output);
+        if (config::enable_gdb_protocol_dump) fmt::print(stderr, "send --> \"{}\"\n", output);
 
         static string rle_output { &memres };
         rle_output.clear();
@@ -536,7 +536,7 @@ namespace jw::debug::detail
         }
 
         const auto sum = checksum(rle_output);
-        fmt::print(*gdb, FMT_STRING("${}#{:0>2x}"), rle_output, sum);
+        fmt::print(*gdb, "${}#{:0>2x}", rle_output, sum);
         sent_packets.emplace_back(output);
         replied = true;
     }
@@ -547,7 +547,7 @@ namespace jw::debug::detail
         if (gdb->rdbuf()->in_avail()) switch (gdb->peek())
         {
         case '-':
-            fmt::print(stderr, FMT_STRING("NACK --> {}\n"), sent_packets.back());
+            fmt::print(stderr, "NACK --> {}\n", sent_packets.back());
             if (sent_packets.size() > 0) send_packet(sent_packets.back());
             [[fallthrough]];
         case '+':
@@ -590,13 +590,13 @@ namespace jw::debug::detail
         }
         catch (const std::exception& e)
         {
-            fmt::print(stderr, FMT_STRING("Error while receiving gdb packet: {}\n"), e.what());
+            fmt::print(stderr, "Error while receiving gdb packet: {}\n", e.what());
             bad |= gdb->bad();
             if (gdb->rdbuf()->in_avail() != -1)
             {
-                fmt::print(stderr, FMT_STRING("Received so far: \"{}\"\n"), raw_packet_string);
+                fmt::print(stderr, "Received so far: \"{}\"\n", raw_packet_string);
                 if (bad)
-                    fmt::print(stderr, FMT_STRING("Malformed character: \'{}\'\n"), gdb->get());
+                    fmt::print(stderr, "Malformed character: \'{}\'\n", gdb->get());
                 gdb->put('-');
                 bad = false;
             }
@@ -606,14 +606,14 @@ namespace jw::debug::detail
         if (decode(sum) == checksum(raw_packet_string)) *gdb << '+';
         else
         {
-            fmt::print(stderr, FMT_STRING("Bad checksum: \"{}\": {}, calculated: {:0>2x}\n"),
+            fmt::print(stderr, "Bad checksum: \"{}\": {}, calculated: {:0>2x}\n",
                         raw_packet_string, sum, checksum(raw_packet_string));
             gdb->put('-');
             goto retry;
         }
 
     parse:
-        if (config::enable_gdb_protocol_dump) fmt::print(stderr, FMT_STRING("recv <-- \"{}\"\n"), raw_packet_string);
+        if (config::enable_gdb_protocol_dump) fmt::print(stderr, "recv <-- \"{}\"\n", raw_packet_string);
         std::size_t pos { 1 };
         packet.clear();
         std::string_view input { raw_packet_string };
@@ -762,7 +762,7 @@ namespace jw::debug::detail
             auto* const f = current_exception.frame;
             auto* const d10f = static_cast<dpmi10_exception_frame*>(current_exception.frame);
             const bool dpmi10_frame = current_exception.is_dpmi10_frame;
-            if (debugmsg) fmt::print(stderr, FMT_STRING("set register {}={}\n"), regname[reg], value);
+            if (debugmsg) fmt::print(stderr, "set register {}={}\n", regname[reg], value);
             switch (reg)
             {
             case eax:    return reverse_decode(value, &r->eax, regsize[reg]);
@@ -795,7 +795,7 @@ namespace jw::debug::detail
         else
         {
             auto* const r = t.thread->get_context();
-            if (debugmsg) fmt::print(stderr, FMT_STRING("set thread {:d} register {}={}\n"), id, regname[reg], value);
+            if (debugmsg) fmt::print(stderr, "set thread {:d} register {}={}\n", id, regname[reg], value);
             switch (reg)
             {
             case ebx:    return reverse_decode(value, &r->ebx, regsize[reg]);
@@ -852,20 +852,20 @@ namespace jw::debug::detail
                 if (async) str += "Stop:"sv;
                 if (signal == thread_finished)
                 {
-                    fmt::format_to(it(), FMT_STRING("w{};{:x}"),
+                    fmt::format_to(it(), "w{};{:x}",
                         t_ptr->get_state() == jw::detail::thread::finished ? "00"sv : "ff"sv, t_ptr->id);
                     send_packet(str);
                 }
                 else
                 {
-                    fmt::format_to(std::back_inserter(str), FMT_STRING("T{:0>2x}"), posix_signal(signal));
+                    fmt::format_to(std::back_inserter(str), "T{:0>2x}", posix_signal(signal));
                     if (t_ptr->get_state() != jw::detail::thread::starting)
                     {
                         str += "8:"; reg(str, eip, t_ptr->id); str += ';';
                         str += "4:"; reg(str, esp, t_ptr->id); str += ';';
                         str += "5:"; reg(str, ebp, t_ptr->id); str += ';';
                     }
-                    fmt::format_to(it(), FMT_STRING("thread:{:x};"), t_ptr->id);
+                    fmt::format_to(it(), "thread:{:x};", t_ptr->id);
                     if (signal == thread_started)
                     {
                         str += "create:;"sv;
@@ -879,7 +879,7 @@ namespace jw::debug::detail
                                 if (w.second.get_state())
                                 {
                                     if (w.second.get_type() == watchpoint::execute) str += "hwbreak:;"sv;
-                                    else fmt::format_to(it(), FMT_STRING("watch:{:x};"), w.first);
+                                    else fmt::format_to(it(), "watch:{:x};", w.first);
                                     break;
                                 }
                             }
@@ -957,7 +957,7 @@ namespace jw::debug::detail
             else if (q == "Attached"sv) send_packet("0");
             else if (q == "C"sv)
             {
-                it = fmt::format_to(it, FMT_STRING("QC{:x}"), current_thread_id);
+                it = fmt::format_to(it, "QC{:x}", current_thread_id);
                 send_packet(str);
             }
             else if (q == "fThreadInfo"sv)
@@ -965,7 +965,7 @@ namespace jw::debug::detail
                 *it++ = 'm';
                 for (auto&& t : threads)
                 {
-                    it = fmt::format_to(it, FMT_STRING("{:x},"), t.first);
+                    it = fmt::format_to(it, "{:x},", t.first);
                 }
                 send_packet(str);
             }
@@ -979,7 +979,7 @@ namespace jw::debug::detail
                 if (threads.count(id))
                 {
                     auto* t = threads[id].thread;
-                    fmt::format_to(std::back_inserter(msg), FMT_STRING("{}{}: "),
+                    fmt::format_to(std::back_inserter(msg), "{}{}: ",
                                     t->get_name(), id == current_thread_id ? " (*)"sv : ""sv);
                     switch (t->get_state())
                     {
@@ -1155,7 +1155,7 @@ namespace jw::debug::detail
                 {
                     std::uintptr_t jmp = decode(packet[0]);
                     if (debugmsg and t.eip() != jmp)
-                        fmt::print(stderr, FMT_STRING("JUMP to {:#x}\n"), jmp);
+                        fmt::print(stderr, "JUMP to {:#x}\n", jmp);
                     t.jmp(jmp);
                 }
                 t.set_action(packet[0].delim);
@@ -1174,7 +1174,7 @@ namespace jw::debug::detail
                 {
                     std::uintptr_t jmp = decode(packet[1]);
                     if (debugmsg and t.eip() != jmp)
-                        fmt::print(stderr, FMT_STRING("JUMP to {:#x}\n"), jmp);
+                        fmt::print(stderr, "JUMP to {:#x}\n", jmp);
                     t.jmp(jmp);
                 }
                 t.set_action(packet[0].delim);
@@ -1243,10 +1243,10 @@ namespace jw::debug::detail
         }
         else if (p == 'k')  // kill
         {
-            if (debugmsg) fmt::print(stdout, FMT_STRING("KILL signal received."));
+            if (debugmsg) fmt::print(stdout, "KILL signal received.");
             for (auto&& t : threads) t.second.set_action('c');
             redirect_exception(current_exception, dpmi::detail::kill);
-            it = fmt::format_to(it, FMT_STRING("X{:0>2x}"), posix_signal(current_thread->last_stop_signal));
+            it = fmt::format_to(it, "X{:0>2x}", posix_signal(current_thread->last_stop_signal));
             send_packet(str);
             uninstall_gdb_interface();
         }
@@ -1257,7 +1257,7 @@ namespace jw::debug::detail
     {
         auto* const r = info.registers;
         auto* const f = info.frame;
-        if (debugmsg) fmt::print(stderr, FMT_STRING("entering exception 0x{:0>2x} from {:#x}\n"),
+        if (debugmsg) fmt::print(stderr, "entering exception 0x{:0>2x} from {:#x}\n",
                                  std::uint8_t { exc }, std::uintptr_t { f->fault_address.offset });
         if (not debug_mode)
         {
@@ -1269,11 +1269,11 @@ namespace jw::debug::detail
 
         auto catch_exception = []
         {
-            fmt::print(stderr, FMT_STRING("Exception occured while communicating with GDB.\n"
-                                            "caused by this packet: {}\n"
-                                            "good={} bad={} fail={} eof={}\n"),
-                        raw_packet_string,
-                        gdb->good(), gdb->bad(), gdb->fail(), gdb->eof());
+            fmt::print(stderr, "Exception occured while communicating with GDB.\n"
+                               "caused by this packet: {}\n"
+                               "good={} bad={} fail={} eof={}\n",
+                       raw_packet_string,
+                       gdb->good(), gdb->bad(), gdb->fail(), gdb->eof());
             do { } while (true);
         };
 
@@ -1288,7 +1288,7 @@ namespace jw::debug::detail
                 else f->fault_address.offset += 1;  // hardcoded breakpoint, safe to skip
             }
 
-            if (debugmsg) fmt::print(stderr, FMT_STRING("leaving exception 0x{:0>2x}, resuming at {:#x}\n"),
+            if (debugmsg) fmt::print(stderr, "leaving exception 0x{:0>2x}, resuming at {:#x}\n",
                                      std::uint8_t { exc }, std::uintptr_t { f->fault_address.offset });
         };
 
@@ -1304,8 +1304,8 @@ namespace jw::debug::detail
         if (f->fault_address.segment != main_cs and f->fault_address.segment != ring0_cs) [[unlikely]]
         {
             if (exc == exception_num::trap) return true; // keep stepping until we get back to our own code
-            fmt::print(stderr, FMT_STRING("Can't debug this!  CS is neither 0x{:0>4x} nor 0x{:0>4x}.\n"
-                                            "{}\n"),
+            fmt::print(stderr, "Can't debug this!  CS is neither 0x{:0>4x} nor 0x{:0>4x}.\n"
+                               "{}\n",
                         main_cs, ring0_cs,
                         cpu_category { }.message(info.num));
             info.frame->print();
@@ -1339,7 +1339,7 @@ namespace jw::debug::detail
 
             if (exc == exception_num::breakpoint and current_signal != -1)
             {
-                if (debugmsg) fmt::print(stderr, FMT_STRING("break with signal 0x{:0>2x}\n"), int { current_signal });
+                if (debugmsg) fmt::print(stderr, "break with signal 0x{:0>2x}\n", int { current_signal });
                 current_thread->signals.insert(current_signal);
                 current_signal = -1;
             }
@@ -1361,8 +1361,8 @@ namespace jw::debug::detail
             {
                 if (all_benign_signals(current_thread))
                 {
-                    if (debugmsg) fmt::print(stderr, FMT_STRING("trap masked at {:#x}\n"),
-                                                std::uintptr_t { f->fault_address.offset });
+                    if (debugmsg) fmt::print(stderr, "trap masked at {:#x}\n",
+                                             std::uintptr_t { f->fault_address.offset });
                 }
                 else
                 {
@@ -1399,13 +1399,13 @@ namespace jw::debug::detail
                 current_exception.frame->fault_address.offset >= current_thread->step_range_begin and
                 current_exception.frame->fault_address.offset <= current_thread->step_range_end)
             {
-                if (debugmsg) fmt::print(stderr,FMT_STRING("range step until {:#x}, now at {:#x}\n"),
-                                            current_thread->step_range_end, std::uintptr_t { f->fault_address.offset });
+                if (debugmsg) fmt::print(stderr,"range step until {:#x}, now at {:#x}\n",
+                                         current_thread->step_range_end, std::uintptr_t { f->fault_address.offset });
                 clear_trap_signals();
             }
 
-            if (debugmsg) fmt::print(stderr, FMT_STRING("signals: {}\n"),
-                                        fmt::join(current_thread->signals, ", "));
+            if (debugmsg) fmt::print(stderr, "signals: {}\n",
+                                     fmt::join(current_thread->signals, ", "));
 
             stop_reply();
 
@@ -1506,7 +1506,7 @@ namespace jw::debug::detail
     void notify_gdb_exit(byte result)
     {
         string str { &memres };
-        fmt::format_to(std::back_inserter(str), FMT_STRING("W{:0>2x}"), result);
+        fmt::format_to(std::back_inserter(str), "W{:0>2x}", result);
         send_packet(str);
         uninstall_gdb_interface();
     }
@@ -1540,7 +1540,7 @@ namespace jw::debug
 {
     _Unwind_Reason_Code unwind_print_trace(_Unwind_Context* c, void*)
     {
-        fmt::print(stderr, FMT_STRING(" --> {: >11x}"), _Unwind_GetIP(c));
+        fmt::print(stderr, " --> {: >11x}", _Unwind_GetIP(c));
         return _URC_NO_REASON;
     }
 

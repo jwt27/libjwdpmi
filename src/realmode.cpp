@@ -1,8 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
+#/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+#/*    Copyright (C) 2017 - 2023 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <jw/dpmi/realmode.h>
 #include <jw/dpmi/detail/selectors.h>
@@ -120,9 +117,9 @@ namespace jw
             auto* const reg = self->reg_ptr++;
             if (self->reg_ptr > self->reg_pool.data() + self->reg_pool.size()) [[unlikely]]
             {
-                fmt::print(stderr, FMT_STRING("Too many re-entries in real-mode callback!\n"
-                                              "Callback pointer: {:0>4x}:{:0>4x}\n"
-                                              "Pool size: {:d}\n"),
+                fmt::print(stderr, "Too many re-entries in real-mode callback!\n"
+                                   "Callback pointer: {:0>4x}:{:0>4x}\n"
+                                   "Pool size: {:d}\n",
                            self->ptr.segment, self->ptr.offset,
                            self->reg_pool.size());
                 halt();
@@ -138,9 +135,9 @@ namespace jw
             }
             catch (...)
             {
-                fmt::print(stderr, FMT_STRING("Caught exception in real-mode callback handler!\n"
-                                              "Callback pointer: {:0>4x}:{:0>4x}\n"
-                                              "Exception: "),
+                fmt::print(stderr, "Caught exception in real-mode callback handler!\n"
+                                   "Callback pointer: {:0>4x}:{:0>4x}\n"
+                                   "Exception: ",
                            self->ptr.segment, self->ptr.offset);
                 try { throw; }
                 catch (const std::exception& e) { fmt::print(stderr, "{}\n", e.what()); }

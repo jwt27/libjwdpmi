@@ -1,7 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
+#/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+#/*    Copyright (C) 2016 - 2023 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <string>
 #include <fmt/format.h>
@@ -45,6 +43,6 @@ namespace jw::dpmi
 
     std::string dpmi_error_category::message(int ev) const
     {
-        return fmt::format(FMT_STRING("DPMI error 0x{:0>4x}: {}."), ev, msg(ev));
+        return fmt::format("DPMI error 0x{:0>4x}: {}.", ev, msg(ev));
     }
 }
