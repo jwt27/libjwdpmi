@@ -29,9 +29,15 @@ namespace jw::video
         {
             vga() : pci_device { class_tag { }, 0x03, { 0x00, 0x01 }, 0 } { }
 
-            auto find_irq() const
+            std::uint8_t find_irq() const
             {
-                return bus_info().read().irq;
+                auto info = bus_info().read();
+                if (info.irq < 16)
+                    return info.irq;
+
+                info.irq = 9;
+                bus_info().write(info);
+                return 9;
             }
         };
 
