@@ -1,11 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
+#/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+#/*    Copyright (C) 2016 - 2023 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <exception>
@@ -212,6 +206,7 @@ namespace jw
         if (not ptr) throw std::system_error { std::make_error_code(std::errc::no_such_process) };
         if (get_id() == detail::scheduler::current_thread_id()) throw deadlock { };
         auto id = ptr->id;
+        ptr->resume();
         detach();
         this_thread::yield_while([id] { return detail::scheduler::get_thread(id) != nullptr; });
     }
