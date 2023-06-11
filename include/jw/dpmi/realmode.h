@@ -1,9 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
+#/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+#/*    Copyright (C) 2017 - 2023 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <jw/dpmi/memory.h>
@@ -187,7 +183,7 @@ namespace jw
                 std::byte* stack_ptr;
                 realmode_registers* reg_ptr;
 
-                trivial_function<function_type> func;
+                function<function_type> func;
                 std::vector<std::byte, allocator<std::byte>> stack;
                 std::vector<realmode_registers, allocator<realmode_registers>> reg_pool;
             };
