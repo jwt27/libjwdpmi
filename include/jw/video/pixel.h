@@ -370,6 +370,12 @@ namespace jw::video
     template<pixel_type Dst>
     struct px_convert_t
     {
+        template<simd flags, simd_data_for<Dst> D>
+        auto operator()(simd_format auto, D dsrc) const
+        {
+            return dsrc;
+        }
+
         template<simd flags, any_simd_format_of<format_nosimd, format_pi16, format_ps> F, pixel_data D>
         auto operator()(F, D dsrc) const
         {

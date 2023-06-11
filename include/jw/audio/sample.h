@@ -57,6 +57,12 @@ namespace jw::audio
                 static constexpr int rshift = sizeof(From) * 8 - sizeof(To) * 8;
             };
 
+            template<simd flags, simd_data_for<To> D>
+            auto operator()(simd_format auto, D src) const
+            {
+                return src;
+            }
+
             template<simd flags, sample_data D>
             auto operator()(format_nosimd, D src) const
             {
