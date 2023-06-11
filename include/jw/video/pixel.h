@@ -1,9 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
+#/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+#/*    Copyright (C) 2017 - 2023 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <type_traits>
@@ -375,7 +371,7 @@ namespace jw::video
     struct px_convert_t
     {
         template<simd flags, any_simd_format_of<format_nosimd, format_pi16, format_ps> F, pixel_data D>
-        auto operator()(F, D dsrc)
+        auto operator()(F, D dsrc) const
         {
             using Src = simd_type<D>;
             using proxy = pixel_proxy_for<Dst, Src>;
@@ -463,7 +459,7 @@ namespace jw::video
     struct px_premultiply_alpha_t
     {
         template<simd flags, pixel_data D>
-        auto operator()(format_nosimd, D dsrc)
+        auto operator()(format_nosimd, D dsrc) const
         {
             using P = simd_type<D>;
             if constexpr (not P::has_alpha()) return dsrc;
@@ -479,7 +475,7 @@ namespace jw::video
         }
 
         template<simd flags, pixel_data D>
-        auto operator()(format_pi16, D dsrc)
+        auto operator()(format_pi16, D dsrc) const
         {
             using P = simd_type<D>;
             if constexpr (not P::has_alpha()) return dsrc;
@@ -492,7 +488,7 @@ namespace jw::video
         }
 
         template<simd flags, pixel_data D>
-        auto operator()(format_ps, D dsrc)
+        auto operator()(format_ps, D dsrc) const
         {
             using P = simd_type<D>;
             if constexpr (not P::has_alpha()) return dsrc;
@@ -512,7 +508,7 @@ namespace jw::video
     struct px_blend_straight_t
     {
         template<simd flags, pixel_data DD, pixel_data DS>
-        auto operator()(format_nosimd, DD ddst, DS dsrc)
+        auto operator()(format_nosimd, DD ddst, DS dsrc) const
         {
             using Dst = simd_type<DD>;
             using Src = simd_type<DS>;
@@ -535,7 +531,7 @@ namespace jw::video
         }
 
         template<simd flags, pixel_data DD, pixel_data DS>
-        auto operator()(format_pi16, DD ddst, DS dsrc)
+        auto operator()(format_pi16, DD ddst, DS dsrc) const
         {
             using Dst = simd_type<DD>;
             using Src = simd_type<DS>;
@@ -567,7 +563,7 @@ namespace jw::video
         }
 
         template<simd flags, pixel_data DD, pixel_data DS>
-        auto operator()(format_ps, DD ddst, DS dsrc)
+        auto operator()(format_ps, DD ddst, DS dsrc) const
         {
             using Dst = simd_type<DD>;
             using Src = simd_type<DS>;
@@ -596,7 +592,7 @@ namespace jw::video
     struct px_blend_premultiplied_t
     {
         template<simd flags, pixel_data DD, pixel_data DS>
-        auto operator()(format_nosimd, DD ddst, DS dsrc)
+        auto operator()(format_nosimd, DD ddst, DS dsrc) const
         {
             using Dst = simd_type<DD>;
             using Src = simd_type<DS>;
@@ -619,7 +615,7 @@ namespace jw::video
         }
 
         template<simd flags, pixel_data DD, pixel_data DS>
-        auto operator()(format_pi16, DD ddst, DS dsrc)
+        auto operator()(format_pi16, DD ddst, DS dsrc) const
         {
             using Dst = simd_type<DD>;
             using Src = simd_type<DS>;
@@ -640,7 +636,7 @@ namespace jw::video
         }
 
         template<simd flags, pixel_data DD, pixel_data DS>
-        auto operator()(format_ps, DD ddst, DS dsrc)
+        auto operator()(format_ps, DD ddst, DS dsrc) const
         {
             using Dst = simd_type<DD>;
             using Src = simd_type<DS>;
@@ -669,7 +665,7 @@ namespace jw::video
     struct px_clamp_t
     {
         template<simd, pixel_data D>
-        auto operator()(format_nosimd, D dsrc)
+        auto operator()(format_nosimd, D dsrc) const
         {
             using P = simd_type<D>;
             using proxy = pixel_proxy_for<P>;
@@ -681,7 +677,7 @@ namespace jw::video
         }
 
         template<simd flags, pixel_data D> requires (flags.match(simd::mmx2))
-        auto operator()(format_pi8, D dsrc)
+        auto operator()(format_pi8, D dsrc) const
         {
             using P = simd_type<D>;
             constexpr auto max = reinterpret_cast<__m64>(simd_vector<std::uint8_t, 8>
@@ -697,7 +693,7 @@ namespace jw::video
         }
 
         template<simd flags, pixel_data D>
-        auto operator()(format_pi16, D dsrc)
+        auto operator()(format_pi16, D dsrc) const
         {
             using P = simd_type<D>;
             constexpr auto max = reinterpret_cast<__m64>(simd_vector<std::uint16_t, 4> { P::bx, P::gx, P::rx, P::ax });
@@ -720,7 +716,7 @@ namespace jw::video
         }
 
         template<simd, pixel_data D>
-        auto operator()(format_ps, D dsrc)
+        auto operator()(format_ps, D dsrc) const
         {
             using P = simd_type<D>;
             constexpr __m128 max { P::bx, P::gx, P::rx, P::ax };

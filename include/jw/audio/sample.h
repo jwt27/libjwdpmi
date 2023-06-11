@@ -1,5 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
+#/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+#/*    Copyright (C) 2022 - 2023 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <cstdint>
@@ -58,7 +58,7 @@ namespace jw::audio
             };
 
             template<simd flags, sample_data D>
-            auto operator()(format_nosimd, D src)
+            auto operator()(format_nosimd, D src) const
             {
                 using From = simd_type<D>;
                 using cvt = conversion_data<From>;
@@ -82,7 +82,7 @@ namespace jw::audio
             }
 
             template<simd flags, sample_data D>
-            auto operator()(format_pi8, D src)
+            auto operator()(format_pi8, D src) const
             {
                 using cvt = conversion_data<simd_type<D>>;
                 __m64 dst = src;
@@ -93,7 +93,7 @@ namespace jw::audio
             }
 
             template<simd flags, sample_data D>
-            auto operator()(format_pi16, D src)
+            auto operator()(format_pi16, D src) const
             {
                 using cvt = conversion_data<simd_type<D>>;
                 __m64 dst = src;
@@ -108,7 +108,7 @@ namespace jw::audio
             }
 
             template<simd flags, sample_data D>
-            auto operator()(format_pi32, D src)
+            auto operator()(format_pi32, D src) const
             {
                 using cvt = conversion_data<simd_type<D>>;
                 __m64 dst = src;
@@ -123,7 +123,7 @@ namespace jw::audio
             }
 
             template<simd flags, sample_data D>
-            auto operator()(format_pf, D src)
+            auto operator()(format_pf, D src) const
             {
                 using cvt = conversion_data<simd_type<D>>;
                 constexpr auto set1 = [](float f) consteval { return reinterpret_cast<__m64>(simd_vector<float, 2> { f, f }); };
@@ -135,7 +135,7 @@ namespace jw::audio
             }
 
             template<simd flags, sample_data D>
-            auto operator()(format_ps, D src)
+            auto operator()(format_ps, D src) const
             {
                 using cvt = conversion_data<simd_type<D>>;
                 __m128 dst = src;
@@ -148,7 +148,7 @@ namespace jw::audio
 
         template<simd flags, simd_format F, sample_data... D>
         requires (sizeof...(D) == sizeof...(T) and (simd_invocable<impl<T>, flags, F, D> and ...))
-        auto operator()(F, D... src)
+        auto operator()(F, D... src) const
         {
             return simd_return(F { }, simd_invoke<flags>(impl<T> { }, F { }, src)...);
         }
@@ -162,7 +162,7 @@ namespace jw::audio
     struct sample_interleave_t
     {
         template<simd flags, simd_format F, sample_data D>
-        auto operator()(F, D l, D r)
+        auto operator()(F, D l, D r) const
         {
             using T = simd_type<D>;
             if constexpr (std::same_as<F, format_pi8>)
@@ -201,14 +201,14 @@ namespace jw::audio
     struct sample_separate_t
     {
         template<simd flags, any_simd_format_of<format_nosimd, format_si64> F, sample_data D>
-        auto operator()(F, D lo, D hi)
+        auto operator()(F, D lo, D hi) const
         {
             using T = simd_type<D>;
             return simd_return(F { }, simd_data<T>(lo), simd_data<T>(hi));
         }
 
         template<simd flags, sample_data D>
-        auto operator()(format_ps, D lo, D hi)
+        auto operator()(format_ps, D lo, D hi) const
         {
             using T = simd_type<D>;
             auto lr0 = _mm_unpacklo_ps(lo, hi);
@@ -219,7 +219,7 @@ namespace jw::audio
         }
 
         template<simd flags, any_simd_format_of<format_pi8, format_pi16, format_pi32, format_pf> F, sample_data D>
-        auto operator()(F, D lo, D hi)
+        auto operator()(F, D lo, D hi) const
         {
             using T = simd_type<D>;
             __m64 x, l = lo, r = hi;

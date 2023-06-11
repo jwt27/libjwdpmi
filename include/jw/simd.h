@@ -1,5 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
+#/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+#/*    Copyright (C) 2022 - 2023 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <tuple>
@@ -401,7 +401,7 @@ namespace jw
     struct simd_source_t
     {
         template<simd flags, simd_format F, typename... I> requires (simd_loadable<I, flags, F> and ...)
-        auto operator()(F, I*... iterators)
+        auto operator()(F, I*... iterators) const
         {
             auto ret = simd_return(F { }, simd_data<std::iter_value_t<I>>(simd_load<flags>(F { }, *iterators))...);
             (increment_simd_iterator<F>(iterators), ...);
@@ -443,7 +443,7 @@ namespace jw
     {
         template<simd flags, simd_format F, typename T>
         requires (simd_loadable<const T*, flags, F> and simd_type_traits<T, F>::delta == 1)
-        auto operator()(F, const T& value)
+        auto operator()(F, const T& value) const
         {
             return simd_data<T>(simd_load<flags>(F { }, &value));
         }
@@ -457,7 +457,7 @@ namespace jw
         template<simd flags, simd_format F, simd_data_type D>
         requires (simd_storable<simd_type<D>*, flags, F> and simd_type_traits<simd_type<D>, F>::delta == 1
                   and std::is_default_constructible_v<simd_type<D>>)
-        auto operator()(F, D data)
+        auto operator()(F, D data) const
         {
             simd_type<D> value;
             simd_store<flags>(F { }, &value, data);
@@ -470,7 +470,7 @@ namespace jw
     struct simd_reinterpret
     {
         template<simd flags, typename... U> requires (sizeof...(T) == sizeof...(U))
-            auto operator()(auto fmt, U&&... data)
+            auto operator()(auto fmt, U&&... data) const
         {
             return simd_return(fmt, simd_data<T>(std::forward<U>(data))...);
         }
