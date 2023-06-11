@@ -595,6 +595,7 @@ namespace jw::video
     } inline constexpr px_blend_straight;
 
     // Given inputs (dst, src), blend src over dst using premultiplied alpha.
+    // Does not saturate, so must be followed by px_clamp.
     struct px_blend_premultiplied_t
     {
         template<simd flags, pixel_data DD, pixel_data DS>
@@ -636,7 +637,7 @@ namespace jw::video
 
             dst = _mm_mullo_pi16(dst, _mm_set1_pi16(a));
             dst = mmx_div_scalar_pu16<flags, true, Src::ax, max * Src::ax>(dst);
-            dst = _mm_adds_pu8(dst, src);
+            dst = _mm_adds_pi16(dst, src);
 
             return simd_data<Dst>(dst);
         }
