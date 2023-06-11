@@ -360,7 +360,7 @@ namespace jw
         using P = std::iter_value_t<I>;
         __m128 v = src;
         if constexpr (std::floating_point<typename P::T>) *dst = *reinterpret_cast<P*>(&v);
-        else simd_store(pi16, dst, _mm_cvtps_pi16(v));
+        else simd_store<flags>(pi16, dst, _mm_cvtps_pi16(v));
     }
 }
 
