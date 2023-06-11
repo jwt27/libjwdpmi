@@ -518,7 +518,7 @@ namespace jw::video
             const auto a = src.a;
 
             if constexpr (not std::same_as<Dst, Src>)
-                src = std::get<0>(simd_invoke<flags>(px_convert<Dst>, nosimd, dsrc).data);
+                src = simd_invoke<flags>(px_convert<Dst>, nosimd, dsrc);
 
             for (unsigned i = 0; i < 3; ++i)
             {
@@ -542,7 +542,7 @@ namespace jw::video
             const int sa = mmx_extract_pi16<flags, 3>(dsrc);
 
             if constexpr (not std::same_as<Dst, Src>)
-                src = std::get<0>(simd_invoke<flags>(px_convert<Dst>, pi16, dsrc).data);
+                src = simd_invoke<flags>(px_convert<Dst>, pi16, dsrc);
 
             src = _mm_mullo_pi16(src, _mm_set1_pi16(sa));
             dst = _mm_mullo_pi16(dst, _mm_set1_pi16(Src::ax - sa));
@@ -574,7 +574,7 @@ namespace jw::video
             a = _mm_shuffle_ps(a, a, shuffle_mask { 3, 3, 3, 0 });
 
             if constexpr (not std::same_as<Dst, Src>)
-                src = std::get<0>(simd_invoke<flags>(px_convert<Dst>, ps, dsrc).data);
+                src = simd_invoke<flags>(px_convert<Dst>, ps, dsrc);
 
             src = _mm_sub_ps(src, dst);
             src = _mm_mul_ps(src, a);
@@ -602,7 +602,7 @@ namespace jw::video
             const auto a = Src::ax - src.a;
 
             if constexpr (not std::same_as<Dst, Src>)
-                src = std::get<0>(simd_invoke<flags>(px_convert<Dst>, nosimd, dsrc).data);
+                src = simd_invoke<flags>(px_convert<Dst>, nosimd, dsrc);
 
             for (unsigned i = 0; i < 4; ++i)
             {
@@ -626,7 +626,7 @@ namespace jw::video
             const int a = Src::ax - mmx_extract_pi16<flags, 3>(src);
 
             if constexpr (not std::same_as<Dst, Src>)
-                src = std::get<0>(simd_invoke<flags>(px_convert<Dst>, pi16, dsrc).data);
+                src = simd_invoke<flags>(px_convert<Dst>, pi16, dsrc);
 
             dst = _mm_mullo_pi16(dst, _mm_set1_pi16(a));
             dst = mmx_div_scalar_pu16<flags, true, Src::ax, max * Src::ax>(dst);
@@ -648,7 +648,7 @@ namespace jw::video
             a = _mm_shuffle_ps(a, a, shuffle_mask { 0, 0, 0, 0 });
 
             if constexpr (not std::same_as<Dst, Src>)
-                src = std::get<0>(simd_invoke<flags>(px_convert<Dst>, ps, dsrc).data);
+                src = simd_invoke<flags>(px_convert<Dst>, ps, dsrc);
 
             dst = _mm_mul_ps(dst, a);
             if constexpr (Src::ax != 1)
