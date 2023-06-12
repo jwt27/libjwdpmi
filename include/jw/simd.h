@@ -545,42 +545,42 @@ namespace jw
     template<typename True>
     auto simd_if(bool condition, True&& yes)
     {
-        return detail::simd_if<std::decay_t<True>, simd_nop_t> { condition, std::forward<True>(yes), { } };
+        return detail::simd_if<True, simd_nop_t> { condition, std::forward<True>(yes), { } };
     }
 
     // Execute a simd_pipeline conditionally.
     template<typename True, typename False>
     auto simd_if(bool condition, True&& yes, False&& no)
     {
-        return detail::simd_if<std::decay_t<True>, std::decay_t<False>> { condition, std::forward<True>(yes), std::forward<False>(no) };
+        return detail::simd_if<True, False> { condition, std::forward<True>(yes), std::forward<False>(no) };
     }
 
     // Execute a simd_pipeline conditionally.
     template<bool Condition, typename True>
     auto simd_if_constexpr(True&& yes)
     {
-        return detail::simd_if_constexpr<Condition, std::decay_t<True>, simd_nop_t> { std::forward<True>(yes), { } };
+        return detail::simd_if_constexpr<Condition, True, simd_nop_t> { std::forward<True>(yes), { } };
     }
 
     // Execute a simd_pipeline conditionally.
     template<bool Condition, typename True, typename False>
     auto simd_if_constexpr(True&& yes, False&& no)
     {
-        return detail::simd_if_constexpr<Condition, std::decay_t<True>, std::decay_t<False>> { std::forward<True>(yes), std::forward<False>(no) };
+        return detail::simd_if_constexpr<Condition, True, False> { std::forward<True>(yes), std::forward<False>(no) };
     }
 
     // Execute a simd_pipeline if the format matches any of those specified.
     template<simd_format... Fmts, typename True>
     auto simd_if_format(True&& yes)
     {
-        return detail::simd_if_format<std::decay_t<True>, simd_nop_t, Fmts...> { std::forward<True>(yes), { } };
+        return detail::simd_if_format<True, simd_nop_t, Fmts...> { std::forward<True>(yes), { } };
     }
 
     // Execute a simd_pipeline if the format matches any of those specified.
     template<simd_format... Fmts, typename True, typename False>
     auto simd_if_format(True&& yes, False&& no)
     {
-        return detail::simd_if_format<std::decay_t<True>, std::decay_t<False>, Fmts...> { std::forward<True>(yes), std::forward<False>(no) };
+        return detail::simd_if_format<True, False, Fmts...> { std::forward<True>(yes), std::forward<False>(no) };
     }
 
     // A SIMD pipeline is composed of one or more functor objects, each of
@@ -794,7 +794,7 @@ namespace jw
         }
     };
 
-    template<typename... T> simd_pipeline(T...) -> simd_pipeline<std::remove_cvref_t<T>...>;
+    template<typename... T> simd_pipeline(T&&...) -> simd_pipeline<T...>;
 
     // Execute a SIMD pipeline or single stage with the specified arguments,
     // trying simd_formats in the specified order.
