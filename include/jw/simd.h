@@ -505,6 +505,22 @@ namespace jw::detail
         True yes;
         False no;
     };
+
+    template<bool Condition, typename True, typename False>
+    struct simd_if_constexpr
+    {
+        template<simd flags, typename... T>
+        auto operator()(auto fmt, T&&... data) const
+        {
+            if constexpr (Condition)
+                return simd_invoke<flags>(yes, fmt, std::forward<T>(data)...);
+            else
+                return simd_invoke<flags>(no, fmt, std::forward<T>(data)...);
+        }
+
+        True yes;
+        False no;
+    };
 }
 
 namespace jw
@@ -521,6 +537,20 @@ namespace jw
     auto simd_if(bool condition, True&& yes, False&& no)
     {
         return detail::simd_if<std::decay_t<True>, std::decay_t<False>> { condition, std::forward<True>(yes), std::forward<False>(no) };
+    }
+
+    // Execute a simd_pipeline conditionally.
+    template<bool Condition, typename True>
+    auto simd_if_constexpr(True&& yes)
+    {
+        return detail::simd_if_constexpr<Condition, std::decay_t<True>, simd_nop_t> { std::forward<True>(yes), { } };
+    }
+
+    // Execute a simd_pipeline conditionally.
+    template<bool Condition, typename True, typename False>
+    auto simd_if_constexpr(True&& yes, False&& no)
+    {
+        return detail::simd_if_constexpr<Condition, std::decay_t<True>, std::decay_t<False>> { std::forward<True>(yes), std::forward<False>(no) };
     }
 
     // A SIMD pipeline is composed of one or more functor objects, each of
