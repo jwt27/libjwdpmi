@@ -476,6 +476,16 @@ namespace jw
         }
     };
 
+    // Does nothing.
+    struct simd_nop_t
+    {
+        template<simd flags, typename... T>
+        auto operator()(auto fmt, T&&... data) const
+        {
+            return simd_return(fmt, std::forward<T>(data)...);
+        }
+    } constexpr inline simd_nop;
+
     // A SIMD pipeline is composed of one or more functor objects, each of
     // which defines an operator() with the following signature:
     //  template<simd flags> auto operator()(simd_format fmt, auto... src)
