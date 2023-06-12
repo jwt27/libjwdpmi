@@ -485,6 +485,43 @@ namespace jw
             return simd_return(fmt, std::forward<T>(data)...);
         }
     } constexpr inline simd_nop;
+}
+
+namespace jw::detail
+{
+    template<typename True, typename False>
+    struct simd_if
+    {
+        template<simd flags, typename... T>
+        auto operator()(auto fmt, T&&... data) const
+        {
+            if (condition)
+                return simd_invoke<flags>(yes, fmt, std::forward<T>(data)...);
+            else
+                return simd_invoke<flags>(no, fmt, std::forward<T>(data)...);
+        }
+
+        const bool condition;
+        True yes;
+        False no;
+    };
+}
+
+namespace jw
+{
+    // Execute a simd_pipeline conditionally.
+    template<typename True>
+    auto simd_if(bool condition, True&& yes)
+    {
+        return detail::simd_if<std::decay_t<True>, simd_nop_t> { condition, std::forward<True>(yes), { } };
+    }
+
+    // Execute a simd_pipeline conditionally.
+    template<typename True, typename False>
+    auto simd_if(bool condition, True&& yes, False&& no)
+    {
+        return detail::simd_if<std::decay_t<True>, std::decay_t<False>> { condition, std::forward<True>(yes), std::forward<False>(no) };
+    }
 
     // A SIMD pipeline is composed of one or more functor objects, each of
     // which defines an operator() with the following signature:
