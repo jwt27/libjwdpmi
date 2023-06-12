@@ -521,6 +521,22 @@ namespace jw::detail
         True yes;
         False no;
     };
+
+    template<typename True, typename False, simd_format... Fmts>
+    struct simd_if_format
+    {
+        template<simd flags, simd_format Fmt, typename... T>
+        auto operator()(Fmt fmt, T&&... data) const
+        {
+            if constexpr (any_simd_format_of<Fmt, Fmts...>)
+                return simd_invoke<flags>(yes, fmt, std::forward<T>(data)...);
+            else
+                return simd_invoke<flags>(no, fmt, std::forward<T>(data)...);
+        }
+
+        True yes;
+        False no;
+    };
 }
 
 namespace jw
@@ -551,6 +567,20 @@ namespace jw
     auto simd_if_constexpr(True&& yes, False&& no)
     {
         return detail::simd_if_constexpr<Condition, std::decay_t<True>, std::decay_t<False>> { std::forward<True>(yes), std::forward<False>(no) };
+    }
+
+    // Execute a simd_pipeline if the format matches any of those specified.
+    template<simd_format... Fmts, typename True>
+    auto simd_if_format(True&& yes)
+    {
+        return detail::simd_if_format<std::decay_t<True>, simd_nop_t, Fmts...> { std::forward<True>(yes), { } };
+    }
+
+    // Execute a simd_pipeline if the format matches any of those specified.
+    template<simd_format... Fmts, typename True, typename False>
+    auto simd_if_format(True&& yes, False&& no)
+    {
+        return detail::simd_if_format<std::decay_t<True>, std::decay_t<False>, Fmts...> { std::forward<True>(yes), std::forward<False>(no) };
     }
 
     // A SIMD pipeline is composed of one or more functor objects, each of
