@@ -43,13 +43,13 @@ namespace jw
     concept any_of = (std::same_as<T, U> or ...);
 
     template<typename T>
-    concept simd_format = any_of<T, format_nosimd, format_pi8, format_pi16, format_pi32, format_si64, format_ps, format_pf>;
+    concept simd_format = any_of<std::remove_cvref_t<T>, format_nosimd, format_pi8, format_pi16, format_pi32, format_si64, format_ps, format_pf>;
 
     template<typename T, typename... U>
-    concept any_simd_format_of = simd_format<T> and (simd_format<U> and ...) and any_of<T, U...>;
+    concept any_simd_format_of = simd_format<T> and (simd_format<U> and ...) and any_of<std::remove_cvref_t<T>, U...>;
 
     template<typename T, typename... U>
-    concept any_simd_format_but = simd_format<T> and (simd_format<U> and ...) and not any_of<T, U...>;
+    concept any_simd_format_but = simd_format<T> and (simd_format<U> and ...) and not any_of<std::remove_cvref_t<T>, U...>;
 
     template<simd_format>
     struct simd_format_traits

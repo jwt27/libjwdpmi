@@ -132,7 +132,7 @@ namespace jw::video
     };
 
     template<typename P>
-    concept pixel_type = requires { typename P::layout; } and std::same_as<P, pixel<typename P::layout>>;
+    concept pixel_type = requires { typename P::layout; } and std::same_as<std::remove_cvref_t<P>, pixel<typename P::layout>>;
 
     template<typename P>
     concept pixel_data = pixel_type<simd_type<P>>;
