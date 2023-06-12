@@ -461,6 +461,51 @@ namespace jw::video
     template<pixel_type Dst>
     inline constexpr px_convert_t<Dst> px_convert;
 
+    // Convert inputs to one of the specified formats, if possible.
+    template<simd_format... Fmts>
+    class px_convert_format_t
+    {
+        template<simd_format Fmt, pixel_data... D>
+        static auto do_convert(Fmt, Fmt, D&&... dsrc)
+        {
+            return simd_return(Fmt { }, std::forward<D>(dsrc)...);
+        }
+
+        template<pixel_data... D> requires (std::integral<typename simd_type<D>::T> and ...)
+        static auto do_convert(format_pi16, format_ps, D&&... dsrc)
+        {
+            return simd_return(pi16, simd_data<simd_type<D>>(_mm_cvtps_pi16(std::forward<D>(dsrc)))...);
+        }
+
+        template<pixel_data... D>
+        static auto do_convert(format_ps, format_pi16, D&&... dsrc)
+        {
+            return simd_return(ps, simd_data<simd_type<D>>(_mm_cvtpu16_ps(std::forward<D>(dsrc)))...);
+        }
+
+        template<simd flags, simd_format Fdst, simd_format... Fdsts, simd_format Fsrc, pixel_data... D>
+        static auto convert(Fsrc, D&&... dsrc)
+        {
+            if constexpr (flags.match(simd_format_traits<Fdst>::flags) and
+                          requires { do_convert(std::declval<Fdst>(), std::declval<Fsrc>(), std::declval<D>()...); })
+                return do_convert(Fdst { }, Fsrc { }, std::forward<D>(dsrc)...);
+            else if constexpr (sizeof...(Fdsts) > 0)
+                return convert<flags, Fdsts...>(Fsrc { }, std::forward<D>(dsrc)...);
+            else
+                return simd_return(Fsrc { }, std::forward<D>(dsrc)...);
+        }
+
+    public:
+        template<simd flags, simd_format Fsrc, pixel_data... D>
+        auto operator()(Fsrc, D&&... dsrc) const
+        {
+            return convert<flags, Fmts...>(Fsrc { }, std::forward<D>(dsrc)...);
+        }
+    };
+
+    template<simd_format... Fmts>
+    inline constexpr px_convert_format_t<Fmts...> px_convert_format;
+
     // Multiply color components by alpha.
     struct px_premultiply_alpha_t
     {
