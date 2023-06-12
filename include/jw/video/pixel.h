@@ -445,10 +445,10 @@ namespace jw::video
             {
                 constexpr __m128 factor = simd_vector<float, 4>
                 {
-                    mul[0] / div[0],
-                    mul[1] / div[1],
-                    mul[2] / div[2],
-                    mul[3] / div[3]
+                    static_cast<float>(mul[0]) / div[0],
+                    static_cast<float>(mul[1]) / div[1],
+                    static_cast<float>(mul[2]) / div[2],
+                    static_cast<float>(mul[3]) / div[3]
                 };
                 __m128 dst = _mm_mul_ps(dsrc, factor);
                 if constexpr (insert_alpha)
