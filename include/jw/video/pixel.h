@@ -519,8 +519,8 @@ namespace jw::video
             using Dst = simd_type<DD>;
             using Src = simd_type<DS>;
             using proxy = pixel_proxy_for<Dst, Src>;
-            proxy dst = ddst;
-            proxy src = dsrc;
+            proxy dst = static_cast<pixel_proxy_for<Dst>>(ddst);
+            proxy src = static_cast<pixel_proxy_for<Src>>(dsrc);
             const auto a = src.a;
 
             if constexpr (not std::same_as<Dst, Src>)
@@ -604,8 +604,8 @@ namespace jw::video
             using Dst = simd_type<DD>;
             using Src = simd_type<DS>;
             using proxy = pixel_proxy_for<Dst, Src>;
-            proxy dst = ddst;
-            proxy src = dsrc;
+            proxy dst = static_cast<pixel_proxy_for<Dst>>(ddst);
+            proxy src = static_cast<pixel_proxy_for<Src>>(dsrc);
             const auto a = Src::ax - src.a;
 
             if constexpr (not std::same_as<Dst, Src>)
