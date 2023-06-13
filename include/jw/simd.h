@@ -803,6 +803,16 @@ namespace jw
         template<typename... U>
         simd_pipeline(U&&... f) : stages { std::forward<U>(f)... } { }
 
+        template<typename U>
+        friend constexpr auto operator|(simd_pipeline&& pipe, U&& stage)
+        {
+            auto make = [&]<std::size_t... I>(std::index_sequence<I...>)
+            {
+                return simd_pipeline<T..., U> { std::get<I>(std::move(pipe).stages)..., std::forward<U>(stage) };
+            };
+            return make(std::index_sequence_for<T...> { });
+        }
+
         template<simd flags, simd_format Fmt, typename... A> requires (invocable<flags, Fmt>(tuple_id<A...> { }))
         [[gnu::flatten, gnu::hot]] auto operator()(Fmt, A&&... args)
         {
@@ -811,6 +821,18 @@ namespace jw
     };
 
     template<typename... T> simd_pipeline(T&&...) -> simd_pipeline<T...>;
+
+    template<typename T>
+    constexpr auto operator| (simd_source_t src, T&& next)
+    {
+        return simd_pipeline { src, std::forward<T>(next) };
+    }
+
+    template<typename T>
+    constexpr auto operator| (simd_in_t src, T&& next)
+    {
+        return simd_pipeline { src, std::forward<T>(next) };
+    }
 
     // Execute a SIMD pipeline or single stage with the specified arguments,
     // trying simd_formats in the specified order.
