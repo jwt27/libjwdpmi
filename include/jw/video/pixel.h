@@ -465,10 +465,86 @@ namespace jw::video
     template<simd_format... Fmts>
     class px_convert_format_t
     {
+        template<pixel_data D>
+        static auto pi16_to_nosimd(D dsrc)
+        {
+            pixel_proxy_for<simd_type<D>> px;
+            const simd_vector<int, 2> lo = _mm_unpacklo_pi16(dsrc, _mm_setzero_si64());
+            const simd_vector<int, 2> hi = _mm_unpackhi_pi16(dsrc, _mm_setzero_si64());
+            px.array[0] = lo[0];
+            px.array[1] = lo[1];
+            px.array[2] = hi[0];
+            px.array[3] = hi[1];
+            return px;
+        }
+
+        template<pixel_data D>
+        static auto ps_to_nosimd(D dsrc)
+        {
+            using Pixel = simd_type<D>;
+            using Proxy = pixel_proxy_for<Pixel>;
+            Proxy px;
+            if constexpr (std::integral<typename Proxy::type>)
+            {
+                const simd_vector<int, 2> lo = _mm_cvtps_pi32(dsrc);
+                const simd_vector<int, 2> hi = _mm_cvtps_pi32(_mm_movehl_ps(dsrc, dsrc));
+                px.array[0] = lo[0];
+                px.array[1] = lo[1];
+                px.array[2] = hi[0];
+                px.array[3] = hi[1];
+            }
+            else px.vector = dsrc.get();
+            return px;
+        }
+
+        template<pixel_data D>
+        static auto nosimd_to_pi16(D dsrc)
+        {
+            static_assert(std::same_as<int, typename simd_type_traits<simd_type<D>, format_nosimd>::data_type::type>);
+            auto* const p = reinterpret_cast<const __m64*>(&dsrc.get().vector);
+            return _mm_packs_pi32(p[0], p[1]);
+        }
+
+        template<pixel_data D>
+        static auto nosimd_to_ps(D dsrc)
+        {
+            using T = typename simd_type_traits<simd_type<D>, format_nosimd>::data_type::type;
+            if constexpr (std::same_as<T, int>)
+            {
+                auto* const p = reinterpret_cast<const __m64*>(&dsrc.get().vector);
+                return _mm_cvtpi32x2_ps(p[0], p[1]);
+            }
+            else return reinterpret_cast<__m128>(dsrc.get().vector);
+        }
+
         template<simd_format Fmt, pixel_data... D>
         static auto do_convert(Fmt, Fmt, D&&... dsrc)
         {
             return simd_return(Fmt { }, std::forward<D>(dsrc)...);
+        }
+
+        template<pixel_data... D>
+        static auto do_convert(format_nosimd, format_pi16, D&&... dsrc)
+        {
+            return simd_return(nosimd, simd_data<simd_type<D>>(pi16_to_nosimd(std::forward<D>(dsrc)))...);
+        }
+
+        template<pixel_data... D>
+        static auto do_convert(format_nosimd, format_ps, D&&... dsrc)
+        {
+            return simd_return(nosimd, simd_data<simd_type<D>>(ps_to_nosimd(std::forward<D>(dsrc)))...);
+        }
+
+        template<pixel_data... D> requires (std::integral<typename simd_type<D>::T> and ...)
+        static auto do_convert(format_pi16, format_nosimd, D&&... dsrc)
+        {
+            return simd_return(pi16, simd_data<simd_type<D>>(nosimd_to_pi16(std::forward<D>(dsrc)))...);
+        }
+
+        template<pixel_data... D>
+        static auto do_convert(format_ps, format_nosimd, D&&... dsrc)
+        {
+            return simd_return(ps, simd_data<simd_type<D>>(nosimd_to_ps(std::forward<D>(dsrc)))...);
         }
 
         template<pixel_data... D> requires (std::integral<typename simd_type<D>::T> and ...)
