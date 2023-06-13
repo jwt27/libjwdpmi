@@ -583,6 +583,22 @@ namespace jw
         return detail::simd_if_format<True, False, Fmts...> { std::forward<True>(yes), std::forward<False>(no) };
     }
 
+    // Selectively slice/shuffle/duplicate inputs.
+    // Example: simd_slice<0, 0, 3, 2> (A, B, C, D, ...) -> (A, A, D, C)
+    template<unsigned... I>
+    struct simd_slice_t
+    {
+        template<simd, typename... T>
+        auto operator()(auto fmt, T&&... data) const
+        {
+            constexpr auto slice = [fmt](auto data) { return simd_return(fmt, std::get<I>(data)...); };
+            return slice(std::tuple<T...> { std::forward<T>(data)... });
+        }
+    };
+
+    template<unsigned... I>
+    constexpr inline simd_slice_t<I...> simd_slice;
+
     // A SIMD pipeline is composed of one or more functor objects, each of
     // which defines an operator() with the following signature:
     //  template<simd flags> auto operator()(simd_format fmt, auto... src)
