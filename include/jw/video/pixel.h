@@ -997,7 +997,7 @@ namespace jw::video
     inline auto generate_px8n_palette() noexcept
     {
         std::array<px32n, 256> result;
-        simd_pipeline pipe { simd_in, px_convert<px32n>, simd_out };
+        auto pipe = simd_in | px_convert<px32n> | simd_out;
         for (unsigned i = 0; i < 256; ++i)
             result[i] = simd_run<default_simd()>(pipe, std::bit_cast<px8n>(static_cast<std::uint8_t>(i)));
         return result;

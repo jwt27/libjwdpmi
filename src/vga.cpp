@@ -67,7 +67,7 @@ namespace jw::video
         {
             mmx_function<default_simd()>([pal]<simd flags>()
             {
-                simd_pipeline pipe { simd_in, px_convert<pxvga>, simd_out };
+                auto pipe = simd_in | px_convert<pxvga> | simd_out;
                 for (const auto& i : pal)
                 {
                     const auto p = simd_run<flags>(pipe, i);
@@ -96,7 +96,7 @@ namespace jw::video
         {
             mmx_function<default_simd()>([p = result.data()]<simd flags>()
             {
-                simd_pipeline pipe { simd_in, px_convert<px32n>, simd_out };
+                auto pipe = simd_in | px_convert<px32n> | simd_out;
                 for (auto i = 0; i < 256; ++i)
                 {
                     auto r = dac_data.read();
