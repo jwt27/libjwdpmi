@@ -1,14 +1,15 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
+#/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+#/*    Copyright (C) 2022 - 2023 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
+#include <jw/simd.h>
+#include <jw/math.h>
 #include <bit>
 #include <array>
 #include <stdexcept>
+#include <cstring>
 #include <mmintrin.h>
 #include <mm3dnow.h>
-#include <jw/simd.h>
-#include <jw/math.h>
 
 // These functions emulate the "mmx2" intrinsics in <xmmintrin.h>.  Those have
 // a target("sse") attribute, and can not be used with target("3dnowa").
