@@ -42,6 +42,9 @@ namespace jw
     template<typename T, typename... U>
     concept any_of = (std::same_as<T, U> or ...);
 
+    template<typename... T>
+    inline constexpr bool all_same = sizeof...(T) < 2 or (std::same_as<std::tuple_element_t<0, std::tuple<T...>>, T> and ...);
+
     template<typename T>
     concept simd_format = any_of<std::remove_cvref_t<T>, format_nosimd, format_pi8, format_pi16, format_pi32, format_si64, format_ps, format_pf>;
 
