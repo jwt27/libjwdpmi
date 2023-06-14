@@ -610,7 +610,7 @@ namespace jw::video
             {
                 mmx_function<default_simd()>([out = copy.begin(), size, pal]<simd flags>()
                 {
-                    simd_pipeline pipe { simd_source, px_convert<pxvga>, simd_sink { out } };
+                    simd_pipeline pipe { simd_source { }, px_convert<pxvga>, simd_sink { out } };
                     for (auto p = pal.begin(); p != pal.end();)
                         simd_run<flags>(pipe, &p);
                 });
@@ -640,7 +640,7 @@ namespace jw::video
             {
                 mmx_function<default_simd()>([out = dos_data->palette.data(), size, pal]<simd flags>()
                 {
-                    simd_pipeline pipe { simd_source, px_convert<pxvga>, simd_sink { reinterpret_cast<pxvga*>(out) } };
+                    simd_pipeline pipe { simd_source { }, px_convert<pxvga>, simd_sink { reinterpret_cast<pxvga*>(out) } };
                     for (auto p = pal.begin(); p != pal.end();)
                         simd_run<flags>(pipe, &p);
                 });
@@ -674,7 +674,7 @@ namespace jw::video
         {
             mmx_function<default_simd()>([out = copy.data(), pal, size]<simd flags>()
             {
-                simd_pipeline pipe { simd_source, px_convert<pxvga>, simd_sink { out } };
+                simd_pipeline pipe { simd_source { }, px_convert<pxvga>, simd_sink { out } };
                 for (auto p = pal.begin(); p != pal.end();)
                     simd_run<flags>(pipe, &p);
             });

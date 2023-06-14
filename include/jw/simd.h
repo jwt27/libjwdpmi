@@ -398,25 +398,46 @@ namespace jw
         else *i += delta;
     }
 
-    // Load from one or more iterators, passed by pointer, and return
-    // simd_data.  The iterators are incremented by the amount specified in
-    // simd_type_traits.
-    struct simd_source_t
+    // Load simd_data from one or more iterators.  In addition to the stored
+    // iterators, additional iterators may be passed by pointer to operator(),
+    // and data from these is inserted first in the output stream.  All
+    // iterators are incremented by the delta specified in simd_type_traits.
+    template<typename... I>
+    struct simd_source
     {
-        template<simd flags, simd_format F, typename... I> requires (simd_loadable<I, flags, F> and ...)
-        auto operator()(F, I*... iterators) const
+        template<typename... J>
+        constexpr simd_source(J&&... i) : iterators { std::forward<J>(i)... } { }
+
+        template<simd flags, simd_format F, typename... J> requires
+            ((simd_loadable<I, flags, F> and ...) and
+             (simd_loadable<J, flags, F> and ...))
+        auto operator()(F, J*... it)
         {
-            auto ret = simd_return(F { }, simd_data<std::iter_value_t<I>>(simd_load<flags>(F { }, *iterators))...);
-            (increment_simd_iterator<F>(iterators), ...);
+            return load<flags>(F { }, std::make_index_sequence<sizeof...(I)> { }, it...);
+        }
+
+    private:
+        template<simd flags, simd_format F, typename... J, std::size_t... N>
+        auto load(F, std::index_sequence<N...>, J*... it)
+        {
+            auto ret = simd_return(F { }, simd_data<std::iter_value_t<J>>(simd_load<flags>(F { }, *it))...,
+                                   simd_data<std::iter_value_t<std::tuple_element_t<N, std::tuple<I...>>>>(simd_load<flags>(F { }, std::get<N>(iterators)))...);
+            (increment_simd_iterator<F>(it), ...);
+            (increment_simd_iterator<F>(&std::get<N>(iterators)), ...);
             return ret;
         }
-    } constexpr inline simd_source;
+
+        std::tuple<I...> iterators;
+    };
+
+    template<typename... I> simd_source(I&&...) -> simd_source<std::decay_t<I>...>;
 
     // Store the incoming simd_data in a contained set of iterators.
     template<typename... I>
     struct simd_sink
     {
-        constexpr simd_sink(I... i) : iterators { i... } { }
+        template<typename... J>
+        constexpr simd_sink(J&&... i) : iterators { std::forward<J>(i)... } { }
 
         template<simd flags, simd_format F, typename... D>
         requires (sizeof...(D) == sizeof...(I) and
@@ -437,6 +458,8 @@ namespace jw
 
         std::tuple<I...> iterators;
     };
+
+    template<typename... I> simd_sink(I&&...) -> simd_sink<std::decay_t<I>...>;
 
     // Convert input directly to SIMD data via simd_load.  This is only
     // possible for types where the returned SIMD vector represents one
@@ -847,16 +870,16 @@ namespace jw
 
     template<typename... T> simd_pipeline(T&&...) -> simd_pipeline<T...>;
 
-    template<typename T>
-    constexpr auto operator| (simd_source_t src, T&& next)
+    template<typename... I, typename T>
+    constexpr auto operator| (simd_source<I...>&& src, T&& next)
     {
-        return simd_pipeline { src, std::forward<T>(next) };
+        return simd_pipeline { std::move(src), std::forward<T>(next) };
     }
 
-    template<typename T>
-    constexpr auto operator| (simd_in_t src, T&& next)
+    template<typename I, typename T> requires std::same_as<std::remove_cvref_t<I>, simd_in_t>
+    constexpr auto operator| (I&& src, T&& next)
     {
-        return simd_pipeline { src, std::forward<T>(next) };
+        return simd_pipeline { std::forward<I>(src), std::forward<T>(next) };
     }
 
     // Execute a SIMD pipeline or single stage with the specified arguments,
