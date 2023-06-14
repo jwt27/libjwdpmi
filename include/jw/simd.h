@@ -881,20 +881,14 @@ namespace jw
 
     // Invoke a SIMD pipeline or single stage using the format and arguments
     // unpacked from simd_return data.
-    template<simd flags, typename F, simd_return_type... A>
-    [[gnu::flatten, gnu::hot]] auto simd_apply(F&& func, A&&... args)
+    template<simd flags, typename F, simd_return_type A>
+    [[gnu::flatten, gnu::hot]] auto simd_apply(F&& func, A&& args)
     {
-        constexpr auto get_format = []<typename B, typename... C>(std::type_identity<std::tuple<B, C...>>)
-        {
-            return typename B::format { };
-        };
-        using Fmt = decltype(get_format(std::type_identity<std::tuple<A...>> { }));
-        static_assert ((std::same_as<Fmt, typename A::format> and ...), "Conflicting formats in arguments");
-
+        using Fmt = A::format;
         auto invoke = [&func]<typename... A2>(A2&&... args)
         {
-            return simd_run<flags, Fmt>(std::forward<F>(func), std::forward<A2>(args)...);
+            return simd_invoke<flags>(std::forward<F>(func), Fmt { }, std::forward<A2>(args)...);
         };
-        return std::apply(invoke, std::forward<A>(args).data...);
+        return std::apply(invoke, std::forward<A>(args).data);
     }
 }
