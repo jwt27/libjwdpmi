@@ -599,6 +599,28 @@ namespace jw
     template<std::size_t... I>
     constexpr inline simd_slice_t<I...> simd_slice;
 
+    template<std::size_t I, std::size_t N>
+    struct simd_slice_sequential_t
+    {
+        template<simd, typename... T> requires (I + N <= sizeof...(T))
+        auto operator()(auto fmt, T&&... data) const
+        {
+            constexpr auto slice = [fmt]<std::size_t... Is>(auto tuple, std::index_sequence<Is...>)
+            {
+                return simd_return(fmt, std::get<I + Is>(tuple)...);
+            };
+            return slice(std::forward_as_tuple(std::forward<T>(data)...), std::make_index_sequence<N> { });
+        }
+    };
+
+    // Return the first N inputs.
+    template<std::size_t N>
+    constexpr inline simd_slice_sequential_t<0, N> simd_slice_first;
+
+    // Return the first N inputs starting from index I.
+    template<std::size_t I, std::size_t N>
+    constexpr inline simd_slice_sequential_t<I, N> simd_slice_next;
+
     // A SIMD pipeline is composed of one or more functor objects, each of
     // which defines an operator() with the following signature:
     //  template<simd flags> auto operator()(simd_format fmt, auto... src)
