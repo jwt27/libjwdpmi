@@ -347,9 +347,14 @@ namespace jw::audio
             using T = type<Ds...>;
             if constexpr (std::integral<T>)
             {
-                using U = std::conditional_t<std::same_as<T, sample_i32>, std::int64_t, std::conditional_t<std::signed_integral<T>, std::int32_t, std::uint32_t>>;
-                static_assert((sizeof(U) - sizeof(T)) * 8 >= shift<Ds...>);
-                return simd_data<T>((static_cast<U>(data) + ...) >> shift<Ds...>);
+                constexpr auto shift = this->shift<Ds...>;
+                if constexpr (sizeof(T) < sizeof(int))
+                {
+                    using U = std::conditional_t<std::signed_integral<T>, int, unsigned>;
+                    static_assert((sizeof(U) - sizeof(T)) * 8 >= shift);
+                    return simd_data<T>((static_cast<U>(data) + ...) >> shift);
+                }
+                else return simd_data<T>(((data >> shift) + ...));
             }
             else return simd_data<T>((data + ...) * factor<Ds...>);
         }
