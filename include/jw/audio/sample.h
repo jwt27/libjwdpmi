@@ -89,6 +89,7 @@ namespace jw::audio
             }
 
             template<simd flags, sample_data D>
+            requires (std::max(sizeof(simd_type<D>), sizeof(To)) <= 1)
             auto operator()(format_pi8, D src) const
             {
                 using cvt = conversion_data<simd_type<D>>;
@@ -100,6 +101,7 @@ namespace jw::audio
             }
 
             template<simd flags, sample_data D>
+            requires (std::max(sizeof(simd_type<D>), sizeof(To)) <= 2)
             auto operator()(format_pi16, D src) const
             {
                 using cvt = conversion_data<simd_type<D>>;
@@ -115,6 +117,7 @@ namespace jw::audio
             }
 
             template<simd flags, sample_data D>
+            requires (std::max(sizeof(simd_type<D>), sizeof(To)) <= 4)
             auto operator()(format_pi32, D src) const
             {
                 using cvt = conversion_data<simd_type<D>>;
