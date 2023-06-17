@@ -412,12 +412,9 @@ namespace jw
             return simd_return(fmt, std::forward<T>(data)...);
         }
     } constexpr inline simd_nop;
-}
 
-namespace jw::detail
-{
     template<typename True, typename False>
-    struct simd_if
+    struct simd_if_t
     {
         template<simd flags, typename... T>
         auto operator()(auto fmt, T&&... data) const
@@ -433,8 +430,22 @@ namespace jw::detail
         False no;
     };
 
+    // Execute a simd_pipeline conditionally.
+    template<typename True>
+    auto simd_if(bool condition, True&& yes)
+    {
+        return simd_if_t<True, simd_nop_t> { condition, std::forward<True>(yes), { } };
+    }
+
+    // Execute a simd_pipeline conditionally.
+    template<typename True, typename False>
+    auto simd_if(bool condition, True&& yes, False&& no)
+    {
+        return simd_if_t<True, False> { condition, std::forward<True>(yes), std::forward<False>(no) };
+    }
+
     template<bool Condition, typename True, typename False>
-    struct simd_if_constexpr
+    struct simd_if_constexpr_t
     {
         template<simd flags, typename... T>
         auto operator()(auto fmt, T&&... data) const
@@ -449,8 +460,22 @@ namespace jw::detail
         False no;
     };
 
+    // Execute a simd_pipeline conditionally.
+    template<bool Condition, typename True>
+    auto simd_if_constexpr(True&& yes)
+    {
+        return simd_if_constexpr_t<Condition, True, simd_nop_t> { std::forward<True>(yes), { } };
+    }
+
+    // Execute a simd_pipeline conditionally.
+    template<bool Condition, typename True, typename False>
+    auto simd_if_constexpr(True&& yes, False&& no)
+    {
+        return simd_if_constexpr_t<Condition, True, False> { std::forward<True>(yes), std::forward<False>(no) };
+    }
+
     template<typename True, typename False, simd_format... Fmts>
-    struct simd_if_format
+    struct simd_if_format_t
     {
         template<simd flags, simd_format Fmt, typename... T>
         auto operator()(Fmt fmt, T&&... data) const
@@ -464,50 +489,19 @@ namespace jw::detail
         True yes;
         False no;
     };
-}
-
-namespace jw
-{
-    // Execute a simd_pipeline conditionally.
-    template<typename True>
-    auto simd_if(bool condition, True&& yes)
-    {
-        return detail::simd_if<True, simd_nop_t> { condition, std::forward<True>(yes), { } };
-    }
-
-    // Execute a simd_pipeline conditionally.
-    template<typename True, typename False>
-    auto simd_if(bool condition, True&& yes, False&& no)
-    {
-        return detail::simd_if<True, False> { condition, std::forward<True>(yes), std::forward<False>(no) };
-    }
-
-    // Execute a simd_pipeline conditionally.
-    template<bool Condition, typename True>
-    auto simd_if_constexpr(True&& yes)
-    {
-        return detail::simd_if_constexpr<Condition, True, simd_nop_t> { std::forward<True>(yes), { } };
-    }
-
-    // Execute a simd_pipeline conditionally.
-    template<bool Condition, typename True, typename False>
-    auto simd_if_constexpr(True&& yes, False&& no)
-    {
-        return detail::simd_if_constexpr<Condition, True, False> { std::forward<True>(yes), std::forward<False>(no) };
-    }
 
     // Execute a simd_pipeline if the format matches any of those specified.
     template<simd_format... Fmts, typename True>
     auto simd_if_format(True&& yes)
     {
-        return detail::simd_if_format<True, simd_nop_t, Fmts...> { std::forward<True>(yes), { } };
+        return simd_if_format_t<True, simd_nop_t, Fmts...> { std::forward<True>(yes), { } };
     }
 
     // Execute a simd_pipeline if the format matches any of those specified.
     template<simd_format... Fmts, typename True, typename False>
     auto simd_if_format(True&& yes, False&& no)
     {
-        return detail::simd_if_format<True, False, Fmts...> { std::forward<True>(yes), std::forward<False>(no) };
+        return simd_if_format_t<True, False, Fmts...> { std::forward<True>(yes), std::forward<False>(no) };
     }
 
     template<std::size_t... I>
