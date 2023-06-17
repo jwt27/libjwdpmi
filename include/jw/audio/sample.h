@@ -398,9 +398,12 @@ namespace jw::audio
         auto operator()(format_pi16, Ds&&... data) const
         {
             using T = type<Ds...>;
-            if constexpr (sizeof...(Ds) == 1) return simd_data<T>(data...);
+            constexpr auto headroom = this->headroom<format_pi16, Ds...>;
+            constexpr auto shift = this->shift<Ds...>;
 
-            if constexpr (flags.match(simd::mmx2) and sizeof...(Ds) % 2 == 0 and std::unsigned_integral<T>)
+            if constexpr (sizeof...(Ds) == 1)
+                return simd_data<T>(data...);
+            else if constexpr (flags.match(simd::mmx2) and sizeof...(Ds) % 2 == 0 and std::unsigned_integral<T>)
             {
                 auto do_mix = [&] { return mix_pu16<T>(std::forward_as_tuple(std::forward<Ds>(data)...), std::make_index_sequence<sizeof...(Ds) / 2> { }); };
                 if constexpr (sizeof...(Ds) > 2)
@@ -408,10 +411,7 @@ namespace jw::audio
                 else
                     return do_mix();
             }
-
-            constexpr auto headroom = this->headroom<format_pi16, Ds...>;
-            constexpr auto shift = this->shift<Ds...>;
-            if constexpr (shift < headroom)
+            else if constexpr (shift < headroom)
             {
                 const auto mix = mix_pi16_oversized(data...);
                 if constexpr (std::unsigned_integral<T>)
