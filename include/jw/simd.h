@@ -335,24 +335,24 @@ namespace jw
     // Convert input directly to SIMD data via simd_load.  This is only
     // possible for types where the returned SIMD vector represents one
     // element of T.  For regular arithmetic types, only format_nosimd
-    // satisfies this constraint.
+    // and format_si64 satisfy this constraint.
     struct simd_in_t
     {
-        template<simd flags, simd_format F, typename T>
-        requires (simd_loadable<const T*, flags, F> and simd_type_traits<T, F>::delta == 1)
-        auto operator()(F, const T& value) const
+        template<simd flags, simd_format Fmt, typename... T>
+        requires ((simd_loadable<const T*, flags, Fmt> and ...) and
+                  ((simd_type_traits<T, Fmt>::delta == 1) and ...))
+        auto operator()(Fmt, const T&... values) const
         {
-            return simd_data<T>(simd_load<flags>(F { }, &value));
+            return simd_return(Fmt { }, simd_data<T>(simd_load<flags>(Fmt { }, &values))...);
         }
     } constexpr inline simd_in;
 
     // Convert SIMD data directly to output value via simd_store.  When this
     // SIMD data represents multiple elements of T, a std::array is returned.
-    struct simd_out_t
+    class simd_out_t
     {
         template<simd flags, simd_format Fmt, simd_data_type D>
-        requires (simd_storable<simd_type<D>*, flags, Fmt> and std::is_default_constructible_v<simd_type<D>>)
-        auto operator()(Fmt, D data) const
+        static auto store(Fmt, D data)
         {
             using T = simd_type<D>;
             constexpr auto N = simd_type_traits<T, Fmt>::delta;
@@ -360,14 +360,23 @@ namespace jw
             {
                 T value;
                 simd_store<flags>(Fmt { }, &value, data);
-                return std::make_tuple(std::move(value));
+                return value;
             }
             else
             {
                 std::array<T, N> value;
                 simd_store<flags>(Fmt { }, value.data(), data);
-                return std::make_tuple(std::move(value));
+                return value;
             }
+        }
+
+    public:
+        template<simd flags, simd_format Fmt, simd_data_type... D>
+        requires ((simd_storable<simd_type<D>*, flags, Fmt> and ...) and
+                  (std::is_default_constructible_v<simd_type<D>> and ...))
+        auto operator()(Fmt, D&&... data) const
+        {
+            return std::make_tuple(store<flags>(Fmt {}, std::forward<D>(data))...);
         }
     } constexpr inline simd_out;
 
