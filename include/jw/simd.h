@@ -416,13 +416,14 @@ namespace jw
     template<typename True, typename False>
     struct simd_if_t
     {
-        template<simd flags, typename... T>
-        auto operator()(auto fmt, T&&... data) const
+        template<simd flags, simd_format Fmt, typename... A>
+        requires (simd_invocable<True, flags, Fmt, A&&...> and simd_invocable<False, flags, Fmt, A&&...>)
+        auto operator()(Fmt, A&&... args) const
         {
             if (condition)
-                return simd_invoke<flags>(yes, fmt, std::forward<T>(data)...);
+                return simd_invoke<flags>(yes, Fmt { }, std::forward<A>(args)...);
             else
-                return simd_invoke<flags>(no, fmt, std::forward<T>(data)...);
+                return simd_invoke<flags>(no, Fmt { }, std::forward<A>(args)...);
         }
 
         const bool condition;
@@ -447,13 +448,14 @@ namespace jw
     template<bool Condition, typename True, typename False>
     struct simd_if_constexpr_t
     {
-        template<simd flags, typename... T>
-        auto operator()(auto fmt, T&&... data) const
+        template<simd flags, simd_format Fmt, typename... A>
+        requires (Condition ? simd_invocable<True, flags, Fmt, A&&...> : simd_invocable<False, flags, Fmt, A&&...>)
+        auto operator()(Fmt, A&&... args) const
         {
             if constexpr (Condition)
-                return simd_invoke<flags>(yes, fmt, std::forward<T>(data)...);
+                return simd_invoke<flags>(yes, Fmt { }, std::forward<A>(args)...);
             else
-                return simd_invoke<flags>(no, fmt, std::forward<T>(data)...);
+                return simd_invoke<flags>(no, Fmt { }, std::forward<A>(args)...);
         }
 
         True yes;
@@ -477,13 +479,18 @@ namespace jw
     template<typename True, typename False, simd_format... Fmts>
     struct simd_if_format_t
     {
-        template<simd flags, simd_format Fmt, typename... T>
-        auto operator()(Fmt fmt, T&&... data) const
+        template<simd flags, simd_format Fmt, typename... A>
+        requires (any_simd_format_of<Fmt, Fmts...> and simd_invocable<True, flags, Fmt, A&&...>)
+        auto operator()(Fmt fmt, A&&... args) const
         {
-            if constexpr (any_simd_format_of<Fmt, Fmts...>)
-                return simd_invoke<flags>(yes, fmt, std::forward<T>(data)...);
-            else
-                return simd_invoke<flags>(no, fmt, std::forward<T>(data)...);
+            return simd_invoke<flags>(yes, fmt, std::forward<A>(args)...);
+        }
+
+        template<simd flags, simd_format Fmt, typename... A>
+        requires (not any_simd_format_of<Fmt, Fmts...> and simd_invocable<False, flags, Fmt, A&&...>)
+        auto operator()(Fmt fmt, A&&... args) const
+        {
+            return simd_invoke<flags>(no, fmt, std::forward<A>(args)...);
         }
 
         True yes;
