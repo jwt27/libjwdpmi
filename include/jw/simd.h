@@ -200,19 +200,31 @@ namespace jw
     }
 
     // Invoke a SIMD pipeline using arguments unpacked from a tuple.
-    template<simd flags, typename F, simd_format Fmt, typename Tuple>
-    [[gnu::flatten, gnu::hot]] auto simd_apply(F&& func, Fmt, Tuple&& args)
+    template<simd flags, typename F, simd_format Fmt, typename... A> requires (simd_invocable<F&&, flags, Fmt, A...>)
+    [[gnu::flatten, gnu::hot]] auto simd_apply(F&& func, Fmt, std::tuple<A...>&& args)
     {
-        auto invoke = [&func]<typename... A>(A&&... args)
+        auto invoke = [&func]<typename... A2>(A2&&... args)
         {
-            return simd_invoke<flags>(std::forward<F>(func), Fmt { }, std::forward<A>(args)...);
+            return simd_invoke<flags>(std::forward<F>(func), Fmt { }, std::forward<A2>(args)...);
         };
-        return std::apply(invoke, std::forward<Tuple>(args));
+        return std::apply(invoke, std::move(args));
+    }
+
+    // Invoke a SIMD pipeline using arguments unpacked from a tuple.
+    template<simd flags, typename F, simd_format Fmt, typename... A> requires (simd_invocable<F&&, flags, Fmt, A...>)
+    [[gnu::flatten, gnu::hot]] auto simd_apply(F&& func, Fmt, const std::tuple<A...>& args)
+    {
+        auto invoke = [&func]<typename... A2>(A2&&... args)
+        {
+            return simd_invoke<flags>(std::forward<F>(func), Fmt { }, std::forward<A2>(args)...);
+        };
+        return std::apply(invoke, args);
     }
 
     // Invoke a SIMD pipeline using the format and arguments unpacked from
     // simd_return data.
     template<simd flags, typename F, simd_return_type A>
+    requires (requires (F&& func, A&& args) { simd_apply<flags>(std::forward<F>(func), typename A::format { }, std::forward<A>(args).data); })
     [[gnu::flatten, gnu::hot]] auto simd_apply(F&& func, A&& args)
     {
         using Fmt = A::format;
