@@ -176,6 +176,49 @@ namespace jw
     template<typename F, simd flags, typename... A>
     using simd_invoke_result = decltype(simd_invoke<flags>(std::declval<F>(), std::declval<A>()...));
 
+    // Execute a SIMD pipeline stage with the specified arguments, trying
+    // simd_formats in the specified order.
+    template<simd flags, simd_format Fmt, simd_format... Fmts, typename F, typename... A>
+    [[gnu::flatten, gnu::hot]] auto simd_run(F&& func, A&&... args)
+    {
+        if constexpr (flags.match(simd_format_traits<Fmt>::flags) and simd_invocable<F, flags, Fmt, A...>)
+            return simd_invoke<flags>(std::forward<F>(func), Fmt { }, std::forward<A>(args)...);
+        else
+        {
+            static_assert (sizeof...(Fmts) > 0, "Unable to find suitable simd_format");
+            return simd_run<flags, Fmts...>(std::forward<F>(func), std::forward<A>(args)...);
+        }
+    }
+
+    // Execute a SIMD pipeline with the specified arguments, using the default
+    // format search order.
+    template<simd flags, typename F, typename... A>
+    [[gnu::flatten, gnu::hot]] auto simd_run(F&& func, A&&... args)
+    {
+        return simd_run<flags, format_pi8, format_pi16, format_pi32, format_si64, format_ps, format_pf, format_nosimd>
+            (std::forward<F>(func), std::forward<A>(args)...);
+    }
+
+    // Invoke a SIMD pipeline using arguments unpacked from a tuple.
+    template<simd flags, typename F, simd_format Fmt, typename Tuple>
+    [[gnu::flatten, gnu::hot]] auto simd_apply(F&& func, Fmt, Tuple&& args)
+    {
+        auto invoke = [&func]<typename... A>(A&&... args)
+        {
+            return simd_invoke<flags>(std::forward<F>(func), Fmt { }, std::forward<A>(args)...);
+        };
+        return std::apply(invoke, std::forward<Tuple>(args));
+    }
+
+    // Invoke a SIMD pipeline using the format and arguments unpacked from
+    // simd_return data.
+    template<simd flags, typename F, simd_return_type A>
+    [[gnu::flatten, gnu::hot]] auto simd_apply(F&& func, A&& args)
+    {
+        using Fmt = A::format;
+        return simd_apply<flags>(std::forward<F>(func), Fmt { }, std::forward<A>(args).data);
+    }
+
 #   pragma GCC diagnostic push
 #   pragma GCC diagnostic ignored "-Wunused-local-typedefs"
 
@@ -708,49 +751,6 @@ namespace jw
     constexpr auto operator| (I&& src, T&& next)
     {
         return simd_pipeline { std::forward<I>(src), std::forward<T>(next) };
-    }
-
-    // Execute a SIMD pipeline stage with the specified arguments, trying
-    // simd_formats in the specified order.
-    template<simd flags, simd_format Fmt, simd_format... Fmts, typename F, typename... A>
-    [[gnu::flatten, gnu::hot]] auto simd_run(F&& func, A&&... args)
-    {
-        if constexpr (flags.match(simd_format_traits<Fmt>::flags) and simd_invocable<F, flags, Fmt, A...>)
-            return simd_invoke<flags>(std::forward<F>(func), Fmt { }, std::forward<A>(args)...);
-        else
-        {
-            static_assert (sizeof...(Fmts) > 0, "Unable to find suitable simd_format");
-            return simd_run<flags, Fmts...>(std::forward<F>(func), std::forward<A>(args)...);
-        }
-    }
-
-    // Execute a SIMD pipeline with the specified arguments, using the default
-    // format search order.
-    template<simd flags, typename F, typename... A>
-    [[gnu::flatten, gnu::hot]] auto simd_run(F&& func, A&&... args)
-    {
-        return simd_run<flags, format_pi8, format_pi16, format_pi32, format_si64, format_ps, format_pf, format_nosimd>
-            (std::forward<F>(func), std::forward<A>(args)...);
-    }
-
-    // Invoke a SIMD pipeline using arguments unpacked from a tuple.
-    template<simd flags, typename F, simd_format Fmt, typename Tuple>
-    [[gnu::flatten, gnu::hot]] auto simd_apply(F&& func, Fmt, Tuple&& args)
-    {
-        auto invoke = [&func]<typename... A>(A&&... args)
-        {
-            return simd_invoke<flags>(std::forward<F>(func), Fmt { }, std::forward<A>(args)...);
-        };
-        return std::apply(invoke, std::forward<Tuple>(args));
-    }
-
-    // Invoke a SIMD pipeline using the format and arguments unpacked from
-    // simd_return data.
-    template<simd flags, typename F, simd_return_type A>
-    [[gnu::flatten, gnu::hot]] auto simd_apply(F&& func, A&& args)
-    {
-        using Fmt = A::format;
-        return simd_apply<flags>(std::forward<F>(func), Fmt { }, std::forward<A>(args).data);
     }
 }
 
