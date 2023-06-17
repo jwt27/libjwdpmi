@@ -326,7 +326,7 @@ namespace jw::audio
         }
 
         template<typename T, std::size_t... I, typename... Ds>
-        static auto mix_pu16(std::tuple<Ds&&...> tuple, std::index_sequence<I...>)
+        static auto mix_pu16(std::tuple<Ds...> tuple, std::index_sequence<I...>)
         {
             if constexpr (sizeof...(Ds) > 2)
                 return simd_return(pi16, simd_data<T>(mmx2_avg_pu16(std::get<I * 2>(tuple), std::get<I * 2 + 1>(tuple)))...);
@@ -335,7 +335,7 @@ namespace jw::audio
         };
 
         template<typename T, std::size_t... I, typename... Ds>
-        static auto mix_pu8(std::tuple<Ds&&...> tuple, std::index_sequence<I...>)
+        static auto mix_pu8(std::tuple<Ds...> tuple, std::index_sequence<I...>)
         {
             if constexpr (sizeof...(Ds) > 2)
                 return simd_return(pi8, simd_data<T>(mmx2_avg_pu8(std::get<I * 2>(tuple), std::get<I * 2 + 1>(tuple)))...);
