@@ -882,8 +882,8 @@ namespace jw
         return simd_pipeline { std::forward<I>(src), std::forward<T>(next) };
     }
 
-    // Execute a SIMD pipeline or single stage with the specified arguments,
-    // trying simd_formats in the specified order.
+    // Execute a SIMD pipeline stage with the specified arguments, trying
+    // simd_formats in the specified order.
     template<simd flags, simd_format Fmt, simd_format... Fmts, typename F, typename... A>
     [[gnu::flatten, gnu::hot]] auto simd_run(F&& func, A&&... args)
     {
@@ -896,8 +896,8 @@ namespace jw
         }
     }
 
-    // Execute a SIMD pipeline or single stage with the specified arguments,
-    // using the default format search order.
+    // Execute a SIMD pipeline with the specified arguments, using the default
+    // format search order.
     template<simd flags, typename F, typename... A>
     [[gnu::flatten, gnu::hot]] auto simd_run(F&& func, A&&... args)
     {
@@ -905,16 +905,23 @@ namespace jw
             (std::forward<F>(func), std::forward<A>(args)...);
     }
 
-    // Invoke a SIMD pipeline or single stage using the format and arguments
-    // unpacked from simd_return data.
+    // Invoke a SIMD pipeline using arguments unpacked from a tuple.
+    template<simd flags, typename F, simd_format Fmt, typename Tuple>
+    [[gnu::flatten, gnu::hot]] auto simd_apply(F&& func, Fmt, Tuple&& args)
+    {
+        auto invoke = [&func]<typename... A>(A&&... args)
+        {
+            return simd_invoke<flags>(std::forward<F>(func), Fmt { }, std::forward<A>(args)...);
+        };
+        return std::apply(invoke, std::forward<Tuple>(args));
+    }
+
+    // Invoke a SIMD pipeline using the format and arguments unpacked from
+    // simd_return data.
     template<simd flags, typename F, simd_return_type A>
     [[gnu::flatten, gnu::hot]] auto simd_apply(F&& func, A&& args)
     {
         using Fmt = A::format;
-        auto invoke = [&func]<typename... A2>(A2&&... args)
-        {
-            return simd_invoke<flags>(std::forward<F>(func), Fmt { }, std::forward<A2>(args)...);
-        };
-        return std::apply(invoke, std::forward<A>(args).data);
+        return simd_apply<flags>(std::forward<F>(func), Fmt { }, std::forward<A>(args).data);
     }
 }
