@@ -70,7 +70,7 @@ namespace jw::video
                 auto pipe = simd_in | px_convert<pxvga> | simd_out;
                 for (const auto& i : pal)
                 {
-                    const auto p = simd_run<flags>(pipe, i);
+                    const auto p = std::get<0>(simd_run<flags>(pipe, i));
                     dac_data.write(p.r);
                     dac_data.write(p.g);
                     dac_data.write(p.b);
@@ -102,7 +102,7 @@ namespace jw::video
                     auto r = dac_data.read();
                     auto g = dac_data.read();
                     auto b = dac_data.read();
-                    p[i] = simd_run<flags>(pipe, pxvga { r, g, b });
+                    p[i] = std::get<0>(simd_run<flags>(pipe, pxvga { r, g, b }));
                 }
             });
         }

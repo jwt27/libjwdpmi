@@ -717,7 +717,7 @@ namespace jw::video
             {
                 auto pipe = simd_in | px_convert<px32n> | simd_out;
                 for (auto i = 0; i < 256; ++i)
-                    out[i] = simd_run<flags>(pipe, reinterpret_cast<const pxvga*>(ptr)[i]);
+                    out[i] = std::get<0>(simd_run<flags>(pipe, reinterpret_cast<const pxvga*>(ptr)[i]));
             });
         }
         else for (auto i = 0; i < 256; ++i) result[i] = ptr[i];

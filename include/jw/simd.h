@@ -358,7 +358,7 @@ namespace jw
         {
             simd_type<D> value;
             simd_store<flags>(F { }, &value, data);
-            return value;
+            return std::make_tuple(std::move(value));
         }
     } constexpr inline simd_out;
 
