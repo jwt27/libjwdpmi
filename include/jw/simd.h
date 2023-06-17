@@ -346,19 +346,28 @@ namespace jw
         }
     } constexpr inline simd_in;
 
-    // Convert SIMD data directly to output value via simd_store.  As with
-    // simd_in, this only possible when the SIMD vector represents a single
-    // element of the output type.
+    // Convert SIMD data directly to output value via simd_store.  When this
+    // SIMD data represents multiple elements of T, a std::array is returned.
     struct simd_out_t
     {
-        template<simd flags, simd_format F, simd_data_type D>
-        requires (simd_storable<simd_type<D>*, flags, F> and simd_type_traits<simd_type<D>, F>::delta == 1
-                  and std::is_default_constructible_v<simd_type<D>>)
-        auto operator()(F, D data) const
+        template<simd flags, simd_format Fmt, simd_data_type D>
+        requires (simd_storable<simd_type<D>*, flags, Fmt> and std::is_default_constructible_v<simd_type<D>>)
+        auto operator()(Fmt, D data) const
         {
-            simd_type<D> value;
-            simd_store<flags>(F { }, &value, data);
-            return std::make_tuple(std::move(value));
+            using T = simd_type<D>;
+            constexpr auto N = simd_type_traits<T, Fmt>::delta;
+            if constexpr (N == 1)
+            {
+                T value;
+                simd_store<flags>(Fmt { }, &value, data);
+                return std::make_tuple(std::move(value));
+            }
+            else
+            {
+                std::array<T, N> value;
+                simd_store<flags>(Fmt { }, value.data(), data);
+                return std::make_tuple(std::move(value));
+            }
         }
     } constexpr inline simd_out;
 
