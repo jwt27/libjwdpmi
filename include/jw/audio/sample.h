@@ -54,8 +54,9 @@ namespace jw::audio
             {
                 static constexpr auto src0 = sample_traits<From>::zero();
                 static constexpr auto dst0 = sample_traits<To>::zero();
-                static constexpr float factor = sample_traits<To>::max_amplitude() / sample_traits<From>::max_amplitude();
                 static constexpr int rshift = sizeof(From) * 8 - sizeof(To) * 8;
+                static constexpr float factor =
+                    static_cast<float>(sample_traits<To>::max_amplitude()) / sample_traits<From>::max_amplitude();
             };
 
             template<simd flags, simd_data_for<To> D>
