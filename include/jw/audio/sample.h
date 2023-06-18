@@ -31,7 +31,7 @@ namespace jw::audio
         static consteval auto min()           { return std::numeric_limits<T>::min(); }
         static consteval auto max()           { return std::numeric_limits<T>::max(); }
         static consteval auto zero()          { return std::midpoint(max(), min()); }
-        static consteval auto max_amplitude() { return std::max(std::abs(min() - zero()), std::abs(max() - zero())); }
+        static consteval auto max_amplitude() { return std::min(std::abs(min() - zero()), std::abs(max() - zero())); }
     };
 
     template<>
