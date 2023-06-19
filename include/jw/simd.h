@@ -135,34 +135,111 @@ namespace jw
         static constexpr std::size_t delta = 1;
     };
 
-    // Check if the given type was produced by simd_data().
-    template<typename T> concept simd_data_type = requires (T r)
+    // Check if there is a valid overload of simd_load() for input iterator I
+    // in the given format.
+    template<typename I, simd flags, typename Fmt>
+    concept simd_loadable = requires (Fmt t, I p)
     {
-        typename T::type;
-        typename T::data_type;
-        { r.data } -> std::convertible_to<typename T::data_type>;
+        { simd_load<flags>(t, p) } -> std::same_as<typename simd_type_traits<std::remove_cv_t<std::iter_value_t<I>>, Fmt>::data_type>;
     };
 
-    // Check if the given type was produced by simd_return().
-    template<typename T> concept simd_return_type = requires (T r)
+    // Check if there is a valid overload of simd_store() for output iterator
+    // O in the given format.
+    template<typename O, simd flags, typename Fmt>
+    concept simd_storable = requires (Fmt t, O p, typename simd_type_traits<std::remove_cv_t<std::iter_value_t<O>>, Fmt>::data_type v)
     {
-        typename T::format;
-        requires simd_format<typename T::format>;
-        { r.data };
-        { std::tuple_size_v<decltype(r.data)> } -> std::convertible_to<std::size_t>;
+        simd_store<flags>(t, p, v);
     };
+}
+
+namespace jw::detail
+{
+    template<typename T, typename D>
+    struct simd_data_t
+    {
+        using type = T;
+        using data_type = D;
+        const data_type data;
+
+        constexpr operator data_type() const noexcept { return data; }
+        constexpr const data_type& get() const noexcept { return data; }
+    };
+
+    template<typename>
+    constexpr bool detect_simd_data = false;
+
+    template<typename T, typename D>
+    constexpr bool detect_simd_data<simd_data_t<T, D>> = true;
+}
+
+namespace jw
+{
+    // Check if the given type is a type produced by simd_data(), or a
+    // reference to one.
+    template<typename T>
+    concept simd_data_type = detail::detect_simd_data<std::remove_cvref_t<T>>;
 
     // Read the type name stored by simd_data().
-    template<typename D> using simd_type = typename std::decay_t<D>::type;
+    template<simd_data_type D>
+    using simd_type = typename std::remove_cvref_t<D>::type;
 
     // Check if the simd_type of D matches T.
     template<typename D, typename T>
     concept simd_data_for = simd_data_type<D> and std::same_as<simd_type<D>, T>;
 
-    template<typename I, simd flags, typename Fmt> concept simd_loadable = requires (Fmt t, I p) { { simd_load<flags>(t, p) } -> std::same_as<typename simd_type_traits<std::remove_cv_t<std::iter_value_t<I>>, Fmt>::data_type>; };
-    template<typename O, simd flags, typename Fmt> concept simd_storable = requires (Fmt t, O p, typename simd_type_traits<std::remove_cv_t<std::iter_value_t<O>>, Fmt>::data_type v) { simd_store<flags>(t, p, v); };
+    // Wrap data in a struct with the specified type info.
+    template <typename T, typename D>
+    auto simd_data(D&& data)
+    {
+        if constexpr (simd_data_type<std::decay_t<D>>)
+            return simd_data<T, typename std::decay_t<D>::data_type>(std::forward<D>(data));
+        else
+            return detail::simd_data_t<std::remove_cvref_t<T>, std::decay_t<D>> { std::forward<D>(data) };
+    }
+}
 
+namespace jw::detail
+{
+    template<simd_format F, typename T>
+    struct simd_return_t
+    {
+        using format = F;
+        using tuple = T;
+        tuple data;
+    };
 
+    template<typename>
+    constexpr bool detect_simd_return = false;
+
+    template<simd_format F, typename T>
+    constexpr bool detect_simd_return<simd_return_t<F, T>> = true;
+}
+
+namespace jw
+{
+    // Check if the given type is a type produced by simd_return(), or a
+    // reference to one.
+    template<typename T>
+    concept simd_return_type = detail::detect_simd_return<std::remove_cvref_t<T>>;
+
+    // Wrap simd_data in a struct with the specified format info.  All data is
+    // converted to the data_type specified in simd_type_traits.
+    template<simd_format F, simd_data_type... D>
+    auto simd_return(F, D&&... data)
+    {
+        using tuple = std::tuple<detail::simd_data_t<simd_type<D>, typename simd_type_traits<simd_type<D>, F>::data_type>...>;
+        auto convert = []<simd_data_type D2>(D2&& data)
+        {
+            using T = simd_type<D2>;
+            using old_type = std::remove_cvref_t<D2>::data_type;
+            using new_type = typename simd_type_traits<T, F>::data_type;
+            if constexpr (not std::same_as<old_type, new_type>)
+                return simd_data<T>(static_cast<new_type>(std::forward<D2>(data).data));
+            else
+                return data;
+        };
+        return detail::simd_return_t<F, tuple> { .data = { convert(std::forward<D>(data))... } };
+    }
 
     template<typename F, simd flags, typename... A>
     concept simd_invocable = requires(F&& f, A&&... args) { std::forward<F>(f).template operator()<flags>(std::forward<A>(args)...); };
@@ -231,46 +308,9 @@ namespace jw
         return simd_apply<flags>(std::forward<F>(func), Fmt { }, std::forward<A>(args).data);
     }
 
-#   pragma GCC diagnostic push
-#   pragma GCC diagnostic ignored "-Wunused-local-typedefs"
 
-    // Wrap data in a struct with the specified type info.
-    template <typename T, typename D>
-    auto simd_data(D&& data)
-    {
-        struct impl
-        {
-            using type = std::remove_cvref_t<T>;
-            using data_type = std::decay_t<D>;
-            const data_type data;
 
-            constexpr operator data_type() const noexcept { return data; }
-            constexpr const data_type& get() const noexcept { return data; }
-        };
-        if constexpr (simd_data_type<std::decay_t<D>>)
-            return simd_data<T, typename std::decay_t<D>::data_type>(std::forward<D>(data));
-        else
-            return impl { std::forward<D>(data) };
-    }
 
-    // Wrap simd_data in a struct with the specified format info.  All data is
-    // converted to the data_type specified in simd_type_traits.
-    template<simd_format F, typename... D>
-    auto simd_return(F, D&&... data)
-    {
-        auto make = []<typename... D2>(D2&&... data)
-        {
-            struct impl
-            {
-                using format = F;
-                std::tuple<std::decay_t<D2>...> data;
-            };
-            return impl { std::tuple<std::decay_t<D2>...> { std::forward<D2>(data)... } };
-        };
-        return make(simd_data<simd_type<D>>(static_cast<simd_type_traits<simd_type<D>, F>::data_type>(std::forward<D>(data).data))...);
-    }
-
-#   pragma GCC diagnostic pop
 
     // Increment an iterator by the amount specified in simd_type_traits.
     template<simd_format F, typename I>
