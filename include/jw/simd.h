@@ -241,24 +241,37 @@ namespace jw
         return detail::simd_return_t<F, tuple> { .data = { convert(std::forward<D>(data))... } };
     }
 
-    template<typename F, simd flags, typename... A>
-    concept simd_invocable = requires(F&& f, A&&... args) { std::forward<F>(f).template operator()<flags>(std::forward<A>(args)...); };
+    // This placeholder type may be returned by SIMD pipeline stages to signal
+    // that the given format and/or input types are not supported, as an
+    // alternative to writing elaborate requires-expressions.
+    class simd_invalid_t { } constexpr simd_invalid;
 
-    template<simd flags, typename F, typename... A>
+    // Check if a type is not simd_invalid_t.
+    template<typename T>
+    concept simd_valid = not std::same_as<std::remove_cvref_t<T>, simd_invalid_t>;
+
+    // Check if functor object of type F is invocable with the specified flags
+    // and arguments, and does not return simd_invalid.
+    template<typename F, simd flags, typename... A>
+    concept simd_invocable = requires(F func, A&&... args)
+    {
+        { (std::forward<F>(func).template operator()<flags>(std::forward<A>(args)...)) } -> simd_valid;
+    };
+
+    // Call a simd-invocable functor object with the specified flags and
+    // arguments.
+    template<simd flags, typename F, typename... A> requires simd_invocable<F&&, flags, A&&...>
     [[gnu::flatten]] decltype(auto) simd_invoke(F&& func, A&&... args)
     {
         return (std::forward<F>(func).template operator()<flags>(std::forward<A>(args)...));
     }
-
-    template<typename F, simd flags, typename... A>
-    using simd_invoke_result = decltype(simd_invoke<flags>(std::declval<F>(), std::declval<A>()...));
 
     // Execute a SIMD pipeline stage with the specified arguments, trying
     // simd_formats in the specified order.
     template<simd flags, simd_format Fmt, simd_format... Fmts, typename F, typename... A>
     [[gnu::flatten, gnu::hot]] auto simd_run(F&& func, A&&... args)
     {
-        if constexpr (flags.match(simd_format_traits<Fmt>::flags) and simd_invocable<F, flags, Fmt, A...>)
+        if constexpr (flags.match(simd_format_traits<Fmt>::flags) and simd_invocable<F&&, flags, Fmt&&, A&&...>)
             return simd_invoke<flags>(std::forward<F>(func), Fmt { }, std::forward<A>(args)...);
         else
         {
@@ -308,9 +321,49 @@ namespace jw
         return simd_apply<flags>(std::forward<F>(func), Fmt { }, std::forward<A>(args).data);
     }
 
+    template<typename F, simd flags, typename... A>
+    concept simd_applicable = requires (F&& func, A&&... args)
+    {
+        { simd_apply<flags>(std::forward<F>(func), std::forward<A>(args)...) } -> simd_valid;
+    };
+}
 
+namespace jw::detail
+{
+    // Used to implement simd_invoke_result
+    template<typename F, simd flags, typename... A>
+    consteval auto find_simd_invoke_result()
+    {
+        if constexpr (simd_invocable<F, flags, A...>)
+            return std::type_identity<decltype(simd_invoke<flags>(std::declval<F>(), std::declval<A>()...))> { };
+        else
+            return std::type_identity<simd_invalid_t> { };
+    }
 
+    // Used to implement simd_apply_result
+    template<typename F, simd flags, typename... A>
+    consteval auto find_simd_apply_result()
+    {
+        if constexpr (simd_applicable<F, flags, A...>)
+            return std::type_identity<decltype(simd_apply<flags>(std::declval<F>(), std::declval<A>()...))> { };
+        else
+            return std::type_identity<simd_invalid_t> { };
+    }
+}
 
+namespace jw
+{
+    // The result of calling a functor object of type F with the specified
+    // flags and arguments.  The result is simd_invalid_t if F is not
+    // simd-invocable.
+    template<typename F, simd flags, typename... A>
+    using simd_invoke_result = decltype(detail::find_simd_invoke_result<F, flags, A...>())::type;
+
+    // The result of calling simd_apply() on a SIMD pipeline object of type F
+    // with the specified flags and arguments.  The result is simd_invalid_t
+    // if F is not simd-invocable.
+    template<typename F, simd flags, typename... A>
+    using simd_apply_result = decltype(detail::find_simd_apply_result<F, flags, A...>())::type;
 
     // Increment an iterator by the amount specified in simd_type_traits.
     template<simd_format F, typename I>
