@@ -607,11 +607,14 @@ namespace jw
     template<std::size_t... I>
     struct simd_slice_t
     {
-        template<simd, typename... T> requires (std::max({ I... }) < sizeof...(T))
-        auto operator()(auto fmt, T&&... data) const
+        template<simd, simd_format Fmt, typename... T> requires (std::max({ I... }) < sizeof...(T))
+        auto operator()(Fmt, T&&... data) const
         {
-            constexpr auto slice = [fmt](auto tuple) { return simd_return(fmt, std::get<I>(tuple)...); };
-            return slice(std::tuple<T...> { std::forward<T>(data)... });
+            constexpr auto slice = [](auto tuple)
+            {
+                return simd_return(Fmt { }, std::get<I>(tuple)...);
+            };
+            return slice(std::tuple<const T&...> { std::forward<T>(data)... });
         }
     };
 
@@ -623,12 +626,12 @@ namespace jw
     template<std::size_t I, std::size_t N>
     struct simd_slice_sequential_t
     {
-        template<simd, typename... T> requires (I + N <= sizeof...(T))
-        auto operator()(auto fmt, T&&... data) const
+        template<simd, simd_format Fmt, typename... T> requires (I + N <= sizeof...(T))
+        auto operator()(Fmt, T&&... data) const
         {
-            constexpr auto slice = [fmt]<std::size_t... Is>(auto tuple, std::index_sequence<Is...>)
+            constexpr auto slice = []<std::size_t... Is>(auto&& tuple, std::index_sequence<Is...>)
             {
-                return simd_return(fmt, std::get<I + Is>(tuple)...);
+                return simd_return(Fmt { }, std::get<I + Is>(std::move(tuple))...);
             };
             return slice(std::forward_as_tuple(std::forward<T>(data)...), std::make_index_sequence<N> { });
         }
