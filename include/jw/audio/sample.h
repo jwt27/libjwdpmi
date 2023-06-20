@@ -363,14 +363,14 @@ namespace jw::audio
             else return simd_data<T>((data + ...) * factor<Ds...>);
         }
 
-        template<simd, sample_data... Ds> requires (all_same<Ds...>)
+        template<simd, sample_data... Ds>
         auto operator()(format_ps, Ds... data) const
         {
             using T = type<Ds...>;
             return simd_data<T>(_mm_mul_ps(mix_ps(data...), _mm_set1_ps(factor<Ds...>)));
         }
 
-        template<simd, sample_data... Ds> requires (all_same<Ds...>)
+        template<simd, sample_data... Ds>
         auto operator()(format_pf, Ds... data) const
         {
             using T = type<Ds...>;
