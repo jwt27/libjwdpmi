@@ -416,11 +416,11 @@ namespace jw
         constexpr simd_sink(J&&... i) : iterators { std::forward<J>(i)... } { }
 
         template<simd flags, simd_format F, typename... D>
-        requires (sizeof...(D) == sizeof...(I) and
-                  (simd_storable<I, flags, F> and ...) and
-                  (std::output_iterator<I, simd_type<D>> and ...))
+        requires (simd_storable<I, flags, F> and ...)
         void operator()(F, D&&... data)
         {
+            static_assert (sizeof...(D) == sizeof...(I));
+            static_assert ((std::output_iterator<I, simd_type<D>> and ...));
             store<flags>(F { }, std::index_sequence_for<D...> { }, std::forward_as_tuple(std::forward<D>(data)...));
         }
 
@@ -477,10 +477,10 @@ namespace jw
 
     public:
         template<simd flags, simd_format Fmt, simd_data_type... D>
-        requires ((simd_storable<simd_type<D>*, flags, Fmt> and ...) and
-                  (std::is_default_constructible_v<simd_type<D>> and ...))
+        requires (simd_storable<simd_type<D>*, flags, Fmt> and ...)
         auto operator()(Fmt, D&&... data) const
         {
+            static_assert ((std::is_default_constructible_v<simd_type<D>> and ...));
             return std::make_tuple(store<flags>(Fmt {}, std::forward<D>(data))...);
         }
     } constexpr inline simd_out;
@@ -489,9 +489,10 @@ namespace jw
     template<typename... T>
     struct simd_reinterpret
     {
-        template<simd flags, typename... U> requires (sizeof...(T) == sizeof...(U))
-            auto operator()(auto fmt, U&&... data) const
+        template<simd flags, typename... U>
+        auto operator()(auto fmt, U&&... data) const
         {
+            static_assert(sizeof...(T) == sizeof...(U));
             return simd_return(fmt, simd_data<T>(std::forward<U>(data))...);
         }
     };
@@ -510,7 +511,7 @@ namespace jw
     struct simd_if_t
     {
         template<simd flags, simd_format Fmt, typename... A>
-        requires (simd_invocable<True, flags, Fmt, A&&...> and simd_invocable<False, flags, Fmt, A&&...>)
+        requires (simd_invocable<True&, flags, Fmt&&, A&&...> and simd_invocable<False&, flags, Fmt&&, A&&...>)
         auto operator()(Fmt, A&&... args) const
         {
             if (condition)
@@ -542,7 +543,7 @@ namespace jw
     struct simd_if_constexpr_t
     {
         template<simd flags, simd_format Fmt, typename... A>
-        requires (Condition ? simd_invocable<True, flags, Fmt, A&&...> : simd_invocable<False, flags, Fmt, A&&...>)
+        requires (Condition ? simd_invocable<True&, flags, Fmt&&, A&&...> : simd_invocable<False&, flags, Fmt&&, A&&...>)
         auto operator()(Fmt, A&&... args) const
         {
             if constexpr (Condition)
@@ -573,17 +574,17 @@ namespace jw
     struct simd_if_format_t
     {
         template<simd flags, simd_format Fmt, typename... A>
-        requires (any_simd_format_of<Fmt, Fmts...> and simd_invocable<True, flags, Fmt, A&&...>)
-        auto operator()(Fmt fmt, A&&... args) const
+        requires (any_simd_format_of<Fmt, Fmts...> and simd_invocable<True&, flags, Fmt&&, A&&...>)
+        auto operator()(Fmt, A&&... args) const
         {
-            return simd_invoke<flags>(yes, fmt, std::forward<A>(args)...);
+            return simd_invoke<flags>(yes, Fmt { }, std::forward<A>(args)...);
         }
 
         template<simd flags, simd_format Fmt, typename... A>
-        requires (not any_simd_format_of<Fmt, Fmts...> and simd_invocable<False, flags, Fmt, A&&...>)
-        auto operator()(Fmt fmt, A&&... args) const
+        requires (not any_simd_format_of<Fmt, Fmts...> and simd_invocable<False&, flags, Fmt&&, A&&...>)
+        auto operator()(Fmt, A&&... args) const
         {
-            return simd_invoke<flags>(no, fmt, std::forward<A>(args)...);
+            return simd_invoke<flags>(no, Fmt { }, std::forward<A>(args)...);
         }
 
         True yes;
@@ -607,9 +608,10 @@ namespace jw
     template<std::size_t... I>
     struct simd_slice_t
     {
-        template<simd, simd_format Fmt, typename... T> requires (std::max({ I... }) < sizeof...(T))
+        template<simd, simd_format Fmt, typename... T>
         auto operator()(Fmt, T&&... data) const
         {
+            static_assert (std::max({ I... }) < sizeof...(T));
             constexpr auto slice = [](auto tuple)
             {
                 return simd_return(Fmt { }, std::get<I>(tuple)...);
@@ -626,9 +628,10 @@ namespace jw
     template<std::size_t I, std::size_t N>
     struct simd_slice_sequential_t
     {
-        template<simd, simd_format Fmt, typename... T> requires (I + N <= sizeof...(T))
+        template<simd, simd_format Fmt, typename... T>
         auto operator()(Fmt, T&&... data) const
         {
+            static_assert (I + N <= sizeof...(T));
             constexpr auto slice = []<std::size_t... Is>(auto&& tuple, std::index_sequence<Is...>)
             {
                 return simd_return(Fmt { }, std::get<I + Is>(std::move(tuple))...);
@@ -871,7 +874,7 @@ namespace jw
         simd_parallel(U&&... args) : pipes { std::forward<U>(args)... } { }
 
         template<simd flags, simd_format Fmt, typename... A>
-        requires (simd_invocable<detail::simd_pipeline_wrapper<T>&, flags, Fmt, const A&...> and ...)
+        requires (simd_invocable<detail::simd_pipeline_wrapper<T>&, flags, Fmt&&, const A&...> and ...)
         auto operator()(Fmt, A&&... args)
         {
             return invoke<flags>(std::make_index_sequence<sizeof...(T)> { }, Fmt { }, std::forward<A>(args)...);
