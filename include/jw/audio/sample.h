@@ -345,82 +345,77 @@ namespace jw::audio
         };
 
     public:
-        template<simd, sample_data... Ds>
-        auto operator()(format_nosimd, Ds... data) const
+        template<simd flags, any_simd_format_of<format_pi16, format_pi32, format_pf, format_ps, format_nosimd> Fmt, typename... Ds>
+        auto operator()(Fmt, Ds&&... data) const
         {
+            static_assert ((sample_data<Ds> and ...));
+            static_assert ((all_same<Ds> and ...));
             using T = type<Ds...>;
-            if constexpr (std::integral<T>)
-            {
-                constexpr auto shift = this->shift<Ds...>;
-                if constexpr (sizeof(T) < sizeof(int))
-                {
-                    using U = std::conditional_t<std::signed_integral<T>, int, unsigned>;
-                    static_assert((sizeof(U) - sizeof(T)) * 8 >= shift);
-                    return simd_data<T>((static_cast<U>(data) + ...) >> shift);
-                }
-                else return simd_data<T>(((data >> shift) + ...));
-            }
-            else return simd_data<T>((data + ...) * factor<Ds...>);
-        }
-
-        template<simd, sample_data... Ds>
-        auto operator()(format_ps, Ds... data) const
-        {
-            using T = type<Ds...>;
-            return simd_data<T>(_mm_mul_ps(mix_ps(data...), _mm_set1_ps(factor<Ds...>)));
-        }
-
-        template<simd, sample_data... Ds>
-        auto operator()(format_pf, Ds... data) const
-        {
-            using T = type<Ds...>;
-            constexpr auto f = reinterpret_cast<__m64>(simd_vector<float, 2> { factor<Ds...>, factor<Ds...> });
-            return simd_data<T>(_m_pfmul(mix_pf(data...), f));
-        }
-
-        template<simd, sample_data... Ds>
-        auto operator()(format_pi32, Ds... data) const
-        {
-            using T = type<Ds...>;
-            constexpr auto headroom = this->headroom<format_pi16, Ds...>;
-            constexpr auto shift = this->shift<Ds...>;
-            if constexpr (shift < headroom)
-            {
-                const auto mix = mix_pi32_oversized(data...);
-                if constexpr (std::unsigned_integral<T>)
-                    return simd_data<T>(_mm_srli_pi32(mix, shift));
-                else
-                    return simd_data<T>(_mm_srai_pi32(mix, shift));
-            }
-            else return simd_data<T>(mix_pi32<T, shift>(data...));
-        }
-
-        template<simd flags, sample_data... Ds>
-        auto operator()(format_pi16, Ds&&... data) const
-        {
-            using T = type<Ds...>;
-            constexpr auto headroom = this->headroom<format_pi16, Ds...>;
-            constexpr auto shift = this->shift<Ds...>;
 
             if constexpr (sizeof...(Ds) == 1)
                 return simd_data<T>(data...);
-            else if constexpr (flags.match(simd::mmx2) and sizeof...(Ds) % 2 == 0 and std::unsigned_integral<T>)
+
+            if constexpr (std::same_as<Fmt, format_nosimd>)
             {
-                auto do_mix = [&] { return mix_pu16<T>(std::forward_as_tuple(std::forward<Ds>(data)...), std::make_index_sequence<sizeof...(Ds) / 2> { }); };
-                if constexpr (sizeof...(Ds) > 2)
-                    return simd_apply<flags>(*this, do_mix());
-                else
-                    return do_mix();
+                if constexpr (std::integral<T>)
+                {
+                    constexpr auto shift = this->shift<Ds...>;
+                    if constexpr (sizeof(T) < sizeof(int))
+                    {
+                        using U = std::conditional_t<std::signed_integral<T>, int, unsigned>;
+                        static_assert((sizeof(U) - sizeof(T)) * 8 >= shift);
+                        return simd_data<T>((static_cast<U>(data) + ...) >> shift);
+                    }
+                    else return simd_data<T>(((data >> shift) + ...));
+                }
+                else return simd_data<T>((data + ...) * factor<Ds...>);
             }
-            else if constexpr (shift < headroom)
+            else if constexpr (std::same_as<Fmt, format_ps>)
             {
-                const auto mix = mix_pi16_oversized(data...);
-                if constexpr (std::unsigned_integral<T>)
-                    return simd_data<T>(_mm_srli_pi16(mix, shift));
-                else
-                    return simd_data<T>(_mm_srai_pi16(mix, shift));
+                return simd_data<T>(_mm_mul_ps(mix_ps(data...), _mm_set1_ps(factor<Ds...>)));
             }
-            else return simd_data<T>(mix_pi16<T, shift>(data...));
+            else if constexpr (std::same_as<Fmt, format_pf>)
+            {
+                constexpr auto f = reinterpret_cast<__m64>(simd_vector<float, 2> { factor<Ds...>, factor<Ds...> });
+                return simd_data<T>(_m_pfmul(mix_pf(data...), f));
+            }
+            else if constexpr (std::same_as<Fmt, format_pi32>)
+            {
+                constexpr auto headroom = this->headroom<format_pi16, Ds...>;
+                constexpr auto shift = this->shift<Ds...>;
+                if constexpr (shift < headroom)
+                {
+                    const auto mix = mix_pi32_oversized(data...);
+                    if constexpr (std::unsigned_integral<T>)
+                        return simd_data<T>(_mm_srli_pi32(mix, shift));
+                    else
+                        return simd_data<T>(_mm_srai_pi32(mix, shift));
+                }
+                else return simd_data<T>(mix_pi32<T, shift>(data...));
+            }
+            else if constexpr (std::same_as<Fmt, format_pi16>)
+            {
+                constexpr auto headroom = this->headroom<format_pi16, Ds...>;
+                constexpr auto shift = this->shift<Ds...>;
+
+                if constexpr (flags.match(simd::mmx2) and sizeof...(Ds) % 2 == 0 and std::unsigned_integral<T>)
+                {
+                    auto do_mix = [&] { return mix_pu16<T>(std::forward_as_tuple(std::forward<Ds>(data)...), std::make_index_sequence<sizeof...(Ds) / 2> { }); };
+                    if constexpr (sizeof...(Ds) > 2)
+                        return simd_apply<flags>(*this, do_mix());
+                    else
+                        return do_mix();
+                }
+                else if constexpr (shift < headroom)
+                {
+                    const auto mix = mix_pi16_oversized(data...);
+                    if constexpr (std::unsigned_integral<T>)
+                        return simd_data<T>(_mm_srli_pi16(mix, shift));
+                    else
+                        return simd_data<T>(_mm_srai_pi16(mix, shift));
+                }
+                else return simd_data<T>(mix_pi16<T, shift>(data...));
+            }
         }
 
         template<simd flags, typename... Ds>
