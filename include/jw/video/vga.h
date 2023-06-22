@@ -1,5 +1,5 @@
-#/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-#/*    Copyright (C) 2017 - 2023 J.W. Jagersma, see COPYING.txt for details    */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2017 - 2023 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <jw/video/vbe_types.h>

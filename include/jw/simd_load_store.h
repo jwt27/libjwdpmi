@@ -1,5 +1,5 @@
-#/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-#/*    Copyright (C) 2023 - 2023 J.W. Jagersma, see COPYING.txt for details    */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2023 - 2023 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <jw/simd.h>

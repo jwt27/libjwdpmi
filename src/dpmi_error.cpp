@@ -1,5 +1,5 @@
-#/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-#/*    Copyright (C) 2016 - 2023 J.W. Jagersma, see COPYING.txt for details    */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2016 - 2023 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <string>
 #include <fmt/format.h>
