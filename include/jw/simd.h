@@ -647,6 +647,27 @@ namespace jw
     // Return the first N inputs starting from index I.
     template<std::size_t I, std::size_t N>
     constexpr inline simd_slice_sequential_t<I, N> simd_slice_next;
+
+    template<std::size_t N>
+    struct simd_slice_tail_t
+    {
+        template<simd, simd_format Fmt, typename... T>
+        auto operator()(Fmt, T&&... data) const
+        {
+            if constexpr (sizeof...(T) > N)
+            {
+                constexpr auto slice = []<std::size_t... Is>(auto&& tuple, std::index_sequence<Is...>)
+                {
+                    return simd_return(Fmt { }, std::get<N + Is>(std::move(tuple))...);
+                };
+                return slice(std::forward_as_tuple(std::forward<T>(data)...), std::make_index_sequence<sizeof...(T) - N> { });
+            }
+        }
+    };
+
+    // Discard the first N inputs.
+    template<std::size_t N>
+    constexpr inline simd_slice_tail_t<N> simd_slice_tail;
 }
 
 namespace jw::detail
