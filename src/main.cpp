@@ -1,11 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2017 - 2023 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <cstring>
 #include <string_view>
@@ -154,7 +148,7 @@ int main(int argc, const char** argv)
 
         std::string_view args[argc];
         auto* a = args;
-        new (a++) std::string_view { argv[0] };
+        *a++ = argv[0];
         for (auto i = 1; i < argc; ++i)
         {
 #           ifndef NDEBUG
@@ -171,7 +165,7 @@ int main(int argc, const char** argv)
             else
 #           endif
             {
-                new (a++) std::string_view { argv[i] };
+                *a++ = argv[i];
             }
         }
 
