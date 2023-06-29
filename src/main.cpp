@@ -44,6 +44,7 @@ int jwdpmi_main(std::span<std::string_view>);
 namespace jw
 {
     static constinit std::optional<dpmi::realmode_interrupt_handler> int2f_handler { std::nullopt };
+    static void (*abort_handler)(int);
 
     namespace debug::detail
     {
@@ -71,6 +72,18 @@ namespace jw
         catch (...) { fmt::print(stderr, "Exception: unknown exception\n"); }
     }
 
+    static void terminate_cleanup() noexcept
+    {
+        dpmi::ring0_privilege::force_leave();
+        debug::break_with_signal(SIGTERM);
+
+        // Exit will crash if int 2f is still hooked.
+        int2f_handler.reset();
+
+        // Make sure at least the keyboard works.
+        io::ps2_interface::instance().reset();
+    }
+
     [[noreturn]] static void terminate_handler() noexcept
     {
         static unsigned terminated = 0;
@@ -85,14 +98,7 @@ namespace jw
             halt();
         }
 
-        dpmi::ring0_privilege::force_leave();
-        debug::break_with_signal(SIGTERM);
-
-        // Exit will crash if int 2f is still hooked.
-        int2f_handler.reset();
-
-        // Make sure at least the keyboard works.
-        io::ps2_interface::instance().reset();
+        terminate_cleanup();
 
         if (auto e = std::current_exception())
         {
@@ -122,6 +128,13 @@ namespace jw
         uninstall_exception_handlers();
 
         std::_Exit(-1);
+    }
+
+    [[noreturn]] static void signal_handler(int sig) noexcept
+    {
+        terminate_cleanup();
+        abort_handler(sig);
+        __builtin_unreachable();
     }
 
     // DPMI yield function replacement: int 2f, ax=1680
@@ -225,6 +238,7 @@ namespace jw
             using namespace jw::dpmi::detail;
 
             std::set_terminate(terminate_handler);
+            abort_handler = std::signal(SIGABRT, signal_handler);
 
             // We can lock memory ourselves from this point on.
             _crt0_startup_flags &= ~_CRT0_FLAG_LOCK_MEMORY;
