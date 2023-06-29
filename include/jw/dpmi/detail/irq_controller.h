@@ -192,10 +192,8 @@ namespace jw::dpmi::detail
 
     inline void irq_controller::acknowledge(interrupt_id_data* id, std::uint8_t irq) noexcept
     {
-        if (data->get(irq)->flags & (late_eoi | always_chain))
-            return;
-
-        if (id->acknowledged == ack::no)
+        if (not (data->get(irq)->flags & (late_eoi | always_chain))
+            and id->acknowledged == ack::no)
             send_eoi(irq);
         id->acknowledged = ack::yes;
     }
