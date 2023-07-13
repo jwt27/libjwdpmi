@@ -1,11 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2017 - 2023 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <bit>
 #include <jw/chrono.h>
@@ -298,21 +292,20 @@ namespace jw::chrono
             const auto irq_mask = pic0_mask.read();
             pic0_mask.write(0b11111110);
 
-            {
-                dpmi::interrupt_unmask allow_irq { };
-                asm
-                (R"(
-                    .balign 0x10
-                Loop:
-                    .nops 14, 1
-                    cmp [%0], %1
-                    .nops 14, 1
-                    jb Loop
-                 )" :
-                    : "r" (&sample),
-                      "r" (samples.end())
-                );
-            }
+            asm
+            (R"(
+                sti
+                .balign 0x10
+            Loop:
+                .nops 14, 1
+                cmp [%0], %1
+                .nops 14, 1
+                jb Loop
+                cli
+             )" :
+                : "r" (&sample),
+                  "r" (samples.end())
+            );
 
             pic0_mask.write(irq_mask);
 
