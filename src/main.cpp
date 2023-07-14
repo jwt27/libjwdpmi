@@ -44,7 +44,6 @@ int jwdpmi_main(std::span<std::string_view>);
 namespace jw
 {
     static constinit std::optional<dpmi::realmode_interrupt_handler> int2f_handler { std::nullopt };
-    static void (*abort_handler)(int);
 
     namespace debug::detail
     {
@@ -133,7 +132,8 @@ namespace jw
     [[noreturn]] static void signal_handler(int sig) noexcept
     {
         terminate_cleanup();
-        abort_handler(sig);
+        std::signal(sig, SIG_DFL);
+        std::raise(sig);
         __builtin_unreachable();
     }
 
@@ -238,7 +238,7 @@ namespace jw
             using namespace jw::dpmi::detail;
 
             std::set_terminate(terminate_handler);
-            abort_handler = std::signal(SIGABRT, signal_handler);
+            std::signal(SIGABRT, signal_handler);
 
             // We can lock memory ourselves from this point on.
             _crt0_startup_flags &= ~_CRT0_FLAG_LOCK_MEMORY;
