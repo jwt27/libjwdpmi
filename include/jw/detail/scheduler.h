@@ -1,12 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2016 - 2023 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <jw/dpmi/irq_check.h>
@@ -160,8 +153,8 @@ namespace jw::detail
         friend struct ::jw::thread;
         friend struct ::jw::init;
 
-        [[gnu::hot, gnu::noinline]]
-        static void yield();
+        [[gnu::hot]] static void yield();
+        [[gnu::hot]] static void safe_yield();
 
         static bool is_current_thread(const thread* t) noexcept;
         static bool is_current_thread(thread_id) noexcept;
@@ -188,6 +181,9 @@ namespace jw::detail
         template<typename F>
         static thread* create_thread(F&& func, std::size_t stack_size);
         static void atexit(thread*) noexcept;
+
+        template<bool>
+        static void do_yield();
 
         [[gnu::hot, gnu::noinline, gnu::noclone, gnu::naked, gnu::regparm(1)]]
         static void context_switch(thread_context**);

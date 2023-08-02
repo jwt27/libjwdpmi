@@ -1,12 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2016 - 2023 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <algorithm>
 #include <memory_resource>
@@ -26,7 +19,7 @@
 
 extern "C" void __wrap___dpmi_yield()
 {
-    jw::this_thread::yield();
+    jw::detail::scheduler::safe_yield();
     errno = 0;
 }
 
@@ -48,7 +41,7 @@ namespace jw::detail
         iterator.emplace(threads->begin());
 
 #       ifdef JWDPMI_WITH_WATT32
-        sock_yield(nullptr, yield);
+        sock_yield(nullptr, safe_yield);
 #       endif
     }
 
@@ -108,7 +101,8 @@ namespace jw::detail
         );
     }
 
-    void scheduler::yield()
+    template<bool allow_unwind>
+    inline void scheduler::do_yield()
     {
         if (dpmi::in_irq_context()) [[unlikely]] return;
 
@@ -127,9 +121,10 @@ namespace jw::detail
             throw std::runtime_error { "Stack overflow!" };
 #       endif
 
-        if (terminating) [[unlikely]]
-            if (not ct->unwinding and std::uncaught_exceptions() == 0)
-                forced_unwind();
+        if constexpr (allow_unwind)
+            if (terminating) [[unlikely]]
+                if (not ct->unwinding and std::uncaught_exceptions() == 0)
+                    forced_unwind();
 
         while (not ct->invoke_list.empty()) [[unlikely]]
         {
@@ -142,10 +137,14 @@ namespace jw::detail
             ct->invoke_list.front()();
         }
 
-        if (ct->canceled) [[unlikely]]
-            if (ct->state != thread::finishing and not ct->unwinding and std::uncaught_exceptions() == 0)
-                forced_unwind();
+        if constexpr (allow_unwind)
+            if (ct->canceled) [[unlikely]]
+                if (ct->state != thread::finishing and not ct->unwinding and std::uncaught_exceptions() == 0)
+                    forced_unwind();
     }
+
+    void scheduler::yield()      { do_yield<true>(); }
+    void scheduler::safe_yield() { do_yield<false>(); }
 
     // The actual thread.
     void scheduler::run_thread() noexcept

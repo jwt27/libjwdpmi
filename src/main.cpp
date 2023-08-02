@@ -143,7 +143,7 @@ namespace jw
         if (reg->ax != 0x1680) return false;
         if (dpmi::in_irq_context()) return false;
         [[maybe_unused]] std::conditional_t<config::save_fpu_on_realmode_callback, empty, dpmi::fpu_context> fpu { };
-        this_thread::yield();
+        detail::scheduler::safe_yield();
         errno = 0;
         reg->al = 0;
         return true;
