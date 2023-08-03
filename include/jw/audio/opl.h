@@ -1,7 +1,5 @@
-﻿/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2020 - 2023 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 
@@ -21,9 +19,44 @@ namespace jw::audio
         opl2, opl3, opl3_l
     };
 
-    struct basic_opl
+    // Minimal OPL driver.  Provides direct register access, no caching.
+    struct opl_driver
     {
         using clock = config::midi_clock;
+
+        struct [[gnu::packed]] status_t
+        {
+            bool busy : 1;
+            bool opl2 : 1;
+            bool busy2 : 1;
+            unsigned : 2;
+            bool timer1 : 1;
+            bool timer0 : 1;
+            bool irq : 1;
+        };
+        static_assert (sizeof(status_t) == 1);
+
+        opl_driver(io::port_num);
+
+        void write(unsigned index, std::byte data) { return do_write(this, index, data); }
+        status_t status() const noexcept { return io::read_port<status_t>(base); }
+        opl_type type() const noexcept { return opltype; }
+
+    private:
+        template<opl_type>
+        static void write_impl(opl_driver*, unsigned, std::byte);
+        opl_type detect();
+
+        const io::port_num base;
+        const opl_type opltype;
+        void (* const do_write)(opl_driver*, unsigned, std::byte);
+        unsigned index { 0 };
+        clock::time_point last_access { clock::time_point::min() };
+    };
+
+    struct basic_opl
+    {
+        using clock = opl_driver::clock;
 
         struct [[gnu::packed]] setup
         {
@@ -111,7 +144,7 @@ namespace jw::audio
 
             template<unsigned sample_rate>
             constexpr void freq(float) noexcept;
-            constexpr void freq(const basic_opl& opl, float) noexcept;
+            void freq(const basic_opl& opl, float) noexcept;
 
             template<unsigned sample_rate, long double A4 = 440.L>
             void note(int) noexcept;
@@ -135,16 +168,7 @@ namespace jw::audio
             constexpr std::bitset<4> output() const noexcept;
         };
 
-        struct [[gnu::packed]] status_t
-        {
-            bool busy : 1;
-            bool opl2 : 1;
-            bool busy2 : 1;
-            unsigned : 2;
-            bool timer1 : 1;
-            bool timer0 : 1;
-            bool irq : 1;
-        };
+        using status_t = opl_driver::status_t;
 
         static_assert (sizeof(setup) == 4);
         static_assert (sizeof(timer) == 3);
@@ -175,7 +199,8 @@ namespace jw::audio
         bool is_4op(std::uint8_t ch_4op) const noexcept { return read_4op().bitset()[ch_4op]; };
         void set_4op(std::uint8_t ch_4op, bool enable);
 
-        status_t status() const noexcept { return io::read_port<status_t>(base); }
+        opl_type type() const noexcept { return drv.type(); }
+        status_t status() const noexcept { return drv.status(); }
         void reset();
 
         // Returns absolute oscillator slot number for given operator in given channel.
@@ -227,18 +252,11 @@ namespace jw::audio
 
         template<bool force, unsigned... N, typename T>
         void write(const T&, reg<T>&, unsigned);
-        template<opl_type t, bool force, unsigned I, unsigned N, unsigned... Next, typename T>
-        void do_write(const reg<T>&, reg<T>&, unsigned);
-        template<opl_type t>
-        void do_write(unsigned, std::byte);
+        template<bool force, unsigned I, unsigned N, unsigned... Next>
+        void do_write(const std::byte*, std::byte*, unsigned);
         void init();
-        opl_type detect();
 
-        io::out_port<std::uint8_t> index(bool hi) const noexcept { return { base + hi * 2 }; }
-        io::io_port<std::byte> data() const noexcept { return { base + 1 }; }
-
-        const io::port_num base;
-        unsigned last_index { 0 };
+        opl_driver drv;
         reg<setup> reg_setup;
         reg<timer> reg_timer;
         reg<mode_4op> reg_4op;
@@ -246,9 +264,6 @@ namespace jw::audio
         std::array<reg<oscillator>, 36> oscillators;
         std::array<reg<channel>, 18> channels;
         clock::time_point last_access { clock::time_point::min() };
-
-    public:
-        const opl_type type;
     };
 
     struct opl_config
@@ -418,23 +433,23 @@ namespace jw::audio
         freq_block = b;
     }
 
-    inline constexpr void basic_opl::channel::freq(const basic_opl& opl, float f) noexcept
+    inline void basic_opl::channel::freq(const basic_opl& opl, float f) noexcept
     {
-        if (opl.type == opl_type::opl3_l) freq<49518>(f);
+        if (opl.type() == opl_type::opl3_l) freq<49518>(f);
         else freq<49716>(f);
     }
 
     template<long double A4>
     inline void basic_opl::channel::note(const basic_opl& opl, int midi_note) noexcept
     {
-        if (opl.type == opl_type::opl3_l) note<49518, A4>(midi_note);
+        if (opl.type() == opl_type::opl3_l) note<49518, A4>(midi_note);
         else note<49716, A4>(midi_note);
     }
 
     template<long double A4>
     inline void basic_opl::channel::note(const basic_opl& opl, long double midi_note) noexcept
     {
-        if (opl.type == opl_type::opl3_l) note<49518, A4>(midi_note);
+        if (opl.type() == opl_type::opl3_l) note<49518, A4>(midi_note);
         else note<49716, A4>(midi_note);
     }
 

@@ -1,7 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2020 - 2023 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <jw/audio/opl.h>
 #include <jw/io/io_error.h>
@@ -9,9 +7,73 @@
 
 namespace jw::audio
 {
-    basic_opl::basic_opl(io::port_num port)
+    opl_driver::opl_driver(io::port_num port)
         : base { port }
-        , type { detect() }
+        , opltype { detect() }
+        , do_write { opltype == opl_type::opl3_l ? write_impl<opl_type::opl3_l> :
+                     opltype == opl_type::opl3   ? write_impl<opl_type::opl3> :
+                                                   write_impl<opl_type::opl2> }
+    { }
+
+    inline opl_type opl_driver::detect()
+    {
+        using namespace std::chrono_literals;
+        auto w = [this](unsigned r, unsigned v) { write_impl<opl_type::opl2>(this, r, static_cast<std::byte>(v)); };
+        auto w3 = [this](unsigned r, unsigned v) { write_impl<opl_type::opl3>(this, r, static_cast<std::byte>(v)); };
+
+        // from https://www.fit.vutbr.cz/~arnost/opl/opl3.html#appendixB
+        w(0x04, 0x60);          // mask both timers
+        w(0x04, 0x80);          // reset irq
+        if (status().timer0) throw io::device_not_found { "OPL not detected" };
+        w(0x02, 0xff);          // set timer 0 count 0xff
+        w(0x04, 0x21);          // start timer 0
+        this_thread::sleep_for(100us);
+        auto s = status();
+        if (not s.timer0) throw io::device_not_found { "OPL not detected" };
+        w(0x04, 0x60);          // stop timer
+        w(0x04, 0x80);          // reset irq
+        if (s.opl2) return opl_type::opl2;
+
+        w3(0x02, 0xa5);         // write a distinctive value to timer 0
+        this_thread::sleep_for(2235ns);
+        if (io::read_port(base + 1) == std::byte { 0xa5 }) return opl_type::opl3_l;
+        else return opl_type::opl3;
+    }
+
+    template<opl_type t>
+    void opl_driver::write_impl(opl_driver* drv, unsigned idx, std::byte data)
+    {
+        using namespace std::chrono_literals;
+        constexpr bool opl2   = t == opl_type::opl2;
+        constexpr bool opl3   = t == opl_type::opl3;
+        constexpr bool opl3_l = t == opl_type::opl3_l;
+
+        idx &= 0x1ff;
+        const bool hi = opl2 ? false : idx > 0xff;
+        const auto port = drv->base + hi * 2;
+
+        if constexpr (opl3_l) do { } while (drv->status().busy);
+        else if constexpr (opl3) do { } while (clock::now() < drv->last_access + 2235ns);
+        else this_thread::sleep_until(drv->last_access + 23us);
+
+        if (drv->index != idx)
+        {
+            io::write_port<std::uint8_t>(port, idx);
+            drv->index = idx;
+
+            if constexpr (opl2)
+            {
+                const auto now = clock::now();
+                do { } while (clock::now() < now + 3300ns);
+            }
+        }
+
+        io::write_port(port + 1, data);
+        if constexpr (not opl3_l) drv->last_access = clock::now();
+    }
+
+    basic_opl::basic_opl(io::port_num port)
+        : drv { port }
     {
         channels = { };
         oscillators = { };
@@ -34,9 +96,9 @@ namespace jw::audio
     inline void basic_opl::init()
     {
         setup s { };
-        s.enable_waveform_select = type == opl_type::opl2;
-        s.enable_opl3 = type != opl_type::opl2;
-        s.enable_opl3_l = type == opl_type::opl3_l;
+        s.enable_waveform_select = type() == opl_type::opl2;
+        s.enable_opl3 = type() != opl_type::opl2;
+        s.enable_opl3_l = type() == opl_type::opl3_l;
         s.note_sel = true;
         write<true, 0x01, 0x08, 0x101, 0x105>(s, reg_setup, 0);
 
@@ -74,31 +136,6 @@ namespace jw::audio
         init();
     }
 
-    inline opl_type basic_opl::detect()
-    {
-        using namespace std::chrono_literals;
-        auto w = [this] (unsigned r, unsigned v) { do_write<opl_type::opl2>(r, static_cast<std::byte>(v)); };
-        auto w_opl3 = [this] (unsigned r, unsigned v) { do_write<opl_type::opl3>(r, static_cast<std::byte>(v)); };
-
-        // from https://www.fit.vutbr.cz/~arnost/opl/opl3.html#appendixB
-        w(0x04, 0x60);          // mask both timers
-        w(0x04, 0x80);          // reset irq
-        if (status().timer0) throw io::device_not_found { "OPL not detected" };
-        w(0x02, 0xff);          // set timer 0 count 0xff
-        w(0x04, 0x21);          // start timer 0
-        this_thread::yield_for(100us);
-        auto s = status();
-        if (not s.timer0) throw io::device_not_found { "OPL not detected" };
-        w(0x04, 0x60);          // mask both timers
-        w(0x04, 0x80);          // reset irq
-        if (s.opl2) return opl_type::opl2;
-
-        w_opl3(0x02, 0xa5);     // write a distinctive value to timer 0
-        this_thread::yield_for(2235ns);
-        if (data().read() == std::byte { 0xa5 }) return opl_type::opl3_l;
-        else return opl_type::opl3;
-    }
-
     void basic_opl::write(const setup& value)
     {
         write<false, 0x01, 0x08, 0x101, 0x105>(value, reg_setup, 0);
@@ -133,7 +170,7 @@ namespace jw::audio
     {
         assume(ch < 18);
         const unsigned offset = ch + (ch >= 9 ? 0x100 - 9 : 0);
-        if (type != opl_type::opl2)
+        if (type() != opl_type::opl2)
         {
             auto ch_4op = lookup_2to4(ch);
             if (ch_4op != 0xff and ch == lookup_4to2_sec(ch_4op) and is_4op(ch_4op))
@@ -151,57 +188,19 @@ namespace jw::audio
     {
         static_assert(sizeof...(N) <= sizeof(T));
         const reg<T> value { v };
-        switch (type)
-        {
-        case opl_type::opl2:   return do_write<opl_type::opl2  , force, 0, N...>(value, cache, offset);
-        case opl_type::opl3:   return do_write<opl_type::opl3  , force, 0, N...>(value, cache, offset);
-        case opl_type::opl3_l: return do_write<opl_type::opl3_l, force, 0, N...>(value, cache, offset);
-        default: __builtin_unreachable();
-        }
+        do_write<force, 0, N...>(value.raw.data(), cache.raw.data(), offset);
     }
 
-    template<opl_type t, bool force, unsigned I, unsigned N, unsigned... Next, typename T>
-    inline void basic_opl::do_write(const reg<T>& value, reg<T>& cache, unsigned offset)
+    template<bool force, unsigned I, unsigned N, unsigned... Next>
+    inline void basic_opl::do_write(const std::byte* value, std::byte* cache, unsigned offset)
     {
-        if (force or value.raw[I] != cache.raw[I])
+        if (force or value[I] != cache[I])
         {
-            cache.raw[I] = value.raw[I];
-            do_write<t>(N + offset, value.raw[I]);
+            cache[I] = value[I];
+            drv.write(N + offset, value[I]);
         }
         if constexpr (sizeof...(Next) > 0)
-            return do_write<t, force, I + 1, Next...>(value, cache, offset);
-    }
-
-    template<opl_type t>
-    inline void basic_opl::do_write(unsigned reg, std::byte value)
-    {
-        using namespace std::chrono_literals;
-        constexpr bool opl2 = t == opl_type::opl2;
-        constexpr bool opl3 = t == opl_type::opl3;
-        constexpr bool opl3_l = t == opl_type::opl3_l;
-
-        assume(reg < 0x200);
-        const bool hi = reg > 0xff;
-        if constexpr (opl2) if (hi) return;
-
-        if constexpr (opl3_l) do { } while (status().busy);
-        else if constexpr (opl3) do { } while (clock::now() < last_access + 2235ns);
-        else this_thread::yield_until(last_access + 23us);
-
-        if (last_index != reg)
-        {
-            index(hi).write(reg);
-            last_index = reg;
-
-            if constexpr (opl2)
-            {
-                const auto now = clock::now();
-                do { } while (clock::now() < now + 3300ns);
-            }
-        }
-
-        data().write(value);
-        if constexpr (not opl3_l) last_access = clock::now();
+            return do_write<force, I + 1, Next...>(value, cache, offset);
     }
 
     void basic_opl::set_4op(std::uint8_t n, bool v)
@@ -269,7 +268,7 @@ namespace jw::audio
         {
             remove(channels_2op[n]);
             auto ch_4op = lookup_2to4(n);
-            if (type != opl_type::opl2 and ch_4op != 0xff)
+            if (type() != opl_type::opl2 and ch_4op != 0xff)
             {
                 remove(channels_4op[ch_4op]);
                 set_4op(ch_4op, false);
@@ -408,7 +407,7 @@ namespace jw::audio
             return false;
         };
 
-        if (type == opl_type::opl2)
+        if (type() == opl_type::opl2)
         {
             if constexpr (N == 2) if (search_2op(0, 1, 2, 3, 4, 5, 6, 7, 8)) return true;
         }
