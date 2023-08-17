@@ -1,10 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2017 - 2023 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <jw/io/ps2_interface.h>
 #include <jw/dpmi/irq_mask.h>
@@ -22,7 +17,7 @@ namespace jw::io
 {
     std::optional<key_state_pair> ps2_interface::get_scancode()
     {
-        return detail::scancode::extract(scancodes.read(), current_scancode_set);
+        return detail::scancode::extract(scancodes.consumer(), current_scancode_set);
     }
 
     void ps2_interface::reset()

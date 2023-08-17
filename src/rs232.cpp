@@ -1,10 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2017 - 2023 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <jw/io/rs232.h>
 #include <jw/thread.h>
@@ -163,8 +158,8 @@ namespace jw::io
 
         irq_enable_port(base).write({ });
 
-        auto* const rx = rx_buf.read();
-        auto* const tx = tx_buf.write();
+        auto* const rx = rx_buf.consumer();
+        auto* const tx = tx_buf.producer();
         const auto rx_begin = rx->begin();
         const auto tx_begin = tx->fill();
 
@@ -239,7 +234,7 @@ namespace jw::io
 
     void rs232_streambuf::put_realtime(char_type c)
     {
-        auto* const rt = realtime_buf.write();
+        auto* const rt = realtime_buf.producer();
         this_thread::yield_while([rt] { return rt->full(); });
         rt->try_push_back(c);
         update_tx_stop();
@@ -247,7 +242,7 @@ namespace jw::io
 
     std::streamsize rs232_streambuf::showmanyc()
     {
-        auto* const rx = rx_buf.read();
+        auto* const rx = rx_buf.consumer();
         const auto pos = rx->iterator_from_pointer(gptr());
         auto end = rx->cend();
 
@@ -262,7 +257,7 @@ namespace jw::io
 
     rs232_streambuf::int_type rs232_streambuf::underflow()
     {
-        auto* const rx = rx_buf.read();
+        auto* const rx = rx_buf.consumer();
         const auto pos = rx->iterator_from_pointer(gptr());
         rx->pop_front_to(clamp_add(pos, -putback_reserve, rx->begin(), pos));
         auto* new_end = rx->contiguous_end(pos);
@@ -343,7 +338,7 @@ namespace jw::io
             return traits_type::not_eof(c);
         }
 
-        auto* const rx = rx_buf.read();
+        auto* const rx = rx_buf.consumer();
         auto i = rx->iterator_from_pointer(gptr());
         if (rx->begin().distance_to(i) > 0)
         {
@@ -357,7 +352,7 @@ namespace jw::io
 
     rs232_streambuf::int_type rs232_streambuf::overflow(int_type c)
     {
-        auto* const tx = tx_buf.write();
+        auto* const tx = tx_buf.producer();
         const auto pos = update_tx_stop();
 
         while (tx->full())
@@ -398,7 +393,7 @@ namespace jw::io
 
     inline int rs232_streambuf::sync(bool force)
     {
-        auto* const tx = tx_buf.write();
+        auto* const tx = tx_buf.producer();
         const auto pos = update_tx_stop();
 
         if (force)
@@ -427,7 +422,7 @@ namespace jw::io
     {
         // Split the TX buffer into smaller chunks, so tx_stop is updated more
         // frequently.
-        auto* const tx = tx_buf.write();
+        auto* const tx = tx_buf.producer();
         auto* const p = &*i;
         setp(p, std::min(p + std::max((tx->max_size() + 1) / 8, 1u), tx->contiguous_end(i)));
     }
@@ -435,7 +430,7 @@ namespace jw::io
     inline rs232_streambuf::tx_queue::iterator rs232_streambuf::update_tx_stop() noexcept
     {
         irq_disable no_irq { this };
-        auto i = tx_buf.write()->iterator_from_pointer(pptr());
+        auto i = tx_buf.producer()->iterator_from_pointer(pptr());
         tx_stop = i;
         set_tx();
         return i;
@@ -445,9 +440,9 @@ namespace jw::io
     // Assumes IRQ is disabled!
     inline void rs232_streambuf::set_tx() noexcept
     {
-        bool enable = tx_buf.read()->begin() != tx_stop;
+        bool enable = tx_buf.consumer()->begin() != tx_stop;
         enable &= can_tx;
-        enable |= not realtime_buf.read()->empty();
+        enable |= not realtime_buf.consumer()->empty();
         if (enable)
             irq_enable_reg |= irq_enable::transmitter_empty;
         else
@@ -466,7 +461,7 @@ namespace jw::io
         can_rx = rts;
         if (flow_control == rs232_config::xon_xoff)
         {
-            realtime_buf.write()->try_push_back(rts ? xon : xoff);
+            realtime_buf.producer()->try_push_back(rts ? xon : xoff);
         }
         else if (flow_control == rs232_config::rtr_cts)
         {
@@ -488,9 +483,9 @@ namespace jw::io
     // Assumes IRQ is disabled!
     void rs232_streambuf::do_sync(std::size_t rx_minimum) noexcept
     {
-        auto* const rx = rx_buf.write();
-        auto* const tx = tx_buf.read();
-        auto* const realtime = realtime_buf.read();
+        auto* const rx = rx_buf.producer();
+        auto* const tx = tx_buf.consumer();
+        auto* const realtime = realtime_buf.consumer();
         std::size_t sent = 16;
         std::size_t received = 0;
         bool overflow = false;

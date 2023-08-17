@@ -1,11 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2017 - 2023 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <jw/dpmi/bda.h>
@@ -161,8 +155,8 @@ namespace jw::io
         template<typename T>
         using allocator = default_constructing_allocator_adaptor<dpmi::global_locked_pool_allocator<T>>;
 
-        using tx_queue = dynamic_circular_queue<char_type, queue_sync::read_irq, allocator<char_type>>;
-        using rx_queue = dynamic_circular_queue<char_type, queue_sync::write_irq, allocator<char_type>>;
+        using tx_queue = dynamic_circular_queue<char_type, queue_sync::consumer_irq, allocator<char_type>>;
+        using rx_queue = dynamic_circular_queue<char_type, queue_sync::producer_irq, allocator<char_type>>;
 
         struct error_mark
         {

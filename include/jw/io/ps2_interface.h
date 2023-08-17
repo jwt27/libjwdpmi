@@ -1,12 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2016 - 2023 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <mutex>
@@ -269,8 +262,8 @@ namespace jw::io
                 do
                 {
                     auto c = data_port.read();
-                    if (config.translate_scancodes) *detail::scancode::undo_translation_inserter(*scancodes.write()) = c;
-                    else scancodes.write()->push_back(c);
+                    if (config.translate_scancodes) *detail::scancode::undo_translation_inserter(*scancodes.producer()) = c;
+                    else scancodes.producer()->push_back(c);
                 } while (get_status().data_available);
 
                 dpmi::irq_handler::acknowledge<1>();

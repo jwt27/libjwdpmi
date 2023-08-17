@@ -1,10 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2016 - 2023 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <jw/io/detail/scancode.h>
 
@@ -230,7 +225,7 @@ namespace jw::io::detail
         key::bad_key                // 0x8F
     };
 
-    std::optional<key_state_pair> scancode::extract(scancode_queue::reader* bytes, scancode_set set)
+    std::optional<key_state_pair> scancode::extract(scancode_queue::consumer_type* bytes, scancode_set set)
     {
         key k = key::bad_key;
         key_state state = key_state::down;

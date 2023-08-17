@@ -1,10 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2017 - 2023 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <jw/io/mpu401.h>
 #include <jw/chrono.h>
@@ -46,8 +41,8 @@ namespace jw::io
 
         auto fail = [] { throw device_not_found { "MPU-401 not detected" }; };
 
-        auto* const rx = rx_buf.read();
-        auto* const tx = tx_buf.write();
+        auto* const rx = rx_buf.consumer();
+        auto* const tx = tx_buf.producer();
         const auto rx_begin = rx->begin();
         const auto tx_begin = tx->fill();
 
@@ -137,7 +132,7 @@ namespace jw::io
 
     std::streamsize mpu401_streambuf::showmanyc()
     {
-        auto* const rx = rx_buf.read();
+        auto* const rx = rx_buf.consumer();
         const auto pos = rx->iterator_from_pointer(gptr());
         auto end = rx->cend();
 
@@ -152,7 +147,7 @@ namespace jw::io
 
     mpu401_streambuf::int_type mpu401_streambuf::underflow()
     {
-        auto* const rx = rx_buf.read();
+        auto* const rx = rx_buf.consumer();
         const auto pos = rx->iterator_from_pointer(gptr());
         rx->pop_front_to(clamp_add(pos, -putback_reserve, rx->begin(), pos));
         auto* new_end = rx->contiguous_end(pos);
@@ -199,7 +194,7 @@ namespace jw::io
             return traits_type::not_eof(c);
         }
 
-        auto* const rx = rx_buf.read();
+        auto* const rx = rx_buf.consumer();
         auto i = rx->iterator_from_pointer(gptr());
         if (rx->begin().distance_to(i) > 0)
         {
@@ -213,7 +208,7 @@ namespace jw::io
 
     mpu401_streambuf::int_type mpu401_streambuf::overflow(int_type c)
     {
-        auto* const tx = tx_buf.write();
+        auto* const tx = tx_buf.producer();
         const auto pos = tx->iterator_from_pointer(pptr());
         tx_stop = pos;
 
@@ -241,7 +236,7 @@ namespace jw::io
 
     int mpu401_streambuf::sync()
     {
-        auto* const tx = tx_buf.write();
+        auto* const tx = tx_buf.producer();
         const auto pos = tx->iterator_from_pointer(pptr());
         tx_stop = pos;
 
@@ -263,7 +258,7 @@ namespace jw::io
     {
         // Split the TX buffer into smaller chunks, so tx_stop is updated more
         // frequently.
-        auto* const tx = tx_buf.write();
+        auto* const tx = tx_buf.producer();
         auto* const p = &*i;
         setp(p, std::min(p + std::max((tx->max_size() + 1) / 8, tx_queue::size_type { 1u }), tx->contiguous_end(i)));
     }
@@ -271,7 +266,7 @@ namespace jw::io
     // Receive one byte, without checking status.
     inline void mpu401_streambuf::get_one() noexcept
     {
-        auto* const rx = rx_buf.write();
+        auto* const rx = rx_buf.producer();
         const auto ok = rx->try_push_back(data_port(base).read());
         if (not ok) [[unlikely]]
         {
@@ -302,7 +297,7 @@ namespace jw::io
 
     inline void mpu401_streambuf::do_sync(std::uint8_t s) noexcept
     {
-        auto* const tx = tx_buf.read();
+        auto* const tx = tx_buf.consumer();
         auto status = std::bit_cast<mpu401_status>(s);
         if (not status.no_data_available) [[likely]] goto get;
         if (not status.dont_send_data) [[likely]] goto put;
