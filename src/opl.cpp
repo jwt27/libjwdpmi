@@ -36,8 +36,9 @@ namespace jw::audio
 
         w3(0x02, 0xa5);         // write a distinctive value to timer 0
         this_thread::sleep_for(2235ns);
-        if (io::read_port(base + 1) == std::byte { 0xa5 }) return opl_type::opl3_l;
-        else return opl_type::opl3;
+        if (io::read_port(base + 1) != std::byte { 0xa5 }) return opl_type::opl3;
+        w3(0x105, 0x05);        // enable BUSY flag
+        return opl_type::opl3_l;
     }
 
     template<opl_type t>
