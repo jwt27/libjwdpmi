@@ -173,8 +173,8 @@ namespace jw::audio
         const unsigned offset = ch + (ch >= 9 ? 0x100 - 9 : 0);
         if (type() != opl_type::opl2)
         {
-            auto ch_4op = lookup_2to4(ch);
-            if (ch_4op != 0xff and ch == lookup_4to2_sec(ch_4op) and is_4op(ch_4op))
+            auto ch_4op = opl_2to4(ch);
+            if (ch_4op != 0xff and ch == opl_4to2_sec(ch_4op) and is_4op(ch_4op))
             {
                 write<false, 0xc0>(value, channels[ch], offset);
                 return;
@@ -227,7 +227,7 @@ namespace jw::audio
 
     template<unsigned N> void opl::update(channel<N>* ch)
     {
-        auto pri = N == 4 ? lookup_4to2_pri(ch->channel_num) : ch->channel_num;
+        auto pri = N == 4 ? opl_4to2_pri(ch->channel_num) : ch->channel_num;
         auto key_on = ch->key_on();
         ch->key_on(base::read_channel(pri).key_on);
         write(ch);
@@ -268,7 +268,7 @@ namespace jw::audio
         if constexpr (N == 2)
         {
             remove(channels_2op[n]);
-            auto ch_4op = lookup_2to4(n);
+            auto ch_4op = opl_2to4(n);
             if (type() != opl_type::opl2 and ch_4op != 0xff)
             {
                 remove(channels_4op[ch_4op]);
@@ -279,8 +279,8 @@ namespace jw::audio
         if constexpr (N == 4)
         {
             remove(channels_4op[n]);
-            remove(channels_2op[lookup_4to2_pri(n)]);
-            remove(channels_2op[lookup_4to2_sec(n)]);
+            remove(channels_2op[opl_4to2_pri(n)]);
+            remove(channels_2op[opl_4to2_sec(n)]);
             set_4op(n, true);
             channels_4op[n] = ch;
         }
@@ -368,8 +368,8 @@ namespace jw::audio
                     }
                     else
                     {
-                        auto pri = lookup_4to2_pri(i);
-                        auto sec = lookup_4to2_sec(i);
+                        auto pri = opl_4to2_pri(i);
+                        auto sec = opl_4to2_sec(i);
                         if (channels_2op[pri] == nullptr and channels_2op[sec] == nullptr)
                             return insert_at(i, ch);
 
@@ -392,8 +392,8 @@ namespace jw::audio
                 }
                 else if constexpr (N == 2)
                 {
-                    auto pri = lookup_4to2_pri(i);
-                    auto sec = lookup_4to2_sec(i);
+                    auto pri = opl_4to2_pri(i);
+                    auto sec = opl_4to2_sec(i);
                     if (is_4op(i))
                     {
                         if (channels_4op[i] == nullptr)
@@ -444,7 +444,7 @@ namespace jw::audio
     template <unsigned N> void opl::remove(channel<N>* ch) noexcept
     {
         if (ch == nullptr) return;
-        auto pri = N == 4 ? lookup_4to2_pri(ch->channel_num) : ch->channel_num;
+        auto pri = N == 4 ? opl_4to2_pri(ch->channel_num) : ch->channel_num;
         auto c = read_channel(pri);
         c.key_on = false;
         base::write(c, pri);
@@ -463,7 +463,7 @@ namespace jw::audio
     template<unsigned N>
     void opl::write(channel<N>* ch)
     {
-        constexpr auto translate = [](auto n) { return N == 4 ? lookup_4to2_pri(n) : n; };
+        constexpr auto translate = [](auto n) { return N == 4 ? opl_4to2_pri(n) : n; };
 
         for (unsigned i = 0; i < N; ++i)
             base::write(ch->op[i], translate(ch->channel_num), i);
@@ -472,7 +472,7 @@ namespace jw::audio
         {
             opl_channel ch2 { *ch };
             ch2.connection = ch->connection[1];
-            base::write(ch2, lookup_4to2_sec(ch->channel_num));
+            base::write(ch2, opl_4to2_sec(ch->channel_num));
         }
         static_cast<opl_channel*>(ch)->connection = ch->connection[0];
         base::write(*ch, translate(ch->channel_num));
@@ -535,7 +535,7 @@ namespace jw::audio
         }();
 
         const clock::time_point infinity = clock::time_point::max();
-        const bool key_on = read_channel(N == 4 ? lookup_4to2_pri(ch->channel_num) : ch->channel_num).key_on;
+        const bool key_on = read_channel(N == 4 ? opl_4to2_pri(ch->channel_num) : ch->channel_num).key_on;
         const std::uint8_t freq_msb = (ch->freq_num >> (9 - read_setup().note_sel)) & 1;
         const std::uint8_t freq_rate = (ch->freq_block << 1) | freq_msb;
 

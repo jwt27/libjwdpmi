@@ -53,6 +53,34 @@ namespace jw::audio
         clock::time_point last_access { clock::time_point::min() };
     };
 
+    // Find absolute operator slot number for given operator in given channel.
+    constexpr std::uint8_t opl_slot(std::uint8_t ch, std::uint8_t op) noexcept
+    {
+        assume(ch < 18 and op < 4);
+        return ch + 3 * (ch / 3) + 3 * op;
+    }
+
+    // Find primary 2op channel number for given 4op channel number.
+    constexpr std::uint8_t opl_4to2_pri(std::uint8_t ch_4op) noexcept
+    {
+        assume(ch_4op < 6);
+        return (0xba9210u >> (ch_4op << 2)) & 0xf;
+    }
+
+    // Find secondary 2op channel number for given 4op channel number.
+    constexpr std::uint8_t opl_4to2_sec(std::uint8_t ch_4op) noexcept
+    {
+        return opl_4to2_pri(ch_4op) + 3;
+    }
+
+    // Find 4op channel number that the given 2op channel is part of, or 0xff if none.
+    constexpr std::uint8_t opl_2to4(std::uint8_t ch_2op) noexcept
+    {
+        constexpr std::uint8_t table[] { 0, 1, 2, 0, 1, 2, 0xff, 0xff, 0xff,
+                                         3, 4, 5, 3, 4, 5, 0xff, 0xff, 0xff };
+        return table[ch_2op];
+    }
+
     struct basic_opl;
 
     struct [[gnu::packed]] opl_setup
@@ -170,7 +198,7 @@ namespace jw::audio
         void write(const opl_percussion&);
         void write(const opl_channel&, std::uint8_t ch);
         void write(const opl_operator&, std::uint8_t slot);
-        void write(const opl_operator& o, std::uint8_t ch, std::uint8_t osc) { write(o, operator_slot(ch, osc)); }
+        void write(const opl_operator& o, std::uint8_t ch, std::uint8_t osc) { write(o, opl_slot(ch, osc)); }
 
         const opl_setup&      read_setup() const noexcept { return reg_setup.value; }
         const opl_timer&      read_timer() const noexcept { return reg_timer.value; }
@@ -178,7 +206,7 @@ namespace jw::audio
         const opl_percussion& read_percussion() const noexcept { return reg_percussion.value; }
         const opl_channel&    read_channel(std::uint8_t ch) const noexcept { return channels[ch].value; }
         const opl_operator&   read_operator(std::uint8_t osc) const noexcept { return operators[osc].value; }
-        const opl_operator&   read_operator(std::uint8_t ch, std::uint8_t osc) const noexcept { return read_operator(operator_slot(ch, osc)); }
+        const opl_operator&   read_operator(std::uint8_t ch, std::uint8_t osc) const noexcept { return read_operator(opl_slot(ch, osc)); }
 
         bool is_4op(std::uint8_t ch_4op) const noexcept { return read_4op().bitset()[ch_4op]; };
         void set_4op(std::uint8_t ch_4op, bool enable);
@@ -186,34 +214,6 @@ namespace jw::audio
         opl_type type() const noexcept { return drv.type(); }
         opl_status status() const noexcept { return drv.status(); }
         void reset();
-
-        // Returns absolute operator slot number for given operator in given channel.
-        static constexpr std::uint8_t operator_slot(std::uint8_t ch, std::uint8_t op) noexcept
-        {
-            assume(ch < 18 and op < 4);
-            return ch + 3 * (ch / 3) + 3 * op;
-        }
-
-        // Returns primary 2op channel number for given 4op channel number.
-        static constexpr std::uint8_t lookup_4to2_pri(std::uint8_t ch_4op) noexcept
-        {
-            assume(ch_4op < 6);
-            return (0xba9210u >> (ch_4op << 2)) & 0xf;
-        }
-
-        // Returns secondary 2op channel number for given 4op channel number.
-        static constexpr std::uint8_t lookup_4to2_sec(std::uint8_t ch_4op) noexcept
-        {
-            return lookup_4to2_pri(ch_4op) + 3;
-        }
-
-        // Returns 4op channel number that the given 2op channel is part of, or 0xff if none.
-        static constexpr std::uint8_t lookup_2to4(std::uint8_t ch_2op) noexcept
-        {
-            constexpr std::uint8_t table[] { 0, 1, 2, 0, 1, 2, 0xff, 0xff, 0xff,
-                                             3, 4, 5, 3, 4, 5, 0xff, 0xff, 0xff };
-            return table[ch_2op];
-        }
 
     private:
         basic_opl(const basic_opl&) = delete;
