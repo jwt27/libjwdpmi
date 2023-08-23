@@ -77,18 +77,18 @@ namespace jw::audio
         : drv { port }
     {
         channels = { };
-        oscillators = { };
+        operators = { };
 
         init();
 
-        channel c { };
-        reg<channel> c_tmp;
+        opl_channel c { };
+        reg<opl_channel> c_tmp;
         for (auto j : { 0, 0x100 })
             for (unsigned i = 0; i < 9; ++i)
                 write<true, 0xc0, 0xa0, 0xb0>(c, c_tmp, i | j);
 
-        oscillator o { };
-        reg<oscillator> o_tmp;
+        opl_operator o { };
+        reg<opl_operator> o_tmp;
         for (auto j : { 0, 0x100 })
             for (unsigned i = 0; i < 18; ++i)
                 write<true, 0x20, 0x40, 0x60, 0x80, 0xe0>(o, o_tmp, i | j);
@@ -96,24 +96,24 @@ namespace jw::audio
 
     inline void basic_opl::init()
     {
-        setup s { };
+        opl_setup s { };
         s.enable_waveform_select = type() == opl_type::opl2;
         s.enable_opl3 = type() != opl_type::opl2;
         s.enable_opl3_l = type() == opl_type::opl3_l;
         s.note_sel = true;
         write<true, 0x01, 0x08, 0x101, 0x105>(s, reg_setup, 0);
 
-        timer t { };
+        opl_timer t { };
         t.mask_timer0 = true;
         t.mask_timer1 = true;
         write<true, 0x02, 0x03, 0x04>(t, reg_timer, 0);
         t.reset_irq = true;
         write(t);
 
-        mode_4op m { };
+        opl_4op m { };
         write<true, 0x104>(m, reg_4op, 0);
 
-        percussion p { };
+        opl_percussion p { };
         write<true, 0xbd>(p, reg_percussion, 0);
     }
 
@@ -121,14 +121,14 @@ namespace jw::audio
     {
         for (unsigned i = 0; i < 36; ++i)
         {
-            oscillator o { oscillators[i].value };
+            opl_operator o { operators[i].value };
             o.sustain = 0;
             o.release = 0xf;
             write(o, i);
         }
         for (unsigned i = 0; i < 18; ++i)
         {
-            channel c { channels[i].value };
+            opl_channel c { channels[i].value };
             c.key_on = false;
             c.freq_block = 0;
             c.freq_num = 0;
@@ -137,37 +137,37 @@ namespace jw::audio
         init();
     }
 
-    void basic_opl::write(const setup& value)
+    void basic_opl::write(const opl_setup& value)
     {
         write<false, 0x01, 0x08, 0x101, 0x105>(value, reg_setup, 0);
     }
 
-    void basic_opl::write(const timer& value)
+    void basic_opl::write(const opl_timer& value)
     {
         write<false, 0x02, 0x03, 0x04>(value, reg_timer, 0);
         reg_timer.value.reset_irq = false;
     }
 
-    void basic_opl::write(const mode_4op& value)
+    void basic_opl::write(const opl_4op& value)
     {
         write<false, 0x104>(value, reg_4op, 0);
     }
 
-    void basic_opl::write(const percussion& value)
+    void basic_opl::write(const opl_percussion& value)
     {
         write<false, 0xbd>(value, reg_percussion, 0);
     }
 
-    void basic_opl::write(const oscillator& value, std::uint8_t slot)
+    void basic_opl::write(const opl_operator& value, std::uint8_t slot)
     {
         assume(slot < 36);
         const bool hi = slot >= 18;
         const unsigned n = slot - (hi ? 18 : 0);
         const unsigned offset = n + 2 * (n / 6) + (hi ? 0x100 : 0);
-        write<false, 0x20, 0x40, 0x60, 0x80, 0xe0>(value, oscillators[slot], offset);
+        write<false, 0x20, 0x40, 0x60, 0x80, 0xe0>(value, operators[slot], offset);
     }
 
-    void basic_opl::write(const channel& value, std::uint8_t ch)
+    void basic_opl::write(const opl_channel& value, std::uint8_t ch)
     {
         assume(ch < 18);
         const unsigned offset = ch + (ch >= 9 ? 0x100 - 9 : 0);
@@ -450,7 +450,7 @@ namespace jw::audio
         base::write(c, pri);
         for (unsigned i = 0; i < N; ++i)
         {
-            auto o = read_oscillator(pri, i);
+            auto o = read_operator(pri, i);
             o.sustain = 0x0;
             o.release = 0xf;
             base::write(o, pri, i);
@@ -466,15 +466,15 @@ namespace jw::audio
         constexpr auto translate = [](auto n) { return N == 4 ? lookup_4to2_pri(n) : n; };
 
         for (unsigned i = 0; i < N; ++i)
-            base::write(ch->osc[i], translate(ch->channel_num), i);
+            base::write(ch->op[i], translate(ch->channel_num), i);
 
         if constexpr (N == 4)
         {
-            base::channel ch2 { *ch };
+            opl_channel ch2 { *ch };
             ch2.connection = ch->connection[1];
             base::write(ch2, lookup_4to2_sec(ch->channel_num));
         }
-        static_cast<base::channel*>(ch)->connection = ch->connection[0];
+        static_cast<opl_channel*>(ch)->connection = ch->connection[0];
         base::write(*ch, translate(ch->channel_num));
     }
 
@@ -544,7 +544,7 @@ namespace jw::audio
         for (unsigned i = 0; i < N; ++i)
         {
             if (not carriers[i]) continue;
-            const auto& o = ch->osc[i];
+            const auto& o = ch->op[i];
             if (o.attack == 0) continue;
             if (o.release == 0) return infinity;
             if (o.enable_sustain and key_on) return infinity;
