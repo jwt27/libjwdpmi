@@ -247,7 +247,6 @@ namespace jw::audio
         reg<opl_percussion> reg_percussion;
         std::array<reg<opl_operator>, 36> operators;
         std::array<reg<opl_channel>, 18> channels;
-        clock::time_point last_access { clock::time_point::min() };
     };
 
     struct opl_config
