@@ -250,7 +250,7 @@ namespace jw::audio
         ch->key_on(true);
         write(ch);
         ch->on_time = clock::now();
-        ch->off_time = off_time(ch, clock::time_point::max());
+        ch->off_time = off_time(ch, true, ch->on_time);
     }
 
     template<unsigned N> void opl::stop(channel<N>* ch)
@@ -258,7 +258,7 @@ namespace jw::audio
         const auto was_on = ch->key_on();
         ch->key_on(false);
         write(ch);
-        if (was_on) ch->off_time = off_time(ch, clock::now());
+        if (was_on) ch->off_time = std::min(ch->off_time, off_time(ch, false, clock::now()));
     }
 
     template<unsigned N> bool opl::insert_at(std::uint8_t n, channel<N>* ch)
@@ -296,8 +296,9 @@ namespace jw::audio
         {
             if (ch->key_on())
             {
+                const auto pri = N == 4 ? opl_4to2_pri(ch->channel_num) : ch->channel_num;
                 ch->key_on(false);
-                write(ch);
+                base::write(*ch, pri);
             }
             start(ch);
             return true;
@@ -444,14 +445,14 @@ namespace jw::audio
     template <unsigned N> void opl::remove(channel<N>* ch) noexcept
     {
         if (ch == nullptr) return;
-        auto pri = N == 4 ? opl_4to2_pri(ch->channel_num) : ch->channel_num;
+        const auto pri = N == 4 ? opl_4to2_pri(ch->channel_num) : ch->channel_num;
         auto c = read_channel(pri);
         c.key_on = false;
         base::write(c, pri);
         for (unsigned i = 0; i < N; ++i)
         {
             auto o = read_operator(pri, i);
-            o.sustain = 0x0;
+            o.sustain = 0xf;
             o.release = 0xf;
             base::write(o, pri, i);
         }
@@ -508,36 +509,34 @@ namespace jw::audio
         using namespace std::chrono_literals;
         using duration = std::chrono::duration<std::uint32_t, std::micro>;
         constexpr auto infinite = duration::max();
-        static constexpr duration table[]
+        static constexpr duration table[]   // Approx. us / -3dB
         {
-              infinite,   infinite,   infinite,   infinite, 39280640us, 31416320us, 26173440us, 22446080us,
-            19640320us, 15708160us, 13086720us, 11223040us,  9820160us,  7854080us,  6543360us,  5611520us,
-             4910080us,  3927040us,  3271680us,  2805760us,  2455040us,  1936520us,  1635840us,  1402880us,
-             1227520us,   981760us,   817920us,   701440us,   613760us,   490880us,   488960us,   350720us,
-              306880us,   245440us,   204480us,   175360us,   153440us,   122720us,   102240us,    87680us,
-               76720us,    61360us,    51120us,    43840us,    38360us,    30680us,    25560us,    21920us,
-               19200us,    15360us,    12800us,    10960us,     9600us,     7680us,     6400us,     5480us,
-                4800us,     3840us,     3200us,     2740us,     2400us,     2400us,     2400us,     2400us
+              infinite,   infinite,   infinite,   infinite,  1318207us,  1054566us,   878791us,   749154us,
+              659104us,   527283us,   439396us,   374577us,   329552us,   263641us,   219698us,   187288us,
+              164776us,   131821us,   109849us,    93644us,    82388us,    65910us,    54924us,    46822us,
+               41194us,    32955us,    27462us,    23411us,    20597us,    16478us,    13731us,    11706us,
+               10298us,     8239us,     6866us,     5853us,     5149us,     4119us,     3433us,     2926us,
+                2575us,     2060us,     1716us,     1463us,     1287us,     1030us,      858us,      732us,
+                 644us,      515us,      429us,      366us,      322us,      257us,      215us,      183us,
+                 161us,      129us,      107us,       91us,       80us,       80us,       80us,       80us,
+
         };
         return table[rate];
     }
 
     // Estimate when the given channel will become silent.
-    template<unsigned N> opl::clock::time_point opl::off_time(const channel<N>* ch, clock::time_point key_off) const noexcept
+    template<unsigned N> opl::clock::time_point opl::off_time(const channel<N>* ch, bool key_on, clock::time_point now) const noexcept
     {
-        using duration = std::chrono::duration<std::uint32_t, std::micro>;
+        constexpr clock::time_point infinity = clock::time_point::max();
 
+        const std::uint8_t freq_msb = (ch->freq_num >> (9 - read_setup().note_sel)) & 1;
+        const std::uint8_t freq_rate = (ch->freq_block << 1) | freq_msb;
         const std::bitset<N> carriers = [ch]
         {
             const std::uint8_t connection = ch->connection.to_ulong();
             if constexpr (N == 2) return 0b10 | connection;
             else if constexpr (N == 4) return 0b1000 | ((0b11'01'10'00 >> (connection * 2)) & 0b11);
         }();
-
-        const clock::time_point infinity = clock::time_point::max();
-        const bool key_on = read_channel(N == 4 ? opl_4to2_pri(ch->channel_num) : ch->channel_num).key_on;
-        const std::uint8_t freq_msb = (ch->freq_num >> (9 - read_setup().note_sel)) & 1;
-        const std::uint8_t freq_rate = (ch->freq_block << 1) | freq_msb;
 
         clock::time_point off_time = clock::time_point::min();
 
@@ -547,19 +546,25 @@ namespace jw::audio
             const auto& o = ch->op[i];
             if (o.attack == 0) continue;
             if (o.release == 0) return infinity;
+            if (o.decay == 0 and o.sustain != 0) return infinity;
             if (o.enable_sustain and key_on) return infinity;
 
             const std::uint8_t key_scale_num = freq_rate >> ((not o.key_scale_rate) << 1);
             auto key_scale = [key_scale_num](unsigned r) { return std::min((r << 2) + key_scale_num, 63u); };
-            clock::time_point t;
-            duration d = release_time(key_scale(o.release));
-            if (o.enable_sustain) t = key_off + d;
+
+            // Assumes -72dB is inaudible (24 * -3).
+            const unsigned sustain_level = (o.decay == 0 ? 0u : (o.sustain == 15 ? 24u : o.sustain));
+            const auto attack = attack_time(key_scale(o.attack));
+            const auto decay = release_time(key_scale(o.decay)) * sustain_level;
+            const auto release_from_sustain = release_time(key_scale(o.release)) * (24 - sustain_level);
+            const auto release_from_0db = release_time(key_scale(o.release)) * 24;
+            clock::time_point t = now;
+            if (key_on)
+                t += attack + decay + release_from_sustain;
+            else if (now < ch->on_time + attack + decay)
+                t += release_from_0db;
             else
-            {
-                const auto a = attack_time(key_scale(o.attack));
-                if (o.decay != 0) d += release_time(key_scale(o.decay));
-                t = std::min(ch->on_time + a, key_off) + d;
-            }
+                t += release_from_sustain;
             off_time = std::max(off_time, t);
         }
         return off_time;
