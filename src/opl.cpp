@@ -311,32 +311,26 @@ namespace jw::audio
         struct
         {
             std::uint8_t i { npos };
-            bool key_on { true };
             int priority { std::numeric_limits<int>::max() };
             clock::time_point on_time { clock::time_point::max() };
             clock::time_point off_time { clock::time_point::max() };
         } best { };
 
-        auto check = [&](std::uint8_t i, bool key_on, auto prio, auto on_time, auto off_time)
+        auto check = [&](std::uint8_t i, auto prio, auto on_time, auto off_time)
         {
-            if (key_on and now < off_time)
+            if (off_time > best.off_time) return;
+            if (off_time == best.off_time and
+                on_time > best.on_time) return;
+
+            if (not cfg.ignore_priority and now < off_time)
             {
-                if (not best.key_on) return;
-                if (not cfg.ignore_priority)
-                {
-                    if (prio > ch->priority) return;
-                    if (prio > best.priority) return;
-                }
-                if (on_time > best.on_time) return;
+                if (prio > ch->priority) return;
+                if (prio > best.priority) return;
                 best.priority = prio;
-                best.on_time = on_time;
             }
-            else
-            {
-                if (off_time > best.off_time) return;
-                best.key_on = false;
-                best.off_time = off_time;
-            }
+
+            best.off_time = off_time;
+            best.on_time = on_time;
             best.i = i;
         };
 
@@ -347,8 +341,8 @@ namespace jw::audio
                 if (channels_2op[i] == nullptr)
                     return insert_at(i, ch);
 
-                auto* c = channels_2op[i];
-                check(i, c->key_on(), c->priority, c->on_time, c->off_time);
+                const auto* const c = channels_2op[i];
+                check(i, c->priority, c->on_time, c->off_time);
             }
             return false;
         };
@@ -364,46 +358,50 @@ namespace jw::audio
                         if (channels_4op[i] == nullptr)
                             return insert_at(i, ch);
 
-                        auto* c = channels_4op[i];
-                        check(i, c->key_on(), c->priority, c->on_time, c->off_time);
+                        const auto* const c = channels_4op[i];
+                        check(i, c->priority, c->on_time, c->off_time);
                     }
                     else
                     {
-                        auto pri = opl_4to2_pri(i);
-                        auto sec = opl_4to2_sec(i);
+                        const auto pri = opl_4to2_pri(i);
+                        const auto sec = opl_4to2_sec(i);
                         if (channels_2op[pri] == nullptr and channels_2op[sec] == nullptr)
                             return insert_at(i, ch);
 
-                        auto [key_on, prio, on_time, off_time] = [this, pri, sec]()
-                        {
-                            auto* a = channels_2op[pri];
-                            auto* b = channels_2op[sec];
-                            if (a == nullptr) return std::make_tuple(b->key_on(), b->priority, b->on_time, b->off_time);
-                            if (b == nullptr) return std::make_tuple(a->key_on(), a->priority, a->on_time, a->off_time);
-                            auto a_on = a->key_on();
-                            auto b_on = b->key_on();
-                            auto max = [a_on, b_on](auto va, auto vb) { return a_on == b_on ? std::max(va, vb) : a_on ? va : vb; };
-                            auto on_time = max(a->on_time, b->on_time);
-                            auto prio = max(a->priority, b->priority);
-                            return std::make_tuple(a_on or b_on, prio, on_time, std::max(a->off_time, b->off_time));
-                        }();
+                        const auto* const a = channels_2op[pri];
+                        const auto* const b = channels_2op[sec];
 
-                        check(i, key_on, prio, on_time, off_time);
+                        if (a == nullptr)
+                            check(i, b->priority, b->on_time, b->off_time);
+                        else if (b == nullptr)
+                            check(i, a->priority, a->on_time, a->off_time);
+                        else
+                        {
+                            const auto a_on = now < a->off_time;
+                            const auto b_on = now < b->off_time;
+                            const auto max = [a_on, b_on](auto va, auto vb) { return a_on == b_on ? std::max(va, vb) : a_on ? va : vb; };
+                            const auto prio = max(a->priority, b->priority);
+                            const auto on_time = max(a->on_time, b->on_time);
+                            const auto off_time = std::max(a->off_time, b->off_time);
+
+                            check(i, prio, on_time, off_time);
+                        }
                     }
                 }
                 else if constexpr (N == 2)
                 {
-                    auto pri = opl_4to2_pri(i);
-                    auto sec = opl_4to2_sec(i);
+                    const auto pri = opl_4to2_pri(i);
+                    const auto sec = opl_4to2_sec(i);
                     if (is_4op(i))
                     {
                         if (channels_4op[i] == nullptr)
                             return insert_at(pri, ch);
 
-                        auto* c = channels_4op[i];
-                        check(pri, c->key_on(), c->priority, c->on_time, c->off_time);
+                        const auto* const c = channels_4op[i];
+                        check(pri, c->priority, c->on_time, c->off_time);
                     }
-                    else if (search_2op(pri, sec)) return true;
+                    else if (search_2op(pri, sec))
+                        return true;
                 }
             }
             return false;
@@ -411,34 +409,44 @@ namespace jw::audio
 
         if (type() == opl_type::opl2)
         {
-            if constexpr (N == 2) if (search_2op(0, 1, 2, 3, 4, 5, 6, 7, 8)) return true;
+            if constexpr (N == 2)
+                if (search_2op(0, 1, 2, 3, 4, 5, 6, 7, 8))
+                    return true;
         }
         else
         {
             if constexpr (N == 2)
             {
-                if (search_2op(6, 7, 8, 15, 16, 17)) return true;
+                if (search_2op(6, 7, 8, 15, 16, 17))
+                    return true;
                 switch (cfg.prioritize_4op)
                 {
                 case opl_config::auto_force:
-                    if (read_4op().bitset().none()) break;
+                    if (read_4op().bitset().none())
+                        break;
                     [[fallthrough]];
                 case opl_config::force:
-                    if (best.i != npos) return insert_at(best.i, ch);
+                    if (best.i != npos)
+                        return insert_at(best.i, ch);
                     return false;
+
                 case opl_config::automatic:
-                    if (read_4op().bitset().none()) break;
+                    if (read_4op().bitset().none())
+                        break;
                     [[fallthrough]];
                 case opl_config::yes:
-                    if (best.i != npos and not best.key_on and best.off_time < now) return insert_at(best.i, ch);
+                    if (now >= best.off_time)
+                        return insert_at(best.i, ch);
                 case opl_config::no:
                     break;
                 }
             }
-            if (search_4op(0, 1, 2, 3, 4, 5)) return true;
+            if (search_4op(0, 1, 2, 3, 4, 5))
+                return true;
         }
 
-        if (best.i != npos) return insert_at(best.i, ch);
+        if (best.i != npos) [[likely]]
+            return insert_at(best.i, ch);
         return false;
     }
 
