@@ -286,7 +286,7 @@ namespace jw::audio
         {
             static_assert(N == 2 or N == 4);
 
-            std::bitset<N / 2> connection;
+            std::uint8_t connection : N / 2;
             std::array<opl_operator, N> op;
             int priority;
         };

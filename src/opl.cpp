@@ -549,9 +549,10 @@ namespace jw::audio
         const std::uint8_t freq_rate = (ch->freq_block << 1) | freq_msb;
         const std::bitset<N> carriers = [ch]
         {
-            const std::uint8_t connection = ch->connection.to_ulong();
-            if constexpr (N == 2) return 0b10 | connection;
-            else if constexpr (N == 4) return 0b1000 | ((0b11'01'10'00 >> (connection * 2)) & 0b11);
+            if constexpr (N == 2)
+                return 0b10 | ch->connection;
+            if constexpr (N == 4)
+                return 0b1000 | ((0b11'01'10'00 >> (ch->connection * 2)) & 0b11);
         }();
 
         clock::time_point off_time = clock::time_point::min();
