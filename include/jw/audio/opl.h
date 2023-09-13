@@ -251,22 +251,29 @@ namespace jw::audio
 
     struct opl_config
     {
-        // Try to allocate 2op channels so that they don't overlap with 4op channels.  Has no effect for OPL2.
+        // Try to allocate 2op channels so that they don't overlap with 4op
+        // channels.  Has no effect for OPL2.
         //         no: No special treatment is given to 4op slots.
-        //        yes: 2op channels may only be allocated in a 4op slot if all 2op-only slots are taken.
+        //        yes: 2op channels may only be allocated in a 4op slot if all
+        //             2op-only slots are taken.
         //      force: 2op channels are never allocated in a 4op slot.
-        //  automatic: Default to 'no', switch to 'yes' when there are any active 4op channels.
-        // auto_force: Default to 'no', latch to 'force' once a 4op channel is played.
+        //  automatic: Default to 'no', switch to 'yes' when there are any
+        //             active 4op channels.
+        // auto_force: Default to 'no', latch to 'force' once a 4op channel is
+        //             played.
         enum : std::uint8_t { no, yes, force, automatic, auto_force } prioritize_4op { automatic };
 
         // Ignore channel priority field.
         bool ignore_priority { false };
 
-        // Determines if key scale rate/level is calculated by highest or second highest bit in freq_num.
+        // Determines how envelope rate scaling is calculated.
+        //  true: use freq_num bit 8.
+        // false: use freq_num bit 9.
         bool note_select { true };
 
-        // For tremolo: low = 1dB, high = 4.8dB.  For vibrato: low = 7%, high = 14%.
-        enum : unsigned { low, high } tremolo_depth : 1 { low }, vibrato_depth : 1 { low };
+        // For tremolo: low = 1dB, high = 4.8dB.
+        // For vibrato: low = 7 cents, high = 14 cents.
+        enum : std::uint8_t { low, high } tremolo_depth : 1 { low }, vibrato_depth : 1 { low };
     };
 
     struct opl final : private basic_opl

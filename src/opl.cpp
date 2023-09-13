@@ -215,17 +215,18 @@ namespace jw::audio
 
     opl::~opl()
     {
-        for (auto&& i : channels_2op) if (i != nullptr) remove(i);
-        for (auto&& i : channels_4op) if (i != nullptr) remove(i);
+        for (auto* i : channels_2op) if (i != nullptr) remove(i);
+        for (auto* i : channels_4op) if (i != nullptr) remove(i);
     }
 
     void opl::update()
     {
-        for (auto&& i : channels_4op) if (i != nullptr) update(i);
-        for (auto&& i : channels_2op) if (i != nullptr) update(i);
+        for (auto* i : channels_4op) if (i != nullptr) update(i);
+        for (auto* i : channels_2op) if (i != nullptr) update(i);
     }
 
-    template<unsigned N> void opl::update(channel<N>* ch)
+    template<unsigned N>
+    void opl::update(channel<N>* ch)
     {
         auto pri = N == 4 ? opl_4to2_pri(ch->channel_num) : ch->channel_num;
         auto key_on = ch->key_on();
@@ -245,7 +246,8 @@ namespace jw::audio
         base::write(p);
     }
 
-    template<unsigned N> void opl::start(channel<N>* ch)
+    template<unsigned N>
+    inline void opl::start(channel<N>* ch)
     {
         ch->key_on(true);
         write(ch);
@@ -253,7 +255,8 @@ namespace jw::audio
         ch->off_time = off_time(ch, true, ch->on_time);
     }
 
-    template<unsigned N> void opl::stop(channel<N>* ch)
+    template<unsigned N>
+    void opl::stop(channel<N>* ch)
     {
         const auto was_on = ch->key_on();
         ch->key_on(false);
@@ -261,7 +264,8 @@ namespace jw::audio
         if (was_on) ch->off_time = std::min(ch->off_time, off_time(ch, false, clock::now()));
     }
 
-    template<unsigned N> bool opl::insert_at(std::uint8_t n, channel<N>* ch)
+    template<unsigned N>
+    inline bool opl::insert_at(std::uint8_t n, channel<N>* ch)
     {
         if (ch->owner != nullptr) ch->owner->remove(ch);
 
@@ -290,7 +294,8 @@ namespace jw::audio
         return true;
     }
 
-    template<unsigned N> bool opl::insert(channel<N>* ch)
+    template<unsigned N>
+    bool opl::insert(channel<N>* ch)
     {
         if (ch->owner == this)
         {
@@ -450,7 +455,8 @@ namespace jw::audio
         return false;
     }
 
-    template <unsigned N> void opl::remove(channel<N>* ch) noexcept
+    template <unsigned N>
+    void opl::remove(channel<N>* ch) noexcept
     {
         if (ch == nullptr) return;
         const auto pri = N == 4 ? opl_4to2_pri(ch->channel_num) : ch->channel_num;
@@ -470,7 +476,7 @@ namespace jw::audio
     }
 
     template<unsigned N>
-    void opl::write(channel<N>* ch)
+    inline void opl::write(channel<N>* ch)
     {
         constexpr auto translate = [](auto n) { return N == 4 ? opl_4to2_pri(n) : n; };
 
@@ -480,14 +486,15 @@ namespace jw::audio
         if constexpr (N == 4)
         {
             opl_channel ch2 { *ch };
-            ch2.connection = ch->connection[1];
+            ch2.connection = (ch->connection >> 1) & 1;
             base::write(ch2, opl_4to2_sec(ch->channel_num));
         }
-        static_cast<opl_channel*>(ch)->connection = ch->connection[0];
+        static_cast<opl_channel*>(ch)->connection = ch->connection & 1;
         base::write(*ch, translate(ch->channel_num));
     }
 
-    template<unsigned N> void opl::move(channel<N>* ch) noexcept
+    template<unsigned N>
+    inline void opl::move(channel<N>* ch) noexcept
     {
         if constexpr (N == 2) channels_2op[ch->channel_num] = ch;
         if constexpr (N == 4) channels_4op[ch->channel_num] = ch;
@@ -533,7 +540,8 @@ namespace jw::audio
     }
 
     // Estimate when the given channel will become silent.
-    template<unsigned N> opl::clock::time_point opl::off_time(const channel<N>* ch, bool key_on, clock::time_point now) const noexcept
+    template<unsigned N>
+    inline opl::clock::time_point opl::off_time(const channel<N>* ch, bool key_on, clock::time_point now) const noexcept
     {
         constexpr clock::time_point infinity = clock::time_point::max();
 
