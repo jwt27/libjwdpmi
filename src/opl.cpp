@@ -226,7 +226,7 @@ namespace jw::audio
     }
 
     template<unsigned N>
-    void opl::update(channel<N>* ch)
+    void opl::update(opl_voice<N>* ch)
     {
         auto pri = N == 4 ? opl_4to2_pri(ch->channel_num) : ch->channel_num;
         auto key_on = ch->key_on();
@@ -247,7 +247,7 @@ namespace jw::audio
     }
 
     template<unsigned N>
-    inline void opl::start(channel<N>* ch)
+    inline void opl::start(opl_voice<N>* ch)
     {
         ch->key_on(true);
         write(ch);
@@ -256,7 +256,7 @@ namespace jw::audio
     }
 
     template<unsigned N>
-    void opl::stop(channel<N>* ch)
+    void opl::stop(opl_voice<N>* ch)
     {
         const auto was_on = ch->key_on();
         ch->key_on(false);
@@ -265,7 +265,7 @@ namespace jw::audio
     }
 
     template<unsigned N>
-    inline bool opl::insert_at(std::uint8_t n, channel<N>* ch)
+    inline bool opl::insert_at(std::uint8_t n, opl_voice<N>* ch)
     {
         if (ch->owner != nullptr) ch->owner->remove(ch);
 
@@ -295,7 +295,7 @@ namespace jw::audio
     }
 
     template<unsigned N>
-    bool opl::insert(channel<N>* ch)
+    bool opl::insert(opl_voice<N>* ch)
     {
         if (ch->owner == this)
         {
@@ -456,7 +456,7 @@ namespace jw::audio
     }
 
     template <unsigned N>
-    void opl::remove(channel<N>* ch) noexcept
+    void opl::remove(opl_voice<N>* ch) noexcept
     {
         if (ch == nullptr) return;
         const auto pri = N == 4 ? opl_4to2_pri(ch->channel_num) : ch->channel_num;
@@ -476,7 +476,7 @@ namespace jw::audio
     }
 
     template<unsigned N>
-    inline void opl::write(channel<N>* ch)
+    inline void opl::write(opl_voice<N>* ch)
     {
         constexpr auto translate = [](auto n) { return N == 4 ? opl_4to2_pri(n) : n; };
 
@@ -494,7 +494,7 @@ namespace jw::audio
     }
 
     template<unsigned N>
-    inline void opl::move(channel<N>* ch) noexcept
+    inline void opl::move(opl_voice<N>* ch) noexcept
     {
         if constexpr (N == 2) channels_2op[ch->channel_num] = ch;
         if constexpr (N == 4) channels_4op[ch->channel_num] = ch;
@@ -541,7 +541,7 @@ namespace jw::audio
 
     // Estimate when the given channel will become silent.
     template<unsigned N>
-    inline opl::clock::time_point opl::off_time(const channel<N>* ch, bool key_on, clock::time_point now) const noexcept
+    inline opl::clock::time_point opl::off_time(const opl_voice<N>* ch, bool key_on, clock::time_point now) const noexcept
     {
         constexpr clock::time_point infinity = clock::time_point::max();
 
@@ -587,67 +587,15 @@ namespace jw::audio
         return off_time;
     }
 
-    template<unsigned N>
-    opl::channel<N>::channel(const channel& c) noexcept
-        : base { c }
-    {
-        base::key_on = false;
-    }
+    template void opl::update(opl_voice<2>*);
+    template void opl::stop(opl_voice<2>*);
+    template bool opl::insert(opl_voice<2>*);
+    template void opl::remove(opl_voice<2>*) noexcept;
+    template void opl::move(opl_voice<2>*) noexcept;
 
-    template<unsigned N>
-    opl::channel<N>& opl::channel<N>::operator=(const channel& c) noexcept
-    {
-        const bool k = base::key_on;
-        *static_cast<base*>(this) = c;
-        base::key_on = k;
-        return *this;
-    }
-
-    template<unsigned N>
-    opl::channel<N>::channel(channel&& c) noexcept
-        : base { std::move(c) }
-        , owner { std::move(c.owner) }
-        , channel_num { std::move(c.channel_num) }
-        , on_time { std::move(c.on_time) }
-        , off_time { std::move(c.off_time) }
-    {
-        if (owner != nullptr) owner->move(this);
-        c.owner = nullptr;
-        c.base::key_on = false;
-    }
-
-    template<unsigned N>
-    opl::channel<N>& opl::channel<N>::operator=(channel&& c) noexcept
-    {
-        this->~channel();
-        return *new (this) channel { std::move(c) };
-    }
-
-    template<unsigned N>
-    opl::channel<N> opl::channel<N>::from_bytes(std::span<const std::byte, sizeof(base)> bytes) noexcept
-    {
-        return *reinterpret_cast<const base*>(bytes.data());
-    }
-
-    template<unsigned N>
-    std::array<std::byte, sizeof(typename opl::channel<N>::base)> opl::channel<N>::to_bytes() const noexcept
-    {
-        std::array<std::byte, sizeof(base)> array;
-        std::memcpy(array.data(), this, sizeof(base));
-        reinterpret_cast<base*>(array.data())->key_on = false;
-        return array;
-    }
-
-    template void opl::update(channel<2>*);
-    template void opl::stop(channel<2>*);
-    template bool opl::insert(channel<2>*);
-    template void opl::remove(channel<2>*) noexcept;
-
-    template void opl::update(channel<4>*);
-    template void opl::stop(channel<4>*);
-    template bool opl::insert(channel<4>*);
-    template void opl::remove(channel<4>*) noexcept;
-
-    template struct opl::channel<2>;
-    template struct opl::channel<4>;
+    template void opl::update(opl_voice<4>*);
+    template void opl::stop(opl_voice<4>*);
+    template bool opl::insert(opl_voice<4>*);
+    template void opl::remove(opl_voice<4>*) noexcept;
+    template void opl::move(opl_voice<4>*) noexcept;
 }

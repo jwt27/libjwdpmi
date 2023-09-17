@@ -276,61 +276,15 @@ namespace jw::audio
         enum : std::uint8_t { low, high } tremolo_depth : 1 { low }, vibrato_depth : 1 { low };
     };
 
+    template<unsigned> struct opl_voice;
+    using opl_voice_2op = opl_voice<2>;
+    using opl_voice_4op = opl_voice<4>;
+
     struct opl final : private basic_opl
     {
         using base = basic_opl;
         using clock = base::clock;
-
-        template<unsigned N>
-        struct channel_base : opl_channel
-        {
-            static_assert(N == 2 or N == 4);
-
-            std::uint8_t connection : N / 2;
-            std::array<opl_operator, N> op;
-            int priority;
-        };
-
-        template<unsigned N>
-        struct channel final : channel_base<N>
-        {
-            using base = channel_base<N>;
-            friend struct opl;
-
-            constexpr channel() noexcept = default;
-            ~channel() { if (allocated()) owner->remove(this); }
-
-            channel(const channel&) noexcept;
-            channel& operator=(const channel&) noexcept;
-            channel(channel&& c) noexcept;
-            channel& operator=(channel&& c) noexcept;
-
-            void freq(const opl& o, float f) noexcept           { base::freq(o, f); }
-            void note(const opl& o, int n) noexcept             { base::note(o, n); }
-            void note(const opl& o, long double n) noexcept     { base::note(o, n); }
-            bool key_on(opl& o)                                 { return o.insert(this); }
-            void key_off()                                      { if (allocated()) owner->stop(this); }
-            void update()                                       { if (allocated()) owner->update(this); }
-            bool silent() const noexcept                        { return not allocated() or off_time < clock::now(); }
-            bool silent_at(clock::time_point t) const noexcept  { return not allocated() or off_time < t; }
-            bool allocated() const noexcept                     { return owner != nullptr; }
-
-            static channel from_bytes(std::span<const std::byte, sizeof(base)>) noexcept;
-            std::array<std::byte, sizeof(base)> to_bytes() const noexcept;
-
-        private:
-            channel(const base& c) noexcept : base { c } { };
-
-            bool key_on() const noexcept { return base::key_on; }
-            void key_on(bool v) noexcept { base::key_on = v; }
-
-            opl* owner { nullptr };
-            unsigned channel_num { };
-            clock::time_point on_time { };
-            clock::time_point off_time { };
-        };
-        using channel_2op = channel<2>;
-        using channel_4op = channel<4>;
+        template<unsigned> friend struct opl_voice;
 
         opl(io::port_num port, opl_config c = { }) : basic_opl { port }, cfg { c } { update_config(); }
         virtual ~opl();
@@ -354,20 +308,121 @@ namespace jw::audio
         opl& operator=(opl&&) = delete;
 
         void update_config();
-        template<unsigned N> void update(channel<N>* ch);
-        template<unsigned N> void start(channel<N>* ch);
-        template<unsigned N> void stop(channel<N>* ch);
-        template<unsigned N> bool insert_at(std::uint8_t n, channel<N>* ch);
-        template<unsigned N> bool insert(channel<N>*);
-        template<unsigned N> void remove(channel<N>*) noexcept;
-        template<unsigned N> void write(channel<N>*);
-        template<unsigned N> void move(channel<N>*) noexcept;
-        template<unsigned N> clock::time_point off_time(const channel<N>*, bool, clock::time_point) const noexcept;
+        template<unsigned N> void update(opl_voice<N>* ch);
+        template<unsigned N> void start(opl_voice<N>* ch);
+        template<unsigned N> void stop(opl_voice<N>* ch);
+        template<unsigned N> bool insert_at(std::uint8_t n, opl_voice<N>* ch);
+        template<unsigned N> bool insert(opl_voice<N>*);
+        template<unsigned N> void remove(opl_voice<N>*) noexcept;
+        template<unsigned N> void write(opl_voice<N>*);
+        template<unsigned N> void move(opl_voice<N>*) noexcept;
+        template<unsigned N> clock::time_point off_time(const opl_voice<N>*, bool, clock::time_point) const noexcept;
 
         opl_config cfg { };
-        std::array<channel_4op*, 6> channels_4op { };
-        std::array<channel_2op*, 18> channels_2op { };
+        std::array<opl_voice_4op*, 6> channels_4op { };
+        std::array<opl_voice_2op*, 18> channels_2op { };
     };
+
+    template<unsigned N>
+    struct opl_voice_base : opl_channel
+    {
+        static_assert(N == 2 or N == 4);
+
+        std::uint8_t connection : N / 2;
+        std::array<opl_operator, N> op;
+        int priority;
+    };
+
+    template<unsigned N>
+    struct opl_voice final : opl_voice_base<N>
+    {
+        using base = opl_voice_base<N>;
+        using clock = opl_driver::clock;
+        friend struct opl;
+
+        constexpr opl_voice() noexcept = default;
+        ~opl_voice() { if (allocated()) owner->remove(this); }
+
+        opl_voice(const opl_voice&) noexcept;
+        opl_voice& operator=(const opl_voice&) noexcept;
+        opl_voice(opl_voice&& c) noexcept;
+        opl_voice& operator=(opl_voice&& c) noexcept;
+
+        void freq(const opl& o, float f) noexcept           { base::freq(o, f); }
+        void note(const opl& o, int n) noexcept             { base::note(o, n); }
+        void note(const opl& o, long double n) noexcept     { base::note(o, n); }
+        bool key_on(opl& o)                                 { return o.insert(this); }
+        void key_off()                                      { if (allocated()) owner->stop(this); }
+        void update()                                       { if (allocated()) owner->update(this); }
+        bool silent() const noexcept                        { return not allocated() or off_time < clock::now(); }
+        bool silent_at(clock::time_point t) const noexcept  { return not allocated() or off_time < t; }
+        bool allocated() const noexcept                     { return owner != nullptr; }
+
+        static opl_voice from_bytes(std::span<const std::byte, sizeof(base)>) noexcept;
+        std::array<std::byte, sizeof(base)> to_bytes() const noexcept;
+
+    private:
+        opl_voice(const base& c) noexcept : base { c } { };
+
+        bool key_on() const noexcept { return base::key_on; }
+        void key_on(bool v) noexcept { base::key_on = v; }
+
+        opl* owner { nullptr };
+        unsigned channel_num { };
+        clock::time_point on_time { };
+        clock::time_point off_time { };
+    };
+
+    template<unsigned N>
+    opl_voice<N>::opl_voice(const opl_voice& c) noexcept
+        : base { c }
+    {
+        base::key_on = false;
+    }
+
+    template<unsigned N>
+    opl_voice<N>& opl_voice<N>::operator=(const opl_voice& c) noexcept
+    {
+        const bool k = base::key_on;
+        *static_cast<base*>(this) = c;
+        base::key_on = k;
+        return *this;
+    }
+
+    template<unsigned N>
+    opl_voice<N>::opl_voice(opl_voice&& c) noexcept
+        : base { std::move(c) }
+        , owner { std::move(c.owner) }
+        , channel_num { std::move(c.channel_num) }
+        , on_time { std::move(c.on_time) }
+        , off_time { std::move(c.off_time) }
+    {
+        if (owner != nullptr) owner->move(this);
+        c.owner = nullptr;
+        c.base::key_on = false;
+    }
+
+    template<unsigned N>
+    opl_voice<N>& opl_voice<N>::operator=(opl_voice&& c) noexcept
+    {
+        this->~opl_voice();
+        return *new (this) opl_voice { std::move(c) };
+    }
+
+    template<unsigned N>
+    opl_voice<N> opl_voice<N>::from_bytes(std::span<const std::byte, sizeof(base)> bytes) noexcept
+    {
+        return *reinterpret_cast<const base*>(bytes.data());
+    }
+
+    template<unsigned N>
+    std::array<std::byte, sizeof(typename opl_voice<N>::base)> opl_voice<N>::to_bytes() const noexcept
+    {
+        std::array<std::byte, sizeof(base)> array;
+        std::memcpy(array.data(), this, sizeof(base));
+        reinterpret_cast<base*>(array.data())->key_on = false;
+        return array;
+    }
 }
 
 namespace jw::audio::detail
