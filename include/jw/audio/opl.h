@@ -177,9 +177,9 @@ namespace jw::audio
         void note(const basic_opl&, int) noexcept;
 
         template<unsigned sample_rate, long double A4 = 440.L>
-        void note(long double) noexcept;
+        void pitch(long double) noexcept;
         template<long double A4 = 440.L>
-        void note(const basic_opl&, long double) noexcept;
+        void pitch(const basic_opl&, long double) noexcept;
 
         void output(std::bitset<4> value) noexcept;
         constexpr std::bitset<4> output() const noexcept;
@@ -350,7 +350,7 @@ namespace jw::audio
 
         void freq(const opl& o, float f) noexcept           { base::freq(o, f); }
         void note(const opl& o, int n) noexcept             { base::note(o, n); }
-        void note(const opl& o, long double n) noexcept     { base::note(o, n); }
+        void pitch(const opl& o, long double n) noexcept    { base::pitch(o, n); }
         bool key_on(opl& o)                                 { return o.insert(this); }
         void key_off()                                      { if (allocated()) owner->stop(this); }
         void update()                                       { if (allocated()) owner->update(this); }
@@ -481,7 +481,7 @@ namespace jw::audio::detail
 
     // Set fnum from floating-point MIDI note.
     template<unsigned sample_rate, long double A4>
-    inline constexpr auto opl_note(long double midi_note) noexcept
+    inline constexpr auto opl_pitch(long double midi_note) noexcept
     {
         constexpr auto constant = 20 + log2(A4 / sample_rate);
         const auto exp = (midi_note - 69) / 12 + constant;
@@ -510,9 +510,9 @@ namespace jw::audio
     }
 
     template<unsigned sample_rate, long double A4>
-    inline void opl_channel::note(long double midi_note) noexcept
+    inline void opl_channel::pitch(long double midi_note) noexcept
     {
-        auto [f, b] = detail::opl_note<sample_rate, A4>(midi_note);
+        auto [f, b] = detail::opl_pitch<sample_rate, A4>(midi_note);
         freq_num = f;
         freq_block = b;
     }
@@ -531,10 +531,10 @@ namespace jw::audio
     }
 
     template<long double A4>
-    inline void opl_channel::note(const basic_opl& opl, long double midi_note) noexcept
+    inline void opl_channel::pitch(const basic_opl& opl, long double midi_note) noexcept
     {
-        if (opl.type() == opl_type::opl3_l) note<49518, A4>(midi_note);
-        else note<49716, A4>(midi_note);
+        if (opl.type() == opl_type::opl3_l) pitch<49518, A4>(midi_note);
+        else pitch<49716, A4>(midi_note);
     }
 
     inline void opl_channel::output(std::bitset<4> value) noexcept
