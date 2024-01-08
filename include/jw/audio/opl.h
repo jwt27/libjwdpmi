@@ -478,15 +478,11 @@ namespace jw::audio
     template<long double sample_rate, long double A4 = 440.L>
     inline constexpr opl_frequency opl_pitch(long double midi_note) noexcept
     {
-        constexpr long double constant = -69 + 12 * (20 + __builtin_log2l(A4 / sample_rate));
+        constexpr long double constant = -69 + 12 * (21 + __builtin_log2l(A4 / sample_rate));
         const long double exp = (midi_note + constant) * (1.L / 12);
-        const unsigned b = std::max(0, static_cast<int>(std::ceil(exp - __builtin_log2l(1023.L))));
-        if (b < 8)
-        {
-            const unsigned f = __builtin_roundl(__builtin_exp2l(exp - b));
-            return { f, b };
-        }
-        else return { 1023u, 7u };
+        const unsigned b = std::max(0, static_cast<int>(exp - __builtin_log2l(1023.L)));
+        const unsigned f = __builtin_exp2l(exp);
+        return { ((f >> b) + 1) >> 1, std::min(b, 7u) };
     }
 
     template<long double A4 = 440.L>
