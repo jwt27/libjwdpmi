@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2020 - 2023 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2020 - 2024 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 
@@ -18,6 +18,11 @@ namespace jw::audio
     {
         opl2, opl3, opl3_l
     };
+
+    template<opl_type> constexpr long double opl_sample_rate;
+    template<> constexpr long double opl_sample_rate<opl_type::opl2>   =  3'579545.L /  72;
+    template<> constexpr long double opl_sample_rate<opl_type::opl3>   = 14'318182.L / 288;
+    template<> constexpr long double opl_sample_rate<opl_type::opl3_l> = 33'868800.L / 684;
 
     struct [[gnu::packed]] opl_status
     {
@@ -81,7 +86,11 @@ namespace jw::audio
         return table[ch_2op];
     }
 
-    struct basic_opl;
+    struct opl_frequency
+    {
+        unsigned num : 10;
+        unsigned block : 3;
+    };
 
     struct [[gnu::packed]] opl_setup
     {
@@ -121,8 +130,8 @@ namespace jw::audio
         bool chB : 1;
         unsigned : 2;
 
-        void bitset(std::bitset<6> value) noexcept { *reinterpret_cast<std::uint8_t*>(this) = value.to_ulong(); }
-        constexpr std::bitset<6> bitset() const noexcept { return { *reinterpret_cast<const std::uint8_t*>(this) }; }
+        void bitset(std::bitset<6> value) noexcept;
+        std::bitset<6> bitset() const noexcept;
     };
 
     struct [[gnu::packed]] opl_percussion
@@ -167,22 +176,9 @@ namespace jw::audio
         bool key_on : 1;
         unsigned : 2;
 
-        template<unsigned sample_rate>
-        constexpr void freq(float) noexcept;
-        void freq(const basic_opl& opl, float) noexcept;
-
-        template<unsigned sample_rate, long double A4 = 440.L>
-        void note(int) noexcept;
-        template<long double A4 = 440.L>
-        void note(const basic_opl&, int) noexcept;
-
-        template<unsigned sample_rate, long double A4 = 440.L>
-        void pitch(long double) noexcept;
-        template<long double A4 = 440.L>
-        void pitch(const basic_opl&, long double) noexcept;
-
+        void frequency(opl_frequency f) noexcept;
         void output(std::bitset<4> value) noexcept;
-        constexpr std::bitset<4> output() const noexcept;
+        std::bitset<4> output() const noexcept;
     };
 
     struct basic_opl
@@ -348,9 +344,6 @@ namespace jw::audio
         opl_voice(opl_voice&& c) noexcept;
         opl_voice& operator=(opl_voice&& c) noexcept;
 
-        void freq(const opl& o, float f) noexcept           { base::freq(o, f); }
-        void note(const opl& o, int n) noexcept             { base::note(o, n); }
-        void pitch(const opl& o, long double n) noexcept    { base::pitch(o, n); }
         bool key_on(opl& o)                                 { return o.insert(this); }
         void key_off()                                      { if (allocated()) owner->stop(this); }
         void update()                                       { if (allocated()) owner->update(this); }
@@ -423,46 +416,40 @@ namespace jw::audio
         reinterpret_cast<base*>(array.data())->key_on = false;
         return array;
     }
-}
 
-namespace jw::audio::detail
-{
-    template<unsigned sample_rate>
-    inline constexpr unsigned fnum(std::uint8_t blk, float f) noexcept
+    template<long double sample_rate>
+    inline constexpr opl_frequency opl_freq(long double freq) noexcept
     {
-        return static_cast<unsigned>(f * (1 << (20 - blk))) / sample_rate;
+        const unsigned f = __builtin_roundl(freq * ((1 << 20) / sample_rate));
+        const unsigned b = std::max(0, static_cast<int>(std::bit_width(f)) - 10);
+        if (b < 8)
+            return { f >> b, b };
+        else
+            return { 1023u, 7u };
     }
 
-    template<unsigned sample_rate>
-    consteval long double fnum_to_freq(std::uint8_t blk, unsigned fnum) noexcept
+    inline constexpr opl_frequency opl_freq(const auto& opl, float freq) noexcept
     {
-        return fnum * sample_rate / static_cast<long double>(1 << (20 - blk));
-    }
-
-    template<unsigned sample_rate>
-    inline constexpr auto opl_freq(float freq) noexcept
-    {
-        constexpr unsigned max = fnum_to_freq<sample_rate>(7, 1023);
-        constexpr std::uint8_t shift = std::bit_width(static_cast<unsigned>(fnum_to_freq<sample_rate>(0, 1023)));
-
-        const auto f = static_cast<unsigned>(freq);
-        std::uint8_t b = std::bit_width(f) - shift;
-        b += (f << (7 - b)) > max;
-        return std::make_tuple(fnum<sample_rate>(b, freq), b);
+        if (opl.type() == opl_type::opl3_l)
+            return opl_freq<opl_sample_rate<opl_type::opl3_l>>(freq);
+        else return opl_freq<opl_sample_rate<opl_type::opl3>>(freq);
     }
 
     // Set fnum from MIDI note number, using a lookup table.
-    template<unsigned sample_rate, long double A4>
-    inline auto opl_note(int midi_note) noexcept
+    template<long double sample_rate, long double A4 = 440.L>
+    inline opl_frequency opl_note(int midi_note) noexcept
     {
         assume(midi_note < 128);
-        constexpr std::uint8_t max_note = log2(fnum_to_freq<sample_rate>(0, 1023) / A4) * 12 + 69;
+        constexpr std::uint8_t max_note = __builtin_log2l(1023 * (sample_rate / (1 << 20)) / A4) * 12 + 69;
         constexpr std::uint8_t offset = max_note - 11;
         static constexpr auto scale = []
         {
             std::array<std::uint16_t, 12> array;
             for (int i = 0; i < 12; ++i)
-                array[i] = fnum<sample_rate>(0, std::pow(2.0L, (i + offset - 69.0L) / 12.0L) * A4);
+            {
+                const auto f = __builtin_exp2l((i + offset - 69) / 12.0L) * A4;
+                array[i] = __builtin_roundl(f * ((1 << 20) / sample_rate));
+            }
             return array;
         }();
 
@@ -476,65 +463,54 @@ namespace jw::audio::detail
             f >>= -b;
             b = 0;
         }
-        return std::make_tuple(f, b);
+        return { f, static_cast<unsigned>(b) };
+    }
+
+    template<long double A4 = 440.L>
+    inline opl_frequency opl_note(const auto& opl, int midi_note) noexcept
+    {
+        if (opl.type() == opl_type::opl3_l)
+            return opl_note<opl_sample_rate<opl_type::opl3_l>, A4>(midi_note);
+        else return opl_note<opl_sample_rate<opl_type::opl3>, A4>(midi_note);
     }
 
     // Set fnum from floating-point MIDI note.
-    template<unsigned sample_rate, long double A4>
-    inline constexpr auto opl_pitch(long double midi_note) noexcept
+    template<long double sample_rate, long double A4 = 440.L>
+    inline constexpr opl_frequency opl_pitch(long double midi_note) noexcept
     {
-        constexpr auto constant = 20 + log2(A4 / sample_rate);
-        const auto exp = (midi_note - 69) / 12 + constant;
-        const auto b = std::clamp(static_cast<int>(std::ceil(exp - log2(1023.L))), 0, 7);
-        const auto f = round(__builtin_exp2l(exp - b));
-        return std::make_tuple(std::min(static_cast<int>(f), 1023), b);
-    }
-}
-
-namespace jw::audio
-{
-    template<unsigned sample_rate>
-    inline constexpr void opl_channel::freq(float freq) noexcept
-    {
-        auto [f, b] = detail::opl_freq<sample_rate>(freq);
-        freq_num = f;
-        freq_block = b;
+        constexpr long double constant = -69 + 12 * (20 + __builtin_log2l(A4 / sample_rate));
+        const long double exp = (midi_note + constant) * (1.L / 12);
+        const unsigned b = std::max(0, static_cast<int>(std::ceil(exp - __builtin_log2l(1023.L))));
+        if (b < 8)
+        {
+            const unsigned f = __builtin_roundl(__builtin_exp2l(exp - b));
+            return { f, b };
+        }
+        else return { 1023u, 7u };
     }
 
-    template<unsigned sample_rate, long double A4>
-    inline void opl_channel::note(int midi_note) noexcept
+    template<long double A4 = 440.L>
+    inline opl_frequency opl_pitch(const auto& opl, long double midi_note) noexcept
     {
-        auto [f, b] = detail::opl_note<sample_rate, A4>(midi_note);
-        freq_num = f;
-        freq_block = b;
+        if (opl.type() == opl_type::opl3_l)
+            return opl_pitch<opl_sample_rate<opl_type::opl3_l>, A4>(midi_note);
+        else return opl_pitch<opl_sample_rate<opl_type::opl3>, A4>(midi_note);
     }
 
-    template<unsigned sample_rate, long double A4>
-    inline void opl_channel::pitch(long double midi_note) noexcept
+    inline void opl_4op::bitset(std::bitset<6> value) noexcept
     {
-        auto [f, b] = detail::opl_pitch<sample_rate, A4>(midi_note);
-        freq_num = f;
-        freq_block = b;
+        *reinterpret_cast<std::uint8_t*>(this) = value.to_ulong();
     }
 
-    inline void opl_channel::freq(const basic_opl& opl, float f) noexcept
+    inline std::bitset<6> opl_4op::bitset() const noexcept
     {
-        if (opl.type() == opl_type::opl3_l) freq<49518>(f);
-        else freq<49716>(f);
+        return { *reinterpret_cast<const std::uint8_t*>(this) };
     }
 
-    template<long double A4>
-    inline void opl_channel::note(const basic_opl& opl, int midi_note) noexcept
+    inline void opl_channel::frequency(opl_frequency f) noexcept
     {
-        if (opl.type() == opl_type::opl3_l) note<49518, A4>(midi_note);
-        else note<49716, A4>(midi_note);
-    }
-
-    template<long double A4>
-    inline void opl_channel::pitch(const basic_opl& opl, long double midi_note) noexcept
-    {
-        if (opl.type() == opl_type::opl3_l) pitch<49518, A4>(midi_note);
-        else pitch<49716, A4>(midi_note);
+        freq_num = f.num;
+        freq_block = f.block;
     }
 
     inline void opl_channel::output(std::bitset<4> value) noexcept
@@ -544,7 +520,7 @@ namespace jw::audio
         *p |= value.to_ulong() << 4;
     }
 
-    inline constexpr std::bitset<4> opl_channel::output() const noexcept
+    inline std::bitset<4> opl_channel::output() const noexcept
     {
         return { static_cast<unsigned>(*reinterpret_cast<const std::uint8_t*>(this) >> 4) };
     }
