@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2020 - 2023 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2020 - 2024 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <jw/audio/opl.h>
 #include <jw/io/io_error.h>
@@ -97,7 +97,7 @@ namespace jw::audio
     inline void basic_opl::init()
     {
         opl_setup s { };
-        s.enable_waveform_select = type() == opl_type::opl2;
+        s.enable_opl2 = type() == opl_type::opl2;
         s.enable_opl3 = type() != opl_type::opl2;
         s.enable_opl3_l = type() == opl_type::opl3_l;
         s.note_sel = true;

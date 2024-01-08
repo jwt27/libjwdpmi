@@ -95,11 +95,11 @@ namespace jw::audio
     struct [[gnu::packed]] opl_setup
     {
         unsigned test0 : 5;
-        bool enable_waveform_select : 1;        // OPL2 only
+        bool enable_opl2 : 1;
         unsigned test1 : 2;
         unsigned : 6;
         bool note_sel : 1;
-        bool enable_composite_sine_mode : 1;    // OPL2 only
+        bool composite_sine_mode : 1;    // OPL2 only
         unsigned test_opl3 : 6;
         unsigned : 2;
         bool enable_opl3 : 1;
