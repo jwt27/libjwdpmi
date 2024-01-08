@@ -420,15 +420,15 @@ namespace jw::audio
     template<long double sample_rate>
     inline constexpr opl_frequency opl_freq(long double freq) noexcept
     {
-        const unsigned f = __builtin_roundl(freq * ((1 << 20) / sample_rate));
-        const unsigned b = std::max(0, static_cast<int>(std::bit_width(f)) - 10);
+        const unsigned f = freq * ((1 << 21) / sample_rate);
+        const unsigned b = std::max(0, static_cast<int>(std::bit_width(f / 2047)));
         if (b < 8)
-            return { f >> b, b };
+            return { ((f >> b) + 1) >> 1, b };
         else
             return { 1023u, 7u };
     }
 
-    inline constexpr opl_frequency opl_freq(const auto& opl, float freq) noexcept
+    inline constexpr opl_frequency opl_freq(const auto& opl, long double freq) noexcept
     {
         if (opl.type() == opl_type::opl3_l)
             return opl_freq<opl_sample_rate<opl_type::opl3_l>>(freq);
