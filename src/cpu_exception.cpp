@@ -1,11 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2016 - 2024 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <jw/main.h>
 #include <jw/detail/scheduler.h>
@@ -68,8 +62,10 @@ namespace jw::dpmi::detail
     {
         if (info.num != exception_num::general_protection_fault and
             info.num != exception_num::stack_segment_fault) return false;
+        std::uint32_t ds;
         std::size_t limit;
-        asm ("lsl %0, %k1" : "=r" (limit) : "m" (main_ds));
+        asm ("mov %0, %k1" : "=r" (ds) : "m" (main_ds));
+        asm ("lsl %0, %1" : "=r" (limit) : "r" (ds));
         if (limit != 0xfff) return false;
 
         auto id = pending_signals._Find_first();
