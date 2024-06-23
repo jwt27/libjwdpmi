@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2017 - 2023 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2017 - 2024 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <type_traits>
@@ -999,7 +999,7 @@ namespace jw::video
         std::array<px32n, 256> result;
         auto pipe = simd_in | px_convert<px32n> | simd_out;
         for (unsigned i = 0; i < 256; ++i)
-            result[i] = simd_run<default_simd()>(pipe, std::bit_cast<px8n>(static_cast<std::uint8_t>(i)));
+            result[i] = std::get<0>(simd_run<default_simd()>(pipe, std::bit_cast<px8n>(static_cast<std::uint8_t>(i))));
         return result;
     }
 }
