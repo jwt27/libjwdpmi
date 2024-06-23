@@ -1,5 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2022 - 2024 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <jw/audio/sample.h>
@@ -81,7 +81,10 @@ namespace jw::audio::detail
         stopping
     };
 
-    template<any_sample_type_of<sample_u8, sample_i16> T>
+    template<typename T>
+    concept sb_sample_type = any_sample_type_of<T, sample_u8, sample_i16>;
+
+    template<sb_sample_type T>
     struct sb_driver final : device<T>::driver
     {
         sb_driver(sb_config cfg);

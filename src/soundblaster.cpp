@@ -1,6 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2022 - 2024 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <jw/audio/soundblaster.h>
 #include <jw/io/io_error.h>
@@ -271,7 +270,7 @@ namespace jw::audio::detail
         return [drv] { sb_irq<sb16, state>(drv); };
     }
 
-    template<typename T>
+    template<sb_sample_type T>
     sb_driver<T>::sb_driver(sb_config cfg)
         : version { sb_init(cfg.base) }
         , dsp { cfg.base }
@@ -287,14 +286,14 @@ namespace jw::audio::detail
         }
     }
 
-    template<typename T>
+    template<sb_sample_type T>
     sb_driver<T>::~sb_driver()
     {
         stop();
         this_thread::yield_while([this] { return volatile_load(&state) == sb_state::stopping; });
     }
 
-    template<typename T>
+    template<sb_sample_type T>
     void sb_driver<T>::start(const start_parameters& params)
     {
         if (state != sb_state::idle and state != sb_state::stopping)
@@ -402,7 +401,7 @@ namespace jw::audio::detail
         }
     }
 
-    template<typename T>
+    template<sb_sample_type T>
     void sb_driver<T>::stop()
     {
         dpmi::interrupt_mask no_irq { };
@@ -433,7 +432,7 @@ namespace jw::audio::detail
         dsp_speaker_enable(dsp, false);
     }
 
-    template<typename T>
+    template<sb_sample_type T>
     device<T>::buffer_type sb_driver<T>::buffer()
     {
         if (not buffer_pending) return { };
