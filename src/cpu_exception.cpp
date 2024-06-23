@@ -62,10 +62,8 @@ namespace jw::dpmi::detail
     {
         if (info.num != exception_num::general_protection_fault and
             info.num != exception_num::stack_segment_fault) return false;
-        std::uint32_t ds;
         std::size_t limit;
-        asm ("mov %0, %k1" : "=r" (ds) : "m" (main_ds));
-        asm ("lsl %0, %1" : "=r" (limit) : "r" (ds));
+        asm ("lsl %0, %1" : "=r" (limit) : "m" (main_ds));
         if (limit != 0xfff) return false;
 
         auto id = pending_signals._Find_first();
