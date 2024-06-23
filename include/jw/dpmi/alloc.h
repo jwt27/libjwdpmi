@@ -1,10 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2016 - 2024 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <new>
@@ -51,7 +46,7 @@ namespace jw::dpmi
             {
                 return this == &other;
             }
-        } static constinit memres { };
+        } static memres { };
         return &memres;
     }
 
@@ -190,7 +185,7 @@ namespace jw::dpmi
             {
                 return this == &other;
             }
-        } static constinit memres { };
+        } static memres { };
         return &memres;
     }
 
