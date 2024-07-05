@@ -82,13 +82,13 @@ namespace jw::audio
         init();
 
         opl_channel c { };
-        reg<opl_channel> c_tmp;
+        opl_channel c_tmp;
         for (auto j : { 0, 0x100 })
             for (unsigned i = 0; i < 9; ++i)
                 write<true, 0xc0, 0xa0, 0xb0>(c, c_tmp, i | j);
 
         opl_operator o { };
-        reg<opl_operator> o_tmp;
+        opl_operator o_tmp;
         for (auto j : { 0, 0x100 })
             for (unsigned i = 0; i < 18; ++i)
                 write<true, 0x20, 0x40, 0x60, 0x80, 0xe0>(o, o_tmp, i | j);
@@ -121,14 +121,14 @@ namespace jw::audio
     {
         for (unsigned i = 0; i < 36; ++i)
         {
-            opl_operator o { operators[i].value };
+            opl_operator o { operators[i] };
             o.sustain = 0;
             o.release = 0xf;
             write(o, i);
         }
         for (unsigned i = 0; i < 18; ++i)
         {
-            opl_channel c { channels[i].value };
+            opl_channel c { channels[i] };
             c.key_on = false;
             c.freq_block = 0;
             c.freq_num = 0;
@@ -145,7 +145,7 @@ namespace jw::audio
     void basic_opl::write(const opl_timer& value)
     {
         write<false, 0x02, 0x03, 0x04>(value, reg_timer, 0);
-        reg_timer.value.reset_irq = false;
+        reg_timer.reset_irq = false;
     }
 
     void basic_opl::write(const opl_4op& value)
@@ -185,23 +185,22 @@ namespace jw::audio
     }
 
     template<bool force, unsigned... N, typename T>
-    inline void basic_opl::write(const T& v, reg<T>& cache, unsigned offset)
+    inline void basic_opl::write(const T& v, T& cache, unsigned offset)
     {
         static_assert(sizeof...(N) <= sizeof(T));
-        const reg<T> value { v };
-        do_write<force, 0, N...>(value.raw.data(), cache.raw.data(), offset);
+        do_write<force, N...>(as_bytes(v).data(), as_writable_bytes(cache).data(), offset);
     }
 
-    template<bool force, unsigned I, unsigned N, unsigned... Next>
+    template<bool force, unsigned N, unsigned... Next>
     inline void basic_opl::do_write(const std::byte* value, std::byte* cache, unsigned offset)
     {
-        if (force or value[I] != cache[I])
+        if (force or *value != *cache)
         {
-            cache[I] = value[I];
-            drv.write(N + offset, value[I]);
+            *cache = *value;
+            drv.write(N + offset, *value);
         }
         if constexpr (sizeof...(Next) > 0)
-            return do_write<force, I + 1, Next...>(value, cache, offset);
+            return do_write<force, Next...>(value + 1, cache + 1, offset);
     }
 
     void basic_opl::set_4op(std::uint8_t n, bool v)

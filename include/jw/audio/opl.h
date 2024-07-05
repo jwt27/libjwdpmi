@@ -92,6 +92,7 @@ namespace jw::audio
         unsigned block : 3;
     };
 
+    // Registers 0x01, 0x08, 0x101, 0x105
     struct [[gnu::packed]] opl_setup
     {
         unsigned test0 : 5;
@@ -108,6 +109,7 @@ namespace jw::audio
         unsigned : 5;
     };
 
+    // Registers 0x02, 0x03, 0x04
     struct [[gnu::packed]] opl_timer
     {
         unsigned timer0 : 8;
@@ -120,6 +122,7 @@ namespace jw::audio
         bool reset_irq : 1;
     };
 
+    // Register 0x104
     struct [[gnu::packed]] opl_4op
     {
         bool ch0 : 1;
@@ -134,6 +137,7 @@ namespace jw::audio
         std::bitset<6> bitset() const noexcept;
     };
 
+    // Register 0xbd
     struct [[gnu::packed]] opl_percussion
     {
         bool hihat : 1;
@@ -146,6 +150,7 @@ namespace jw::audio
         unsigned tremolo_depth : 1;
     };
 
+    // Registers 0x20, 0x40, 0x60, 0x80, 0xe0
     struct [[gnu::packed]] opl_operator
     {
         unsigned multiplier : 4;
@@ -163,6 +168,7 @@ namespace jw::audio
         unsigned : 5;
     };
 
+    // Registers 0xc0, 0xa0, 0xb0
     struct [[gnu::packed]] opl_channel
     {
         unsigned connection : 1;
@@ -196,12 +202,12 @@ namespace jw::audio
         void write(const opl_operator&, std::uint8_t slot);
         void write(const opl_operator& o, std::uint8_t ch, std::uint8_t osc) { write(o, opl_slot(ch, osc)); }
 
-        const opl_setup&      read_setup() const noexcept { return reg_setup.value; }
-        const opl_timer&      read_timer() const noexcept { return reg_timer.value; }
-        const opl_4op&        read_4op() const noexcept { return reg_4op.value; }
-        const opl_percussion& read_percussion() const noexcept { return reg_percussion.value; }
-        const opl_channel&    read_channel(std::uint8_t ch) const noexcept { return channels[ch].value; }
-        const opl_operator&   read_operator(std::uint8_t osc) const noexcept { return operators[osc].value; }
+        const opl_setup&      read_setup() const noexcept { return reg_setup; }
+        const opl_timer&      read_timer() const noexcept { return reg_timer; }
+        const opl_4op&        read_4op() const noexcept { return reg_4op; }
+        const opl_percussion& read_percussion() const noexcept { return reg_percussion; }
+        const opl_channel&    read_channel(std::uint8_t ch) const noexcept { return channels[ch]; }
+        const opl_operator&   read_operator(std::uint8_t osc) const noexcept { return operators[osc]; }
         const opl_operator&   read_operator(std::uint8_t ch, std::uint8_t osc) const noexcept { return read_operator(opl_slot(ch, osc)); }
 
         bool is_4op(std::uint8_t ch_4op) const noexcept { return read_4op().bitset()[ch_4op]; };
@@ -217,32 +223,19 @@ namespace jw::audio
         basic_opl& operator=(const basic_opl&) = delete;
         basic_opl& operator=(basic_opl&&) = delete;
 
-        template <typename T>
-        struct reg
-        {
-            union
-            {
-                T value;
-                std::array<std::byte, sizeof(T)> raw;
-            };
-
-            constexpr reg() noexcept = default;
-            constexpr reg(const T& v) noexcept : value { v } { }
-        };
-
         template<bool force, unsigned... N, typename T>
-        void write(const T&, reg<T>&, unsigned);
-        template<bool force, unsigned I, unsigned N, unsigned... Next>
+        void write(const T&, T&, unsigned);
+        template<bool force, unsigned N, unsigned... Next>
         void do_write(const std::byte*, std::byte*, unsigned);
         void init();
 
         opl_driver drv;
-        reg<opl_setup> reg_setup;
-        reg<opl_timer> reg_timer;
-        reg<opl_4op> reg_4op;
-        reg<opl_percussion> reg_percussion;
-        std::array<reg<opl_operator>, 36> operators;
-        std::array<reg<opl_channel>, 18> channels;
+        opl_setup reg_setup;
+        opl_timer reg_timer;
+        opl_4op reg_4op;
+        opl_percussion reg_percussion;
+        std::array<opl_operator, 36> operators;
+        std::array<opl_channel, 18> channels;
     };
 
     struct opl_config
@@ -520,6 +513,20 @@ namespace jw::audio
     {
         return { static_cast<unsigned>(*reinterpret_cast<const std::uint8_t*>(this) >> 4) };
     }
+
+#define DEFINE_BYTE_ACCESS(T) \
+    inline auto as_bytes(const T& reg) noexcept { return std::as_bytes(std::span<const T, 1u> { &reg, 1u }); } \
+    inline auto as_writable_bytes(T& reg) noexcept { return std::as_writable_bytes(std::span<T, 1u> { &reg, 1u }); }
+
+    DEFINE_BYTE_ACCESS(opl_status);
+    DEFINE_BYTE_ACCESS(opl_setup);
+    DEFINE_BYTE_ACCESS(opl_timer);
+    DEFINE_BYTE_ACCESS(opl_4op);
+    DEFINE_BYTE_ACCESS(opl_percussion);
+    DEFINE_BYTE_ACCESS(opl_operator);
+    DEFINE_BYTE_ACCESS(opl_channel);
+
+#undef DEFINE_BYTE_ACCESS
 
     static_assert (sizeof(opl_status) == 1);
     static_assert (sizeof(opl_setup) == 4);
