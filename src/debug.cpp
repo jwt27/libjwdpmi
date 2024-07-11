@@ -11,6 +11,7 @@
 #include <unwind.h>
 #include <fmt/format.h>
 #include <fmt/ostream.h>
+#include <fmt/ranges.h>
 #include <jw/main.h>
 #include <jw/dpmi/fpu.h>
 #include <jw/dpmi/dpmi.h>
