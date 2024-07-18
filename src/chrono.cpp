@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2017 - 2023 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2017 - 2024 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <bit>
 #include <jw/chrono.h>
@@ -299,7 +299,7 @@ namespace jw::chrono
         if (not dpmi::cpuid::feature_flags().time_stamp_counter) return;
 
         if (pit_irq.is_enabled())
-            throw std::runtime_error { "Please call tsc::setup() before pit::setup()." };
+            throw std::logic_error { "Please call tsc::setup() before pit::setup()." };
 
         constexpr io::io_port<byte> pic0_mask { 0x21 };
         constexpr std::size_t N = 8;
