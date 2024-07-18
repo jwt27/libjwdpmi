@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2016 - 2023 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2016 - 2024 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <exception>
@@ -80,6 +80,8 @@ namespace jw
 
         template<typename F, typename... A>
         explicit jthread(F&& f, A&&... args)
+            requires (std::invocable<std::decay_t<F>, std::stop_token, std::decay_t<A>...>
+                      or std::invocable<std::decay_t<F>, std::decay_t<A>...>)
             : jthread { config::thread_default_stack_size, std::forward<F>(f), std::forward<A>(args)... } { }
 
         template<typename F, typename... A>
