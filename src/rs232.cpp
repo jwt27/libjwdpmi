@@ -184,7 +184,7 @@ namespace jw::io
         fctrl.enable_fifo = true;
         fctrl.clear_rx = true;
         fctrl.clear_tx = true;
-        fctrl.irq_threshold = uart_fifo_control::bytes_14;
+        fctrl.irq_threshold = uart_fifo_control::bytes_8;
         fifo_control_port(base).write(fctrl);
 
         irq_enable_reg = 0 | irq_enable::data_available;
@@ -613,7 +613,7 @@ namespace jw::io
             break;
 
         case uart_irq_id::data_available:
-            do_sync(id.timeout ? 1 : 14);
+            do_sync(id.timeout ? 1 : 8);
         }
     }
 
