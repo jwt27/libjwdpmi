@@ -3,7 +3,7 @@ CXXFLAGS += -Wno-address-of-packed-member
 
 CXXFLAGS_NOFPU := -mgeneral-regs-only
 
-SRC := debug.cpp chrono.cpp dpmi_error.cpp key.cpp keyboard.cpp
+SRC := globals.cpp debug.cpp chrono.cpp dpmi_error.cpp key.cpp keyboard.cpp
 SRC += keyboard_streambuf.cpp mpu401.cpp opl.cpp pci.cpp ps2_interface.cpp
 SRC += realmode.cpp rs232.cpp scancode.cpp scheduler.cpp soundblaster.cpp
 SRC += vbe.cpp vga.cpp cpu_exception.cpp irq.cpp memory.cpp ring0.cpp main.cpp

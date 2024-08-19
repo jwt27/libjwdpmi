@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2017 - 2023 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2017 - 2024 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <cstring>
 #include <string_view>
@@ -208,27 +208,13 @@ int main(int argc, const char** argv)
     return jw::exit_code;
 }
 
-namespace jw::dpmi
-{
-    constinit static std::optional<mapped_dos_memory<bios_data_area>> bda_memory;
-    bios_data_area* const bda { };
-}
-
-namespace jw::dpmi::detail
-{
-    const selector main_cs { };
-    const selector main_ds { };
-    const selector safe_ds { };
-
-    const bool use_fxsave { false };
-}
-
 namespace jw
 {
-    constinit dpmi::locked_pool_resource* irq_alloc { nullptr };
-    constinit std::atomic_flag irq_alloc_resize { false };
-    constexpr std::size_t irq_alloc_size = config::global_locked_pool_size;
-    constinit std::size_t min_chunk_size { 0 };
+    constinit static std::optional<dpmi::mapped_dos_memory<dpmi::bios_data_area>> bda_memory;
+    constinit static dpmi::locked_pool_resource* irq_alloc { nullptr };
+    constinit static std::atomic_flag irq_alloc_resize { false };
+    constexpr static std::size_t irq_alloc_size = config::global_locked_pool_size;
+    constinit static std::size_t min_chunk_size { 0 };
 
     struct init
     {
@@ -274,14 +260,14 @@ namespace jw
             locking_allocator<locked_pool_resource> irq_alloc_alloc { };
             irq_alloc = new (irq_alloc_alloc.allocate(1)) dpmi::locked_pool_resource { irq_alloc_size };
 
-            const_cast<selector&>(safe_ds) = __djgpp_ds_alias;
-            const_cast<selector&>(main_cs) = get_cs();
-            const_cast<selector&>(main_ds) = get_ds();
+            const_cast<volatile selector&>(safe_ds) = __djgpp_ds_alias;
+            const_cast<volatile selector&>(main_cs) = get_cs();
+            const_cast<volatile selector&>(main_ds) = get_ds();
 
             cpuid::setup();
             asm volatile ("" ::: "memory");
             const auto cpu = dpmi::cpuid::feature_flags();
-            const_cast<bool&>(use_fxsave) = cpu.fxsave;
+            const_cast<volatile bool&>(use_fxsave) = cpu.fxsave;
 
             asm volatile
             (R"(
@@ -312,7 +298,7 @@ namespace jw
             setup_direct_ldt_access();
 
             bda_memory.emplace(1, far_ptr16 { 0x0040, 0x0000 });
-            const_cast<bios_data_area*&>(bda) = bda_memory->near_pointer();
+            const_cast<bios_data_area* volatile&>(bda) = bda_memory->near_pointer();
 
             // Try setting control registers first in ring 3.  If we have no ring0 access, the
             // dpmi host might still trap and emulate control register access.
