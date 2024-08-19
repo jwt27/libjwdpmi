@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2017 - 2023 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2017 - 2024 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <jw/io/mpu401.h>
 #include <jw/chrono.h>
@@ -148,6 +148,8 @@ namespace jw::io
     mpu401_streambuf::int_type mpu401_streambuf::underflow()
     {
         auto* const rx = rx_buf.consumer();
+
+    retry:
         const auto pos = rx->iterator_from_pointer(gptr());
         rx->pop_front_to(clamp_add(pos, -putback_reserve, rx->begin(), pos));
         auto* new_end = rx->contiguous_end(pos);
@@ -178,7 +180,7 @@ namespace jw::io
         {
             if (irq.is_enabled()) this_thread::yield();
             else do_sync();
-            return underflow();
+            goto retry;
         }
 
         setg(rx->contiguous_begin(pos), &*pos, new_end);

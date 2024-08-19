@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2017 - 2023 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2017 - 2024 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <jw/io/rs232.h>
 #include <jw/thread.h>
@@ -258,6 +258,8 @@ namespace jw::io
     rs232_streambuf::int_type rs232_streambuf::underflow()
     {
         auto* const rx = rx_buf.consumer();
+
+    retry:
         const auto pos = rx->iterator_from_pointer(gptr());
         rx->pop_front_to(clamp_add(pos, -putback_reserve, rx->begin(), pos));
         auto* new_end = rx->contiguous_end(pos);
@@ -323,7 +325,7 @@ namespace jw::io
             {
                 this_thread::yield();
             }
-            return underflow();
+            goto retry;
         }
         setg(rx->contiguous_begin(pos), &*pos, new_end);
         return traits_type::to_int_type(*gptr());
