@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2017 - 2023 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2017 - 2024 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <array>
 #include <cstring>
@@ -508,36 +508,41 @@ namespace jw::debug::detail
         fmt::print(*gdb, "%{}#{:0>2x}", output, checksum(output));
     }
 
-    static void send_packet(const std::string_view& output)
+    static void send_packet(std::string_view output)
     {
         if (config::enable_gdb_protocol_dump) fmt::print(stderr, "send --> \"{}\"\n", output);
 
-        static string rle_output { &memres };
-        rle_output.clear();
-        rle_output.reserve(output.size());
-        auto& s = rle_output;
+        static string buf { &memres };
+        buf.resize(output.size());
+        auto* p = buf.data();
 
-        for (std::size_t j, i = 0; i < output.size(); i = j)
+        std::size_t i = 0;
+        while (i < output.size())
         {
-            j = output.find_first_not_of(output[i], i);
-            if (j == output.npos) j = output.size();
+            const auto ch = output[i];
+            auto j = output.find_first_not_of(ch, i);
+            if (j == output.npos)
+                j = output.size();
             auto count = j - i;
             if (count > 3)
             {
-                count = std::min(count, std::size_t { 98 }); // above 98, rle byte would be non - printable
-                if (count == 7 or count == 8) count = 6;    // rle byte can't be '#' or '$'
-                s += output[i];
-                s += '*';
-                s += static_cast<char>(count + 28);
+                count = std::min(count, std::size_t { 98 }); // above 98, RLE byte would be non-printable
+                if (count == 7 or count == 8) count = 6;     // RLE byte can't be '#' or '$'
+                *p++ = ch;
+                *p++ = '*';
+                *p++ = static_cast<char>(count + 28);
             }
             else
             {
-                s.append(count, output[i]);
+                std::memset(p, ch, count);
+                p += count;
             }
+            i += count;
         }
 
-        const auto sum = checksum(rle_output);
-        fmt::print(*gdb, "${}#{:0>2x}", rle_output, sum);
+        const std::string_view rle { buf.data(), p };
+        const auto sum = checksum(rle);
+        fmt::print(*gdb, "${}#{:0>2x}", rle, sum);
         sent_packets.emplace_back(output);
         replied = true;
     }
