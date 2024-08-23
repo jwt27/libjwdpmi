@@ -505,13 +505,15 @@ namespace jw::debug::detail
     // not used
     void send_notification(const std::string_view& output)
     {
-        if (config::enable_gdb_protocol_dump) fmt::print(stderr, "note --> \"{}\"\n", output);
+        if (config::enable_gdb_protocol_dump)
+            fmt::print(stderr, "note --> \"{}\"\n", output);
         fmt::print(*gdb, "%{}#{:0>2x}", output, checksum(output));
     }
 
     static void send_packet(std::string_view output)
     {
-        if (config::enable_gdb_protocol_dump) fmt::print(stderr, "send --> \"{}\"\n", output);
+        if (config::enable_gdb_protocol_dump)
+            fmt::print(stderr, "send --> \"{}\"\n", output);
 
         static string buf { &memres };
         buf.resize(output.size());
@@ -841,7 +843,9 @@ namespace jw::debug::detail
                     continue;
                 }
                 else i = t.signals.erase(i);
-                if (signal == SIGINT) for (auto&&t : threads) t.second.signals.erase(SIGINT);
+                if (signal == SIGINT)
+                    for (auto&&t : threads)
+                        t.second.signals.erase(SIGINT);
 
                 if (not thread_events_enabled and (signal == thread_started or signal == thread_finished))
                     continue;
@@ -1081,10 +1085,13 @@ namespace jw::debug::detail
             {
                 if (packet[0][0] == 'g')
                 {
-                    if (id == all_threads_id) query_thread_id = current_thread_id;
-                    else query_thread_id = id;
+                    if (id == all_threads_id)
+                        query_thread_id = current_thread_id;
+                    else
+                        query_thread_id = id;
                 }
-                else if (packet[0][0] == 'c') control_thread_id = id;
+                else if (packet[0][0] == 'c')
+                    control_thread_id = id;
                 send_packet("OK");
             }
             else send_packet("E00");
@@ -1092,7 +1099,8 @@ namespace jw::debug::detail
         else if (p == 'T')  // is thread alive?
         {
             auto id = decode(packet[0]);
-            if (threads.count(id)) send_packet("OK");
+            if (threads.count(id))
+                send_packet("OK");
             else send_packet("E01");
         }
         else if (p == 'p')  // read one register
@@ -1107,8 +1115,10 @@ namespace jw::debug::detail
         }
         else if (p == 'P')  // write one register
         {
-            if (setreg(static_cast<regnum>(decode(packet[0])), packet[1], query_thread_id)) send_packet("OK");
-            else send_packet("E00");
+            if (setreg(static_cast<regnum>(decode(packet[0])), packet[1], query_thread_id))
+                send_packet("OK");
+            else
+                send_packet("E00");
         }
         else if (p == 'g')  // read registers
         {
@@ -1135,7 +1145,8 @@ namespace jw::debug::detail
                 pos += regsize[reg] * 2;
                 ++reg;
             }
-            if (!fail) send_packet("OK");
+            if (not fail)
+                send_packet("OK");
         }
         else if (p == 'm')  // read memory
         {
@@ -1262,11 +1273,14 @@ namespace jw::debug::detail
     {
         auto* const r = info.registers;
         auto* const f = info.frame;
-        if (debugmsg) fmt::print(stderr, "entering exception 0x{:0>2x} from {:#x}\n",
-                                 std::uint8_t { exc }, std::uintptr_t { f->fault_address.offset });
-        if (not debug_mode)
+        if (debugmsg)
+            fmt::print(stderr, "entering exception 0x{:0>2x} from {:#x}\n",
+                       std::uint8_t { exc }, std::uintptr_t { f->fault_address.offset });
+
+        if (not debug_mode) [[unlikely]]
         {
-            if (debugmsg) fmt::print(stderr, "already killed!\n");
+            if (debugmsg)
+                fmt::print(stderr, "already killed!\n");
             return false;
         }
 
@@ -1275,7 +1289,9 @@ namespace jw::debug::detail
 
         auto leave = [exc, f]
         {
-            for (auto&& w : watchpoints) w.second.reset();
+            for (auto&& w : watchpoints)
+                w.second.reset();
+
             enable_all_breakpoints();
             if (*reinterpret_cast<byte*>(f->fault_address.offset) == 0xcc)  // don't resume on a breakpoint
             {
@@ -1313,7 +1329,8 @@ namespace jw::debug::detail
         {
             if (exc == 0x01 or exc == 0x03)
             {   // breakpoint in debugger code, ignore
-                if (debugmsg) fmt::print(stderr, "reentry caused by breakpoint, ignoring.\n");
+                if (debugmsg)
+                    fmt::print(stderr, "reentry caused by breakpoint, ignoring.\n");
                 leave();
                 f->flags.trap = false;
                 return true;
@@ -1377,7 +1394,8 @@ namespace jw::debug::detail
             {
                 if (t.second.action == thread_info::none)
                 {
-                    if (thread_events_enabled) t.second.set_action('t');
+                    if (thread_events_enabled)
+                        t.second.set_action('t');
                     else t.second.set_action('c');
 
                     if (t.second.thread->get_state() == jw::detail::thread::starting)
@@ -1400,12 +1418,14 @@ namespace jw::debug::detail
                 clear_trap_signals();
             }
 
-            if (debugmsg) fmt::print(stderr, "signals: {}\n",
-                                     fmt::join(current_thread->signals, ", "));
+            if (debugmsg)
+                fmt::print(stderr, "signals: {}\n",
+                           fmt::join(current_thread->signals, ", "));
 
             stop_reply();
 
-            if (config::enable_gdb_interrupts and current_exception.frame->flags.interrupts_enabled) asm("sti");
+            if (config::enable_gdb_interrupts and current_exception.frame->flags.interrupts_enabled)
+                asm ("sti");
 
             auto cant_continue = []
             {
@@ -1453,7 +1473,8 @@ namespace jw::debug::detail
 
     void notify_gdb_thread_event(debug_signals e)
     {
-        if (thread_events_enabled) break_with_signal(e);
+        if (thread_events_enabled)
+            break_with_signal(e);
     }
 
     extern "C" void csignal(int signal)
