@@ -73,9 +73,10 @@ namespace jw::debug::detail
         using std::string_view::basic_string_view;
     };
 
-    std::deque<string, allocator<string>> sent_packets { &memres };
+    string last_sent { &memres };
     string raw_packet_string { &memres };
     std::deque<packet_string, allocator<packet_string>> packet { &memres };
+    bool received { false };
     bool replied { false };
 
     struct thread_info;
@@ -543,83 +544,79 @@ namespace jw::debug::detail
         const std::string_view rle { buf.data(), p };
         const auto sum = checksum(rle);
         fmt::print(*gdb, "${}#{:0>2x}", rle, sum);
-        sent_packets.emplace_back(output);
+        last_sent = rle;
         replied = true;
     }
 
-    static void recv_ack()
+    static bool recv_packet()
     {
-        *gdb << std::flush;
-        if (gdb->rdbuf()->in_avail()) switch (gdb->peek())
-        {
-        case '-':
-            fmt::print(stderr, "NACK --> {}\n", sent_packets.back());
-            if (sent_packets.size() > 0) send_packet(sent_packets.back());
-            [[fallthrough]];
-        case '+':
-            if (sent_packets.size() > 0) sent_packets.pop_back();
-            gdb->get();
-        }
-    }
-
-    static void recv_packet()
-    {
-        char sum_data[2];
-        std::string_view sum { sum_data, 2 };
-        bool bad = false;
-
-    retry:
+        char sum[2];
+        raw_packet_string.clear();
         gdb->clear();
+        gdb->force_flush();
+        if (gdb->rdbuf()->in_avail() == 0)
+            return false;
+
         try
         {
-            recv_ack();
-            switch (gdb->peek())
+            switch (gdb->get())
             {
-            default: gdb->get();
-            case '+':
-            case '-':
-                goto retry;
+            case '-': [[unlikely]]
+                fmt::print(stderr, "NACK --> \"{}\"\n", last_sent);
+                send_packet(last_sent);
+
+            default:
+                return false;
+
             case 0x03:
-                gdb->get();
                 raw_packet_string = "vCtrlC";
                 goto parse;
+
             case '$':
-                gdb->get();
                 break;
             }
 
             replied = false;
+            received = false;
             raw_packet_string.clear();
             std::getline(*gdb, raw_packet_string, '#');
-            sum_data[0] = gdb->get();
-            sum_data[1] = gdb->get();
+            gdb->read(sum, 2);
         }
         catch (const std::exception& e)
         {
+            const auto eof = gdb->eof();
+            const auto bad = gdb->bad();
+            gdb->clear();
+
+            if (eof)
+            {
+                raw_packet_string = "vCtrlC";
+                goto parse;
+            }
+
             fmt::print(stderr, "Error while receiving gdb packet: {}\n", e.what());
-            bad |= gdb->bad();
             if (gdb->rdbuf()->in_avail() != -1)
             {
                 fmt::print(stderr, "Received so far: \"{}\"\n", raw_packet_string);
                 if (bad)
                     fmt::print(stderr, "Malformed character: \'{}\'\n", gdb->get());
                 gdb->put('-');
-                bad = false;
             }
-            goto retry;
+            return false;
         }
 
-        if (decode(sum) == checksum(raw_packet_string)) *gdb << '+';
-        else
+        if (decode(std::string_view { sum, 2 }) != checksum(raw_packet_string)) [[unlikely]]
         {
             fmt::print(stderr, "Bad checksum: \"{}\": {}, calculated: {:0>2x}\n",
                         raw_packet_string, sum, checksum(raw_packet_string));
             gdb->put('-');
-            goto retry;
+            return false;
         }
+        else gdb->put('+');
 
     parse:
-        if (config::enable_gdb_protocol_dump) fmt::print(stderr, "recv <-- \"{}\"\n", raw_packet_string);
+        if (config::enable_gdb_protocol_dump)
+            fmt::print(stderr, "recv <-- \"{}\"\n", raw_packet_string);
         std::size_t pos { 1 };
         packet.clear();
         std::string_view input { raw_packet_string };
@@ -631,6 +628,8 @@ namespace jw::debug::detail
             packet.emplace_back(input.substr(pos, p - pos), input[pos - 1]);
             pos += p - pos + 1;
         }
+        received = true;
+        return true;
     }
 
     template<typename T>
@@ -925,15 +924,15 @@ namespace jw::debug::detail
 
     [[gnu::hot]] static void handle_packet()
     {
-        recv_packet();
-        current_thread->signals.erase(packet_received);
+        if (not received)
+            return;
+        received = false;
 
         static string str { &memres };
         str.clear();
         auto it = std::back_inserter(str);
 
-        //s << std::hex << std::setfill('0');
-        auto& p = packet.front().delim;
+        const char p = packet.front().delim;
         if (p == '?')   // stop reason
         {
             stop_reply(true);
@@ -943,7 +942,7 @@ namespace jw::debug::detail
             auto& q = packet[0];
             if (q == "Supported"sv)
             {
-                sent_packets.clear();
+                last_sent.clear();
                 packet.pop_front();
                 for (auto&& str : packet)
                 {
@@ -1271,17 +1270,8 @@ namespace jw::debug::detail
             return false;
         }
 
-        if (exc == 0x03) f->fault_address.offset -= 1;
-
-        auto catch_exception = []
-        {
-            fmt::print(stderr, "Exception occured while communicating with GDB.\n"
-                               "caused by this packet: {}\n"
-                               "good={} bad={} fail={} eof={}\n",
-                       raw_packet_string,
-                       gdb->good(), gdb->bad(), gdb->fail(), gdb->eof());
-            do { } while (true);
-        };
+        if (exc == 0x03)
+            f->fault_address.offset -= 1;
 
         auto leave = [exc, f]
         {
@@ -1424,24 +1414,36 @@ namespace jw::debug::detail
                         t.second.action == thread_info::none) return true;
                 return false;
             };
+
             do
             {
+                current_thread->signals.erase(packet_received);
+                recv_packet();
                 try
                 {
                     handle_packet();
                 }
                 catch (...)
                 {
+                    // last command caused another exception (most likely page
+                    // fault after a request to read memory)
                     // TODO: determine action based on last packet / signal
-                    if (not replied) send_packet("E04"); // last command caused another exception (most likely page fault after a request to read memory)
+                    if (not replied)
+                        send_packet("E04");
+                    else
+                        print_exception();
                 }
-                recv_ack();
             } while (cant_continue());
-
-            while (sent_packets.size() > 0 and debug_mode) recv_ack();
         }
-        catch (...) { print_exception(); catch_exception(); }
-        asm("cli");
+        catch (...)
+        {
+            fmt::print(stderr, "Exception occured while communicating with GDB.\n"
+                       "last received packet: \"{}\"\n",
+                       raw_packet_string);
+            print_exception();
+            halt();
+        }
+        asm ("cli");
 
         leave();
         debugger_reentry = false;
