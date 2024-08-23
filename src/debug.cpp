@@ -843,9 +843,6 @@ namespace jw::debug::detail
                     continue;
                 }
                 else i = t.signals.erase(i);
-                if (signal == SIGINT)
-                    for (auto&&t : threads)
-                        t.second.signals.erase(SIGINT);
 
                 if (not thread_events_enabled and (signal == thread_started or signal == thread_finished))
                     continue;
@@ -1062,19 +1059,9 @@ namespace jw::debug::detail
             }
             else if (v == "CtrlC")
             {
-                auto already_stopped = []
-                {
-                    for (auto&& t : threads) if (t.second.signals.count(SIGINT)) return true;
-                    return false;
-                };
+                current_thread->signals.insert(SIGINT);
                 send_packet("OK");
-                if (already_stopped()) stop_reply();
-                else
-                {
-                    for (auto&& t : threads) t.second.signals.insert(SIGINT);
-                    if (interrupt_count == 1)
-                        stop_reply();    // breaking in interrupt context yields a useless stack trace
-                }
+                stop_reply();
             }
             else send_packet("");
         }
