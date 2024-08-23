@@ -295,8 +295,10 @@ namespace jw::io
             {
                 err->status = 0;
                 pop();
-                if (eof_on_break) return traits_type::eof();
-                else return underflow();
+                if (eof_on_break)
+                    return traits_type::eof();
+                else
+                    goto retry;
             }
             else if (err->status & line_status::framing_error)
             {
