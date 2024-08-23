@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2017 - 2023 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2017 - 2024 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <jw/dpmi/bda.h>
@@ -173,6 +173,7 @@ namespace jw::io
         void set_rts(bool) noexcept;
         std::uint8_t read_status() noexcept;
         void do_sync(std::size_t = 0) noexcept;
+        void wait();
         void irq_handler() noexcept;
 
         const port_num base;

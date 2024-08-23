@@ -314,17 +314,7 @@ namespace jw::io
 
         if (new_end == &*pos)
         {
-#       ifndef NDEBUG
-            if (dpmi::in_irq_context()) [[unlikely]]
-            {
-                irq_disable no_irq { this };
-                do_sync();
-            }
-            else
-#       endif
-            {
-                this_thread::yield();
-            }
+            wait();
             goto retry;
         }
         setg(rx->contiguous_begin(pos), &*pos, new_end);
@@ -358,19 +348,8 @@ namespace jw::io
         const auto pos = update_tx_stop();
 
         while (tx->full())
-        {
-#       ifndef NDEBUG
-            if (dpmi::in_irq_context()) [[unlikely]]
-            {
-                irq_disable no_irq { this };
-                do_sync();
-            }
-            else
-#       endif
-            {
-                this_thread::yield();
-            }
-        }
+            wait();
+
         tx->fill();
         do_setp(pos);
 
@@ -399,22 +378,9 @@ namespace jw::io
         const auto pos = update_tx_stop();
 
         if (force)
-        {
             while (tx->begin() != pos)
-            {
-#       ifndef NDEBUG
-                if (dpmi::in_irq_context()) [[unlikely]]
-                {
-                    irq_disable no_irq { this };
-                    do_sync();
-                }
-                else
-#       endif
-                {
-                    this_thread::yield();
-                }
-            }
-        }
+                wait();
+
         tx->fill();
         do_setp(pos);
         return 0;
@@ -481,6 +447,21 @@ namespace jw::io
         line_status_reg |= s & line_status::any_errors;
         return line_status_reg | s;
     };
+
+    inline void rs232_streambuf::wait()
+    {
+#   ifndef NDEBUG
+        if (dpmi::in_irq_context())
+        {
+            irq_disable no_irq { this };
+            do_sync();
+        }
+        else
+#   endif
+        {
+            this_thread::yield();
+        }
+    }
 
     // Assumes IRQ is disabled!
     void rs232_streambuf::do_sync(std::size_t rx_minimum) noexcept
