@@ -310,7 +310,7 @@ namespace jw::io
             {
                 err->status &= ~line_status::parity_error;
                 pop();
-                throw parity_error { "RS-232 parity errror" };
+                throw parity_error { "RS-232 parity error" };
             }
         }
 
