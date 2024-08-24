@@ -1551,6 +1551,7 @@ namespace jw::debug::detail
     {
         debug_mode = false;
         serial_irq.reset();
+        gdb.reset();
         watchpoints.clear();
         for (auto&& bp : breakpoints) *reinterpret_cast<std::byte*>(bp.first) = bp.second;
         for (auto&& e : exception_handlers) e.reset();
