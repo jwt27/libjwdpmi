@@ -411,7 +411,7 @@ namespace jw::io
     inline void rs232_streambuf::set_tx() noexcept
     {
         bool enable = tx_buf.consumer()->begin() != tx_stop;
-        enable &= can_tx;
+        enable &= can_tx | closing;
         enable |= not realtime_buf.consumer()->empty();
         if (enable)
             irq_enable_reg |= irq_enable::transmitter_empty;
@@ -425,10 +425,14 @@ namespace jw::io
     // Assumes IRQ is disabled!
     inline void rs232_streambuf::set_rts(bool rts) noexcept
     {
-        if (flow_control == rs232_config::continuous) return;
+        if (flow_control == rs232_config::continuous)
+            return;
 
-        if (can_rx == rts) return;
+        rts &= not closing;
+        if (can_rx == rts)
+            return;
         can_rx = rts;
+
         if (flow_control == rs232_config::xon_xoff)
         {
             realtime_buf.producer()->try_push_back(rts ? xon : xoff);

@@ -188,6 +188,7 @@ namespace jw::io
         std::uint8_t modem_control_reg { };
         std::uint8_t line_status_reg { };
         std::uint8_t irq_enable_reg { };
+        bool closing { false };
         const bool eof_on_break;
         const bool async_flush;
         const decltype(rs232_config::flow_control) flow_control;
