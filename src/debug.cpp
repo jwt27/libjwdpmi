@@ -54,15 +54,15 @@ namespace jw::debug::detail
 
     using string = std::basic_string<char, std::char_traits<char>, allocator<char>>;
 
-    std::pmr::map<std::pmr::string, std::pmr::string> supported { &memres };
-    std::pmr::map<std::uintptr_t, watchpoint> watchpoints { &memres };
-    std::pmr::map<std::uintptr_t, std::byte> breakpoints { &memres };
-    std::map<int, void(*)(int)> signal_handlers { };
+    static std::pmr::map<std::pmr::string, std::pmr::string> supported { &memres };
+    static std::pmr::map<std::uintptr_t, watchpoint> watchpoints { &memres };
+    static std::pmr::map<std::uintptr_t, std::byte> breakpoints { &memres };
+    static std::map<int, void(*)(int)> signal_handlers { };
 
-    std::array<std::unique_ptr<exception_handler>, 0x20> exception_handlers;
-    std::optional<io::rs232_stream> gdb;
-    std::unique_ptr<dpmi::irq_handler> serial_irq;
-    std::optional<dpmi::async_signal> irq_signal;
+    static std::array<std::unique_ptr<exception_handler>, 0x20> exception_handlers;
+    static std::optional<io::rs232_stream> gdb;
+    static std::unique_ptr<dpmi::irq_handler> serial_irq;
+    static std::optional<dpmi::async_signal> irq_signal;
 
     struct packet_string : public std::string_view
     {
@@ -73,20 +73,20 @@ namespace jw::debug::detail
         using std::string_view::basic_string_view;
     };
 
-    string last_sent { &memres };
-    string raw_packet_string { &memres };
-    std::deque<packet_string, allocator<packet_string>> packet { &memres };
-    bool received { false };
-    bool replied { false };
+    static string last_sent { &memres };
+    static string raw_packet_string { &memres };
+    static std::deque<packet_string, allocator<packet_string>> packet { &memres };
+    static bool received { false };
+    static bool replied { false };
 
     struct thread_info;
     using thread_id = jw::detail::thread_id;
-    constexpr thread_id main_thread_id = jw::detail::thread::main_thread_id;
-    constexpr thread_id all_threads_id { 0 };
-    thread_id current_thread_id { 1 };
-    thread_id query_thread_id { 1 };
-    thread_id control_thread_id { all_threads_id };
-    thread_info* current_thread { nullptr };
+    static constexpr thread_id main_thread_id = jw::detail::thread::main_thread_id;
+    static constexpr thread_id all_threads_id { 0 };
+    static thread_id current_thread_id { 1 };
+    static thread_id query_thread_id { 1 };
+    static thread_id control_thread_id { all_threads_id };
+    static thread_info* current_thread { nullptr };
 
     struct thread_info
     {
@@ -189,7 +189,7 @@ namespace jw::debug::detail
         }
     };
 
-    std::pmr::map<thread_id, thread_info> threads { &memres };
+    static std::pmr::map<thread_id, thread_info> threads { &memres };
 
     static void populate_thread_list()
     {
