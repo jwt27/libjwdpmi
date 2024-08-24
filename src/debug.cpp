@@ -438,26 +438,43 @@ namespace jw::debug::detail
     }
 
     // Decode big-endian hex string
-    static auto decode(const std::string_view& in)
+    static auto decode(std::string_view in)
     {
+        static constexpr auto table = []
+        {
+            constexpr std::string_view hex { "0123456789abcdef" };
+            std::array<std::uint8_t, 128> tbl;
+            tbl.fill(0xff);
+            for (unsigned i = 0; i != hex.size(); ++i)
+                tbl[hex[i]] = i;
+            return tbl;
+        }();
+
         std::uint32_t result { };
         if (in[0] == '-') return all_threads_id;
-        for (const auto c : in)
+        for (const std::uint8_t c : in)
         {
+            if (c > table.size())
+                goto fail;
+            const auto nib = table[c];
+            if (nib == 0xff)
+                goto fail;
+
             result <<= 4;
-            if (c >= 'a' and c <= 'f') result |= 10 + c - 'a';
-            else if (c >= '0' and c <= '9') result |= c - '0';
-            else throw std::invalid_argument { "decode() failed: "s + in.data() };
+            result |= nib;
         }
         return result;
+
+    fail:
+        throw std::invalid_argument { "decode() failed: "s + in.data() };
     }
 
     // Decode little-endian hex string
     template <typename T>
-    static bool reverse_decode(const std::string_view& in, T* out, std::size_t len = sizeof(T))
+    static bool reverse_decode(std::string_view in, T* out, std::size_t len = sizeof(T))
     {
         len = std::min(len, in.size() / 2);
-        auto ptr = reinterpret_cast<byte*>(out);
+        auto ptr = reinterpret_cast<std::uint8_t*>(out);
         for (std::size_t i = 0; i < len; ++i)
         {
             ptr[i] = decode(in.substr(i * 2, 2));
