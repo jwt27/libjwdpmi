@@ -61,7 +61,7 @@ namespace jw::debug::detail
 
     static std::array<std::unique_ptr<exception_handler>, 0x20> exception_handlers;
     static std::optional<io::rs232_stream> gdb;
-    static std::unique_ptr<dpmi::irq_handler> serial_irq;
+    static std::optional<dpmi::irq_handler> serial_irq;
     static std::optional<dpmi::async_signal> irq_signal;
 
     struct packet_string : public std::string_view
@@ -1484,7 +1484,7 @@ namespace jw::debug::detail
             handle_exception(exception_num::breakpoint, e);
         });
 
-        serial_irq = std::make_unique<irq_handler>([]
+        serial_irq.emplace([]
         {
             if (debugger_reentry) return;
             if (not packet_available()) return;
@@ -1494,7 +1494,13 @@ namespace jw::debug::detail
         for (auto&& s : { SIGHUP, SIGABRT, SIGTERM, SIGKILL, SIGQUIT, SIGILL, SIGINT })
             signal_handlers[s] = std::signal(s, csignal);
 
-        auto install_exception_handler = [](auto&& e) { exception_handlers[e] = std::make_unique<exception_handler>(e, [e](const auto& i) { return handle_exception(e, i); }); };
+        auto install_exception_handler = [](auto&& e)
+        {
+            exception_handlers[e] = std::make_unique<exception_handler>(e, [e](const auto& i)
+            {
+                return handle_exception(e, i);
+            });
+        };
 
         for (auto e = 0x00; e <= 0x0e; ++e)
             install_exception_handler(e);
