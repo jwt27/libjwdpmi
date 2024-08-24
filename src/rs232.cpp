@@ -349,8 +349,9 @@ namespace jw::io
         auto* const tx = tx_buf.producer();
         const auto pos = update_tx_stop();
 
-        while (tx->full())
-            wait();
+        if (pos == tx->cend())
+            while (tx->full())
+                wait();
 
         tx->fill();
         do_setp(pos);
