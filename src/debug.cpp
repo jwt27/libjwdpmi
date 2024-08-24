@@ -1471,6 +1471,8 @@ namespace jw::debug::detail
                         print_exception();
                 }
             } while (cant_continue());
+
+            gdb->flush();
         }
         catch (...)
         {
@@ -1560,6 +1562,7 @@ namespace jw::debug::detail
         string str { &memres };
         fmt::format_to(std::back_inserter(str), "W{:0>2x}", result);
         send_packet(str);
+        gdb->flush();
         uninstall_gdb_interface();
     }
 }
