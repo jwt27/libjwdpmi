@@ -1043,6 +1043,15 @@ namespace jw::debug::detail
             }
             else if (v == "Cont"sv)
             {
+                struct thread_action
+                {
+                    thread_id id;
+                    std::uintptr_t begin, end;
+                    char action;
+                };
+                thread_action actions[packet.size()];
+                std::size_t n = 0;
+
                 for (std::size_t i = 1; i < packet.size(); ++i)
                 {
                     std::uintptr_t begin { 0 }, end { 0 };
@@ -1061,17 +1070,21 @@ namespace jw::debug::detail
                     if (i + 1 < packet.size() and packet[i + 1].delim == ':')
                     {
                         auto id = decode(packet[i + 1]);
-                        if (threads.count(id)) threads[id].set_action(c, begin, end);
                         ++i;
+                        actions[n++] = { id, begin, end, c };
                     }
                     else
                     {
-                        for (auto&& t : threads)
-                        {
-                            if (t.second.action == thread_info::none)
-                                t.second.set_action(c, begin, end);
-                        }
+                        for (auto& t : threads)
+                            t.second.set_action(c, begin, end);
                     }
+                }
+
+                for (std::size_t i = 0; i != n; ++i)
+                {
+                    auto& a = actions[i];
+                    if (threads.count(a.id))
+                        threads[a.id].set_action(a.action, a.begin, a.end);
                 }
             }
             else if (v == "CtrlC")
