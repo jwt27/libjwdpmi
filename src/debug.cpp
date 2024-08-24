@@ -1355,7 +1355,7 @@ namespace jw::debug::detail
             if (debugmsg)
             {
                 fmt::print(stderr, "debugger re-entry!\n");
-                static_cast<dpmi10_exception_frame*>(f)->print();
+                static_cast<const dpmi10_exception_frame*>(f)->print();
                 r->print();
             }
             throw_cpu_exception(info);
@@ -1402,7 +1402,7 @@ namespace jw::debug::detail
 
             if (debugmsg)
             {
-                static_cast<dpmi10_exception_frame*>(f)->print();
+                static_cast<const dpmi10_exception_frame*>(f)->print();
                 r->print();
             }
             current_exception = info;
