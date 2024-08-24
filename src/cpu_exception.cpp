@@ -61,10 +61,14 @@ namespace jw::dpmi::detail
     bool handle_async_signal(const exception_info& info)
     {
         if (info.num != exception_num::general_protection_fault and
-            info.num != exception_num::stack_segment_fault) return false;
+            info.num != exception_num::stack_segment_fault)
+            return false;
+        if (info.frame->flags.v86_mode)
+            return false;
+
         std::size_t limit;
         asm ("lsl %0, %1" : "=r" (limit) : "m" (main_ds));
-        if (limit != 0xfff) return false;
+        if (limit > 0x1000) return false;
 
         auto id = pending_signals._Find_first();
         if (id != pending_signals.size())
@@ -224,16 +228,22 @@ namespace jw::dpmi::detail
 
     exception_trampoline::~exception_trampoline()
     {
-        if (data->next != nullptr)  // middle of chain
+        interrupt_mask no_irq { };
+
+        if (auto* p = data->prev)
+            p->data->next = data->next;
+
+        if (auto* n = data->next)   // middle of chain
         {
-            data->next->data->prev = data->prev;
-            data->next->chain_to_segment = chain_to_segment;
-            data->next->chain_to_offset = chain_to_offset;
+            n->data->prev = data->prev;
+            n->chain_to_segment = chain_to_segment;
+            n->chain_to_offset = chain_to_offset;
         }
         else                        // last in chain
         {
-            last[data->num] = data->prev;
+            last[data->realmode][data->num] = data->prev;
             far_ptr32 chain_to { chain_to_segment, chain_to_offset };
+
             if (data->realmode)
                 detail::cpu_exception_handlers::set_rm_handler(data->num, chain_to);
             else

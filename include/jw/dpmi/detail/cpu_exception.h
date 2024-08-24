@@ -1,10 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2016 - 2024 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 
@@ -117,16 +112,17 @@ namespace jw::dpmi::detail
         const exception_num num;
         exception_trampoline* next { nullptr };
         exception_trampoline* prev;
-        bool is_dpmi10;
+        const bool is_dpmi10;
         const bool realmode;
 
     private:
         friend struct exception_trampoline;
 
         template <typename F>
-        exception_handler_data(exception_num n, F&& f, bool rm)
+        exception_handler_data(exception_num n, F&& f, bool dpmi10, bool rm)
             : func { std::forward<F>(f) }
             , num { n }
+            , is_dpmi10 { dpmi10 }
             , realmode { rm } { }
     };
 
@@ -151,8 +147,8 @@ namespace jw::dpmi::detail
         }
 
     private:
-        static inline constinit std::array<exception_trampoline*, 0x1f> last { };
         static inline constinit locking_allocator<exception_handler_data> data_alloc { };
+        static inline constinit std::array<std::array<exception_trampoline*, 0x1f>, 2> last { };
 
         static exception_trampoline* allocate();
         static void deallocate(exception_trampoline* p);
@@ -160,26 +156,43 @@ namespace jw::dpmi::detail
 
         template<typename F>
         exception_trampoline(exception_num n, F&& f, bool rm)
-            : data { data_alloc.allocate(1) }
         {
-            data = new (data) exception_handler_data { n, std::forward<F>(f), rm };
-            data->prev = last[n];
-            if (data->prev != nullptr) data->prev->data->next = this;
-            last[n] = this;
-
-            auto chain_to = detail::cpu_exception_handlers::get_pm_handler(n);
-            chain_to_segment = chain_to.segment;
-            chain_to_offset = chain_to.offset;
-
+            bool dpmi10;
             interrupt_mask no_irqs { };
-            const auto p = reinterpret_cast<std::uintptr_t>(&push0_imm32);
+            const auto code = reinterpret_cast<std::uintptr_t>(&push0_imm32);
             if (rm)
             {
-                data->is_dpmi10 = true;
-                detail::cpu_exception_handlers::set_rm_handler(n, { get_cs(), p });
+                auto chain_to = detail::cpu_exception_handlers::get_rm_handler(n);
+                chain_to_segment = chain_to.segment;
+                chain_to_offset = chain_to.offset;
+
+                dpmi10 = true;
+                detail::cpu_exception_handlers::set_rm_handler(n, { get_cs(), code });
             }
-            else data->is_dpmi10 = detail::cpu_exception_handlers::set_pm_handler(n, { get_cs(), p });
-            entry_point = find_entry_point(data->is_dpmi10);
+            else
+            {
+                auto chain_to = detail::cpu_exception_handlers::get_pm_handler(n);
+                chain_to_segment = chain_to.segment;
+                chain_to_offset = chain_to.offset;
+
+                dpmi10 = detail::cpu_exception_handlers::set_pm_handler(n, { get_cs(), code });
+            }
+
+            entry_point = find_entry_point(dpmi10);
+            auto* const p = data_alloc.allocate(1);
+            try
+            {
+                data = new (p) exception_handler_data { n, std::forward<F>(f), dpmi10, rm };
+            }
+            catch (...)
+            {
+                data_alloc.deallocate(p, 1);
+                throw;
+            }
+            data->prev = last[rm][n];
+            if (auto* p = data->prev)
+                p->data->next = this;
+            last[rm][n] = this;
         }
 
         ~exception_trampoline();
