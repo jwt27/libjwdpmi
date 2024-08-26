@@ -132,7 +132,15 @@ namespace jw::dpmi::detail
         static exception_trampoline* create(exception_num n, F&& f, bool rm)
         {
             auto* const p = allocate();
-            return new (p) exception_trampoline { n, std::forward<F>(f), rm };
+            try
+            {
+                return new (p) exception_trampoline { n, std::forward<F>(f), rm };
+            }
+            catch (...)
+            {
+                deallocate(p);
+                throw;
+            }
         }
 
         static void destroy(exception_trampoline* p)
