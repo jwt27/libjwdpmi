@@ -310,7 +310,9 @@ namespace jw::dpmi::detail
                 pop es
             .cfi_def_cfa_offset 0x10
                 call %0
-                add esp, 0x0c
+                add esp, 0x08
+            .cfi_def_cfa_offset 0x08
+                popf
             .cfi_def_cfa_offset 0x04
                 ret
              )" :
