@@ -1,12 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2016 - 2024 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <exception>
@@ -49,3 +42,8 @@ namespace jw
 [[nodiscard]] inline void* operator new[](std::size_t n, const jw::locked_alloc_tag&) { return jw::allocate_locked(n); }
 [[nodiscard]] inline void* operator new  (std::size_t n, std::align_val_t a, const jw::locked_alloc_tag&) { return jw::allocate_locked(n, static_cast<std::size_t>(a)); }
 [[nodiscard]] inline void* operator new[](std::size_t n, std::align_val_t a, const jw::locked_alloc_tag&) { return jw::allocate_locked(n, static_cast<std::size_t>(a)); }
+
+inline void operator delete  (void* p, const jw::locked_alloc_tag&) { jw::free_locked(p, 0); }
+inline void operator delete[](void* p, const jw::locked_alloc_tag&) { jw::free_locked(p, 0); }
+inline void operator delete  (void* p, std::align_val_t a, const jw::locked_alloc_tag&) { jw::free_locked(p, 0, static_cast<std::size_t>(a)); }
+inline void operator delete[](void* p, std::align_val_t a, const jw::locked_alloc_tag&) { jw::free_locked(p, 0, static_cast<std::size_t>(a)); }
