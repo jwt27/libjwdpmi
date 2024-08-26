@@ -58,7 +58,7 @@ namespace jw::dpmi::detail
         std::rethrow_exception(e);
     }
 
-    bool handle_async_signal(const exception_info& info)
+    static bool is_async_signal(const exception_info& info)
     {
         if (info.num != exception_num::general_protection_fault and
             info.num != exception_num::stack_segment_fault)
@@ -67,18 +67,29 @@ namespace jw::dpmi::detail
             return false;
 
         std::size_t limit;
-        asm ("lsl %0, %1" : "=r" (limit) : "m" (main_ds));
-        if (limit > 0x1000) return false;
+        asm("lsl %0, %1" : "=r" (limit) : "m" (main_ds));
 
-        auto id = pending_signals._Find_first();
-        if (id != pending_signals.size())
+        return limit < 0x1000;
+    }
+
+    inline bool handle_async_signal(const exception_info& info)
+    {
+        const auto id = pending_signals._Find_first();
+        if (id == pending_signals.size())
+            return false;
+
+        pending_signals[id] = false;
+
+        local_destructor cleanup { []
         {
-            pending_signals[id] = false;
-            auto& slot = async_signal::slots[id];
-            if (slot.valid()) slot(info);
-        }
-        if (pending_signals.none())
-            descriptor::set_limit(main_ds, __djgpp_selector_limit);
+            if (pending_signals.none())
+               descriptor::set_limit(main_ds, __djgpp_selector_limit);
+        } };
+
+        auto& slot = async_signal::slots[id];
+        if (slot.valid())
+            slot(info);
+
         return true;
     }
 
@@ -97,8 +108,8 @@ namespace jw::dpmi::detail
         bool success = false;
         try
         {
-            if (handle_async_signal(info))
-                success = true;
+            if (is_async_signal(info))
+                success = handle_async_signal(info);
             else
                 success = data->func(info);
         }
