@@ -93,7 +93,7 @@ namespace jw::dpmi::detail
         return true;
     }
 
-    [[gnu::cdecl, gnu::hot]]
+    [[gnu::cdecl]]
     static bool handle_exception(raw_exception_frame* frame) noexcept
     {
         constexpr bool save_fpu { config::save_fpu_on_exception };
@@ -142,7 +142,7 @@ namespace jw::dpmi::detail
     }
 
     template<bool dpmi10_frame>
-    [[gnu::naked, gnu::hot]]
+    [[gnu::naked]]
     static void exception_entry_point()
     {
 #       pragma GCC diagnostic push
