@@ -1,5 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2022 - 2024 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <array>
@@ -51,6 +51,6 @@ namespace jw::dpmi
     private:
         friend bool detail::handle_async_signal(const exception_info&);
         static id_type allocate_id();
-        static inline constinit std::array<jw::function<function_type>, max_signals> slots { };
+        static inline constinit std::array<jw::function<function_type, 4>, max_signals> slots { };
     };
 }

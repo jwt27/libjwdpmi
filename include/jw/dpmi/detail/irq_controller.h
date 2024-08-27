@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2017 - 2023 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2017 - 2024 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <bitset>
@@ -27,7 +27,7 @@ namespace jw::dpmi::detail
         irq_level assigned_irq() const { return irq; }
         bool is_enabled() const { return enabled; }
 
-        function<void()> call;
+        function<void(), 4> call;
         const irq_config_flags flags;
 
     private:

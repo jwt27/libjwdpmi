@@ -108,7 +108,7 @@ namespace jw::dpmi::detail
 
     struct exception_handler_data
     {
-        function<exception_handler_sig> func;
+        function<exception_handler_sig, 4> func;
         const exception_num num;
         exception_trampoline* next { nullptr };
         exception_trampoline* prev;
