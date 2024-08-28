@@ -96,21 +96,9 @@ namespace jw::chrono
 #endif
     }
 
-    template<bool tsc>
-    [[gnu::hot]] static void irq0()
+    static void bios_tick(std::uint32_t count)
     {
-        if constexpr (tsc) last_tsc = rdtsc();
-        pit_ns += ns_per_pit_tick;
-#ifdef JWDPMI_WITH_WATT32
-        pit_ms += ms_per_pit_tick;
-        const auto ms = static_cast<unsigned>(pit_ms);
-        if (ms > 0)
-        {
-            pit_ms -= ms;
-            userTimerTick(ms);
-        }
-#endif
-        pit_bios_count += pit_counter_max;
+        pit_bios_count += count;
         if (pit_bios_count > 0xffff) [[likely]]
         {
             pit_bios_count &= 0xffff;
@@ -138,6 +126,24 @@ namespace jw::chrono
                 dpmi::bda->write(0x40, motor_enable);
             }
         }
+    }
+
+    template<bool tsc>
+    [[gnu::hot]] static void irq0()
+    {
+        if constexpr (tsc)
+            last_tsc = rdtsc();
+        pit_ns += ns_per_pit_tick;
+#ifdef JWDPMI_WITH_WATT32
+        pit_ms += ms_per_pit_tick;
+        const auto ms = static_cast<unsigned>(pit_ms);
+        if (ms > 0)
+        {
+            pit_ms -= ms;
+            userTimerTick(ms);
+        }
+#endif
+        bios_tick(pit_counter_max);
 
         if (pit_counter_max != pit_counter_new_max) [[unlikely]]
         {
@@ -345,6 +351,7 @@ namespace jw::chrono
             );
 
             pic0_mask.write(irq_mask);
+            bios_tick(N * divisor);
         }
 
         std::array<std::uint32_t, N> counts;
