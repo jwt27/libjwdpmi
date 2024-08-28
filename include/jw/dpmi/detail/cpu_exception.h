@@ -246,7 +246,4 @@ namespace jw::dpmi::detail
 
     void setup_exception_handling();
     void uninstall_exception_handlers();
-
-    [[noreturn]]
-    void kill();
 }

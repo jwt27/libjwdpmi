@@ -39,7 +39,6 @@ namespace jw::debug::detail
 
     const bool debugmsg = config::enable_gdb_debug_messages;
 
-    volatile bool debugger_reentry { false };
     bool debug_mode { false };
     volatile int current_signal { -1 };
     bool thread_events_enabled { false };
@@ -50,19 +49,7 @@ namespace jw::debug::detail
     template<typename T = std::byte>
     using allocator = default_constructing_allocator_adaptor<monomorphic_allocator<resource_type, T>>;
 
-    resource_type memres { 1_MB };
-
     using string = std::basic_string<char, std::char_traits<char>, allocator<char>>;
-
-    static std::pmr::map<std::pmr::string, std::pmr::string> supported { &memres };
-    static std::pmr::map<std::uintptr_t, watchpoint> watchpoints { &memres };
-    static std::pmr::map<std::uintptr_t, std::byte> breakpoints { &memres };
-    static std::map<int, void(*)(int)> signal_handlers { };
-
-    static std::array<std::unique_ptr<exception_handler>, 0x20> exception_handlers;
-    static std::optional<io::rs232_stream> gdb;
-    static std::optional<dpmi::irq_handler> serial_irq;
-    static std::optional<dpmi::async_signal> irq_signal;
 
     struct packet_string : public std::string_view
     {
@@ -77,37 +64,23 @@ namespace jw::debug::detail
     static char txbuf[bufsize];
     static std::size_t tx_size { 0 };
 
-    static char* new_tx() noexcept { return txbuf + 1; }
-
-    [[nodiscard]]
-    static char* append(char* p, std::string_view str)
-    {
-        return std::copy(str.begin(), str.end(), p);
-    }
-
-    static string raw_packet_string { &memres };
-    static std::deque<packet_string, allocator<packet_string>> packet { &memres };
-    static bool received { false };
-    static bool replied { false };
-
     struct thread_info;
+    using thread = jw::detail::thread;
     using thread_id = jw::detail::thread_id;
     static constexpr thread_id main_thread_id = jw::detail::thread::main_thread_id;
     static constexpr thread_id all_threads_id { 0 };
-    static thread_id current_thread_id { 1 };
-    static thread_id query_thread_id { 1 };
-    static thread_id control_thread_id { all_threads_id };
+
     static thread_info* current_thread { nullptr };
 
     struct thread_info
     {
         jw::detail::thread* thread;
-        std::pmr::set<std::int32_t> signals { &memres };
+        std::pmr::set<std::int32_t> signals { dpmi::global_locked_pool_resource() };
         std::int32_t last_stop_signal { -1 };
         std::uintptr_t step_range_begin { 0 };
         std::uintptr_t step_range_end { 0 };
         std::int32_t trap_mask { 0 };
-                
+
         enum
         {
             none,
@@ -199,24 +172,6 @@ namespace jw::debug::detail
             }
         }
     };
-
-    static std::pmr::map<thread_id, thread_info> threads { &memres };
-
-    static void populate_thread_list()
-    {
-        for (auto i = threads.begin(); i != threads.end();)
-        {
-            if (jw::detail::scheduler::get_thread(i->first) == nullptr) i = threads.erase(i);
-            else ++i;
-        }
-        for (auto& t : jw::detail::scheduler::all_threads())
-        {
-            threads[t.id].thread = const_cast<jw::detail::thread*>(&t);
-        }
-        current_thread_id = jw::detail::scheduler::current_thread_id();
-        threads[current_thread_id].thread = jw::detail::scheduler::current_thread();
-        current_thread = &threads[current_thread_id];
-    }
 
     // Register order and sizes found in {gdb source}/gdb/regformats/i386/i386.dat
     enum regnum
@@ -410,44 +365,6 @@ namespace jw::debug::detail
         return true;
     }
 
-    static void set_breakpoint(std::uintptr_t at)
-    {
-        auto* ptr = reinterpret_cast<std::byte*>(at);
-        breakpoints.try_emplace(at, *ptr);
-        *ptr = std::byte { 0xcc };
-    }
-
-    static bool clear_breakpoint(std::uintptr_t at)
-    {
-        auto* ptr = reinterpret_cast<std::byte*>(at);
-        const auto i = breakpoints.find(at);
-        if (i != breakpoints.end())
-        {
-            *ptr = i->second;
-            breakpoints.erase(i);
-            return true;
-        }
-        else return false;
-    }
-
-    static bool disable_breakpoint(std::uintptr_t at)
-    {
-        auto* ptr = reinterpret_cast<std::byte*>(at);
-        const auto i = breakpoints.find(at);
-        if (i != breakpoints.end())
-        {
-            *ptr = i->second;
-            return true;
-        }
-        else return false;
-    }
-
-    static void enable_all_breakpoints()
-    {
-        for (auto&& bp : breakpoints)
-            *reinterpret_cast<std::byte*>(bp.first) = std::byte { 0xcc };
-    }
-
     // Decode big-endian hex string
     static auto decode(std::string_view in)
     {
@@ -493,19 +410,30 @@ namespace jw::debug::detail
         return true;
     }
 
+    static char* new_tx() noexcept
+    {
+        return txbuf + 1;
+    }
+
+    [[nodiscard]]
+    static char* append(char* p, std::string_view str)
+    {
+        return std::copy(str.begin(), str.end(), p);
+    }
+
     // Encode little-endian hex string
     template <typename T>
     [[nodiscard]]
-    static char* encode(char* out, T* in, std::size_t len = sizeof(T))
+    static char* encode(char* out, const T* in, std::size_t len = sizeof(T))
     {
-        constexpr char hex[] = "0123456789abcdef";
-        auto* const ptr = reinterpret_cast<const volatile byte*>(in);
+        static constexpr char hex[] = "0123456789abcdef";
+        auto* const ptr = reinterpret_cast<const volatile std::uint8_t*>(in);
 
         for (std::size_t i = 0; i < len; ++i)
         {
-            const byte b = ptr[i];
-            const byte hi = b >> 4;
-            const byte lo = b & 0xf;
+            const auto b = ptr[i];
+            const auto hi = b >> 4;
+            const auto lo = b & 0xf;
             *out++ = hex[hi];
             *out++ = hex[lo];
         }
@@ -518,151 +446,6 @@ namespace jw::debug::detail
         return std::fill_n(p, len * 2, 'x');
     }
 
-    static std::uint8_t checksum(std::string_view s)
-    {
-        std::uint8_t r { 0 };
-        for (std::uint8_t c : s)
-            r += c;
-        return r;
-    }
-
-    static bool packet_available()
-    {
-        return gdb->rdbuf()->in_avail() != 0;
-    }
-
-    static void send_packet(std::string_view output)
-    {
-        if (config::enable_gdb_protocol_dump)
-            fmt::print(stderr, "send --> \"{}\"\n", output);
-
-        if (output.size() > bufsize - 4) [[unlikely]]
-        {
-            fmt::print(stderr, "TX packet too large: {} bytes\n", output.size());
-            halt();
-        }
-
-        auto* p = txbuf;
-        *p++ = '$';
-
-        std::size_t i = 0;
-        while (i < output.size())
-        {
-            const char ch = output[i];
-            auto j = output.find_first_not_of(ch, i);
-            if (j == output.npos)
-                j = output.size();
-            auto n = j - i;
-            if (n > 3)
-            {
-                n = std::min<std::size_t>(n, 98);   // above 98, RLE byte would be non-printable
-                if (n == 7 or n == 8) n = 6;        // RLE byte can't be '#' or '$'
-                *p++ = ch;
-                *p++ = '*';
-                *p++ = static_cast<char>(n + 28);
-            }
-            else p = std::fill_n(p, n, ch);
-            i += n;
-        }
-
-        const auto sum = checksum({ txbuf + 1, p });
-        *p++ = '#';
-        p = encode(p, &sum, 1);
-        tx_size = p - txbuf;
-        gdb->write(txbuf, tx_size);
-        replied = true;
-    }
-
-    static void send_txbuf(const char* end)
-    {
-        return send_packet({ txbuf + 1, end });
-    }
-
-    static bool recv_packet()
-    {
-        char sum[2];
-        raw_packet_string.clear();
-        gdb->clear();
-        gdb->force_flush();
-        if (gdb->rdbuf()->in_avail() == 0)
-            return false;
-
-        try
-        {
-            switch (gdb->get())
-            {
-            case '-': [[unlikely]]
-                fmt::print(stderr, "NACK\n");
-                gdb->write(txbuf, tx_size);
-                [[fallthrough]];
-
-            default:
-                return false;
-
-            case 0x03:
-                raw_packet_string = "vCtrlC";
-                goto parse;
-
-            case '$':
-                break;
-            }
-
-            replied = false;
-            received = false;
-            raw_packet_string.clear();
-            std::getline(*gdb, raw_packet_string, '#');
-            gdb->read(sum, 2);
-        }
-        catch (const std::exception& e)
-        {
-            const auto eof = gdb->eof();
-            const auto bad = gdb->bad();
-            gdb->clear();
-
-            if (eof)
-            {
-                raw_packet_string = "vCtrlC";
-                goto parse;
-            }
-
-            fmt::print(stderr, "Error while receiving gdb packet: {}\n", e.what());
-            if (gdb->rdbuf()->in_avail() != -1)
-            {
-                fmt::print(stderr, "Received so far: \"{}\"\n", raw_packet_string);
-                if (bad)
-                    fmt::print(stderr, "Malformed character: \'{}\'\n", gdb->get());
-                gdb->put('-');
-            }
-            return false;
-        }
-
-        if (decode(std::string_view { sum, 2 }) != checksum(raw_packet_string)) [[unlikely]]
-        {
-            fmt::print(stderr, "Bad checksum: \"{}\": {}, calculated: {:0>2x}\n",
-                        raw_packet_string, sum, checksum(raw_packet_string));
-            gdb->put('-');
-            return false;
-        }
-        else gdb->put('+');
-
-    parse:
-        if (config::enable_gdb_protocol_dump)
-            fmt::print(stderr, "recv <-- \"{}\"\n", raw_packet_string);
-        std::size_t pos { 1 };
-        packet.clear();
-        std::string_view input { raw_packet_string };
-        if (input.size() == 1) packet.emplace_back("", input[0]);
-        while (pos < input.size())
-        {
-            auto p = std::min({ input.find(',', pos), input.find(':', pos), input.find(';', pos), input.find('=', pos) });
-            if (p == input.npos) p = input.size();
-            packet.emplace_back(input.substr(pos, p - pos), input[pos - 1]);
-            pos += p - pos + 1;
-        }
-        received = true;
-        return true;
-    }
-
     template<typename T>
     [[nodiscard]]
     static char* fpu_reg(char* out, regnum reg, const T* fpu)
@@ -670,40 +453,37 @@ namespace jw::debug::detail
         assume(reg >= st0);
         switch (reg)
         {
-            case st0: case st1: case st2: case st3: case st4: case st5: case st6: case st7:
-                return encode(out, &fpu->st[reg - st0], regsize[reg]);
-            case fctrl: { std::uint32_t s = fpu->fctrl; return encode(out, &s); }
-            case fstat: { std::uint32_t s = fpu->fstat; return encode(out, &s); }
-            case ftag:  { std::uint32_t s = fpu->ftag ; return encode(out, &s); }
-            case fiseg: { std::uint32_t s = fpu->fiseg; return encode(out, &s); }
-            case fioff: { std::uint32_t s = fpu->fioff; return encode(out, &s); }
-            case foseg: { std::uint32_t s = fpu->foseg; return encode(out, &s); }
-            case fooff: { std::uint32_t s = fpu->fooff; return encode(out, &s); }
-            case fop:   { std::uint32_t s = fpu->fop  ; return encode(out, &s); }
-            default:
-                if constexpr (std::is_same_v<T, fxsave_data>)
-                {
-                    if (reg == mxcsr) return encode(out, &fpu->mxcsr);
-                    else return encode(out, &fpu->xmm[reg - xmm0]);
-                }
-                else return encode_null(out, regsize[reg]);
+        case st0: case st1: case st2: case st3: case st4: case st5: case st6: case st7:
+            return encode(out, &fpu->st[reg - st0], regsize[reg]);
+        case fctrl: { std::uint32_t s = fpu->fctrl; return encode(out, &s); }
+        case fstat: { std::uint32_t s = fpu->fstat; return encode(out, &s); }
+        case ftag:  { std::uint32_t s = fpu->ftag;  return encode(out, &s); }
+        case fiseg: { std::uint32_t s = fpu->fiseg; return encode(out, &s); }
+        case fioff: { std::uint32_t s = fpu->fioff; return encode(out, &s); }
+        case foseg: { std::uint32_t s = fpu->foseg; return encode(out, &s); }
+        case fooff: { std::uint32_t s = fpu->fooff; return encode(out, &s); }
+        case fop:   { std::uint32_t s = fpu->fop;   return encode(out, &s); }
+        default:
+            if constexpr (std::is_same_v<T, fxsave_data>)
+            {
+                if (reg == mxcsr) return encode(out, &fpu->mxcsr);
+                else return encode(out, &fpu->xmm[reg - xmm0]);
+            }
+            else return encode_null(out, regsize[reg]);
         }
     }
 
     [[nodiscard]]
-    static char* reg(char* out, regnum reg, std::uint32_t id)
+    static char* reg(char* out, regnum reg, thread_info* t)
     {
-        if (threads.count(id) == 0)
-            return encode_null(out, regsize[reg]);
         if (reg > reg_max)
             throw std::out_of_range { "invalid register" };
 
-        auto&& t = threads[id];
-        if (&t == current_thread)
+        if (t == current_thread)
         {
-            auto* const r = current_exception.registers;
-            auto* const f = current_exception.frame;
-            auto* const d10f = static_cast<dpmi10_exception_frame*>(current_exception.frame);
+            const auto* const r = current_exception.registers;
+            const auto* const f = current_exception.frame;
+            const auto* const d10f = static_cast<const dpmi10_exception_frame*>(current_exception.frame);
             const bool dpmi10_frame = current_exception.is_dpmi10_frame;
 
             switch (reg)
@@ -737,10 +517,13 @@ namespace jw::debug::detail
         }
         else
         {
-            auto* t_ptr = t.thread;
+            if (not t)
+                return encode_null(out, regsize[reg]);
+
+            auto* const t_ptr = t->thread;
             if (not t_ptr or t_ptr->get_state() == jw::detail::thread::starting)
                 return encode_null(out, regsize[reg]);
-            auto* r = t_ptr->get_context();
+            const auto* const r = t_ptr->get_context();
             std::uint32_t r_esp = reinterpret_cast<std::uintptr_t>(r) - sizeof(jw::detail::thread_context);
             std::uint32_t r_eip = r->return_address;
             switch (reg)
@@ -781,18 +564,18 @@ namespace jw::debug::detail
         default:
             if constexpr (std::is_same_v<T, fxsave_data>)
             {
-                if (reg == mxcsr) return reverse_decode(value, &fpu->mxcsr, regsize[reg]);
-                else return reverse_decode(value, &fpu->xmm[reg - xmm0], regsize[reg]);
+                if (reg == mxcsr)
+                    return reverse_decode(value, &fpu->mxcsr, regsize[reg]);
+                else
+                    return reverse_decode(value, &fpu->xmm[reg - xmm0], regsize[reg]);
             }
             else return false;
         }
     }
 
-    static bool setreg(regnum reg, const std::string_view& value, std::uint32_t id)
+    static bool set_reg(regnum reg, const std::string_view& value, thread_info* t)
     {
-        if (threads.count(id) == 0) return false;
-        auto&& t = threads[id];
-        if (&t == current_thread)
+        if (t == current_thread)
         {
             auto* const r = current_exception.registers;
             auto* const f = current_exception.frame;
@@ -813,10 +596,14 @@ namespace jw::debug::detail
             case eflags: return reverse_decode(value, &f->raw_eflags, regsize[reg]);
             case cs:     return reverse_decode(value.substr(0, 4), &f->fault_address.segment, 2);
             case ss:     return reverse_decode(value.substr(0, 4), &f->stack.segment, 2);
-            case ds: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->ds, 2); } else return false;
-            case es: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->es, 2); } else return false;
-            case fs: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->fs, 2); } else return false;
-            case gs: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->gs, 2); } else return false;
+            case ds: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->ds, 2); }
+                     else return false;
+            case es: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->es, 2); }
+                     else return false;
+            case fs: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->fs, 2); }
+                     else return false;
+            case gs: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->gs, 2); }
+                     else return false;
             default:
                 auto* const fpu = interrupt_id::get()->fpu;
                 if (fpu == nullptr) return false;
@@ -830,8 +617,11 @@ namespace jw::debug::detail
         }
         else
         {
-            auto* const r = t.thread->get_context();
-            if (debugmsg) fmt::print(stderr, "set thread {:d} register {}={}\n", id, regname[reg], value);
+            if (not t)
+                return false;
+
+            auto* const r = t->thread->get_context();
+            if (debugmsg) fmt::print(stderr, "set thread {:d} register {}={}\n", t->thread->id, regname[reg], value);
             switch (reg)
             {
             case ebx:    return reverse_decode(value, &r->ebx, regsize[reg]);
@@ -847,12 +637,311 @@ namespace jw::debug::detail
         }
     }
 
-    static void stop_reply(bool force = false)
+    static std::uint8_t checksum(std::string_view s)
     {
-        auto do_stop_reply = [force] (auto&& t, bool report_last = false)
+        std::uint8_t r { 0 };
+        for (std::uint8_t c : s)
+            r += c;
+        return r;
+    }
+
+    static void kill()
+    {
+        uninstall_gdb_interface();
+        terminate();
+    }
+
+    struct gdbstub
+    {
+        resource_type memres { 1_MB };
+        string raw_packet_string { &memres };
+        std::deque<packet_string, allocator<packet_string>> packet { &memres };
+        bool received { false };
+        bool replied { false };
+        bool killed { false };
+        std::atomic_flag reentry { false };
+        thread_info* query_thread { nullptr };
+        thread_info* control_thread { nullptr };
+        std::pmr::map<thread_id, thread_info> threads { &memres };
+        std::pmr::map<std::uintptr_t, watchpoint> watchpoints { &memres };
+        std::pmr::map<std::uintptr_t, std::byte> breakpoints { &memres };
+        std::map<int, void(*)(int)> signal_handlers { };
+        std::pmr::map<std::pmr::string, std::pmr::string> supported { &memres };
+        io::rs232_stream com;
+        std::array<std::optional<exception_handler>, 0x20> exception_handlers;
+
+        dpmi::async_signal irq_signal { [this](const exception_info& e)
+        {
+            current_signal = packet_received;
+            handle_exception(exception_num::breakpoint, e);
+        } };
+
+        dpmi::irq_handler serial_irq { [this]
+        {
+            if (reentry.test()) return;
+            if (not packet_available()) return;
+            irq_signal.raise();
+        } };
+
+        gdbstub(const io::rs232_config& cfg)
+            : com { cfg }
+        {
+            com.exceptions(std::ios::failbit | std::ios::badbit | std::ios::eofbit);
+
+            auto install_exception_handler = [&](auto e)
+            {
+                exception_handlers[e].emplace(e, [e, this](const auto& info)
+                {
+                    return handle_exception(e, info);
+                });
+            };
+
+            for (auto e = 0x00; e <= 0x0e; ++e)
+                install_exception_handler(e);
+
+            serial_irq.set_irq(cfg.irq);
+            serial_irq.enable();
+
+            for (auto&& e : { 0x10, 0x11, 0x12, 0x13, 0x14, 0x1e })
+            {
+                try { install_exception_handler(e); }
+                catch (const dpmi_error&) { /* ignore */ }
+            }
+        }
+
+        ~gdbstub()
+        {
+            for (const auto& s : signal_handlers)
+                std::signal(s.first, s.second);
+            for (const auto& bp : breakpoints)
+                *reinterpret_cast<std::byte*>(bp.first) = bp.second;
+            watchpoints.clear();
+        }
+
+        void populate_thread_list();
+
+        void set_breakpoint(std::uintptr_t);
+        bool clear_breakpoint(std::uintptr_t);
+        bool disable_breakpoint(std::uintptr_t);
+        void enable_all_breakpoints();
+
+        void send_packet(std::string_view);
+        void send_txbuf(const char* end);
+        bool recv_packet();
+        bool packet_available();
+
+        void stop_reply(bool force = false);
+        void handle_packet();
+        bool handle_exception(exception_num, const exception_info&);
+    };
+
+    static constinit gdbstub* gdb { nullptr };
+
+    inline void gdbstub::populate_thread_list()
+    {
+        for (auto i = threads.begin(); i != threads.end();)
+        {
+            if (jw::detail::scheduler::get_thread(i->first) == nullptr)
+            {
+                if (query_thread == &i->second)
+                    query_thread = nullptr;
+                if (control_thread == &i->second)
+                    control_thread = nullptr;
+                i = threads.erase(i);
+            }
+            else ++i;
+        }
+        for (auto& t : jw::detail::scheduler::all_threads())
+        {
+            threads[t.id].thread = const_cast<jw::detail::thread*>(&t);
+        }
+        const auto id = jw::detail::scheduler::current_thread_id();
+        threads[id].thread = jw::detail::scheduler::current_thread();
+        current_thread = &threads[id];
+    }
+
+    inline void gdbstub::set_breakpoint(std::uintptr_t at)
+    {
+        auto* ptr = reinterpret_cast<std::byte*>(at);
+        breakpoints.try_emplace(at, *ptr);
+        *ptr = std::byte { 0xcc };
+    }
+
+    inline bool gdbstub::clear_breakpoint(std::uintptr_t at)
+    {
+        auto* const ptr = reinterpret_cast<std::byte*>(at);
+        const auto i = breakpoints.find(at);
+        if (i != breakpoints.end())
+        {
+            *ptr = i->second;
+            breakpoints.erase(i);
+            return true;
+        }
+        else return false;
+    }
+
+    inline bool gdbstub::disable_breakpoint(std::uintptr_t at)
+    {
+        auto* const ptr = reinterpret_cast<std::byte*>(at);
+        const auto i = breakpoints.find(at);
+        if (i != breakpoints.end())
+        {
+            *ptr = i->second;
+            return true;
+        }
+        else return false;
+    }
+
+    inline void gdbstub::enable_all_breakpoints()
+    {
+        for (const auto& bp : breakpoints)
+            *reinterpret_cast<std::byte*>(bp.first) = std::byte { 0xcc };
+    }
+
+    inline bool gdbstub::packet_available()
+    {
+        return com.rdbuf()->in_avail() != 0;
+    }
+
+    inline void gdbstub::send_packet(std::string_view output)
+    {
+        if (config::enable_gdb_protocol_dump)
+            fmt::print(stderr, "send --> \"{}\"\n", output);
+
+        if (output.size() > bufsize - 4) [[unlikely]]
+        {
+            fmt::print(stderr, "TX packet too large: {} bytes\n", output.size());
+            halt();
+        }
+
+        auto* p = txbuf;
+        *p++ = '$';
+
+        std::size_t i = 0;
+        while (i < output.size())
+        {
+            const char ch = output[i];
+            auto j = output.find_first_not_of(ch, i);
+            if (j == output.npos)
+                j = output.size();
+            auto n = j - i;
+            if (n > 3)
+            {
+                n = std::min<std::size_t>(n, 98);   // above 98, RLE byte would be non-printable
+                if (n == 7 or n == 8) n = 6;        // RLE byte can't be '#' or '$'
+                *p++ = ch;
+                *p++ = '*';
+                *p++ = static_cast<char>(n + 28);
+            }
+            else p = std::fill_n(p, n, ch);
+            i += n;
+        }
+
+        const auto sum = checksum({ txbuf + 1, p });
+        *p++ = '#';
+        p = encode(p, &sum, 1);
+        tx_size = p - txbuf;
+        com.write(txbuf, tx_size);
+        replied = true;
+    }
+
+    inline void gdbstub::send_txbuf(const char* end)
+    {
+        return send_packet({ txbuf + 1, end });
+    }
+
+    inline bool gdbstub::recv_packet()
+    {
+        char sum[2];
+        bool bad = false;
+        raw_packet_string.clear();
+        com.clear();
+        com.force_flush();
+        if (com.rdbuf()->in_avail() == 0)
+            return false;
+
+        try
+        {
+            switch (com.get())
+            {
+            case '-': [[unlikely]]
+                fmt::print(stderr, "NACK\n");
+                com.write(txbuf, tx_size);
+                [[fallthrough]];
+
+            default:
+                return false;
+
+            case 0x03:
+                raw_packet_string = "vCtrlC";
+                goto parse;
+
+            case '$':
+                break;
+            }
+
+            replied = false;
+            received = false;
+            raw_packet_string.clear();
+            std::getline(com, raw_packet_string, '#');
+            com.read(sum, 2);
+        }
+        catch (const std::exception& e)
+        {
+            const auto eof = com.eof();
+            bad |= com.bad();
+            com.clear();
+
+            if (eof)
+            {
+                raw_packet_string = "vCtrlC";
+                goto parse;
+            }
+
+            fmt::print(stderr, "Error while receiving gdb packet: {}\n", e.what());
+            if (com.rdbuf()->in_avail() != -1)
+            {
+                fmt::print(stderr, "Received so far: \"{}\"\n", raw_packet_string);
+                if (bad)
+                    fmt::print(stderr, "Malformed character: \'{}\'\n", com.get());
+                com.put('-');
+            }
+            return false;
+        }
+
+        if (decode(std::string_view { sum, 2 }) != checksum(raw_packet_string)) [[unlikely]]
+        {
+            fmt::print(stderr, "Bad checksum: \"{}\": {}, calculated: {:0>2x}\n",
+                        raw_packet_string, sum, checksum(raw_packet_string));
+            com.put('-');
+            return false;
+        }
+        else com.put('+');
+
+    parse:
+        if (config::enable_gdb_protocol_dump)
+            fmt::print(stderr, "recv <-- \"{}\"\n", raw_packet_string);
+        std::size_t pos { 1 };
+        packet.clear();
+        std::string_view input { raw_packet_string };
+        if (input.size() == 1) packet.emplace_back("", input[0]);
+        while (pos < input.size())
+        {
+            auto p = std::min({ input.find(',', pos), input.find(':', pos), input.find(';', pos), input.find('=', pos) });
+            if (p == input.npos) p = input.size();
+            packet.emplace_back(input.substr(pos, p - pos), input[pos - 1]);
+            pos += p - pos + 1;
+        }
+        received = true;
+        return true;
+    }
+
+    inline void gdbstub::stop_reply(bool force)
+    {
+        auto do_stop_reply = [&] (auto& t, bool report_last = false)
         {
             if (t.action == thread_info::none and not force) return false;
-            auto no_stop_signal = [] (auto&& t)
+            auto no_stop_signal = [] (auto& t)
             {
                 if (t.signals.empty()) return true;
                 for (auto&& i : t.signals) if (is_stop_signal(i)) return false;
@@ -892,9 +981,9 @@ namespace jw::debug::detail
                     p = fmt::format_to(p, "T{:0>2x}", posix_signal(signal));
                     if (t_ptr->get_state() != jw::detail::thread::starting)
                     {
-                        p = append(p, "8:"); p = reg(p, eip, t_ptr->id); *p++ = ';';
-                        p = append(p, "4:"); p = reg(p, esp, t_ptr->id); *p++ = ';';
-                        p = append(p, "5:"); p = reg(p, ebp, t_ptr->id); *p++ = ';';
+                        p = append(p, "8:"); p = reg(p, eip, &t); *p++ = ';';
+                        p = append(p, "4:"); p = reg(p, esp, &t); *p++ = ';';
+                        p = append(p, "5:"); p = reg(p, ebp, &t); *p++ = ';';
                     }
                     p = fmt::format_to(p, "thread:{:x};", t_ptr->id);
                     if (signal == thread_started)
@@ -905,7 +994,7 @@ namespace jw::debug::detail
                     {
                         if (signal == watchpoint_hit)
                         {
-                            for (auto&& w : watchpoints)
+                            for (auto& w : watchpoints)
                             {
                                 if (w.second.get_state())
                                 {
@@ -920,7 +1009,7 @@ namespace jw::debug::detail
                         else p = append(p, "swbreak:;");
                     }
                     send_txbuf(p);
-                    query_thread_id = t_ptr->id;
+                    query_thread = &t;
                 }
 
                 if (signal == all_threads_suspended and supported["no-resumed"] == "+")
@@ -935,9 +1024,9 @@ namespace jw::debug::detail
     try_harder:
         if (not do_stop_reply(*current_thread, report_last))
         {
-            auto report_other_threads = [&do_stop_reply, &report_last]
+            auto report_other_threads = [&]
             {
-                for (auto&& t : threads)
+                for (auto& t : threads)
                     if (do_stop_reply(t.second, report_last)) return true;
                 return false;
             };
@@ -949,7 +1038,7 @@ namespace jw::debug::detail
         }
     }
 
-    [[gnu::hot]] static void handle_packet()
+    [[gnu::hot]] inline void gdbstub::handle_packet()
     {
         if (not received)
             return;
@@ -986,7 +1075,7 @@ namespace jw::debug::detail
             else if (q == "C"sv)
             {
                 auto* p = new_tx();
-                p = fmt::format_to(p, "QC{:x}", current_thread_id);
+                p = fmt::format_to(p, "QC{:x}", current_thread->thread->id);
                 send_txbuf(p);
             }
             else if (q == "fThreadInfo"sv)
@@ -1010,7 +1099,7 @@ namespace jw::debug::detail
                 {
                     auto* t = threads[id].thread;
                     fmt::format_to(std::back_inserter(msg), "{}{}: ",
-                                    t->get_name(), id == current_thread_id ? " (*)"sv : ""sv);
+                                    t->get_name(), &threads[id] == current_thread ? " (*)"sv : ""sv);
                     switch (t->get_state())
                     {
                     case jw::detail::thread::starting:    msg += "Starting"sv;    break;
@@ -1112,12 +1201,17 @@ namespace jw::debug::detail
                 if (packet[0][0] == 'g')
                 {
                     if (id == all_threads_id)
-                        query_thread_id = current_thread_id;
+                        query_thread = current_thread;
                     else
-                        query_thread_id = id;
+                        query_thread = &threads.at(id);
                 }
                 else if (packet[0][0] == 'c')
-                    control_thread_id = id;
+                {
+                    if (id == all_threads_id)
+                        control_thread = nullptr;
+                    else
+                        control_thread = &threads.at(id);
+                }
                 send_packet("OK");
             }
             else send_packet("E00");
@@ -1131,29 +1225,29 @@ namespace jw::debug::detail
         }
         else if (p == 'p')  // read one register
         {
-            if (threads.count(query_thread_id))
+            if (query_thread)
             {
                 auto* p = new_tx();
                 auto regn = static_cast<regnum>(decode(packet[0]));
-                p = reg(p, regn, query_thread_id);
+                p = reg(p, regn, query_thread);
                 send_txbuf(p);
             }
             else send_packet("E00");
         }
         else if (p == 'P')  // write one register
         {
-            if (setreg(static_cast<regnum>(decode(packet[0])), packet[1], query_thread_id))
+            if (set_reg(static_cast<regnum>(decode(packet[0])), packet[1], query_thread))
                 send_packet("OK");
             else
                 send_packet("E00");
         }
         else if (p == 'g')  // read registers
         {
-            if (threads.count(query_thread_id))
+            if (query_thread)
             {
                 auto* p = new_tx();
                 for (auto i = eax; i <= gs; ++i)
-                    p = reg(p, i, query_thread_id);
+                    p = reg(p, i, query_thread);
                 send_txbuf(p);
             }
             else send_packet("E00");
@@ -1165,7 +1259,7 @@ namespace jw::debug::detail
             bool fail { false };
             while (pos < packet[0].size())
             {
-                if (fail |= setreg(reg, packet[0].substr(pos), query_thread_id))
+                if (fail |= set_reg(reg, packet[0].substr(pos), query_thread))
                 {
                     send_packet("E00");
                     break;
@@ -1194,8 +1288,7 @@ namespace jw::debug::detail
         }
         else if (p == 'c' or p == 's')  // step/continue
         {
-            auto id = control_thread_id;
-            auto step_continue = [](auto& t)
+            auto step_continue = [this](auto& t)
             {
                 if (packet.size() > 0)
                 {
@@ -1206,15 +1299,15 @@ namespace jw::debug::detail
                 }
                 t.set_action(packet[0].delim);
             };
-            if (id == all_threads_id) for (auto&& t : threads) step_continue(t.second);
-            else if (threads.count(id)) step_continue(threads[id]);
-            else send_packet("E00");
+            if (control_thread == nullptr)
+                for (auto&& t : threads)
+                    step_continue(t.second);
+            else step_continue(*control_thread);
 
         }
         else if (p == 'C' or p == 'S')  // step/continue with signal
         {
-            auto id = control_thread_id;
-            auto step_continue = [](auto& t)
+            auto step_continue = [this](auto& t)
             {
                 if (packet.size() > 1)
                 {
@@ -1225,9 +1318,10 @@ namespace jw::debug::detail
                 }
                 t.set_action(packet[0].delim);
             };
-            if (id == all_threads_id) for (auto&& t : threads) step_continue(t.second);
-            else if (threads.count(id)) step_continue(threads[id]);
-            else send_packet("E00");
+            if (control_thread == nullptr)
+                for (auto&& t : threads)
+                    step_continue(t.second);
+            else step_continue(*control_thread);
         }
         else if (p == 'Z')  // set break/watchpoint
         {
@@ -1290,19 +1384,20 @@ namespace jw::debug::detail
         else if (p == 'k')  // kill
         {
             if (debugmsg) fmt::print(stdout, "KILL signal received.");
-            for (auto&& t : threads) t.second.set_action('c');
-            redirect_exception(current_exception, dpmi::detail::kill);
-
-            auto* p = new_tx();
-            p = fmt::format_to(p, "X{:0>2x}", posix_signal(current_thread->last_stop_signal));
-            send_txbuf(p);
-
-            uninstall_gdb_interface();
+            for (auto&& t : threads)
+                t.second.set_action('c');
+            if (redirect_exception(current_exception, kill))
+            {
+                auto* p = new_tx();
+                p = fmt::format_to(p, "X{:0>2x}", posix_signal(current_thread->last_stop_signal));
+                send_txbuf(p);
+            }
+            else send_packet("E00");
         }
         else send_packet("");   // unknown packet
     }
 
-    [[gnu::hot]] static bool handle_exception(exception_num exc, const exception_info& info)
+    [[gnu::hot]] inline bool gdbstub::handle_exception(exception_num exc, const exception_info& info)
     {
         auto* const r = info.registers;
         auto* const f = info.frame;
@@ -1310,31 +1405,27 @@ namespace jw::debug::detail
             fmt::print(stderr, "entering exception 0x{:0>2x} from {:#x}\n",
                        std::uint8_t { exc }, std::uintptr_t { f->fault_address.offset });
 
-        if (not debug_mode) [[unlikely]]
-        {
-            if (debugmsg)
-                fmt::print(stderr, "already killed!\n");
-            return false;
-        }
-
         if (exc == 0x03)
             f->fault_address.offset -= 1;
 
-        auto leave = [exc, f]
+        auto leave = [&]
         {
-            for (auto&& w : watchpoints)
+            for (auto& w : watchpoints)
                 w.second.reset();
 
             enable_all_breakpoints();
-            if (*reinterpret_cast<byte*>(f->fault_address.offset) == 0xcc)  // don't resume on a breakpoint
+            if (*reinterpret_cast<const std::uint8_t*>(f->fault_address.offset) == 0xcc)
             {
+                // Don't resume on a breakpoint.
                 if (disable_breakpoint(f->fault_address.offset))
-                    f->flags.trap = true;   // trap on next instruction to re-enable
-                else f->fault_address.offset += 1;  // hardcoded breakpoint, safe to skip
+                    f->flags.trap = true;           // trap on next instruction to re-enable
+                else
+                    f->fault_address.offset += 1;   // hardcoded breakpoint, safe to skip
             }
 
-            if (debugmsg) fmt::print(stderr, "leaving exception 0x{:0>2x}, resuming at {:#x}\n",
-                                     std::uint8_t { exc }, std::uintptr_t { f->fault_address.offset });
+            if (debugmsg)
+                fmt::print(stderr, "leaving exception 0x{:0>2x}, resuming at {:#x}\n",
+                           std::uint8_t { exc }, std::uintptr_t { f->fault_address.offset });
         };
 
         auto clear_trap_signals = []
@@ -1348,22 +1439,24 @@ namespace jw::debug::detail
 
         if (f->fault_address.segment != main_cs and f->fault_address.segment != ring0_cs) [[unlikely]]
         {
-            if (exc == exception_num::trap) return true; // keep stepping until we get back to our own code
+            if (exc == exception_num::trap)
+                return true; // keep stepping until we get back to our own code
+
             fmt::print(stderr, "Can't debug this!  CS is neither 0x{:0>4x} nor 0x{:0>4x}.\n"
                                "{}\n",
-                        main_cs, ring0_cs,
-                        cpu_category { }.message(info.num));
+                       main_cs, ring0_cs,
+                       cpu_category { }.message(info.num));
             info.frame->print();
             info.registers->print();
             return false;
         }
 
-        if (debugger_reentry) [[unlikely]]
+        if (reentry.test_and_set()) [[unlikely]]
         {
             if (exc == 0x01 or exc == 0x03)
             {   // breakpoint in debugger code, ignore
                 if (debugmsg)
-                    fmt::print(stderr, "reentry caused by breakpoint, ignoring.\n");
+                    fmt::print(stderr, "re-entry caused by breakpoint, ignoring.\n");
                 leave();
                 f->flags.trap = false;
                 return true;
@@ -1379,7 +1472,6 @@ namespace jw::debug::detail
 
         try
         {
-            debugger_reentry = true;
             populate_thread_list();
             if (packet_available()) current_thread->signals.insert(packet_received);
 
@@ -1389,7 +1481,7 @@ namespace jw::debug::detail
                 current_thread->signals.insert(current_signal);
                 current_signal = -1;
             }
-            else if (exc == exception_num::trap and [] {for (auto&& w : watchpoints) { if (w.second.get_state()) return true; } return false; }())
+            else if (exc == exception_num::trap and [&] {for (auto& w : watchpoints) { if (w.second.get_state()) return true; } return false; }())
             {
                 current_thread->signals.insert(watchpoint_hit);
             }
@@ -1412,7 +1504,8 @@ namespace jw::debug::detail
                 }
                 else
                 {
-                    current_thread->trap_mask = 0;     // serious fault occured, undo trap masks
+                    // serious fault occured, undo trap masks
+                    current_thread->trap_mask = 0;
                 }
             }
 
@@ -1460,9 +1553,9 @@ namespace jw::debug::detail
             if (config::enable_gdb_interrupts and current_exception.frame->flags.interrupts_enabled)
                 asm ("sti");
 
-            auto cant_continue = []
+            auto cant_continue = [this]
             {
-                for (auto&& t : threads)
+                for (auto& t : threads)
                     if (t.second.thread->active() and
                         t.second.action == thread_info::none) return true;
                 return false;
@@ -1488,7 +1581,7 @@ namespace jw::debug::detail
                 }
             } while (cant_continue());
 
-            gdb->flush();
+            com.flush();
         }
         catch (...)
         {
@@ -1501,7 +1594,7 @@ namespace jw::debug::detail
         asm ("cli");
 
         leave();
-        debugger_reentry = false;
+        reentry.clear();
 
         return current_thread->do_action();
     }
@@ -1515,71 +1608,39 @@ namespace jw::debug::detail
     extern "C" void csignal(int signal)
     {
         break_with_signal(signal);
-        signal_handlers[signal](signal);
+        if (gdb)
+            gdb->signal_handlers[signal](signal);
     }
 
     void setup_gdb_interface(io::rs232_config cfg)
     {
-        if (debug_mode) return;
+        if (gdb)
+            return;
+
+        gdb = new (locked) gdbstub { cfg };
+
+        for (int s : { SIGHUP, SIGABRT, SIGTERM, SIGKILL, SIGQUIT, SIGILL, SIGINT })
+            gdb->signal_handlers[s] = std::signal(s, csignal);
+
         debug_mode = true;
-
-        gdb.emplace(cfg);
-        gdb->exceptions(std::ios::failbit | std::ios::badbit | std::ios::eofbit);
-
-        irq_signal.emplace([](const exception_info& e)
-        {
-            current_signal = packet_received;
-            handle_exception(exception_num::breakpoint, e);
-        });
-
-        serial_irq.emplace([]
-        {
-            if (debugger_reentry) return;
-            if (not packet_available()) return;
-            irq_signal->raise();
-        });
-
-        for (auto&& s : { SIGHUP, SIGABRT, SIGTERM, SIGKILL, SIGQUIT, SIGILL, SIGINT })
-            signal_handlers[s] = std::signal(s, csignal);
-
-        auto install_exception_handler = [](auto&& e)
-        {
-            exception_handlers[e] = std::make_unique<exception_handler>(e, [e](const auto& i)
-            {
-                return handle_exception(e, i);
-            });
-        };
-
-        for (auto e = 0x00; e <= 0x0e; ++e)
-            install_exception_handler(e);
-
-        serial_irq->set_irq(cfg.irq);
-        serial_irq->enable();
-
-        for (auto&& e : { 0x10, 0x11, 0x12, 0x13, 0x14, 0x1e })
-        {
-            try { install_exception_handler(e); }
-            catch (const dpmi_error&) { /* ignore */ }
-        }
     }
 
     static void uninstall_gdb_interface()
     {
+        if (gdb)
+            delete gdb;
+        gdb = nullptr;
         debug_mode = false;
-        serial_irq.reset();
-        gdb.reset();
-        watchpoints.clear();
-        for (auto&& bp : breakpoints) *reinterpret_cast<std::byte*>(bp.first) = bp.second;
-        for (auto&& e : exception_handlers) e.reset();
-        for (auto&& s : signal_handlers) std::signal(s.first, s.second);
     }
 
     void notify_gdb_exit(byte result)
     {
+        if (not gdb)
+            return;
         auto* p = new_tx();
         p = fmt::format_to(p, "W{:0>2x}", result);
-        send_txbuf(p);
-        gdb->flush();
+        gdb->send_txbuf(p);
+        gdb->com.flush();
         uninstall_gdb_interface();
     }
 }
@@ -1588,20 +1649,29 @@ namespace jw::debug
 {
     trap_mask::trap_mask() noexcept // TODO: ideally this should treat interrupts as separate 'threads'
     {
-        if (not debug()) { failed = true; return; }
-        if (detail::debugger_reentry) { failed = true; return; }
-        ++detail::threads[jw::detail::scheduler::current_thread_id()].trap_mask;
+        if (not detail::gdb)
+            return;
+        if (detail::gdb->reentry.test())
+            return;
+        ++detail::gdb->threads[jw::detail::scheduler::current_thread_id()].trap_mask;
+        failed = false;
     }
 
     trap_mask::~trap_mask() noexcept
     {
+        if (not detail::gdb)
+            return;
+        if (failed)
+            return;
+
         force_frame_pointer();
-        if (failed) return;
-        auto& t = detail::threads[jw::detail::scheduler::current_thread_id()];
+        auto& t = detail::gdb->threads[jw::detail::scheduler::current_thread_id()];
         t.trap_mask = std::max(t.trap_mask - 1, 0l);
         if (t.trap_mask == 0 and [&t]
         {
-            for (auto&& s : t.signals) if (detail::is_trap_signal(s)) return true;
+            for (auto& s : t.signals)
+                if (detail::is_trap_signal(s))
+                    return true;
             return false;
         }()) break_with_signal(detail::trap_unmasked);
     }

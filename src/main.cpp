@@ -325,7 +325,8 @@ namespace jw
 
         ~init() noexcept
         {
-            if (debug::debug()) debug::detail::notify_gdb_exit(exit_code);
+            if (debug::debug())
+                debug::detail::notify_gdb_exit(exit_code);
         }
 
     private:

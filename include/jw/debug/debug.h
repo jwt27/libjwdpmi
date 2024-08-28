@@ -1,9 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2017 - 2024 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <limits>
@@ -87,7 +83,7 @@ namespace jw
             trap_mask& operator=(const trap_mask&) = delete;
             trap_mask& operator=(trap_mask&&) = delete;
         private:
-            bool failed { false };
+            bool failed { true };
         #else
             constexpr trap_mask() noexcept { }
         #endif

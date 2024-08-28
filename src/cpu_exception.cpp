@@ -127,7 +127,7 @@ namespace jw::dpmi::detail
                 fmt::print(stderr, "Caught exception while handling CPU exception 0x{:0>2x}\n", data->num.value);
                 try { print_exception(); }
                 catch (const abi::__forced_unwind&) { }
-                if (redirect_exception(info, kill)) success = true;
+                if (redirect_exception(info, terminate)) success = true;
                 else std::terminate();
             }
         }
@@ -352,11 +352,6 @@ namespace jw::dpmi::detail
 
     static_assert(sizeof(redirect_trampoline) == sizeof(exception_trampoline));
     static_assert(alignof(redirect_trampoline) == alignof(exception_trampoline));
-
-    void kill()
-    {
-        jw::terminate();
-    }
 
     static bool default_exception_handler(const exception_info& i)
     {
