@@ -311,10 +311,15 @@ namespace jw::chrono
 
         {
             dpmi::interrupt_mask no_irq { };
-            pit_irq = [&sample]
+            pit_irq = [&sample, end = samples.end()]
             {
                 *sample++ = chrono::rdtsc();
                 dpmi::irq_handler::acknowledge<0>();
+                if (sample == end)
+                {
+                    pit_irq.disable();
+                    write_pit(0x10000);
+                }
             };
             pit_irq.enable();
             write_pit(divisor);
@@ -339,9 +344,6 @@ namespace jw::chrono
             );
 
             pic0_mask.write(irq_mask);
-
-            write_pit(0x10000);
-            pit_irq.disable();
         }
 
         std::array<std::uint32_t, N> counts;
