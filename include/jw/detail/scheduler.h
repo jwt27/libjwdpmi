@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2016 - 2023 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2016 - 2024 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <jw/dpmi/irq_check.h>
@@ -7,6 +7,7 @@
 #include <jw/function.h>
 #include <jw/main.h>
 #include <jw/detail/eh_globals.h>
+#include <jw/debug.h>
 #include <functional>
 #include <memory>
 #include <deque>

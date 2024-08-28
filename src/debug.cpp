@@ -15,10 +15,9 @@
 #include <jw/main.h>
 #include <jw/dpmi/fpu.h>
 #include <jw/dpmi/dpmi.h>
-#include <jw/debug/debug.h>
+#include <jw/debug.h>
 #include <jw/dpmi/cpu_exception.h>
 #include <jw/dpmi/detail/selectors.h>
-#include <jw/debug/detail/signals.h>
 #include <jw/io/rs232.h>
 #include <jw/alloc.h>
 #include <jw/dpmi/ring0.h>

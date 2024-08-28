@@ -10,9 +10,8 @@
 #include <fmt/core.h>
 #include <jw/main.h>
 #include <jw/alloc.h>
-#include <jw/debug/debug.h>
+#include <jw/debug.h>
 #include <jw/dpmi/cpu_exception.h>
-#include <jw/debug/detail/signals.h>
 #include <jw/io/rs232.h>
 #include <jw/io/ps2_interface.h>
 #include <jw/dpmi/ring0.h>

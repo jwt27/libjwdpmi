@@ -2,20 +2,18 @@
 /*    Copyright (C) 2016 - 2024 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
+#include <jw/common.h>
+#include <jw/dpmi/lock.h>
+#include <jw/dpmi/irq_mask.h>
+#include <jw/dpmi/irq_check.h>
+#include <jw/alloc.h>
+#include <jw/main.h>
 #include <new>
 #include <memory>
 #include <vector>
 #include <map>
 #include <memory_resource>
 #include <optional>
-
-#include <jw/common.h>
-#include <jw/dpmi/lock.h>
-#include <jw/debug/debug.h>
-#include <jw/dpmi/irq_mask.h>
-#include <jw/dpmi/irq_check.h>
-#include <jw/alloc.h>
-#include <jw/main.h>
 
 namespace jw::dpmi
 {

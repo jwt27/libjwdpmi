@@ -5,7 +5,6 @@
 #include <jw/detail/scheduler.h>
 #include <jw/dpmi/cpu_exception.h>
 #include <jw/dpmi/async_signal.h>
-#include <jw/debug/debug.h>
 #include <jw/dpmi/detail/interrupt_id.h>
 #include <jw/dpmi/detail/selectors.h>
 #include <jw/dpmi/ring0.h>

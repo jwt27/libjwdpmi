@@ -1,18 +1,16 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2016 - 2023 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2016 - 2024 J.W. Jagersma, see COPYING.txt for details    */
 
-#include <algorithm>
-#include <memory_resource>
-#include <cxxabi.h>
-#include <unwind.h>
-#include <fmt/format.h>
 #include <jw/main.h>
 #include <jw/dpmi/irq_mask.h>
 #include <jw/detail/scheduler.h>
 #include <jw/thread.h>
-#include <jw/debug/debug.h>
-#include <jw/debug/detail/signals.h>
 #include <jw/dpmi/realmode.h>
+#include <fmt/format.h>
+#include <cxxabi.h>
+#include <unwind.h>
+#include <algorithm>
+#include <memory_resource>
 #ifdef JWDPMI_WITH_WATT32
 # include <tcp.h>
 #endif

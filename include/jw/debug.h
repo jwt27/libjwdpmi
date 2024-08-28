@@ -2,19 +2,11 @@
 /*    Copyright (C) 2017 - 2024 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
+#include <jw/detail/debug.h>
+#include <jw/dpmi/memory.h>
+#include <fmt/format.h>
 #include <limits>
 #include <source_location>
-#include <fmt/format.h>
-#include <jw/dpmi/memory.h>
-
-namespace jw::debug::detail
-{
-#ifndef NDEBUG
-    extern bool debug_mode;
-    extern volatile int current_signal;
-    struct gdbstub;
-#endif
-}
 
 namespace jw::debug
 {
