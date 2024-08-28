@@ -310,6 +310,7 @@ namespace jw::chrono
         auto* sample = samples.begin();
 
         {
+            debug::trap_mask no_trap { };
             dpmi::interrupt_mask no_irq { };
             pit_irq = [&sample, end = samples.end()]
             {
