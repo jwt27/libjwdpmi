@@ -302,7 +302,7 @@ namespace jw::chrono
             throw std::logic_error { "Please call tsc::setup() before pit::setup()." };
 
         constexpr io::io_port<byte> pic0_mask { 0x21 };
-        constexpr std::size_t N = 8;
+        constexpr std::size_t N = 16;
         constexpr unsigned divisor = 0x1000;
         constexpr long double time = divisor / chrono::pit::max_frequency;
 
@@ -375,17 +375,17 @@ namespace jw::chrono
 
         long double count = most;
 
-        if (max_n < 3)
+        if (max_n < 6)
         {
             // TSC count mode not found.  This generally happens on emulators
             // only, or maybe if the DPMI host executes a non-deterministic
             // amount of code before calling the user IRQ handler.  Or,
             // several NMIs may have occured during sampling.
-            // Discard the first 3 samples and calculate an average.
+            // Discard the first 4 samples and calculate an average.
             std::uint64_t total = 0;
-            for (unsigned i = 4; i < N + 1; ++i)
+            for (unsigned i = 5; i < N + 1; ++i)
                 total += samples[i] - samples[i - 1];
-            count = static_cast<long double>(total) / (N - 3);
+            count = static_cast<long double>(total) / (N - 4);
         }
 
         cpu_freq = count / time;

@@ -1,9 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2017 - 2024 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 
@@ -79,7 +75,7 @@ namespace jw::chrono
         static constexpr bool is_steady { false };
 
         // Calibrate rdtsc using the PIT.  This must be done *before* calling
-        // pit::setup().  A calibration cycle takes ~28ms, during which
+        // pit::setup().  A calibration cycle takes ~55ms, during which
         // interrupts will be disabled.
         static void setup();
 
