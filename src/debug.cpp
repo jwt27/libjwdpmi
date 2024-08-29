@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <string_view>
 #include <set>
+#include <ranges>
 #include <unwind.h>
 #include <fmt/format.h>
 #include <fmt/ostream.h>
@@ -63,17 +64,42 @@ namespace jw::debug::detail
     static char txbuf[bufsize];
     static std::size_t tx_size { 0 };
 
-    struct thread_info;
+    using scheduler = jw::detail::scheduler;
     using thread = jw::detail::thread;
     using thread_id = jw::detail::thread_id;
     static constexpr thread_id main_thread_id = jw::detail::thread::main_thread_id;
     static constexpr thread_id all_threads_id { 0 };
 
-    static thread_info* current_thread { nullptr };
+    struct thread_info;
+
+    static thread_info* get_info(thread* t) noexcept
+    {
+        return static_cast<thread_info*>(t->debug_info);
+    }
+
+    static thread* get_thread(thread_id id) noexcept
+    {
+        auto* const t = scheduler::get_thread(id);
+        if (t and not get_info(t))
+            return nullptr;
+
+        return t;
+    }
+
+    static thread* current_thread() noexcept
+    {
+        return scheduler::current_thread();
+    }
+
+    static auto all_threads()
+    {
+        return scheduler::all_threads()
+            | std::views::transform([](const thread& t) { return const_cast<thread*>(&t); })
+            | std::views::filter([](thread* t) { return get_info(t) != nullptr; });
+    }
 
     struct thread_info
     {
-        jw::detail::thread* thread;
         std::pmr::set<std::int32_t> signals { dpmi::global_locked_pool_resource() };
         std::int32_t last_stop_signal { -1 };
         std::uintptr_t step_range_begin { 0 };
@@ -82,7 +108,6 @@ namespace jw::debug::detail
 
         enum
         {
-            none,
             stop,
             cont,
             step,
@@ -91,68 +116,21 @@ namespace jw::debug::detail
             step_range
         } action;
 
-        std::uintptr_t eip() const noexcept
+        bool stepping() const
         {
-            if (current_thread == this)
-                return current_exception.frame->fault_address.offset;
-            else
-                return thread->get_context()->return_address;
-        }
-
-        void jmp(std::uintptr_t dst) noexcept
-        {
-            if (current_thread == this)
-                current_exception.frame->fault_address.offset = dst;
-            else
-                thread->get_context()->return_address = dst;
-        }
-
-        void trap(bool t) noexcept
-        {
-            if (current_thread == this)
-                current_exception.frame->flags.trap = t;
-            else
-                thread->get_context()->flags.trap = t;
-        };
-
-        void set_action(char a, std::uintptr_t rbegin = 0, std::uintptr_t rend = 0)
-        {
-            thread->resume();
-            if (a == 'c')  // continue
+            switch (action)
             {
-                trap(false);
-                action = cont;
+            case cont:
+            case cont_sig:
+                return false;
+            case step:
+            case step_sig:
+            case step_range:
+            case stop:
+                return true;
+            default:
+                throw std::exception();
             }
-            else if (a == 's')  // step
-            {
-                trap(trap_mask == 0);
-                action = step;
-            }
-            else if (a == 'C')  // continue with signal
-            {
-                trap(false);
-                if (not is_fault_signal(last_stop_signal)) action = cont;
-                else action = cont_sig;
-            }
-            else if (a == 'S')  // step with signal
-            {
-                trap(trap_mask == 0);
-                if (not is_fault_signal(last_stop_signal)) action = step;
-                else action = step_sig;
-            }
-            else if (a == 'r')   // step with range
-            {
-                trap(trap_mask == 0);
-                step_range_begin = rbegin;
-                step_range_end = rend;
-                action = step_range;
-            }
-            else if (a == 't')   // stop
-            {
-                thread->suspend();
-                action = stop;
-            }
-            else throw std::exception { };
         }
 
         bool do_action() const
@@ -167,10 +145,50 @@ namespace jw::debug::detail
             case step_range:
             case stop:
                 return true;
-            default: throw std::exception();
+            default:
+                throw std::exception();
             }
         }
     };
+
+    static void set_action(thread* t, char a, std::uintptr_t rbegin = 0, std::uintptr_t rend = 0)
+    {
+        auto* const ti = get_info(t);
+        switch (a)
+        {
+        case 'c':
+            ti->action = thread_info::cont;
+            break;
+
+        case 's':
+            ti->action = thread_info::step;
+            break;
+
+        case 'C':
+            if (not is_fault_signal(ti->last_stop_signal))
+                ti->action = thread_info::cont;
+            else
+                ti->action = thread_info::cont_sig;
+            break;
+
+        case 'S':
+            if (not is_fault_signal(ti->last_stop_signal))
+                ti->action = thread_info::step;
+            else
+                ti->action = thread_info::step_sig;
+            break;
+
+        case 'r':
+            ti->step_range_begin = rbegin;
+            ti->step_range_end = rend;
+            ti->action = thread_info::step_range;
+            break;
+
+        case 't':
+            // ignore
+            break;
+        }
+    }
 
     // Register order and sizes found in {gdb source}/gdb/regformats/i386/i386.dat
     enum regnum
@@ -259,6 +277,8 @@ namespace jw::debug::detail
         case SIGABRT: return sigabrt;
         case SIGKILL: return sigkill;
         case SIGTERM: return sigterm;
+        case SIGNOFP: return sigemt;
+        case SIGTRAP: return sigtrap;
 
             // other signals
         case continued:
@@ -473,12 +493,12 @@ namespace jw::debug::detail
     }
 
     [[nodiscard]]
-    static char* reg(char* out, regnum reg, thread_info* t)
+    static char* reg(char* out, regnum reg, thread* t)
     {
         if (reg > reg_max)
             throw std::out_of_range { "invalid register" };
 
-        if (t == current_thread)
+        if (t == current_thread())
         {
             const auto* const r = current_exception.registers;
             const auto* const f = current_exception.frame;
@@ -519,10 +539,7 @@ namespace jw::debug::detail
             if (not t)
                 return encode_null(out, regsize[reg]);
 
-            auto* const t_ptr = t->thread;
-            if (not t_ptr or t_ptr->get_state() == jw::detail::thread::starting)
-                return encode_null(out, regsize[reg]);
-            const auto* const r = t_ptr->get_context();
+            const auto* const r = t->get_context();
             std::uint32_t r_esp = reinterpret_cast<std::uintptr_t>(r) - sizeof(jw::detail::thread_context);
             std::uint32_t r_eip = r->return_address;
             switch (reg)
@@ -572,9 +589,9 @@ namespace jw::debug::detail
         }
     }
 
-    static bool set_reg(regnum reg, const std::string_view& value, thread_info* t)
+    static bool set_reg(regnum reg, const std::string_view& value, thread* t)
     {
-        if (t == current_thread)
+        if (t == current_thread())
         {
             auto* const r = current_exception.registers;
             auto* const f = current_exception.frame;
@@ -619,15 +636,14 @@ namespace jw::debug::detail
             if (not t)
                 return false;
 
-            auto* const r = t->thread->get_context();
-            if (debugmsg) fmt::print(stderr, "set thread {:d} register {}={}\n", t->thread->id, regname[reg], value);
+            auto* const r = t->get_context();
+            if (debugmsg) fmt::print(stderr, "set thread {:d} register {}={}\n", t->id, regname[reg], value);
             switch (reg)
             {
             case ebx:    return reverse_decode(value, &r->ebx, regsize[reg]);
             case ebp:    return reverse_decode(value, &r->ebp, regsize[reg]);
             case esi:    return reverse_decode(value, &r->esi, regsize[reg]);
             case edi:    return reverse_decode(value, &r->edi, regsize[reg]);
-            case eip:    return reverse_decode(value, &r->return_address, regsize[reg]);
             case eflags: return reverse_decode(value, &r->flags, regsize[reg]);
             case fs:     return reverse_decode(value.substr(0, 4), &r->fs, 2);
             case gs:     return reverse_decode(value.substr(0, 4), &r->gs, 2);
@@ -659,9 +675,8 @@ namespace jw::debug::detail
         bool replied { false };
         bool killed { false };
         std::atomic_flag reentry { false };
-        thread_info* query_thread { nullptr };
-        thread_info* control_thread { nullptr };
-        std::pmr::map<thread_id, thread_info> threads { &memres };
+        thread* query_thread { nullptr };
+        thread* control_thread { nullptr };
         std::pmr::map<std::uintptr_t, watchpoint> watchpoints { &memres };
         std::pmr::map<std::uintptr_t, std::byte> breakpoints { &memres };
         std::map<int, void(*)(int)> signal_handlers { };
@@ -717,8 +732,6 @@ namespace jw::debug::detail
             watchpoints.clear();
         }
 
-        void populate_thread_list();
-
         void set_breakpoint(std::uintptr_t);
         bool clear_breakpoint(std::uintptr_t);
         bool disable_breakpoint(std::uintptr_t);
@@ -735,29 +748,6 @@ namespace jw::debug::detail
     };
 
     static constinit gdbstub* gdb { nullptr };
-
-    inline void gdbstub::populate_thread_list()
-    {
-        for (auto i = threads.begin(); i != threads.end();)
-        {
-            if (jw::detail::scheduler::get_thread(i->first) == nullptr)
-            {
-                if (query_thread == &i->second)
-                    query_thread = nullptr;
-                if (control_thread == &i->second)
-                    control_thread = nullptr;
-                i = threads.erase(i);
-            }
-            else ++i;
-        }
-        for (auto& t : jw::detail::scheduler::all_threads())
-        {
-            threads[t.id].thread = const_cast<jw::detail::thread*>(&t);
-        }
-        const auto id = jw::detail::scheduler::current_thread_id();
-        threads[id].thread = jw::detail::scheduler::current_thread();
-        current_thread = &threads[id];
-    }
 
     inline void gdbstub::set_breakpoint(std::uintptr_t at)
     {
@@ -851,8 +841,8 @@ namespace jw::debug::detail
 
     inline bool gdbstub::recv_packet()
     {
+        static constinit bool bad = false;
         char sum[2];
-        bool bad = false;
         raw_packet_string.clear();
         com.clear();
         com.force_flush();
@@ -937,9 +927,11 @@ namespace jw::debug::detail
 
     inline void gdbstub::stop_reply(bool force)
     {
-        auto do_stop_reply = [&] (auto& t, bool report_last = false)
+        auto do_stop_reply = [&] (thread* thr, bool report_last = false)
         {
-            if (t.action == thread_info::none and not force) return false;
+            auto& t = *get_info(thr);
+
+            if (t.action == thread_info::stop and not force) return false;
             auto no_stop_signal = [] (auto& t)
             {
                 if (t.signals.empty()) return true;
@@ -947,8 +939,6 @@ namespace jw::debug::detail
                 return true;
             };
             if (no_stop_signal(t) and report_last) t.signals.insert(t.last_stop_signal);
-
-            auto* t_ptr = t.thread;
 
             for (auto i = t.signals.begin(); i != t.signals.end();)
             {
@@ -964,27 +954,22 @@ namespace jw::debug::detail
                 if (not thread_events_enabled and (signal == thread_started or signal == thread_finished))
                     continue;
 
-                t.action = thread_info::none;
+                t.action = thread_info::stop;
                 t.last_stop_signal = signal;
 
                 auto* p = new_tx();
 
                 if (signal == thread_finished)
                 {
-                    const auto status = t_ptr->get_state() == jw::detail::thread::finished ? "00"sv : "ff"sv;
-                    p = fmt::format_to(p, "w{};{:x}", status, t_ptr->id);
-                    send_txbuf(p);
+                    p = fmt::format_to(p, "w00;{:x}", thr->id);
                 }
                 else
                 {
                     p = fmt::format_to(p, "T{:0>2x}", posix_signal(signal));
-                    if (t_ptr->get_state() != jw::detail::thread::starting)
-                    {
-                        p = append(p, "8:"); p = reg(p, eip, &t); *p++ = ';';
-                        p = append(p, "4:"); p = reg(p, esp, &t); *p++ = ';';
-                        p = append(p, "5:"); p = reg(p, ebp, &t); *p++ = ';';
-                    }
-                    p = fmt::format_to(p, "thread:{:x};", t_ptr->id);
+                    p = append(p, "8:"); p = reg(p, eip, thr); *p++ = ';';
+                    p = append(p, "4:"); p = reg(p, esp, thr); *p++ = ';';
+                    p = append(p, "5:"); p = reg(p, ebp, thr); *p++ = ';';
+                    p = fmt::format_to(p, "thread:{:x};", thr->id);
                     if (signal == thread_started)
                     {
                         p = append(p, "create:;"sv);
@@ -1007,9 +992,9 @@ namespace jw::debug::detail
                         }
                         else p = append(p, "swbreak:;");
                     }
-                    send_txbuf(p);
-                    query_thread = &t;
                 }
+                send_txbuf(p);
+                query_thread = thr;
 
                 if (signal == all_threads_suspended and supported["no-resumed"] == "+")
                     send_packet("N");
@@ -1021,12 +1006,13 @@ namespace jw::debug::detail
         bool report_last = false;
 
     try_harder:
-        if (not do_stop_reply(*current_thread, report_last))
+        if (not do_stop_reply(current_thread(), report_last))
         {
             auto report_other_threads = [&]
             {
-                for (auto& t : threads)
-                    if (do_stop_reply(t.second, report_last)) return true;
+                for (auto* t : all_threads())
+                    if (do_stop_reply(t, report_last))
+                        return true;
                 return false;
             };
             if (not report_other_threads() and force)
@@ -1074,17 +1060,15 @@ namespace jw::debug::detail
             else if (q == "C"sv)
             {
                 auto* p = new_tx();
-                p = fmt::format_to(p, "QC{:x}", current_thread->thread->id);
+                p = fmt::format_to(p, "QC{:x}", current_thread()->id);
                 send_txbuf(p);
             }
             else if (q == "fThreadInfo"sv)
             {
                 auto* p = new_tx();
                 *p++ = 'm';
-                for (auto&& t : threads)
-                {
-                    p = fmt::format_to(p, "{:x},", t.first);
-                }
+                for (thread* t : all_threads())
+                    p = fmt::format_to(p, "{:x},", t->id);
                 send_txbuf(p);
             }
             else if (q == "sThreadInfo"sv) send_packet("l");
@@ -1094,11 +1078,10 @@ namespace jw::debug::detail
                 static string msg { &memres };
                 msg.clear();
                 auto id = decode(packet[1]);
-                if (threads.count(id))
+                if (auto* t = get_thread(id))
                 {
-                    auto* t = threads[id].thread;
                     fmt::format_to(std::back_inserter(msg), "{}{}: ",
-                                    t->get_name(), &threads[id] == current_thread ? " (*)"sv : ""sv);
+                                   t->get_name(), t == current_thread() ? " (*)"sv : ""sv);
                     switch (t->get_state())
                     {
                     case jw::detail::thread::starting:    msg += "Starting"sv;    break;
@@ -1158,7 +1141,7 @@ namespace jw::debug::detail
                         if (i + 1 >= packet.size() or packet[i + 1].delim != ',')
                         {
                             send_packet("E00");
-                            break;
+                            return;
                         }
                         begin = decode(packet[i].substr(1));
                         end = decode(packet[i + 1]);
@@ -1167,26 +1150,31 @@ namespace jw::debug::detail
                     if (i + 1 < packet.size() and packet[i + 1].delim == ':')
                     {
                         auto id = decode(packet[i + 1]);
+                        if (not get_thread(id))
+                        {
+                            send_packet("E00");
+                            return;
+                        }
+
                         ++i;
                         actions[n++] = { id, begin, end, c };
                     }
                     else
                     {
-                        for (auto& t : threads)
-                            t.second.set_action(c, begin, end);
+                        for (thread* t : all_threads())
+                            set_action(t, c, begin, end);
                     }
                 }
 
                 for (std::size_t i = 0; i != n; ++i)
                 {
                     auto& a = actions[i];
-                    if (threads.count(a.id))
-                        threads[a.id].set_action(a.action, a.begin, a.end);
+                    set_action(get_thread(a.id), a.action, a.begin, a.end);
                 }
             }
             else if (v == "CtrlC")
             {
-                current_thread->signals.insert(SIGINT);
+                get_info(current_thread())->signals.insert(SIGINT);
                 send_packet("OK");
                 stop_reply();
             }
@@ -1195,21 +1183,22 @@ namespace jw::debug::detail
         else if (p == 'H')  // set current thread
         {
             auto id = decode(packet[0].substr(1));
-            if (threads.count(id) > 0 or id == all_threads_id)
+            auto* t = get_thread(id);
+            if (t or id == all_threads_id)
             {
                 if (packet[0][0] == 'g')
                 {
                     if (id == all_threads_id)
-                        query_thread = current_thread;
+                        query_thread = current_thread();
                     else
-                        query_thread = &threads.at(id);
+                        query_thread = t;
                 }
                 else if (packet[0][0] == 'c')
                 {
                     if (id == all_threads_id)
                         control_thread = nullptr;
                     else
-                        control_thread = &threads.at(id);
+                        control_thread = t;
                 }
                 send_packet("OK");
             }
@@ -1218,9 +1207,10 @@ namespace jw::debug::detail
         else if (p == 'T')  // is thread alive?
         {
             auto id = decode(packet[0]);
-            if (threads.count(id))
+            if (get_thread(id))
                 send_packet("OK");
-            else send_packet("E01");
+            else
+                send_packet("E01");
         }
         else if (p == 'p')  // read one register
         {
@@ -1287,40 +1277,52 @@ namespace jw::debug::detail
         }
         else if (p == 'c' or p == 's')  // step/continue
         {
-            auto step_continue = [this](auto& t)
+            auto step_continue = [this](auto* t)
             {
                 if (packet.size() > 0)
                 {
+                    if (control_thread != current_thread())
+                    {
+                        send_packet("E00");
+                        return;
+                    }
                     std::uintptr_t jmp = decode(packet[0]);
-                    if (debugmsg and t.eip() != jmp)
+                    if (debugmsg and current_exception.frame->fault_address.offset != jmp)
                         fmt::print(stderr, "JUMP to {:#x}\n", jmp);
-                    t.jmp(jmp);
+                    current_exception.frame->fault_address.offset = jmp;
                 }
-                t.set_action(packet[0].delim);
+                set_action(t, packet[0].delim);
             };
+
             if (control_thread == nullptr)
-                for (auto&& t : threads)
-                    step_continue(t.second);
-            else step_continue(*control_thread);
+                for (thread* t : all_threads())
+                    step_continue(t);
+            else step_continue(control_thread);
 
         }
         else if (p == 'C' or p == 'S')  // step/continue with signal
         {
-            auto step_continue = [this](auto& t)
+            auto step_continue = [this](auto* t)
             {
                 if (packet.size() > 1)
                 {
+                    if (control_thread != current_thread())
+                    {
+                        send_packet("E00");
+                        return;
+                    }
                     std::uintptr_t jmp = decode(packet[1]);
-                    if (debugmsg and t.eip() != jmp)
+                    if (debugmsg and current_exception.frame->fault_address.offset != jmp)
                         fmt::print(stderr, "JUMP to {:#x}\n", jmp);
-                    t.jmp(jmp);
+                    current_exception.frame->fault_address.offset = jmp;
                 }
-                t.set_action(packet[0].delim);
+                set_action(t, packet[0].delim);
             };
+
             if (control_thread == nullptr)
-                for (auto&& t : threads)
-                    step_continue(t.second);
-            else step_continue(*control_thread);
+                for (thread* t : all_threads())
+                    step_continue(t);
+            else step_continue(control_thread);
         }
         else if (p == 'Z')  // set break/watchpoint
         {
@@ -1383,12 +1385,12 @@ namespace jw::debug::detail
         else if (p == 'k')  // kill
         {
             if (debugmsg) fmt::print(stdout, "KILL signal received.");
-            for (auto&& t : threads)
-                t.second.set_action('c');
+            for (thread* t : all_threads())
+                set_action(t, 'c');
             if (redirect_exception(current_exception, kill))
             {
                 auto* p = new_tx();
-                p = fmt::format_to(p, "X{:0>2x}", posix_signal(current_thread->last_stop_signal));
+                p = fmt::format_to(p, "X{:0>2x}", posix_signal(get_info(current_thread())->last_stop_signal));
                 send_txbuf(p);
             }
             else send_packet("E00");
@@ -1404,8 +1406,10 @@ namespace jw::debug::detail
             fmt::print(stderr, "entering exception 0x{:0>2x} from {:#x}\n",
                        std::uint8_t { exc }, std::uintptr_t { f->fault_address.offset });
 
-        if (exc == 0x03)
+        if (exc == exception_num::breakpoint)
             f->fault_address.offset -= 1;
+
+        auto* const tinfo = get_info(current_thread());
 
         auto leave = [&]
         {
@@ -1427,14 +1431,34 @@ namespace jw::debug::detail
                            std::uint8_t { exc }, std::uintptr_t { f->fault_address.offset });
         };
 
-        auto clear_trap_signals = []
+        auto clear_trap_signals = [&]
         {
-            for (auto i = current_thread->signals.begin(); i != current_thread->signals.end();)
+            for (auto i = tinfo->signals.begin(); i != tinfo->signals.end();)
             {
-                if (is_trap_signal(*i)) i = current_thread->signals.erase(i);
-                else ++i;
+                if (is_trap_signal(*i))
+                    i = tinfo->signals.erase(i);
+                else
+                    ++i;
             }
         };
+
+        if (not tinfo) [[unlikely]]
+        {
+            if (is_benign_signal(exc))
+            {
+                leave();
+                return true;
+            }
+            else [[unlikely]]
+            {
+                auto* const t = current_thread();
+                fmt::print(stderr, "While entering/leaving thread {} ({}): {}\n",
+                           t->id, t->get_name(), cpu_category { }.message(info.num));
+                info.frame->print();
+                info.registers->print();
+                halt();
+            }
+        }
 
         if (f->fault_address.segment != main_cs and f->fault_address.segment != ring0_cs) [[unlikely]]
         {
@@ -1452,7 +1476,7 @@ namespace jw::debug::detail
 
         if (reentry.test_and_set()) [[unlikely]]
         {
-            if (exc == 0x01 or exc == 0x03)
+            if (exc == exception_num::trap or exc == exception_num::breakpoint)
             {   // breakpoint in debugger code, ignore
                 if (debugmsg)
                     fmt::print(stderr, "re-entry caused by breakpoint, ignoring.\n");
@@ -1471,40 +1495,43 @@ namespace jw::debug::detail
 
         try
         {
-            populate_thread_list();
-            if (packet_available()) current_thread->signals.insert(packet_received);
-
             if (exc == exception_num::breakpoint and current_signal != -1)
             {
                 if (debugmsg) fmt::print(stderr, "break with signal 0x{:0>2x}\n", int { current_signal });
-                current_thread->signals.insert(current_signal);
+                tinfo->signals.insert(current_signal);
                 current_signal = -1;
             }
             else if (exc == exception_num::trap and [&] {for (auto& w : watchpoints) { if (w.second.get_state()) return true; } return false; }())
             {
-                current_thread->signals.insert(watchpoint_hit);
+                tinfo->signals.insert(watchpoint_hit);
             }
-            else current_thread->signals.insert(exc);
+            else tinfo->signals.insert(exc);
 
-            if (current_thread->signals.count(trap_unmasked))
+            if (tinfo->signals.count(trap_unmasked))
             {
-                auto size = current_thread->signals.size();
+                tinfo->signals.erase(trap_unmasked);
                 clear_trap_signals();
-                if (size != current_thread->signals.size()) current_thread->signals.insert(continued); // resume with SIGCONT so gdb won't get confused
-                current_thread->signals.erase(trap_unmasked);
-            }
 
-            if (current_thread->trap_mask > 0)
+                if (tinfo->stepping())  // Resume with SIGCONT so gdb won't get confused
+                    tinfo->signals.insert(continued);
+            }
+            else if (tinfo->trap_mask > 0)
             {
-                if (all_benign_signals(current_thread))
+                if (all_benign_signals(tinfo))
                 {
-                    if (debugmsg) fmt::print(stderr, "trap masked at {:#x}\n",
-                                             std::uintptr_t { f->fault_address.offset });
+                    if (debugmsg)
+                        fmt::print(stderr, "trap masked at {:#x}\n",
+                                   std::uintptr_t { f->fault_address.offset });
+
+                    leave();
+                    f->flags.trap = false;
+                    reentry.clear();
+                    return true;
                 }
                 else
                 {
                     // serious fault occured, undo trap masks
-                    current_thread->trap_mask = 0;
+                    tinfo->trap_mask = 0;
                 }
             }
 
@@ -1515,37 +1542,24 @@ namespace jw::debug::detail
             }
             current_exception = info;
 
-            for (auto&&t : threads)
-            {
-                if (t.second.action == thread_info::none)
-                {
-                    if (thread_events_enabled)
-                        t.second.set_action('t');
-                    else t.second.set_action('c');
+            if (tinfo->signals.count(thread_switched) and tinfo->stepping())
+                tinfo->signals.insert(continued);
+            tinfo->signals.erase(thread_switched);
 
-                    if (t.second.thread->get_state() == jw::detail::thread::starting)
-                        t.second.signals.insert(thread_started);
-                }
-
-                if (current_thread->signals.count(thread_switched) and t.second.action == thread_info::stop)
-                    t.second.signals.insert(thread_suspended);
-            }
-
-            current_thread->signals.erase(thread_switched);
-
-            if (exc == exception_num::trap and current_thread->signals.count(watchpoint_hit) == 0 and
-                current_thread->action == thread_info::step_range and
-                current_exception.frame->fault_address.offset >= current_thread->step_range_begin and
-                current_exception.frame->fault_address.offset <= current_thread->step_range_end)
+            if ((exc == exception_num::trap or tinfo->signals.count(continued))
+                and tinfo->signals.count(watchpoint_hit) == 0 and
+                tinfo->action == thread_info::step_range and
+                current_exception.frame->fault_address.offset >= tinfo->step_range_begin and
+                current_exception.frame->fault_address.offset <= tinfo->step_range_end)
             {
                 if (debugmsg) fmt::print(stderr,"range step until {:#x}, now at {:#x}\n",
-                                         current_thread->step_range_end, std::uintptr_t { f->fault_address.offset });
+                                         tinfo->step_range_end, std::uintptr_t { f->fault_address.offset });
                 clear_trap_signals();
             }
 
             if (debugmsg)
                 fmt::print(stderr, "signals: {}\n",
-                           fmt::join(current_thread->signals, ", "));
+                           fmt::join(tinfo->signals, ", "));
 
             stop_reply();
 
@@ -1554,15 +1568,14 @@ namespace jw::debug::detail
 
             auto cant_continue = [this]
             {
-                for (auto& t : threads)
-                    if (t.second.thread->active() and
-                        t.second.action == thread_info::none) return true;
+                for (auto* t : all_threads())
+                    if (t->active() and get_info(t)->action == thread_info::stop)
+                        return true;
                 return false;
             };
 
             do
             {
-                current_thread->signals.erase(packet_received);
                 recv_packet();
                 try
                 {
@@ -1592,10 +1605,45 @@ namespace jw::debug::detail
         }
         asm ("cli");
 
+        f->flags.trap = tinfo->stepping();
         leave();
         reentry.clear();
 
-        return current_thread->do_action();
+        return tinfo->do_action();
+    }
+
+    void create_thread(thread* t)
+    {
+        if (not debug())
+            return;
+
+        trap_mask no_step;
+        t->debug_info = new (locked) thread_info { };
+
+        if (thread_events_enabled)
+            set_action(t, 's');
+        else
+            set_action(t, 'c');
+
+        break_with_signal(debug_signals::thread_started);
+    }
+
+    void destroy_thread(thread* t)
+    {
+        break_with_signal(debug_signals::thread_finished);
+        trap_mask no_step;
+
+        auto* info = detail::get_info(t);
+        if (info)
+            delete info;
+
+        if (gdb)
+        {
+            if (gdb->query_thread == t)
+                gdb->query_thread = nullptr;
+            if (gdb->control_thread == t)
+                gdb->control_thread = nullptr;
+        }
     }
 
     void notify_gdb_thread_event(debug_signals e)
@@ -1616,6 +1664,14 @@ namespace jw::debug::detail
         if (gdb)
             return;
 
+        for (auto& thr : scheduler::all_threads())
+        {
+            auto* const t = const_cast<thread*>(&thr);
+            auto* const ti = new (locked) thread_info { };
+            ti->action = thread_info::cont;
+            t->debug_info = ti;
+        }
+
         gdb = new (locked) gdbstub { cfg };
 
         for (int s : { SIGHUP, SIGABRT, SIGTERM, SIGKILL, SIGQUIT, SIGILL, SIGINT })
@@ -1626,10 +1682,10 @@ namespace jw::debug::detail
 
     static void uninstall_gdb_interface()
     {
+        debug_mode = false;
         if (gdb)
             delete gdb;
         gdb = nullptr;
-        debug_mode = false;
     }
 
     void notify_gdb_exit(byte result)
@@ -1646,29 +1702,35 @@ namespace jw::debug::detail
 
 namespace jw::debug
 {
-    trap_mask::trap_mask() noexcept // TODO: ideally this should treat interrupts as separate 'threads'
+    trap_mask::trap_mask() noexcept
     {
         if (not detail::gdb)
             return;
         if (detail::gdb->reentry.test())
             return;
-        ++detail::gdb->threads[jw::detail::scheduler::current_thread_id()].trap_mask;
+
+        auto* const ti = detail::get_info(detail::current_thread());
+        if (not ti)
+            return;
+
+        ++ti->trap_mask;
         failed = false;
     }
 
     trap_mask::~trap_mask() noexcept
     {
-        if (not detail::gdb)
-            return;
         if (failed)
             return;
 
+        auto* const ti = detail::get_info(detail::current_thread());
+        if (not ti)
+            return;
+
         force_frame_pointer();
-        auto& t = detail::gdb->threads[jw::detail::scheduler::current_thread_id()];
-        t.trap_mask = std::max(t.trap_mask - 1, 0l);
-        if (t.trap_mask == 0 and [&t]
+        ti->trap_mask = std::max(ti->trap_mask - 1, 0l);
+        if (ti->trap_mask == 0 and [ti]
         {
-            for (auto& s : t.signals)
+            for (auto s : ti->signals)
                 if (detail::is_trap_signal(s))
                     return true;
             return false;

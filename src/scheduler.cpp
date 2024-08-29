@@ -107,12 +107,12 @@ namespace jw::detail
         dpmi::interrupt_unmask enable_interrupts { };
         auto* const ct = current_thread();
 
-        debug::break_with_signal(debug::detail::thread_switched);
-
         {
             debug::trap_mask dont_trace_here { };
             context_switch(&ct->context);
         }
+
+        debug::break_with_signal(debug::detail::thread_switched);
 
 #       ifndef NDEBUG
         if (ct->id != thread::main_thread_id and *reinterpret_cast<std::uint32_t*>(ct->stack.data()) != 0xDEADBEEF) [[unlikely]]
@@ -148,6 +148,7 @@ namespace jw::detail
     void scheduler::run_thread() noexcept
     {
         auto* const t = current_thread();
+        debug::detail::create_thread(t);
         t->state = thread::running;
 
         try
@@ -157,8 +158,6 @@ namespace jw::detail
                 t->state = thread::finishing;
                 atexit(t);
                 t->state = thread::finished;
-
-                debug::detail::notify_gdb_thread_event(debug::detail::thread_finished);
             } };
 
             (*t)();
@@ -175,6 +174,7 @@ namespace jw::detail
             terminating = true;
         }
 
+        debug::detail::destroy_thread(t);
         while (true) yield();
     }
 

@@ -4,6 +4,11 @@
 #pragma once
 #include <cstdint>
 
+namespace jw::detail
+{
+    struct thread;
+}
+
 namespace jw::debug::detail
 {
 #ifndef NDEBUG
@@ -49,8 +54,12 @@ namespace jw::debug::detail
     };
 
 #ifndef NDEBUG
+    void create_thread(jw::detail::thread*);
+    void destroy_thread(jw::detail::thread*);
     void notify_gdb_thread_event(debug::detail::debug_signals);
 #else
+    inline void create_thread(jw::detail::thread*) { }
+    inline void destroy_thread(jw::detail::thread*) { }
     inline void notify_gdb_thread_event(debug::detail::debug_signals) { }
 #endif
 }

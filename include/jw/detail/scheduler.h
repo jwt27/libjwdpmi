@@ -71,15 +71,17 @@ namespace jw::detail
         template<typename F> void invoke(F&& function) { invoke_list.emplace_back(std::forward<F>(function)); }
         template<typename F> void atexit(F&& function) { atexit_list.emplace_back(std::forward<F>(function)); }
 
-#       ifdef NDEBUG
+#ifdef NDEBUG
         void set_name(...) const noexcept { }
         std::string_view get_name() const noexcept { return { }; }
-#       else
+#else
         template<typename T>
         void set_name(T&& string) { name = std::forward<T>(string); }
         std::string_view get_name() const noexcept { return name; }
         thread_context* get_context() noexcept { return context; }
-#       endif
+
+        void* debug_info { nullptr };
+#endif
 
         ~thread()
         {
@@ -139,9 +141,9 @@ namespace jw::detail
         std::deque<jw::function<void(), 4>, thread_allocator<jw::function<void(), 4>>> invoke_list;
         std::deque<jw::function<void(), 4>> atexit_list { };
 
-#       ifndef NDEBUG
+#ifndef NDEBUG
         std::pmr::string name;
-#       endif
+#endif
     };
 
     constexpr std::strong_ordering operator<=>(const thread& a, const thread& b) noexcept { return a.id <=> b.id; }
@@ -249,7 +251,8 @@ namespace jw::detail
 #       ifndef NDEBUG
         , name { scheduler::memory_resource() }
 #       endif
-    { }
+    {
+    }
 
     template <typename F, typename function_t>
     inline thread::thread(std::span<std::byte> span, F&& func)
