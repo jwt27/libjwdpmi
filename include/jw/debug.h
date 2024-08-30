@@ -89,7 +89,7 @@ namespace jw::debug
     // Remember, only 4 watchpoints can exist simultaneously.
     struct watchpoint
     {
-        enum watchpoint_type
+        enum watchpoint_type : std::uint8_t
         {
             execute,
             write,
@@ -98,7 +98,7 @@ namespace jw::debug
 
         template<typename T> requires (sizeof(T) == 4 or sizeof(T) == 2 or sizeof(T) == 1)
         watchpoint(T* ptr, watchpoint_type t)
-            : watchpoint { dpmi::near_to_linear(ptr), sizeof(T), t }{ }
+            : watchpoint { dpmi::near_to_linear(ptr), sizeof(T), t } { }
 
         watchpoint(void* ptr, watchpoint_type t, std::size_t size)
             : watchpoint { dpmi::near_to_linear(ptr), size, t } { }
@@ -108,7 +108,7 @@ namespace jw::debug
         watchpoint& operator=(const watchpoint&) = delete;
 
         watchpoint(watchpoint&& m)
-            : handle { m.handle }, type { m.type }
+            : handle { m.handle }
         {
             m.handle = null_handle;
         }
@@ -116,13 +116,11 @@ namespace jw::debug
         watchpoint& operator=(watchpoint&& m)
         {
             std::swap(handle, m.handle);
-            type = m.type;
             return *this;
         }
 
         // Set a watchpoint (DPMI 0.9, AX=0B00)
         watchpoint(std::uintptr_t linear_addr, std::size_t size_bytes, watchpoint_type t)
-            : type { t }
         {
             bool c;
             dpmi::dpmi_error_code error;
@@ -163,7 +161,7 @@ namespace jw::debug
 
         // Get the current state of this watchpoint (DPMI 0.9, AX=0B02).
         // Returns true if the watchpoint has been triggered.
-        bool get_state() const
+        bool triggered() const
         {
 #ifndef NDEBUG
             bool c;
@@ -208,13 +206,10 @@ namespace jw::debug
 #endif
         }
 
-        auto get_type() { return type; }
-
     private:
 #ifndef NDEBUG
         static constexpr std::uint32_t null_handle { std::numeric_limits<std::uint32_t>::max() };
         std::uint32_t handle { null_handle };
 #endif
-        watchpoint_type type;
     };
 }

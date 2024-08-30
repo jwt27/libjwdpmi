@@ -60,6 +60,8 @@ namespace jw::debug::detail
         using std::string_view::basic_string_view;
     };
 
+    static constexpr std::size_t max_watchpoints { 8 };
+
     static constexpr std::size_t bufsize { 4096 };
     static char txbuf[bufsize];
     static std::size_t tx_size { 0 };
@@ -98,9 +100,36 @@ namespace jw::debug::detail
             | std::views::filter([](thread* t) { return get_info(t) != nullptr; });
     }
 
+    struct watchpoint : debug::watchpoint
+    {
+        watchpoint(std::uintptr_t near_addr, std::size_t bytes, watchpoint_type t)
+            : debug::watchpoint { dpmi::near_to_linear(near_addr), bytes, t }
+            , address { near_addr }
+            , size { static_cast<std::uint8_t>(bytes) }
+            , type { t }
+        { }
+
+        const std::uintptr_t address;
+        const std::uint8_t size;
+        const watchpoint_type type;
+    };
+
+    static std::optional<watchpoint::watchpoint_type> watchpoint_type(char z)
+    {
+        switch (z)
+        {
+        case '1': return { watchpoint::execute };
+        case '2': return { watchpoint::write };
+        case '3': return { watchpoint::read_write };
+        case '4': return { watchpoint::read_write };
+        }
+        return std::nullopt;
+    }
+
     struct thread_info
     {
         std::pmr::set<std::int32_t> signals { dpmi::global_locked_pool_resource() };
+        std::bitset<max_watchpoints> watchpoints { };
         std::int32_t last_stop_signal { -1 };
         std::uintptr_t step_range_begin { 0 };
         std::uintptr_t step_range_end { 0 };
@@ -237,7 +266,6 @@ namespace jw::debug::detail
             // cpu exception -> posix signal
         case exception_num::trap:
         case exception_num::breakpoint:
-        case watchpoint_hit:
             return sigtrap;
 
         case exception_num::divide_error:
@@ -351,7 +379,6 @@ namespace jw::debug::detail
         case exception_num::trap:
         case exception_num::breakpoint:
         case continued:
-        case watchpoint_hit:
             return true;
         }
     }
@@ -365,7 +392,6 @@ namespace jw::debug::detail
 
         case exception_num::trap:
         case exception_num::breakpoint:
-        case watchpoint_hit:
         case thread_switched:
         case thread_finished:
         case all_threads_suspended:
@@ -677,7 +703,7 @@ namespace jw::debug::detail
         std::atomic_flag reentry { false };
         thread* query_thread { nullptr };
         thread* control_thread { nullptr };
-        std::pmr::map<std::uintptr_t, watchpoint> watchpoints { &memres };
+        std::array<std::optional<watchpoint>, max_watchpoints> watchpoints;
         std::pmr::map<std::uintptr_t, std::byte> breakpoints { &memres };
         std::map<int, void(*)(int)> signal_handlers { };
         std::pmr::map<std::pmr::string, std::pmr::string> supported { &memres };
@@ -729,7 +755,6 @@ namespace jw::debug::detail
                 std::signal(s.first, s.second);
             for (const auto& bp : breakpoints)
                 *reinterpret_cast<std::byte*>(bp.first) = bp.second;
-            watchpoints.clear();
         }
 
         void set_breakpoint(std::uintptr_t);
@@ -976,21 +1001,23 @@ namespace jw::debug::detail
                     }
                     else if (is_trap_signal(signal))
                     {
-                        if (signal == watchpoint_hit)
+                        bool hwbreak = false;
+                        if (t.watchpoints.none())
+                            p = append(p, "swbreak:;");
+                        else for (unsigned i = 0; i != max_watchpoints; ++i)
                         {
-                            for (auto& w : watchpoints)
+                            if (not t.watchpoints[i])
+                                continue;
+
+                            if (watchpoints[i]->type == watchpoint::execute)
                             {
-                                if (w.second.get_state())
-                                {
-                                    if (w.second.get_type() == watchpoint::execute)
-                                        p = append(p, "hwbreak:;");
-                                    else
-                                        p = fmt::format_to(p, "watch:{:x};", w.first);
-                                    break;
-                                }
+                                if (hwbreak)
+                                    continue;
+                                hwbreak = true;
+                                p = append(p, "hwbreak:;");
                             }
+                            else p = fmt::format_to(p, "watch:{:x};", watchpoints[i]->address);
                         }
-                        else p = append(p, "swbreak:;");
                     }
                 }
                 send_txbuf(p);
@@ -1328,7 +1355,6 @@ namespace jw::debug::detail
         {
             auto& z = packet[0][0];
             std::uintptr_t addr = decode(packet[1]);
-            auto ptr = reinterpret_cast<byte*>(addr);
             if (z == '0')   // set breakpoint
             {
                 if (packet.size() > 3)  // conditional breakpoint
@@ -1341,21 +1367,29 @@ namespace jw::debug::detail
             }
             else            // set watchpoint
             {
-                watchpoint::watchpoint_type w;
-                if (z == '1') w = watchpoint::execute;
-                else if (z == '2') w = watchpoint::write;
-                else if (z == '3') w = watchpoint::read_write;
-                else if (z == '4') w = watchpoint::read_write;
-                else
-                {
-                    send_packet("");
-                    return;
-                }
                 try
                 {
+                    const auto type = watchpoint_type(z);
+                    if (not type)
+                    {
+                        send_packet("");
+                        return;
+                    }
                     std::size_t size = decode(packet[2]);
-                    watchpoints.emplace(addr, watchpoint { ptr, w, size });
-                    send_packet("OK");
+                    bool ok = false;
+                    for (auto& wp : watchpoints)
+                    {
+                        if (wp)
+                            continue;
+
+                        wp.emplace(addr, size, *type);
+                        ok = true;
+                        break;
+                    }
+                    if (ok)
+                        send_packet("OK");
+                    else
+                        throw std::runtime_error { "this should never happen" };
                 }
                 catch (...)
                 {
@@ -1374,12 +1408,31 @@ namespace jw::debug::detail
             }
             else            // remove watchpoint
             {
-                if (watchpoints.count(addr))
+                const auto type = watchpoint_type(z);
+                if (not type)
                 {
-                    watchpoints.erase(addr);
-                    send_packet("OK");
+                    send_packet("");
+                    return;
                 }
-                else send_packet("E00");
+
+                unsigned n = 0;
+                for (auto& wp : watchpoints)
+                {
+                    if (not wp)
+                        continue;
+                    if (wp->address != addr)
+                        continue;
+                    if (wp->type != *type)
+                        continue;
+
+                    wp.reset();
+                    ++n;
+                }
+
+                if (n > 0)
+                    send_packet("OK");
+                else
+                    send_packet("E00");
             }
         }
         else if (p == 'k')  // kill
@@ -1413,9 +1466,6 @@ namespace jw::debug::detail
 
         auto leave = [&]
         {
-            for (auto& w : watchpoints)
-                w.second.reset();
-
             enable_all_breakpoints();
             if (*reinterpret_cast<const std::uint8_t*>(f->fault_address.offset) == 0xcc)
             {
@@ -1425,6 +1475,7 @@ namespace jw::debug::detail
                 else
                     f->fault_address.offset += 1;   // hardcoded breakpoint, safe to skip
             }
+            f->flags.resume = true;
 
             if (debugmsg)
                 fmt::print(stderr, "leaving exception 0x{:0>2x}, resuming at {:#x}\n",
@@ -1501,11 +1552,12 @@ namespace jw::debug::detail
                 tinfo->signals.insert(current_signal);
                 current_signal = -1;
             }
-            else if (exc == exception_num::trap and [&] {for (auto& w : watchpoints) { if (w.second.get_state()) return true; } return false; }())
-            {
-                tinfo->signals.insert(watchpoint_hit);
-            }
             else tinfo->signals.insert(exc);
+
+            if (exc == exception_num::trap)
+                for (unsigned i = 0; i != max_watchpoints; ++i)
+                    if (watchpoints[i] and watchpoints[i]->triggered())
+                        watchpoints[i]->reset(), tinfo->watchpoints[i] = true;
 
             if (tinfo->signals.count(trap_unmasked))
             {
@@ -1547,7 +1599,7 @@ namespace jw::debug::detail
             tinfo->signals.erase(thread_switched);
 
             if ((exc == exception_num::trap or tinfo->signals.count(continued))
-                and tinfo->signals.count(watchpoint_hit) == 0 and
+                and tinfo->watchpoints.none() and
                 tinfo->action == thread_info::step_range and
                 current_exception.frame->fault_address.offset >= tinfo->step_range_begin and
                 current_exception.frame->fault_address.offset <= tinfo->step_range_end)
@@ -1605,6 +1657,7 @@ namespace jw::debug::detail
         }
         asm ("cli");
 
+        tinfo->watchpoints.reset();
         f->flags.trap = tinfo->stepping();
         leave();
         reentry.clear();
