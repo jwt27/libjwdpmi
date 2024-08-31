@@ -860,6 +860,7 @@ namespace jw::debug::detail
         p = encode(p, &sum, 1);
         tx_size = p - txbuf;
         com.write(txbuf, tx_size);
+        com.flush();
         replied = true;
     }
 
@@ -1699,7 +1700,6 @@ namespace jw::debug::detail
         auto* p = new_tx();
         p = fmt::format_to(p, "W{:0>2x}", result);
         gdb->send_txbuf(p);
-        gdb->com.flush();
         uninstall_gdb_interface();
     }
 }
