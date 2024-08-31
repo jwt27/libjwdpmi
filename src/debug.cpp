@@ -1463,6 +1463,15 @@ namespace jw::debug::detail
             return false;
         }
 
+        local_destructor fix_popf { [&]
+        {
+            auto* const eip = reinterpret_cast<const std::uint8_t*>(info.frame->fault_address.offset);
+            auto* const esp = reinterpret_cast<cpu_flags*>(info.frame->stack.offset);
+
+            if (*eip == 0x9d) // POPF
+                esp->trap = f->flags.trap;
+        } };
+
         if (reentry.test_and_set()) [[unlikely]]
         {
             if ((exc == exception_num::trap) | (exc == exception_num::breakpoint))
