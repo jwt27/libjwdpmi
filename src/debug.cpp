@@ -672,7 +672,6 @@ namespace jw::debug::detail
             case ebp:    return reverse_decode(value, &r->ebp, regsize[reg]);
             case esi:    return reverse_decode(value, &r->esi, regsize[reg]);
             case edi:    return reverse_decode(value, &r->edi, regsize[reg]);
-            case eflags: return reverse_decode(value, &r->flags, regsize[reg]);
             case fs:     return reverse_decode(value.substr(0, 4), &r->fs, 2);
             case gs:     return reverse_decode(value.substr(0, 4), &r->gs, 2);
             default: return false;

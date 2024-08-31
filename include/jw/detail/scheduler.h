@@ -28,7 +28,7 @@ namespace jw::detail
     {
         std::uint32_t gs;
         std::uint32_t fs;
-        dpmi::cpu_flags flags;
+        std::uint32_t unused;
         std::uint32_t ebx;
         std::uint32_t esi;
         std::uint32_t edi;
