@@ -64,8 +64,15 @@ namespace jw::debug::detail
     static constexpr std::size_t max_watchpoints { 8 };
 
     static constexpr std::size_t bufsize { 4096 };
-    static char txbuf[bufsize];
     static std::size_t tx_size { 0 };
+    static std::size_t rx_size { 0 };
+    static char txbuf[bufsize];
+    static char rxbuf[bufsize];
+
+    static std::string_view current_packet() noexcept
+    {
+        return { rxbuf, rx_size };
+    }
 
     using scheduler = jw::detail::scheduler;
     using thread = jw::detail::thread;
@@ -696,7 +703,6 @@ namespace jw::debug::detail
     struct gdbstub
     {
         resource_type memres { 1_MB };
-        string raw_packet_string { &memres };
         std::deque<packet_string, allocator<packet_string>> packet { &memres };
         bool received { false };
         bool replied { false };
@@ -870,13 +876,16 @@ namespace jw::debug::detail
 
     inline bool gdbstub::receive()
     {
-        static constinit bool bad = false;
         char sum[2];
-        raw_packet_string.clear();
         com.clear();
         com.force_flush();
         if (com.rdbuf()->in_avail() == 0)
             return false;
+
+        auto ctrl_c = []
+        {
+            rx_size = append(rxbuf, "vCtrlC") - rxbuf;
+        };
 
         try
         {
@@ -891,7 +900,7 @@ namespace jw::debug::detail
                 return false;
 
             case 0x03:
-                raw_packet_string = "vCtrlC";
+                ctrl_c();
                 goto parse;
 
             case '$':
@@ -900,37 +909,32 @@ namespace jw::debug::detail
 
             replied = false;
             received = false;
-            raw_packet_string.clear();
-            std::getline(com, raw_packet_string, '#');
+            rx_size = 0;
+            com.getline(rxbuf, bufsize, '#');
+            rx_size = com.gcount() - 1;
             com.read(sum, 2);
         }
         catch (const std::exception& e)
         {
             const auto eof = com.eof();
-            bad |= com.bad();
             com.clear();
 
             if (eof)
             {
-                raw_packet_string = "vCtrlC";
+                ctrl_c();
                 goto parse;
             }
 
-            fmt::print(stderr, "Error while receiving gdb packet: {}\n", e.what());
+            fmt::print(stderr, "While receiving gdb packet: {}\n", e.what());
             if (com.rdbuf()->in_avail() != -1)
-            {
-                fmt::print(stderr, "Received so far: \"{}\"\n", raw_packet_string);
-                if (bad)
-                    fmt::print(stderr, "Malformed character: \'{}\'\n", com.get());
                 com.put('-');
-            }
             return false;
         }
 
-        if (decode(std::string_view { sum, 2 }) != checksum(raw_packet_string)) [[unlikely]]
+        if (decode(std::string_view { sum, 2 }) != checksum(current_packet())) [[unlikely]]
         {
             fmt::print(stderr, "Bad checksum: \"{}\": {}, calculated: {:0>2x}\n",
-                        raw_packet_string, sum, checksum(raw_packet_string));
+                       current_packet(), sum, checksum(current_packet()));
             com.put('-');
             return false;
         }
@@ -938,10 +942,10 @@ namespace jw::debug::detail
 
     parse:
         if (config::enable_gdb_protocol_dump)
-            fmt::print(stderr, "recv <-- \"{}\"\n", raw_packet_string);
+            fmt::print(stderr, "recv <-- \"{}\"\n", current_packet());
         std::size_t pos { 1 };
         packet.clear();
-        std::string_view input { raw_packet_string };
+        std::string_view input { current_packet() };
         if (input.size() == 1) packet.emplace_back("", input[0]);
         while (pos < input.size())
         {
@@ -1039,7 +1043,13 @@ namespace jw::debug::detail
                         supported[str.substr(0, equals_sign).data()] = str.substr(equals_sign + 1);
                     }
                 }
-                send("PacketSize=399;swbreak+;hwbreak+;QThreadEvents+"sv);
+
+                auto* p = new_tx();
+                p = fmt::format_to(p, "PacketSize={:x};", bufsize - 4);
+                p = append(p, "swbreak+;");
+                p = append(p, "hwbreak+;");
+                p = append(p, "QThreadEvents+");
+                send_txbuf(p);
             }
             else if (q == "Attached"sv)
                 send("0");
@@ -1549,8 +1559,8 @@ namespace jw::debug::detail
         catch (...)
         {
             fmt::print(stderr, "Exception occured while communicating with GDB.\n"
-                       "last received packet: \"{}\"\n",
-                       raw_packet_string);
+                               "last received packet: \"{}\"\n",
+                       current_packet());
             print_exception();
             halt();
         }
