@@ -765,9 +765,9 @@ namespace jw::debug::detail
         bool disable_breakpoint(std::uintptr_t);
         void enable_all_breakpoints();
 
-        void send_packet(std::string_view);
+        void send(std::string_view);
         void send_txbuf(const char* end);
-        bool recv_packet();
+        bool receive();
         bool packet_available();
 
         void stop_reply(bool force = false);
@@ -820,7 +820,7 @@ namespace jw::debug::detail
         return com.rdbuf()->in_avail() != 0;
     }
 
-    inline void gdbstub::send_packet(std::string_view output)
+    inline void gdbstub::send(std::string_view output)
     {
         if (config::enable_gdb_protocol_dump)
             fmt::print(stderr, "send --> \"{}\"\n", output);
@@ -865,10 +865,10 @@ namespace jw::debug::detail
 
     inline void gdbstub::send_txbuf(const char* end)
     {
-        return send_packet({ txbuf + 1, end });
+        return send({ txbuf + 1, end });
     }
 
-    inline bool gdbstub::recv_packet()
+    inline bool gdbstub::receive()
     {
         static constinit bool bad = false;
         char sum[2];
@@ -1039,9 +1039,10 @@ namespace jw::debug::detail
                         supported[str.substr(0, equals_sign).data()] = str.substr(equals_sign + 1);
                     }
                 }
-                send_packet("PacketSize=399;swbreak+;hwbreak+;QThreadEvents+"sv);
+                send("PacketSize=399;swbreak+;hwbreak+;QThreadEvents+"sv);
             }
-            else if (q == "Attached"sv) send_packet("0");
+            else if (q == "Attached"sv)
+                send("0");
             else if (q == "C"sv)
             {
                 auto* p = new_tx();
@@ -1056,7 +1057,8 @@ namespace jw::debug::detail
                     p = fmt::format_to(p, "{:x},", t->id);
                 send_txbuf(p);
             }
-            else if (q == "sThreadInfo"sv) send_packet("l");
+            else if (q == "sThreadInfo"sv)
+                send("l");
             else if (q == "ThreadExtraInfo"sv)
             {
                 using namespace jw::detail;
@@ -1083,7 +1085,7 @@ namespace jw::debug::detail
                 p = encode(p, msg.c_str(), msg.size());
                 send_txbuf(p);
             }
-            else send_packet("");
+            else send("");
         }
         else if (p == 'Q')
         {
@@ -1091,9 +1093,9 @@ namespace jw::debug::detail
             if (q == "ThreadEvents"sv)
             {
                 thread_events_enabled = packet[1][0] - '0';
-                send_packet("OK");
+                send("OK");
             }
-            else send_packet("");
+            else send("");
         }
         else if (p == 'v')
         {
@@ -1104,7 +1106,7 @@ namespace jw::debug::detail
             }
             else if (v == "Cont?"sv)
             {
-                send_packet("vCont;s;S;c;C;t;r"sv);
+                send("vCont;s;S;c;C;t;r"sv);
             }
             else if (v == "Cont"sv)
             {
@@ -1125,7 +1127,7 @@ namespace jw::debug::detail
                     {
                         if (i + 1 >= packet.size() or packet[i + 1].delim != ',')
                         {
-                            send_packet("E00");
+                            send("E00");
                             return;
                         }
                         begin = decode(packet[i].substr(1));
@@ -1137,7 +1139,7 @@ namespace jw::debug::detail
                         auto id = decode(packet[i + 1]);
                         if (not get_thread(id))
                         {
-                            send_packet("E00");
+                            send("E00");
                             return;
                         }
 
@@ -1160,10 +1162,10 @@ namespace jw::debug::detail
             else if (v == "CtrlC")
             {
                 get_info(current_thread())->signal = SIGINT;
-                send_packet("OK");
+                send("OK");
                 stop_reply();
             }
-            else send_packet("");
+            else send("");
         }
         else if (p == 'H')  // set current thread
         {
@@ -1178,17 +1180,17 @@ namespace jw::debug::detail
                     else
                         query_thread = t;
                 }
-                send_packet("OK");
+                send("OK");
             }
-            else send_packet("E00");
+            else send("E00");
         }
         else if (p == 'T')  // is thread alive?
         {
             auto id = decode(packet[0]);
             if (get_thread(id))
-                send_packet("OK");
+                send("OK");
             else
-                send_packet("E01");
+                send("E01");
         }
         else if (p == 'p')  // read one register
         {
@@ -1199,14 +1201,14 @@ namespace jw::debug::detail
                 p = reg(p, regn, query_thread);
                 send_txbuf(p);
             }
-            else send_packet("E00");
+            else send("E00");
         }
         else if (p == 'P')  // write one register
         {
             if (set_reg(static_cast<regnum>(decode(packet[0])), packet[1], query_thread))
-                send_packet("OK");
+                send("OK");
             else
-                send_packet("E00");
+                send("E00");
         }
         else if (p == 'g')  // read registers
         {
@@ -1217,7 +1219,7 @@ namespace jw::debug::detail
                     p = reg(p, i, query_thread);
                 send_txbuf(p);
             }
-            else send_packet("E00");
+            else send("E00");
         }
         else if (p == 'G')  // write registers
         {
@@ -1231,9 +1233,9 @@ namespace jw::debug::detail
                 ++reg;
             }
             if (ok)
-                send_packet("OK");
+                send("OK");
             else
-                send_packet("E00");
+                send("E00");
         }
         else if (p == 'm')  // read memory
         {
@@ -1248,8 +1250,10 @@ namespace jw::debug::detail
         {
             auto* addr = reinterpret_cast<byte*>(decode(packet[0]));
             std::size_t len = decode(packet[1]);
-            if (reverse_decode(packet[2], addr, len)) send_packet("OK");
-            else send_packet("E00");
+            if (reverse_decode(packet[2], addr, len))
+                send("OK");
+            else
+                send("E00");
         }
         else if (p == 'Z')  // set break/watchpoint
         {
@@ -1259,11 +1263,11 @@ namespace jw::debug::detail
             {
                 if (packet.size() > 3)  // conditional breakpoint
                 {
-                    send_packet("");    // not implemented (TODO)
+                    send("");    // not implemented (TODO)
                     return;
                 }
                 set_breakpoint(addr);
-                send_packet("OK");
+                send("OK");
             }
             else            // set watchpoint
             {
@@ -1272,7 +1276,7 @@ namespace jw::debug::detail
                     const auto type = watchpoint_type(z);
                     if (not type)
                     {
-                        send_packet("");
+                        send("");
                         return;
                     }
                     std::size_t size = decode(packet[2]);
@@ -1287,13 +1291,13 @@ namespace jw::debug::detail
                         break;
                     }
                     if (ok)
-                        send_packet("OK");
+                        send("OK");
                     else
                         throw std::runtime_error { "this should never happen" };
                 }
                 catch (...)
                 {
-                    send_packet("E00");
+                    send("E00");
                 }
             }
         }
@@ -1303,15 +1307,17 @@ namespace jw::debug::detail
             std::uintptr_t addr = decode(packet[1]);
             if (z == '0')   // remove breakpoint
             {
-                if (clear_breakpoint(addr)) send_packet("OK");
-                else send_packet("E00");
+                if (clear_breakpoint(addr))
+                    send("OK");
+                else
+                    send("E00");
             }
             else            // remove watchpoint
             {
                 const auto type = watchpoint_type(z);
                 if (not type)
                 {
-                    send_packet("");
+                    send("");
                     return;
                 }
 
@@ -1330,9 +1336,9 @@ namespace jw::debug::detail
                 }
 
                 if (n > 0)
-                    send_packet("OK");
+                    send("OK");
                 else
-                    send_packet("E00");
+                    send("E00");
             }
         }
         else if (p == 'k')  // kill
@@ -1346,9 +1352,9 @@ namespace jw::debug::detail
                 p = fmt::format_to(p, "X{:0>2x}", posix_signal(get_info(current_thread())->last_stop_signal));
                 send_txbuf(p);
             }
-            else send_packet("E00");
+            else send("E00");
         }
-        else send_packet("");   // unknown packet
+        else send("");   // unknown packet
     }
 
     [[gnu::hot]] inline bool gdbstub::handle_exception(exception_num exc, const exception_info& info)
@@ -1521,7 +1527,7 @@ namespace jw::debug::detail
 
             do
             {
-                recv_packet();
+                receive();
                 try
                 {
                     handle_packet();
@@ -1532,7 +1538,7 @@ namespace jw::debug::detail
                     // fault after a request to read memory)
                     // TODO: determine action based on last packet / signal
                     if (not replied)
-                        send_packet("E04");
+                        send("E04");
                     else
                         print_exception();
                 }
