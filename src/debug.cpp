@@ -716,6 +716,7 @@ namespace jw::debug::detail
         {
             int signal = current_signal;
             current_signal = packet_received;
+            e.frame->fault_address.offset += 1;
             handle_exception(exception_num::breakpoint, e);
             current_signal = signal;
         } };
