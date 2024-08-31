@@ -1231,19 +1231,17 @@ namespace jw::debug::detail
         {
             regnum reg { };
             std::size_t pos { };
-            bool fail { false };
-            while (pos < packet[0].size())
+            bool ok { true };
+            while (ok and pos < packet[0].size())
             {
-                if (fail |= set_reg(reg, packet[0].substr(pos), query_thread))
-                {
-                    send_packet("E00");
-                    break;
-                }
+                ok &= set_reg(reg, packet[0].substr(pos), query_thread);
                 pos += regsize[reg] * 2;
                 ++reg;
             }
-            if (not fail)
+            if (ok)
                 send_packet("OK");
+            else
+                send_packet("E00");
         }
         else if (p == 'm')  // read memory
         {
