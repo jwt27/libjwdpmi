@@ -703,7 +703,6 @@ namespace jw::debug::detail
         bool killed { false };
         std::atomic_flag reentry { false };
         thread* query_thread { nullptr };
-        thread* control_thread { nullptr };
         std::array<std::optional<watchpoint>, max_watchpoints> watchpoints;
         std::pmr::map<std::uintptr_t, std::byte> breakpoints { &memres };
         std::map<int, void(*)(int)> signal_handlers { };
@@ -1179,13 +1178,6 @@ namespace jw::debug::detail
                     else
                         query_thread = t;
                 }
-                else if (packet[0][0] == 'c')
-                {
-                    if (id == all_threads_id)
-                        control_thread = nullptr;
-                    else
-                        control_thread = t;
-                }
                 send_packet("OK");
             }
             else send_packet("E00");
@@ -1258,67 +1250,6 @@ namespace jw::debug::detail
             std::size_t len = decode(packet[1]);
             if (reverse_decode(packet[2], addr, len)) send_packet("OK");
             else send_packet("E00");
-        }
-        else if (p == 'c' or p == 's')  // step/continue
-        {
-            auto step_continue = [this](auto* t)
-            {
-                if (packet.size() > 0)
-                {
-                    if (t != current_thread())
-                        return false;
-                    std::uintptr_t jmp = decode(packet[0]);
-                    if (debugmsg and current_exception.frame->fault_address.offset != jmp)
-                        fmt::print(stderr, "JUMP to {:#x}\n", jmp);
-                    current_exception.frame->fault_address.offset = jmp;
-                }
-                set_action(t, packet[0].delim);
-                return true;
-            };
-
-            if (control_thread == nullptr)
-            {
-                for (thread* t : all_threads())
-                {
-                    if (not step_continue(t))
-                    {
-                        send_packet("E00");
-                        return;
-                    }
-                }
-            }
-            else step_continue(control_thread);
-
-        }
-        else if (p == 'C' or p == 'S')  // step/continue with signal
-        {
-            auto step_continue = [this](auto* t)
-            {
-                if (packet.size() > 1)
-                {
-                    if (t != current_thread())
-                        return false;
-                    std::uintptr_t jmp = decode(packet[1]);
-                    if (debugmsg and current_exception.frame->fault_address.offset != jmp)
-                        fmt::print(stderr, "JUMP to {:#x}\n", jmp);
-                    current_exception.frame->fault_address.offset = jmp;
-                }
-                set_action(t, packet[0].delim);
-                return true;
-            };
-
-            if (control_thread == nullptr)
-            {
-                for (thread* t : all_threads())
-                {
-                    if (not step_continue(t))
-                    {
-                        send_packet("E00");
-                        return;
-                    }
-                }
-            }
-            else step_continue(control_thread);
         }
         else if (p == 'Z')  // set break/watchpoint
         {
@@ -1648,13 +1579,8 @@ namespace jw::debug::detail
 
         trap_mask no_step;
 
-        if (gdb)
-        {
-            if (gdb->query_thread == t)
-                gdb->query_thread = nullptr;
-            if (gdb->control_thread == t)
-                gdb->control_thread = nullptr;
-        }
+        if (gdb and gdb->query_thread == t)
+            gdb->query_thread = nullptr;
 
         auto* info = detail::get_info(t);
         if (info)
