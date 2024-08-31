@@ -4,7 +4,7 @@
 #include <jw/io/rs232.h>
 #include <jw/thread.h>
 #include <bit>
-#include <set>
+#include <vector>
 
 namespace jw::io
 {
@@ -114,7 +114,7 @@ namespace jw::io
     static constexpr char xon = 0x11;
     static constexpr char xoff = 0x13;
 
-    static std::set<port_num> ports_used;
+    static constinit std::vector<port_num>* ports_used { nullptr };
 
     static io_port<std::uint16_t>       rate_divisor_port(port_num base)     { return { base + 0 }; }
     static io_port<char>                data_port(port_num base)             { return { base + 0 }; }
@@ -148,13 +148,27 @@ namespace jw::io
         , putback_reserve { cfg.putback_reserve }
         , irq { [this] { irq_handler(); }, dpmi::no_auto_eoi }
     {
-        if (ports_used.contains(base)) throw std::invalid_argument { "COM port already in use." };
-
         if (cfg.char_bits < 5 or cfg.char_bits > 8)
             throw std::invalid_argument { "RS232: Invalid value for char_bits" };
 
         if (cfg.stop_bits < 1 or cfg.stop_bits > 2)
             throw std::invalid_argument { "RS232: Invalid value for stop_bits" };
+
+        if (not ports_used)
+            ports_used = new std::vector<port_num>;
+
+        local_destructor cleanup { []
+        {
+            if (ports_used->empty())
+            {
+                delete ports_used;
+                ports_used = nullptr;
+            }
+        } };
+
+        for (auto used : *ports_used)
+            if (base == used)
+                throw std::invalid_argument { "COM port already in use." };
 
         irq_enable_port(base).write({ });
 
@@ -219,7 +233,7 @@ namespace jw::io
             modem_control_port(base).write(modem_control_reg);
         }
 
-        ports_used.insert(base);
+        ports_used->push_back(base);
     }
 
     rs232_streambuf::~rs232_streambuf()
@@ -229,7 +243,14 @@ namespace jw::io
         irq_enable_port(base).write({ });
         modem_control_reg &= ~(modem_control::dtr | modem_control::rts);
         modem_control_port(base).write(modem_control_reg);
-        ports_used.erase(base);
+
+        *std::ranges::find(*ports_used, base) = ports_used->back();
+        ports_used->pop_back();
+        if (ports_used->empty())
+        {
+            delete ports_used;
+            ports_used = nullptr;
+        }
     }
 
     void rs232_streambuf::put_realtime(char_type c)
