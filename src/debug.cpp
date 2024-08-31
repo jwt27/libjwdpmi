@@ -706,7 +706,7 @@ namespace jw::debug::detail
         std::deque<packet_string, allocator<packet_string>> packet { &memres };
         bool received { false };
         bool replied { false };
-        bool killed { false };
+        bool acked { true };
         std::atomic_flag reentry { false };
         thread* query_thread { nullptr };
         std::array<std::optional<watchpoint>, max_watchpoints> watchpoints;
@@ -837,6 +837,10 @@ namespace jw::debug::detail
             halt();
         }
 
+        while (not acked)
+            if (receive())
+                throw std::runtime_error { "GDB protocol sequencing error" };
+
         auto* p = txbuf;
         *p++ = '$';
 
@@ -867,6 +871,7 @@ namespace jw::debug::detail
         com.write(txbuf, tx_size);
         com.flush();
         replied = true;
+        acked = false;
     }
 
     inline void gdbstub::send_txbuf(const char* end)
@@ -894,7 +899,11 @@ namespace jw::debug::detail
             case '-': [[unlikely]]
                 fmt::print(stderr, "NACK\n");
                 com.write(txbuf, tx_size);
-                [[fallthrough]];
+                return false;
+
+            case '+':
+                acked = true;
+                return false;
 
             default:
                 return false;
