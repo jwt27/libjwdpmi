@@ -13,20 +13,16 @@ namespace jw::debug::detail
 {
 #ifndef NDEBUG
     extern bool debug_mode;
-    extern volatile int current_signal;
+    extern int current_signal;
     struct gdbstub;
 #endif
 
     enum debug_signals : std::int32_t
     {
         packet_received = 0x1000,
-        trap_unmasked,
         continued,
-        thread_switched,
         thread_started,
-        thread_finished,
-        thread_suspended,
-        all_threads_suspended
+        thread_finished
     };
 
     enum posix_signals : std::int32_t
@@ -55,10 +51,8 @@ namespace jw::debug::detail
 #ifndef NDEBUG
     void create_thread(jw::detail::thread*);
     void destroy_thread(jw::detail::thread*);
-    void notify_gdb_thread_event(debug::detail::debug_signals);
 #else
     inline void create_thread(jw::detail::thread*) { }
     inline void destroy_thread(jw::detail::thread*) { }
-    inline void notify_gdb_thread_event(debug::detail::debug_signals) { }
 #endif
 }

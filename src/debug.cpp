@@ -34,15 +34,16 @@ using namespace jw::dpmi::detail;
 #ifndef NDEBUG
 namespace jw::debug::detail
 {
-    static bool is_fault_signal(std::int32_t) noexcept;
+    static int posix_signal(int exc) noexcept;
+    static bool is_fault_signal(int) noexcept;
     static void uninstall_gdb_interface();
 
     const bool debugmsg = config::enable_gdb_debug_messages;
 
     bool debug_mode { false };
-    volatile int current_signal { -1 };
-    bool thread_events_enabled { false };
-    exception_info current_exception;
+    int current_signal { -1 };
+    static bool thread_events_enabled { false };
+    static exception_info current_exception;
 
     using resource_type = locked_pool_resource;
 
@@ -128,9 +129,9 @@ namespace jw::debug::detail
 
     struct thread_info
     {
-        std::pmr::set<std::int32_t> signals { dpmi::global_locked_pool_resource() };
         std::bitset<max_watchpoints> watchpoints { };
-        std::int32_t last_stop_signal { -1 };
+        int signal { -1 };
+        int last_stop_signal { -1 };
         std::uintptr_t step_range_begin { 0 };
         std::uintptr_t step_range_end { 0 };
         std::int32_t trap_mask { 0 };
@@ -142,7 +143,6 @@ namespace jw::debug::detail
             step,
             cont_sig,
             step_sig,
-            step_range
         } action;
 
         bool stepping() const
@@ -152,28 +152,34 @@ namespace jw::debug::detail
             case cont:
             case cont_sig:
                 return false;
+
             case step:
             case step_sig:
-            case step_range:
             case stop:
                 return true;
+
             default:
                 throw std::exception();
             }
         }
 
-        bool do_action() const
+        bool do_action()
         {
             switch (action)
             {
             case step_sig:
-            case cont_sig:
+                action = step;
                 return false;
+
+            case cont_sig:
+                action = cont;
+                return false;
+
             case step:
             case cont:
-            case step_range:
             case stop:
                 return true;
+
             default:
                 throw std::exception();
             }
@@ -183,6 +189,8 @@ namespace jw::debug::detail
     static void set_action(thread* t, char a, std::uintptr_t rbegin = 0, std::uintptr_t rend = 0)
     {
         auto* const ti = get_info(t);
+        ti->step_range_begin = 0;
+        ti->step_range_end = 0;
         switch (a)
         {
         case 'c':
@@ -210,7 +218,7 @@ namespace jw::debug::detail
         case 'r':
             ti->step_range_begin = rbegin;
             ti->step_range_end = rend;
-            ti->action = thread_info::step_range;
+            ti->action = thread_info::step;
             break;
 
         case 't':
@@ -220,7 +228,7 @@ namespace jw::debug::detail
     }
 
     // Register order and sizes found in {gdb source}/gdb/regformats/i386/i386.dat
-    enum regnum
+    enum regnum : std::uint8_t
     {
         eax, ecx, edx, ebx,
         esp, ebp, esi, edi,
@@ -233,7 +241,7 @@ namespace jw::debug::detail
     };
     regnum& operator++(regnum& r) { return r = static_cast<regnum>(r + 1); }
 
-    constexpr std::array<std::size_t, 41> regsize
+    constexpr std::array<std::uint8_t, 41> regsize
     {
         4, 4, 4, 4,
         4, 4, 4, 4,
@@ -259,7 +267,7 @@ namespace jw::debug::detail
 
     constexpr auto reg_max = regnum::mxcsr;
 
-    static std::uint32_t posix_signal(std::int32_t exc) noexcept
+    static int posix_signal(int exc) noexcept
     {
         switch (exc)
         {
@@ -316,17 +324,16 @@ namespace jw::debug::detail
         case packet_received:
             return 0;
 
-        case all_threads_suspended:
         case thread_finished:
-        case thread_suspended:
         case thread_started:
             return sigstop;
 
-        default: return sigusr1;
+        default:
+            return sigusr1;
         }
     }
 
-    static bool is_fault_signal(std::int32_t exc) noexcept
+    static bool is_fault_signal(int exc) noexcept
     {
         switch (exc)
         {
@@ -354,22 +361,20 @@ namespace jw::debug::detail
         }
     }
 
-    static bool is_stop_signal(std::int32_t exc) noexcept
+    static bool is_stop_signal(int exc) noexcept
     {
         switch (exc)
         {
         default:
             return true;
 
-        case thread_switched:
         case packet_received:
-        case trap_unmasked:
         case -1:
             return false;
         }
     }
 
-    static bool is_trap_signal(std::int32_t exc) noexcept
+    static bool is_trap_signal(int exc) noexcept
     {
         switch (exc)
         {
@@ -392,10 +397,7 @@ namespace jw::debug::detail
 
         case exception_num::trap:
         case exception_num::breakpoint:
-        case thread_switched:
         case thread_finished:
-        case all_threads_suspended:
-        case trap_unmasked:
         case packet_received:
         case continued:
         case -1:
@@ -712,8 +714,10 @@ namespace jw::debug::detail
 
         dpmi::async_signal irq_signal { [this](const exception_info& e)
         {
+            int signal = current_signal;
             current_signal = packet_received;
             handle_exception(exception_num::breakpoint, e);
+            current_signal = signal;
         } };
 
         dpmi::irq_handler serial_irq { [this]
@@ -952,102 +956,56 @@ namespace jw::debug::detail
 
     inline void gdbstub::stop_reply(bool force)
     {
-        auto do_stop_reply = [&] (thread* thr, bool report_last = false)
+        auto* const t = current_thread();
+        auto* const ti = get_info(t);
+        int signal = ti->signal;
+        ti->signal = -1;
+
+        if (not is_stop_signal(signal) and force)
+            signal = ti->last_stop_signal;
+
+        if (not is_stop_signal(signal))
+            return;
+
+        ti->action = thread_info::stop;
+        ti->last_stop_signal = signal;
+
+        auto* p = new_tx();
+
+        if (signal == thread_finished)
         {
-            auto& t = *get_info(thr);
-
-            if (t.action == thread_info::stop and not force) return false;
-            auto no_stop_signal = [] (auto& t)
+            p = fmt::format_to(p, "w00;{:x}", t->id);
+        }
+        else
+        {
+            p = fmt::format_to(p, "T{:0>2x}", posix_signal(signal));
+            p = append(p, "8:"); p = reg(p, eip, t); *p++ = ';';
+            p = append(p, "4:"); p = reg(p, esp, t); *p++ = ';';
+            p = append(p, "5:"); p = reg(p, ebp, t); *p++ = ';';
+            p = fmt::format_to(p, "thread:{:x};", t->id);
+            if (signal == thread_started)
             {
-                if (t.signals.empty()) return true;
-                for (auto&& i : t.signals) if (is_stop_signal(i)) return false;
-                return true;
-            };
-            if (no_stop_signal(t) and report_last) t.signals.insert(t.last_stop_signal);
-
-            for (auto i = t.signals.begin(); i != t.signals.end();)
-            {
-                auto signal = *i;
-                if (not is_stop_signal(signal)
-                    or (is_trap_signal(signal) and t.trap_mask > 0))
-                {
-                    ++i;
-                    continue;
-                }
-                else i = t.signals.erase(i);
-
-                if (not thread_events_enabled and (signal == thread_started or signal == thread_finished))
-                    continue;
-
-                t.action = thread_info::stop;
-                t.last_stop_signal = signal;
-
-                auto* p = new_tx();
-
-                if (signal == thread_finished)
-                {
-                    p = fmt::format_to(p, "w00;{:x}", thr->id);
-                }
-                else
-                {
-                    p = fmt::format_to(p, "T{:0>2x}", posix_signal(signal));
-                    p = append(p, "8:"); p = reg(p, eip, thr); *p++ = ';';
-                    p = append(p, "4:"); p = reg(p, esp, thr); *p++ = ';';
-                    p = append(p, "5:"); p = reg(p, ebp, thr); *p++ = ';';
-                    p = fmt::format_to(p, "thread:{:x};", thr->id);
-                    if (signal == thread_started)
-                    {
-                        p = append(p, "create:;"sv);
-                    }
-                    else if (is_trap_signal(signal))
-                    {
-                        bool hwbreak = false;
-                        if (t.watchpoints.none())
-                            p = append(p, "swbreak:;");
-                        else for (unsigned i = 0; i != max_watchpoints; ++i)
-                        {
-                            if (not t.watchpoints[i])
-                                continue;
-
-                            if (watchpoints[i]->type == watchpoint::execute)
-                            {
-                                if (hwbreak)
-                                    continue;
-                                hwbreak = true;
-                                p = append(p, "hwbreak:;");
-                            }
-                            else p = fmt::format_to(p, "watch:{:x};", watchpoints[i]->address);
-                        }
-                    }
-                }
-                send_txbuf(p);
-                query_thread = thr;
-
-                if (signal == all_threads_suspended and supported["no-resumed"] == "+")
-                    send_packet("N");
-
-                return true;
+                p = append(p, "create:;"sv);
             }
-            return false;
-        };
-        bool report_last = false;
+            else if (is_trap_signal(signal))
+            {
+                if (ti->watchpoints.none())
+                    p = append(p, "swbreak:;");
+                else for (unsigned i = 0; i != max_watchpoints; ++i)
+                {
+                    if (not ti->watchpoints[i])
+                        continue;
 
-    try_harder:
-        if (not do_stop_reply(current_thread(), report_last))
-        {
-            auto report_other_threads = [&]
-            {
-                for (auto* t : all_threads())
-                    if (do_stop_reply(t, report_last))
-                        return true;
-                return false;
-            };
-            if (not report_other_threads() and force)
-            {
-                report_last = true;
-                goto try_harder;
+                    if (watchpoints[i]->type == watchpoint::execute)
+                        p = append(p, "hwbreak:;");
+                    else
+                        p = fmt::format_to(p, "watch:{:x};", watchpoints[i]->address);
+                }
             }
         }
+
+        send_txbuf(p);
+        query_thread = t;
     }
 
     [[gnu::hot]] inline void gdbstub::handle_packet()
@@ -1081,7 +1039,7 @@ namespace jw::debug::detail
                         supported[str.substr(0, equals_sign).data()] = str.substr(equals_sign + 1);
                     }
                 }
-                send_packet("PacketSize=399;swbreak+;hwbreak+;QThreadEvents+;no-resumed+"sv);
+                send_packet("PacketSize=399;swbreak+;hwbreak+;QThreadEvents+"sv);
             }
             else if (q == "Attached"sv) send_packet("0");
             else if (q == "C"sv)
@@ -1201,7 +1159,7 @@ namespace jw::debug::detail
             }
             else if (v == "CtrlC")
             {
-                get_info(current_thread())->signals.insert(SIGINT);
+                get_info(current_thread())->signal = SIGINT;
                 send_packet("OK");
                 stop_reply();
             }
@@ -1308,22 +1266,28 @@ namespace jw::debug::detail
             {
                 if (packet.size() > 0)
                 {
-                    if (control_thread != current_thread())
-                    {
-                        send_packet("E00");
-                        return;
-                    }
+                    if (t != current_thread())
+                        return false;
                     std::uintptr_t jmp = decode(packet[0]);
                     if (debugmsg and current_exception.frame->fault_address.offset != jmp)
                         fmt::print(stderr, "JUMP to {:#x}\n", jmp);
                     current_exception.frame->fault_address.offset = jmp;
                 }
                 set_action(t, packet[0].delim);
+                return true;
             };
 
             if (control_thread == nullptr)
+            {
                 for (thread* t : all_threads())
-                    step_continue(t);
+                {
+                    if (not step_continue(t))
+                    {
+                        send_packet("E00");
+                        return;
+                    }
+                }
+            }
             else step_continue(control_thread);
 
         }
@@ -1333,22 +1297,28 @@ namespace jw::debug::detail
             {
                 if (packet.size() > 1)
                 {
-                    if (control_thread != current_thread())
-                    {
-                        send_packet("E00");
-                        return;
-                    }
+                    if (t != current_thread())
+                        return false;
                     std::uintptr_t jmp = decode(packet[1]);
                     if (debugmsg and current_exception.frame->fault_address.offset != jmp)
                         fmt::print(stderr, "JUMP to {:#x}\n", jmp);
                     current_exception.frame->fault_address.offset = jmp;
                 }
                 set_action(t, packet[0].delim);
+                return true;
             };
 
             if (control_thread == nullptr)
+            {
                 for (thread* t : all_threads())
-                    step_continue(t);
+                {
+                    if (not step_continue(t))
+                    {
+                        send_packet("E00");
+                        return;
+                    }
+                }
+            }
             else step_continue(control_thread);
         }
         else if (p == 'Z')  // set break/watchpoint
@@ -1462,8 +1432,6 @@ namespace jw::debug::detail
         if (exc == exception_num::breakpoint)
             f->fault_address.offset -= 1;
 
-        auto* const tinfo = get_info(current_thread());
-
         auto leave = [&]
         {
             enable_all_breakpoints();
@@ -1482,35 +1450,6 @@ namespace jw::debug::detail
                            std::uint8_t { exc }, std::uintptr_t { f->fault_address.offset });
         };
 
-        auto clear_trap_signals = [&]
-        {
-            for (auto i = tinfo->signals.begin(); i != tinfo->signals.end();)
-            {
-                if (is_trap_signal(*i))
-                    i = tinfo->signals.erase(i);
-                else
-                    ++i;
-            }
-        };
-
-        if (not tinfo) [[unlikely]]
-        {
-            if (is_benign_signal(exc))
-            {
-                leave();
-                return true;
-            }
-            else [[unlikely]]
-            {
-                auto* const t = current_thread();
-                fmt::print(stderr, "While entering/leaving thread {} ({}): {}\n",
-                           t->id, t->get_name(), cpu_category { }.message(info.num));
-                info.frame->print();
-                info.registers->print();
-                halt();
-            }
-        }
-
         if (f->fault_address.segment != main_cs and f->fault_address.segment != ring0_cs) [[unlikely]]
         {
             if (exc == exception_num::trap)
@@ -1527,11 +1466,12 @@ namespace jw::debug::detail
 
         if (reentry.test_and_set()) [[unlikely]]
         {
-            if (exc == exception_num::trap or exc == exception_num::breakpoint)
+            if ((exc == exception_num::trap) | (exc == exception_num::breakpoint))
             {   // breakpoint in debugger code, ignore
                 if (debugmsg)
                     fmt::print(stderr, "re-entry caused by breakpoint, ignoring.\n");
                 leave();
+                current_signal = -1;
                 f->flags.trap = false;
                 return true;
             }
@@ -1544,87 +1484,101 @@ namespace jw::debug::detail
             throw_cpu_exception(info);
         }
 
+        auto* const ti = get_info(current_thread());
+        current_exception = info;
+
         try
         {
-            if (exc == exception_num::breakpoint and current_signal != -1)
+            int signal = current_signal;
+
+            if ((exc != exception_num::breakpoint) | (signal == -1))
             {
-                if (debugmsg) fmt::print(stderr, "break with signal 0x{:0>2x}\n", int { current_signal });
-                tinfo->signals.insert(current_signal);
+                signal = exc;
                 current_signal = -1;
             }
-            else tinfo->signals.insert(exc);
+            else if (debugmsg)
+                fmt::print(stderr, "break with signal 0x{:0>2x}\n", signal);
 
-            if (exc == exception_num::trap)
-                for (unsigned i = 0; i != max_watchpoints; ++i)
-                    if (watchpoints[i] and watchpoints[i]->triggered())
-                        watchpoints[i]->reset(), tinfo->watchpoints[i] = true;
-
-            if (tinfo->signals.count(trap_unmasked))
+            if (not ti) [[unlikely]]
             {
-                tinfo->signals.erase(trap_unmasked);
-                clear_trap_signals();
-
-                if (tinfo->stepping())  // Resume with SIGCONT so gdb won't get confused
-                    tinfo->signals.insert(continued);
-            }
-            else if (tinfo->trap_mask > 0)
-            {
-                if (all_benign_signals(tinfo))
+                if (is_benign_signal(signal))
                 {
-                    if (debugmsg)
-                        fmt::print(stderr, "trap masked at {:#x}\n",
-                                   std::uintptr_t { f->fault_address.offset });
-
                     leave();
-                    f->flags.trap = false;
-                    reentry.clear();
                     return true;
                 }
-                else
+                else [[unlikely]]
                 {
-                    // serious fault occured, undo trap masks
-                    tinfo->trap_mask = 0;
+                    auto* const t = current_thread();
+                    fmt::print(stderr, "While entering/leaving thread {} ({}): {}\n",
+                               t->id, t->get_name(), cpu_category { }.message(info.num));
+                    info.frame->print();
+                    info.registers->print();
+                    halt();
                 }
             }
+
+            switch (signal)
+            {
+            case packet_received:
+                if (ti->signal != -1)
+                    signal = ti->signal;
+                break;
+
+            case exception_num::trap:
+                for (unsigned i = 0; i != max_watchpoints; ++i)
+                    if (watchpoints[i] and watchpoints[i]->triggered())
+                        watchpoints[i]->reset(), ti->watchpoints[i] = true;
+
+                if (ti->watchpoints.none() & not ti->stepping())
+                {
+                    // Possible reasons to be here:
+                    // * To enable a previously-disabled breakpoint.
+                    // * From a POPF, after stepping over PUSHF.
+                    signal = -1;
+                    break;
+                }
+
+                [[fallthrough]];
+            case continued:
+                if (ti->watchpoints.none()
+                    & (f->fault_address.offset >= ti->step_range_begin)
+                    & (f->fault_address.offset <= ti->step_range_end))
+                {
+                    if (debugmsg)
+                        fmt::print(stderr, "range step until {:#x}, now at {:#x}\n",
+                                   ti->step_range_end, std::uintptr_t { f->fault_address.offset });
+                    signal = -1;
+                }
+                break;
+            }
+            ti->signal = signal;
+
+            if (ti->trap_mask > 0 and is_benign_signal(ti->signal))
+            {
+                if (debugmsg)
+                    fmt::print(stderr, "trap masked at {:#x}\n",
+                                std::uintptr_t { f->fault_address.offset });
+
+                leave();
+                f->flags.trap = false;
+                reentry.clear();
+                return true;
+            }
+            ti->trap_mask = 0;
+
+            if (ti->signal == -1)
+                goto done;
 
             if (debugmsg)
             {
                 static_cast<const dpmi10_exception_frame*>(f)->print();
                 r->print();
             }
-            current_exception = info;
 
-            if (tinfo->signals.count(thread_switched) and tinfo->stepping())
-                tinfo->signals.insert(continued);
-            tinfo->signals.erase(thread_switched);
-
-            if ((exc == exception_num::trap or tinfo->signals.count(continued))
-                and tinfo->watchpoints.none() and
-                tinfo->action == thread_info::step_range and
-                current_exception.frame->fault_address.offset >= tinfo->step_range_begin and
-                current_exception.frame->fault_address.offset <= tinfo->step_range_end)
-            {
-                if (debugmsg) fmt::print(stderr,"range step until {:#x}, now at {:#x}\n",
-                                         tinfo->step_range_end, std::uintptr_t { f->fault_address.offset });
-                clear_trap_signals();
-            }
-
-            if (debugmsg)
-                fmt::print(stderr, "signals: {}\n",
-                           fmt::join(tinfo->signals, ", "));
+            if (config::enable_gdb_interrupts and f->flags.interrupts_enabled)
+                asm("sti");
 
             stop_reply();
-
-            if (config::enable_gdb_interrupts and current_exception.frame->flags.interrupts_enabled)
-                asm ("sti");
-
-            auto cant_continue = [this]
-            {
-                for (auto* t : all_threads())
-                    if (t->active() and get_info(t)->action == thread_info::stop)
-                        return true;
-                return false;
-            };
 
             do
             {
@@ -1643,7 +1597,7 @@ namespace jw::debug::detail
                     else
                         print_exception();
                 }
-            } while (cant_continue());
+            } while (ti->action == thread_info::stop);
 
             com.flush();
         }
@@ -1657,12 +1611,13 @@ namespace jw::debug::detail
         }
         asm ("cli");
 
-        tinfo->watchpoints.reset();
-        f->flags.trap = tinfo->stepping();
+    done:
+        ti->watchpoints.reset();
+        f->flags.trap = ti->stepping();
         leave();
         reentry.clear();
 
-        return tinfo->do_action();
+        return ti->do_action();
     }
 
     void create_thread(thread* t)
@@ -1672,23 +1627,18 @@ namespace jw::debug::detail
 
         trap_mask no_step;
         t->debug_info = new (locked) thread_info { };
+        set_action(t, 'c');
 
         if (thread_events_enabled)
-            set_action(t, 's');
-        else
-            set_action(t, 'c');
-
-        break_with_signal(debug_signals::thread_started);
+            break_with_signal(debug_signals::thread_started);
     }
 
     void destroy_thread(thread* t)
     {
-        break_with_signal(debug_signals::thread_finished);
-        trap_mask no_step;
+        if (thread_events_enabled)
+            break_with_signal(debug_signals::thread_finished);
 
-        auto* info = detail::get_info(t);
-        if (info)
-            delete info;
+        trap_mask no_step;
 
         if (gdb)
         {
@@ -1697,12 +1647,13 @@ namespace jw::debug::detail
             if (gdb->control_thread == t)
                 gdb->control_thread = nullptr;
         }
-    }
 
-    void notify_gdb_thread_event(debug_signals e)
-    {
-        if (thread_events_enabled)
-            break_with_signal(e);
+        auto* info = detail::get_info(t);
+        if (info)
+        {
+            delete info;
+            t->debug_info = nullptr;
+        }
     }
 
     extern "C" void csignal(int signal)
@@ -1780,14 +1731,18 @@ namespace jw::debug
             return;
 
         force_frame_pointer();
-        ti->trap_mask = std::max(ti->trap_mask - 1, 0l);
-        if (ti->trap_mask == 0 and [ti]
+
+        const auto n = ti->trap_mask - 1;
+        if (n <= 0)
         {
-            for (auto s : ti->signals)
-                if (detail::is_trap_signal(s))
-                    return true;
-            return false;
-        }()) break_with_signal(detail::trap_unmasked);
+            ti->trap_mask = 0;
+            if ((ti->signal != -1) | (ti->stepping()))
+            {
+                // Resume with SIGCONT, otherwise gdb will get confused.
+                break_with_signal(detail::continued);
+            }
+        }
+        else ti->trap_mask = n;
     }
 }
 #endif

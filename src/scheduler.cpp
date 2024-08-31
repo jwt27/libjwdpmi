@@ -112,8 +112,6 @@ namespace jw::detail
             context_switch(&ct->context);
         }
 
-        debug::break_with_signal(debug::detail::thread_switched);
-
 #       ifndef NDEBUG
         if (ct->id != thread::main_thread_id and *reinterpret_cast<std::uint32_t*>(ct->stack.data()) != 0xDEADBEEF) [[unlikely]]
             throw std::runtime_error { "Stack overflow!" };
@@ -187,19 +185,21 @@ namespace jw::detail
         ct->eh_globals = *abi::__cxa_get_globals();
         ct->errno = errno;
 
-        for(std::size_t n = 0; ; ++n)
+        do
         {
             {
                 local_destructor sti { [] { asm ("sti"); } };
                 auto it = *iterator;
-                if (not ct->detached or ct->active()) [[likely]] ++it;
+                if (ct->active() | not ct->detached) [[likely]]
+                    ++it;
                 else
                 {
                     // Interrupts are always enabled here (by yield()).
                     asm ("cli");
                     it = threads->erase(it);
                 }
-                if (it == threads->end()) it = threads->begin();
+                if (it == threads->end())
+                    it = threads->begin();
                 std::atomic_ref { *iterator }.store(it, std::memory_order_release);
             }
 
@@ -215,14 +215,8 @@ namespace jw::detail
                 ct->context->ebp = 0;
                 ct->context->return_address = reinterpret_cast<std::uintptr_t>(run_thread);
             }
+        } while (ct->suspended | not ct->active());
 
-            if (not ct->suspended and ct->active()) [[likely]] break;
-            if (n > threads->size())
-            {
-                debug::break_with_signal(debug::detail::all_threads_suspended);
-                n = 0;
-            }
-        }
         *abi::__cxa_get_globals() = ct->eh_globals;
         errno = ct->errno;
 
