@@ -47,11 +47,6 @@ namespace jw::debug::detail
 
     using resource_type = locked_pool_resource;
 
-    template<typename T = std::byte>
-    using allocator = default_constructing_allocator_adaptor<monomorphic_allocator<resource_type, T>>;
-
-    using string = std::basic_string<char, std::char_traits<char>, allocator<char>>;
-
     static constexpr std::size_t max_watchpoints { 8 };
 
     static constexpr std::size_t bufsize { 4096 };
@@ -59,6 +54,7 @@ namespace jw::debug::detail
     static std::size_t rx_size { 0 };
     static char txbuf[bufsize];
     static char rxbuf[bufsize];
+    static char asciibuf[bufsize / 2];
 
     static std::string_view current_packet() noexcept
     {
@@ -516,6 +512,13 @@ namespace jw::debug::detail
     static char* encode_null(char* p, std::size_t len)
     {
         return std::fill_n(p, len * 2, 'x');
+    }
+
+    [[nodiscard]]
+    static char* encode_ascii(char* p, const char* end)
+    {
+        const auto n = end - asciibuf;
+        return encode(p, asciibuf, n);
     }
 
     template<typename T>
@@ -1134,29 +1137,29 @@ namespace jw::debug::detail
                 send("l");
             else if (skip("ThreadExtraInfo,"))
             {
-                using namespace ::jw::detail;
-                static string msg { &memres };
-                msg.clear();
-                auto id = decode(remaining());
-                if (auto* t = get_thread(id))
+                auto* a = asciibuf;
+                const auto id = decode(remaining());
+                if (auto* const t = get_thread(id))
                 {
-                    fmt::format_to(std::back_inserter(msg), "{}{}: ",
-                                   t->get_name(), t == current_thread() ? " (*)"sv : ""sv);
+                    a = append(a, t->get_name());
+                    if (t == current_thread())
+                        a = append(a, " (*)");
+                    a = append(a, ": ");
                     switch (t->get_state())
                     {
-                    case jw::detail::thread::starting:    msg += "Starting"sv;    break;
-                    case jw::detail::thread::running:     msg += "Running"sv;     break;
-                    case jw::detail::thread::finishing:   msg += "Finishing"sv;   break;
-                    case jw::detail::thread::finished:    msg += "Finished"sv;    break;
+                    case thread::starting:  a = append(a, "Starting");  break;
+                    case thread::running:   a = append(a, "Running");   break;
+                    case thread::finishing: a = append(a, "Finishing"); break;
+                    case thread::finished:  a = append(a, "Finished");  break;
                     }
-                    if (t->is_suspended()) msg += " (suspended)"sv;
-                    if (t->is_canceled()) msg += " (canceled)"sv;
+                    if (t->is_suspended())  a = append(a, " (suspended)");
+                    if (t->is_canceled())   a = append(a, " (canceled)");
                 }
-                else msg = "invalid thread"sv;
+                else a = append(a, "invalid thread");
 
-                auto* p = new_tx();
-                p = encode(p, msg.c_str(), msg.size());
-                send_txbuf(p);
+                auto* tx = new_tx();
+                tx = encode_ascii(tx, a);
+                send_txbuf(tx);
             }
             else goto unknown;
             break;
