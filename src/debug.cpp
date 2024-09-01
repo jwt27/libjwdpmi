@@ -1642,6 +1642,10 @@ namespace jw::debug::detail
             if (ti->signal == -1)
                 goto done;
 
+            if (not is_debug_exception)
+                print("Exception 0x{:x}: {} (error code: 0x{:0>8x})\n",
+                      exc.value, exc.message(), std::uint32_t { f->error_code });
+
             if (debugmsg)
             {
                 static_cast<const dpmi10_exception_frame*>(f)->print();
