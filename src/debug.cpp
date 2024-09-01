@@ -1553,6 +1553,11 @@ namespace jw::debug::detail
             throw_cpu_exception(info);
         }
 
+        local_destructor clear_reentry { [&]
+        {
+            reentry.clear();
+        } };
+
         auto* const t = current_thread();
         auto* const ti = get_info(t);
         current_exception = info;
@@ -1631,7 +1636,6 @@ namespace jw::debug::detail
 
                 leave();
                 f->flags.trap = false;
-                reentry.clear();
                 return true;
             }
             ti->trap_mask = 0;
@@ -1685,7 +1689,6 @@ namespace jw::debug::detail
         ti->watchpoints.reset();
         f->flags.trap = ti->stepping();
         leave();
-        reentry.clear();
 
         return ti->do_action();
     }
