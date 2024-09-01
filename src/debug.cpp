@@ -1517,8 +1517,7 @@ namespace jw::debug::detail
 
             fmt::print(stderr, "Can't debug this!  CS is neither 0x{:0>4x} nor 0x{:0>4x}.\n"
                                "{}\n",
-                       main_cs, ring0_cs,
-                       cpu_category { }.message(info.num));
+                       main_cs, ring0_cs, exc.message());
             info.frame->print();
             info.registers->print();
             return false;
@@ -1586,7 +1585,7 @@ namespace jw::debug::detail
                 {
                     auto* const t = current_thread();
                     fmt::print(stderr, "While entering/leaving thread {} ({}): {}\n",
-                               t->id, t->get_name(), cpu_category { }.message(info.num));
+                               t->id, t->get_name(), exc.message());
                     info.frame->print();
                     info.registers->print();
                     halt();
