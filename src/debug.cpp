@@ -736,8 +736,7 @@ namespace jw::debug::detail
         {
             int signal = current_signal;
             current_signal = packet_received;
-            e.frame->fault_address.offset += 1;
-            handle_exception(exception_num::breakpoint, e);
+            handle_exception(exception_num::trap, e);
             current_signal = signal;
         } };
 
@@ -1546,15 +1545,16 @@ namespace jw::debug::detail
 
         try
         {
+            const bool is_debug_exception = (exc == exception_num::breakpoint) | (exc == exception_num::trap);
             int signal = current_signal;
 
-            if ((exc != exception_num::breakpoint) | (signal == -1))
+            if ((signal != -1) & is_debug_exception)
             {
-                signal = exc;
                 current_signal = -1;
+                if (debugmsg)
+                    fmt::print(stderr, "break with signal 0x{:0>2x}\n", signal);
             }
-            else if (debugmsg)
-                fmt::print(stderr, "break with signal 0x{:0>2x}\n", signal);
+            else signal = exc;
 
             if (not ti) [[unlikely]]
             {
