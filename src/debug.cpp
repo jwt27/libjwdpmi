@@ -52,15 +52,6 @@ namespace jw::debug::detail
 
     using string = std::basic_string<char, std::char_traits<char>, allocator<char>>;
 
-    struct packet_string : public std::string_view
-    {
-        char delim;
-        template <typename T, typename U>
-        packet_string(T&& str, U&& delimiter): std::string_view(std::forward<T>(str)), delim(std::forward<U>(delimiter)) { }
-        using std::string_view::operator=;
-        using std::string_view::basic_string_view;
-    };
-
     static constexpr std::size_t max_watchpoints { 8 };
 
     static constexpr std::size_t bufsize { 4096 };
@@ -419,6 +410,33 @@ namespace jw::debug::detail
         return true;
     }
 
+    static bool starts_with(const char* p, std::string_view str) noexcept
+    {
+        const auto n4 = str.size() / 4 * 4;
+        const auto n1 = str.size() % 4;
+        const auto* const q = str.begin();
+        union
+        {
+            std::uint8_t x8[4];
+            std::uint32_t x32;
+        } a, b;
+        std::uint32_t neq = 0;
+
+        for (std::size_t i = 0; i != n4; i += 4)
+        {
+            std::copy_n(p + i, 4, a.x8);
+            std::copy_n(q + i, 4, b.x8);
+            neq |= a.x32 xor b.x32;
+        }
+
+        a.x32 = b.x32 = 0;
+        std::copy_n(p + n4, n1, a.x8);
+        std::copy_n(q + n4, n1, b.x8);
+        neq |= a.x32 xor b.x32;
+
+        return neq == 0;
+    }
+
     // Decode big-endian hex string
     static auto decode(std::string_view in)
     {
@@ -703,7 +721,6 @@ namespace jw::debug::detail
     struct gdbstub
     {
         resource_type memres { 1_MB };
-        std::deque<packet_string, allocator<packet_string>> packet { &memres };
         bool received { false };
         bool replied { false };
         bool acked { true };
@@ -712,7 +729,6 @@ namespace jw::debug::detail
         std::array<std::optional<watchpoint>, max_watchpoints> watchpoints;
         std::pmr::map<std::uintptr_t, std::byte> breakpoints { &memres };
         std::map<int, void(*)(int)> signal_handlers { };
-        std::pmr::map<std::pmr::string, std::pmr::string> supported { &memres };
         io::rs232_stream com;
         std::array<std::optional<exception_handler>, 0x20> exception_handlers;
 
@@ -952,17 +968,6 @@ namespace jw::debug::detail
     parse:
         if (config::enable_gdb_protocol_dump)
             fmt::print(stderr, "recv <-- \"{}\"\n", current_packet());
-        std::size_t pos { 1 };
-        packet.clear();
-        std::string_view input { current_packet() };
-        if (input.size() == 1) packet.emplace_back("", input[0]);
-        while (pos < input.size())
-        {
-            auto p = std::min({ input.find(',', pos), input.find(':', pos), input.find(';', pos), input.find('=', pos) });
-            if (p == input.npos) p = input.size();
-            packet.emplace_back(input.substr(pos, p - pos), input[pos - 1]);
-            pos += p - pos + 1;
-        }
         received = true;
         return true;
     }
@@ -1027,32 +1032,82 @@ namespace jw::debug::detail
             return;
         received = false;
 
-        const char p = packet.front().delim;
-        if (p == '?')   // stop reason
+        rxbuf[rx_size] = '\0';
+        const char* pkt = rxbuf;
+        const char* const end = rxbuf + rx_size;
+
+        auto get = [&]
         {
+            return *pkt++;
+        };
+
+        auto get_n = [&](std::size_t n)
+        {
+            std::string_view str { pkt, pkt + n };
+            pkt += n;
+            if (pkt > end)
+                throw std::runtime_error { "packet too short" };
+            return str;
+        };
+
+        auto must_get = [&](char c)
+        {
+            if (*pkt++ != c)
+                throw std::runtime_error { "unrecognized packet format" };
+        };
+
+        auto remaining = [&]
+        {
+            return std::string_view { pkt, end };
+        };
+
+        auto skip = [&](std::string_view str)
+        {
+            const bool eq = starts_with(pkt, str);
+            pkt += str.size() & (static_cast<std::size_t>(not eq) - 1);
+            return eq;
+        };
+
+        auto equal = [&](std::string_view str)
+        {
+            return starts_with(pkt, str) & (remaining().size() == str.size());
+        };
+
+        auto next = [&]
+        {
+            const char* p = pkt;
+            while (true) switch (*p)
+            {
+            default:
+                ++p;
+                continue;
+
+            case ',':
+            case ';':
+            case ':':
+            case '=':
+            case '\0':
+                std::string_view str { pkt, p };
+                pkt = p;
+                return str;
+            }
+        };
+
+        auto count = [&](char c)
+        {
+            return std::count(pkt, end, c);
+        };
+
+        switch (get())
+        {
+        case '?':   // stop reason
             stop_reply(true);
-        }
-        else if (p == 'q')  // query
-        {
-            auto& q = packet[0];
-            if (q == "Supported"sv)
+            break;
+
+        case 'q':   // query
+            if (skip("Supported"))
             {
                 tx_size = 0;
-                packet.pop_front();
-                for (auto&& str : packet)
-                {
-                    auto back = str.back();
-                    auto equals_sign = str.find('=', 0);
-                    if (back == '+' or back == '-')
-                    {
-                        supported[str.substr(0, str.size() - 1).data()] = back;
-                    }
-                    else if (equals_sign != str.npos)
-                    {
-                        supported[str.substr(0, equals_sign).data()] = str.substr(equals_sign + 1);
-                    }
-                }
-
                 auto* p = new_tx();
                 p = fmt::format_to(p, "PacketSize={:x};", bufsize - 4);
                 p = append(p, "swbreak+;");
@@ -1060,15 +1115,15 @@ namespace jw::debug::detail
                 p = append(p, "QThreadEvents+");
                 send_txbuf(p);
             }
-            else if (q == "Attached"sv)
+            else if (skip("Attached"))
                 send("0");
-            else if (q == "C"sv)
+            else if (equal("C"))
             {
                 auto* p = new_tx();
                 p = fmt::format_to(p, "QC{:x}", current_thread()->id);
                 send_txbuf(p);
             }
-            else if (q == "fThreadInfo"sv)
+            else if (equal("fThreadInfo"))
             {
                 auto* p = new_tx();
                 *p++ = 'm';
@@ -1076,14 +1131,14 @@ namespace jw::debug::detail
                     p = fmt::format_to(p, "{:x},", t->id);
                 send_txbuf(p);
             }
-            else if (q == "sThreadInfo"sv)
+            else if (equal("sThreadInfo"))
                 send("l");
-            else if (q == "ThreadExtraInfo"sv)
+            else if (skip("ThreadExtraInfo,"))
             {
-                using namespace jw::detail;
+                using namespace ::jw::detail;
                 static string msg { &memres };
                 msg.clear();
-                auto id = decode(packet[1]);
+                auto id = decode(remaining());
                 if (auto* t = get_thread(id))
                 {
                     fmt::format_to(std::back_inserter(msg), "{}{}: ",
@@ -1104,132 +1159,155 @@ namespace jw::debug::detail
                 p = encode(p, msg.c_str(), msg.size());
                 send_txbuf(p);
             }
-            else send("");
-        }
-        else if (p == 'Q')
-        {
-            auto& q = packet[0];
-            if (q == "ThreadEvents"sv)
+            else goto unknown;
+            break;
+
+        case 'Q':   // set
+            if (skip("ThreadEvents:"))
             {
-                thread_events_enabled = packet[1][0] - '0';
+                thread_events_enabled = get() == '1';
                 send("OK");
             }
-            else send("");
-        }
-        else if (p == 'v')
-        {
-            auto& v = packet[0];
-            if (v == "Stopped"sv)
+            else goto unknown;
+            break;
+
+        case 'v':
+            if (skip("Cont"))
             {
-                stop_reply(true);
-            }
-            else if (v == "Cont?"sv)
-            {
-                send("vCont;s;S;c;C;t;r"sv);
-            }
-            else if (v == "Cont"sv)
-            {
+                switch (get())
+                {
+                case '?':
+                    send("vCont;s;S;c;C;r");
+                    return;
+
+                default:
+                    goto unknown;
+
+                case ';':
+                    break;
+                }
+
                 struct thread_action
                 {
                     thread_id id;
+                    int signal;
                     std::uintptr_t begin, end;
                     char action;
                 };
-                thread_action actions[packet.size()];
+                thread_action actions[count(';') + 1];
+                thread_action default_action { };
                 std::size_t n = 0;
 
-                for (std::size_t i = 1; i < packet.size(); ++i)
+                while(true)
                 {
-                    std::uintptr_t begin { 0 }, end { 0 };
-                    char c { packet[i][0] };
-                    if (c == 'r')
+                    thread_action a { };
+                    switch (a.action = get())
                     {
-                        if (i + 1 >= packet.size() or packet[i + 1].delim != ',')
-                        {
-                            send("E00");
-                            return;
-                        }
-                        begin = decode(packet[i].substr(1));
-                        end = decode(packet[i + 1]);
-                        ++i;
-                    }
-                    if (i + 1 < packet.size() and packet[i + 1].delim == ':')
-                    {
-                        auto id = decode(packet[i + 1]);
-                        if (not get_thread(id))
-                        {
-                            send("E00");
-                            return;
-                        }
+                    case 'c':
+                    case 's':
+                    case 't':
+                        break;
 
-                        ++i;
-                        actions[n++] = { id, begin, end, c };
+                    case 'C':
+                    case 'S':
+                        a.signal = decode(get_n(2));
+                        break;
+
+                    case 'r':
+                        a.begin = decode(next());
+                        must_get(',');
+                        a.end = decode(next());
+                        break;
+
+                    default: [[unlikely]]
+                        goto unknown;
                     }
-                    else
+
+                    char c = get();
+                    switch (c)
                     {
-                        for (thread* t : all_threads())
-                            set_action(t, c, begin, end);
+                    case ':':
+                        a.id = decode(next());
+                        actions[n++] = a;
+                        c = get();
+                        break;
+
+                    case ';':
+                    case '\0':
+                        a.id = all_threads_id;
+                        default_action = a;
+                        break;
+
+                    default: [[unlikely]]
+                        send("E00");
+                        return;
                     }
-                }
+                    if (c != ';')
+                        break;
+                };
+
+                const auto& a = default_action;
+                if (a.id == all_threads_id)
+                    for (thread* t : all_threads())
+                        set_action(t, a.action, a.begin, a.end);
 
                 for (std::size_t i = 0; i != n; ++i)
                 {
-                    auto& a = actions[i];
+                    const auto& a = actions[i];
                     set_action(get_thread(a.id), a.action, a.begin, a.end);
                 }
             }
-            else if (v == "CtrlC")
+            else if (equal("CtrlC"))
             {
                 get_info(current_thread())->signal = SIGINT;
                 send("OK");
                 stop_reply();
             }
-            else send("");
-        }
-        else if (p == 'H')  // set current thread
-        {
-            auto id = decode(packet[0].substr(1));
-            auto* t = get_thread(id);
-            if (t or id == all_threads_id)
+            else goto unknown;
+            break;
+
+        case 'H':   // set current thread
+            if (get() == 'g')
             {
-                if (packet[0][0] == 'g')
-                {
-                    if (id == all_threads_id)
-                        query_thread = current_thread();
-                    else
-                        query_thread = t;
-                }
+                const auto id = decode(remaining());
+                if (id == all_threads_id)
+                    query_thread = current_thread();
+                else
+                    query_thread = get_thread(id);
                 send("OK");
             }
-            else send("E00");
-        }
-        else if (p == 'T')  // is thread alive?
-        {
-            auto id = decode(packet[0]);
-            if (get_thread(id))
+            else goto unknown;
+            break;
+
+        case 'T':   // is thread alive?
+            if (get_thread(decode(remaining())))
                 send("OK");
             else
                 send("E01");
-        }
-        else if (p == 'p')  // read one register
-        {
+            break;
+
+        case 'p':   // read one register
             if (query_thread)
             {
                 auto* p = new_tx();
-                auto regn = static_cast<regnum>(decode(packet[0]));
-                p = reg(p, regn, query_thread);
+                const auto i = static_cast<regnum>(decode(remaining()));
+                p = reg(p, i, query_thread);
                 send_txbuf(p);
             }
             else send("E00");
-        }
-        else if (p == 'P')  // write one register
+            break;
+
+        case 'P':   // write one register
         {
-            if (set_reg(static_cast<regnum>(decode(packet[0])), packet[1], query_thread))
+            const auto i = static_cast<regnum>(decode(next()));
+            must_get('=');
+            if (set_reg(i, remaining(), query_thread))
                 send("OK");
             else
                 send("E00");
+            break;
         }
-        else if (p == 'g')  // read registers
+        case 'g':   // read registers
         {
             if (query_thread)
             {
@@ -1239,15 +1317,17 @@ namespace jw::debug::detail
                 send_txbuf(p);
             }
             else send("E00");
+            break;
         }
-        else if (p == 'G')  // write registers
+        case 'G':   // write registers
         {
+            const auto str { remaining() };
             regnum reg { };
             std::size_t pos { };
             bool ok { true };
-            while (ok and pos < packet[0].size())
+            while (ok and pos < str.size())
             {
-                ok &= set_reg(reg, packet[0].substr(pos), query_thread);
+                ok &= set_reg(reg, str.substr(pos), query_thread);
                 pos += regsize[reg] * 2;
                 ++reg;
             }
@@ -1255,75 +1335,85 @@ namespace jw::debug::detail
                 send("OK");
             else
                 send("E00");
+            break;
         }
-        else if (p == 'm')  // read memory
+        case 'm':   // read memory
         {
-            auto* addr = reinterpret_cast<byte*>(decode(packet[0]));
-            std::size_t len = decode(packet[1]);
+            auto* addr = reinterpret_cast<std::byte*>(decode(next()));
+            must_get(',');
+            std::size_t len = decode(remaining());
 
             auto* p = new_tx();
-            p = encode(p, addr, len);
+            try { p = encode(p, addr, len); }
+            catch (...)
+            {
+                send("E04");
+                return;
+            }
             send_txbuf(p);
+            break;
         }
-        else if (p == 'M')  // write memory
+        case 'M':   // write memory
         {
-            auto* addr = reinterpret_cast<byte*>(decode(packet[0]));
-            std::size_t len = decode(packet[1]);
-            if (reverse_decode(packet[2], addr, len))
-                send("OK");
-            else
-                send("E00");
+            auto* addr = reinterpret_cast<std::byte*>(decode(next()));
+            must_get(',');
+            std::size_t len = decode(next());
+            must_get(':');
+            try { reverse_decode(remaining(), addr, len); }
+            catch (...)
+            {
+                send("E04");
+                return;
+            }
+            send("OK");
+            break;
         }
-        else if (p == 'Z')  // set break/watchpoint
+        case 'Z':  // set break/watchpoint
         {
-            auto& z = packet[0][0];
-            std::uintptr_t addr = decode(packet[1]);
+            const auto z = get();
+            must_get(',');
+            std::uintptr_t addr = decode(next());
+            must_get(',');
+            std::size_t size = decode(next());
             if (z == '0')   // set breakpoint
             {
-                if (packet.size() > 3)  // conditional breakpoint
-                {
-                    send("");    // not implemented (TODO)
-                    return;
-                }
                 set_breakpoint(addr);
                 send("OK");
             }
-            else            // set watchpoint
+            else try        // set watchpoint
             {
-                try
-                {
-                    const auto type = watchpoint_type(z);
-                    if (not type)
-                    {
-                        send("");
-                        return;
-                    }
-                    std::size_t size = decode(packet[2]);
-                    bool ok = false;
-                    for (auto& wp : watchpoints)
-                    {
-                        if (wp)
-                            continue;
+                const auto type = watchpoint_type(z);
+                if (not type)
+                    goto unknown;
 
-                        wp.emplace(addr, size, *type);
-                        ok = true;
-                        break;
-                    }
-                    if (ok)
-                        send("OK");
-                    else
-                        throw std::runtime_error { "this should never happen" };
-                }
-                catch (...)
+                bool ok = false;
+                for (auto& wp : watchpoints)
                 {
-                    send("E00");
+                    if (wp)
+                        continue;
+
+                    wp.emplace(addr, size, *type);
+                    ok = true;
+                    break;
                 }
+                if (ok)
+                    send("OK");
+                else
+                    throw std::runtime_error { "this should never happen" };
             }
+            catch (...)
+            {
+                send("E00");
+            }
+            break;
         }
-        else if (p == 'z')  // remove break/watchpoint
+        case 'z':   // remove break/watchpoint
         {
-            auto& z = packet[0][0];
-            std::uintptr_t addr = decode(packet[1]);
+            const auto z = get();
+            must_get(',');
+            std::uintptr_t addr = decode(next());
+            must_get(',');
+            std::size_t size = decode(remaining());
             if (z == '0')   // remove breakpoint
             {
                 if (clear_breakpoint(addr))
@@ -1331,23 +1421,20 @@ namespace jw::debug::detail
                 else
                     send("E00");
             }
-            else            // remove watchpoint
+            else    // remove watchpoint
             {
                 const auto type = watchpoint_type(z);
                 if (not type)
-                {
-                    send("");
-                    return;
-                }
+                    goto unknown;
 
                 unsigned n = 0;
                 for (auto& wp : watchpoints)
                 {
                     if (not wp)
                         continue;
-                    if (wp->address != addr)
-                        continue;
-                    if (wp->type != *type)
+                    if ((wp->address != addr)
+                        | (wp->type != *type)
+                        | (wp->size != size))
                         continue;
 
                     wp.reset();
@@ -1359,8 +1446,9 @@ namespace jw::debug::detail
                 else
                     send("E00");
             }
+            break;
         }
-        else if (p == 'k')  // kill
+        case 'k':   // kill
         {
             if (debugmsg) fmt::print(stdout, "KILL signal received.");
             for (thread* t : all_threads())
@@ -1372,8 +1460,13 @@ namespace jw::debug::detail
                 send_txbuf(p);
             }
             else send("E00");
+            break;
         }
-        else send("");   // unknown packet
+
+        unknown:
+        default:    // unknown packet
+            send("");
+        }
     }
 
     [[gnu::hot]] inline bool gdbstub::handle_exception(exception_num exc, const exception_info& info)
