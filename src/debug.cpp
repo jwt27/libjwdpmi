@@ -7,12 +7,9 @@
 #include <csignal>
 #include <cstdlib>
 #include <string_view>
-#include <set>
 #include <ranges>
 #include <unwind.h>
 #include <fmt/format.h>
-#include <fmt/ostream.h>
-#include <fmt/ranges.h>
 #include <jw/main.h>
 #include <jw/dpmi/fpu.h>
 #include <jw/dpmi/dpmi.h>
@@ -22,7 +19,6 @@
 #include <jw/io/rs232.h>
 #include <jw/alloc.h>
 #include <jw/dpmi/ring0.h>
-#include <jw/allocator_adaptor.h>
 #include <jw/thread.h>
 #include <jw/dpmi/async_signal.h>
 #include "jwdpmi_config.h"
