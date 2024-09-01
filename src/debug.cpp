@@ -786,7 +786,9 @@ namespace jw::debug::detail
         void enable_all_breakpoints();
 
         void send(std::string_view);
-        void send_txbuf(const char* end);
+        void send_txbuf(const char*);
+        template<typename... T>
+        void print(fmt::format_string<T...>, T&&...);
         bool receive();
         bool packet_available();
 
@@ -891,6 +893,18 @@ namespace jw::debug::detail
     inline void gdbstub::send_txbuf(const char* end)
     {
         return send({ txbuf + 1, end });
+    }
+
+    template<typename... T>
+    inline void gdbstub::print(fmt::format_string<T...> str, T&&... args)
+    {
+        auto* a = asciibuf;
+        a = fmt::format_to(a, std::move(str), std::forward<T>(args)...);
+
+        auto* tx = new_tx();
+        *tx++ = 'O';
+        tx = encode_ascii(tx, a);
+        send_txbuf(tx);
     }
 
     inline bool gdbstub::receive()
@@ -1539,7 +1553,8 @@ namespace jw::debug::detail
             throw_cpu_exception(info);
         }
 
-        auto* const ti = get_info(current_thread());
+        auto* const t = current_thread();
+        auto* const ti = get_info(t);
         current_exception = info;
 
         try
@@ -1611,9 +1626,8 @@ namespace jw::debug::detail
 
             if (ti->trap_mask > 0 and is_benign_signal(ti->signal))
             {
-                if (debugmsg)
-                    fmt::print(stderr, "trap masked at {:#x}\n",
-                                std::uintptr_t { f->fault_address.offset });
+                print("Thread {:d}: Trap masked at {:#x}, resuming with SIGCONT.\n",
+                      t->id, std::uintptr_t { f->fault_address.offset });
 
                 leave();
                 f->flags.trap = false;
