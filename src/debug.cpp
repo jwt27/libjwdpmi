@@ -395,13 +395,6 @@ namespace jw::debug::detail
         }
     }
 
-    static bool all_benign_signals(auto* t)
-    {
-        for (auto&& s : t->signals)
-            if (not is_benign_signal(s)) return false;
-        return true;
-    }
-
     static bool starts_with(const char* p, std::string_view str) noexcept
     {
         const auto n4 = str.size() / 4 * 4;
