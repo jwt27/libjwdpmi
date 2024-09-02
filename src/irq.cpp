@@ -158,20 +158,15 @@ namespace jw::dpmi::detail
                 if (not (flags & no_interrupts)) asm ("sti");
                 else if (flags & no_reentry) mask.emplace(i);
 
-                for (const auto* p = entry->first; p != nullptr; p = p->next)
-                {
-                    if (p->enabled) [[likely]]
-                        p->call();
-                }
+                entry->first->call();
 
-                if ((flags & fallback_handler) and id.acknowledged != ack::yes)
-                {
-                    // No need to check entry->fallback->enabled here.
+                if (((flags & fallback_handler) != 0)
+                    & (id.acknowledged != ack::yes))
                     entry->fallback->call();
-                }
             }
 
-            if ((flags & always_chain) or id.acknowledged == ack::no) [[unlikely]]
+            if (((flags & always_chain) != 0)
+                | (id.acknowledged == ack::no)) [[unlikely]]
             {
                 call_far_iret(entry->prev_handler);
                 id.acknowledged = ack::eoi_sent;

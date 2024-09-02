@@ -23,15 +23,30 @@ namespace jw::dpmi::detail
 
         template<typename F>
         irq_handler_data(F&& func, irq_config_flags fl)
-            : call { std::forward<F>(func) }, flags { fl } { }
+            : flags { fl }
+        {
+            set_func(std::forward<F>(func));
+        }
 
         irq_level assigned_irq() const { return irq; }
         bool is_enabled() const { return enabled; }
 
-        function<void(), 4> call;
-        const irq_config_flags flags;
+        template<typename F>
+        void set_func(F&& func)
+        {
+            call = [this, func = std::make_tuple(std::forward<F>(func))] [[gnu::hot]]
+            {
+                if (enabled) [[likely]]
+                    std::get<0>(func)();
+                if (next) [[likely]]
+                    next->call();
+            };
+        }
 
     private:
+
+        function<void(), 4> call;
+        const irq_config_flags flags;
         irq_level irq { 16 };
         bool enabled { false };
         irq_handler_data* next { nullptr };

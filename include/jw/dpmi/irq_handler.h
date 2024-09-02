@@ -42,7 +42,7 @@ namespace jw::dpmi
         template<typename F>
         irq_handler& operator=(F&& func)
         {
-            data->call = std::forward<F>(func);
+            data->set_func(std::forward<F>(func));
             return *this;
         }
 
