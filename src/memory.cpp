@@ -1,10 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2016 - 2024 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <optional>
 #include <jw/dpmi/memory.h>
@@ -13,8 +8,9 @@
 
 namespace jw::dpmi
 {
-    static std::optional<descriptor> gdt, ldt;
     static bool direct_ldt_access = false;
+    static std::optional<descriptor> gdt, ldt;
+    static local_destructor cleanup { [] { direct_ldt_access = false; } };
 
     [[gnu::noipa]] static void may_throw() { }; // stupid hack
 
