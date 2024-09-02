@@ -156,7 +156,7 @@ namespace jw::debug
             // handle", which "should never happen".
         }
 #else
-        constexpr watchpoint(std::uintptr_t, std::size_t, watchpoint_type t) : type(t) { }
+        constexpr watchpoint(std::uintptr_t, std::size_t, watchpoint_type) { }
 #endif
 
         // Get the current state of this watchpoint (DPMI 0.9, AX=0B02).
