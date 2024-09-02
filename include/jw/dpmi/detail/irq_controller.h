@@ -171,7 +171,8 @@ namespace jw::dpmi::detail
         void free_stack()
         {
             locking_allocator<std::byte> alloc { };
-            if (stack.data() != nullptr) alloc.deallocate(stack.data(), stack.size());
+            if (stack.data() != nullptr)
+                alloc.deallocate(stack.data(), stack.size());
             stack = { };
         }
 
@@ -179,8 +180,9 @@ namespace jw::dpmi::detail
         {
             interrupt_mask no_irqs { };
             locking_allocator<std::byte> alloc { };
+            auto* const p = alloc.allocate(size);
             free_stack();
-            stack = { alloc.allocate(size), size };
+            stack = { p, size };
             resizing_stack.clear();
         }
 
