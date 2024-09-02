@@ -10,6 +10,7 @@
 #include <jw/dpmi/alloc.h>
 #include <jw/dpmi/irq_mask.h>
 #include <jw/dpmi/irq_config_flags.h>
+#include <jw/uninitialized_storage.h>
 
 namespace jw::dpmi::detail
 {
@@ -147,24 +148,23 @@ namespace jw::dpmi::detail
 
         irq_controller* get(irq_level i)
         {
-            return reinterpret_cast<irq_controller*>(&entries[i]);
+            return entries[i].pointer();
         }
 
         irq_controller* add(irq_level i)
         {
-            auto* entry = get(i);
             if (not allocated[i])
             {
-                entry = new (entry) irq_controller { i };
+                auto* entry = new (entries[i].storage) irq_controller { i };
                 allocated[i] = true;
+                return entry;
             }
-            return entry;
+            else return get(i);
         }
 
         void remove(irq_level i)
         {
-            auto* entry = get(i);
-            entry->~irq_controller();
+            get(i)->~irq_controller();
             allocated[i] = false;
         }
 
@@ -185,7 +185,7 @@ namespace jw::dpmi::detail
         }
 
         std::bitset<16> allocated { };
-        std::array<std::aligned_storage_t<sizeof(irq_controller), alignof(irq_controller)>, 16> entries;
+        std::array<uninitialized_storage<irq_controller>, 16> entries;
         std::span<std::byte> stack { };
         std::atomic_flag resizing_stack { false };
     };
