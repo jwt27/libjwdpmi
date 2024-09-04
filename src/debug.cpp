@@ -406,30 +406,7 @@ namespace jw::debug::detail
 
     static bool is_fault_signal(int exc) noexcept
     {
-        switch (exc)
-        {
-        default:
-            return false;
-
-        case exception_num::divide_error:
-        case exception_num::overflow:
-        case exception_num::x87_exception:
-        case exception_num::sse_exception:
-        case exception_num::non_maskable_interrupt:
-        case exception_num::double_fault:
-        case exception_num::bound_range_exceeded:
-        case exception_num::x87_segment_not_present:
-        case exception_num::invalid_tss:
-        case exception_num::segment_not_present:
-        case exception_num::stack_segment_fault:
-        case exception_num::general_protection_fault:
-        case exception_num::page_fault:
-        case exception_num::invalid_opcode:
-        case exception_num::device_not_available:
-        case exception_num::alignment_check:
-        case exception_num::machine_check:
-            return true;
-        }
+        return (exc >= 0) & (exc <= 20);
     }
 
     static bool is_stop_signal(int exc) noexcept
@@ -447,16 +424,9 @@ namespace jw::debug::detail
 
     static bool is_trap_signal(int exc) noexcept
     {
-        switch (exc)
-        {
-        default:
-            return false;
-
-        case exception_num::trap:
-        case exception_num::breakpoint:
-        case continued:
-            return true;
-        }
+        return (exc == exception_num::trap)
+            | (exc == exception_num::breakpoint)
+            | (exc == continued);
     }
 
     static bool is_benign_signal(std::int32_t exc) noexcept
@@ -835,14 +805,14 @@ namespace jw::debug::detail
             for (auto e = 0x00; e <= 0x0e; ++e)
                 install_exception_handler(e);
 
-            serial_irq.set_irq(cfg.irq);
-            serial_irq.enable();
-
-            for (auto&& e : { 0x10, 0x11, 0x12, 0x13, 0x14, 0x1e })
+            for (auto e : { 0x10, 0x11, 0x12, 0x13, 0x14 })
             {
                 try { install_exception_handler(e); }
                 catch (const dpmi_error&) { /* ignore */ }
             }
+
+            serial_irq.set_irq(cfg.irq);
+            serial_irq.enable();
         }
 
         ~gdbstub()
@@ -899,7 +869,7 @@ namespace jw::debug::detail
             if (n > 3)
             {
                 n = std::min<std::size_t>(n, 98);   // above 98, RLE byte would be non-printable
-                if (n == 7 or n == 8) n = 6;        // RLE byte can't be '#' or '$'
+                if ((n == 7) | (n == 8)) n = 6;     // RLE byte can't be '#' or '$'
                 *p++ = ch;
                 *p++ = '*';
                 *p++ = static_cast<char>(n + 28);
@@ -1701,7 +1671,7 @@ namespace jw::debug::detail
                     else
                         print_exception();
                 }
-            } while (ti->action == thread_info::stop);
+            } while (ti->action == thread_info::stop or packet_available());
 
             com.flush();
         }
