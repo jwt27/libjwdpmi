@@ -41,9 +41,8 @@ namespace jw::debug::detail
     static bool thread_events_enabled { false };
     static exception_info current_exception;
 
-    using resource_type = locked_pool_resource;
-
     static constexpr std::size_t max_watchpoints { 8 };
+    static constexpr std::size_t max_breakpoints { 256 };
 
     static constexpr std::size_t bufsize { 4096 };
     static std::size_t tx_size { 0 };
@@ -90,6 +89,88 @@ namespace jw::debug::detail
             | std::views::transform([](const thread& t) { return const_cast<thread*>(&t); })
             | std::views::filter([](thread* t) { return get_info(t) != nullptr; });
     }
+
+    struct breakpoint_map
+    {
+        ~breakpoint_map()
+        {
+            clear();
+        }
+
+        bool insert(std::uintptr_t at)
+        {
+            if (n == max_breakpoints) [[unlikely]]
+                return false;
+
+            entries[n++] = { at, read(at) };
+            return true;
+        }
+
+        bool erase(std::uintptr_t at)
+        {
+            for (unsigned i = n; i-- != 0;)
+            {
+                auto& e = entries[i];
+                if (e.address != at)
+                    continue;
+
+                write(e.address, e.opcode);
+                e = entries[--n];
+                return true;
+            }
+
+            return false;
+        }
+
+        void enable_all()
+        {
+            for (unsigned i = 0; i != n; ++i)
+                write(entries[i].address, std::byte { 0xcc });
+        }
+
+        bool enable_all_except(std::uintptr_t at)
+        {
+            bool found = false;
+            for (unsigned i = 0; i != n; ++i)
+            {
+                const auto& e = entries[i];
+                if (e.address == at)
+                {
+                    found = true;
+                    write(e.address, e.opcode);
+                }
+                else write(e.address, std::byte { 0xcc });
+            }
+            return found;
+        }
+
+        void clear()
+        {
+            for (unsigned i = 0; i != n; ++i)
+                write(entries[i].address, entries[i].opcode);
+            n = 0;
+        }
+
+    private:
+        static std::byte read(std::uintptr_t p) noexcept
+        {
+            return *reinterpret_cast<const std::byte*>(p);
+        }
+
+        static void write(std::uintptr_t p, std::byte b) noexcept
+        {
+            *reinterpret_cast<std::byte*>(p) = b;
+        }
+
+        struct entry
+        {
+            std::uintptr_t address;
+            std::byte opcode;
+        };
+
+        std::unique_ptr<entry[]> entries { new entry[max_breakpoints] };
+        std::size_t n { 0 };
+    };
 
     struct watchpoint : debug::watchpoint
     {
@@ -712,14 +793,13 @@ namespace jw::debug::detail
 
     struct gdbstub
     {
-        resource_type memres { 1_MB };
         bool received { false };
         bool replied { false };
         bool acked { true };
         std::atomic_flag reentry { false };
         thread* query_thread { nullptr };
         std::array<std::optional<watchpoint>, max_watchpoints> watchpoints;
-        std::pmr::map<std::uintptr_t, std::byte> breakpoints { &memres };
+        breakpoint_map breakpoints;
         std::map<int, void(*)(int)> signal_handlers { };
         io::rs232_stream com;
         std::array<std::optional<exception_handler>, 0x20> exception_handlers;
@@ -769,14 +849,7 @@ namespace jw::debug::detail
         {
             for (const auto& s : signal_handlers)
                 std::signal(s.first, s.second);
-            for (const auto& bp : breakpoints)
-                *reinterpret_cast<std::byte*>(bp.first) = bp.second;
         }
-
-        void set_breakpoint(std::uintptr_t);
-        bool clear_breakpoint(std::uintptr_t);
-        bool disable_breakpoint(std::uintptr_t);
-        void enable_all_breakpoints();
 
         void send(std::string_view);
         void send_txbuf(const char*);
@@ -791,44 +864,6 @@ namespace jw::debug::detail
     };
 
     static constinit gdbstub* gdb { nullptr };
-
-    inline void gdbstub::set_breakpoint(std::uintptr_t at)
-    {
-        auto* ptr = reinterpret_cast<std::byte*>(at);
-        breakpoints.try_emplace(at, *ptr);
-        *ptr = std::byte { 0xcc };
-    }
-
-    inline bool gdbstub::clear_breakpoint(std::uintptr_t at)
-    {
-        auto* const ptr = reinterpret_cast<std::byte*>(at);
-        const auto i = breakpoints.find(at);
-        if (i != breakpoints.end())
-        {
-            *ptr = i->second;
-            breakpoints.erase(i);
-            return true;
-        }
-        else return false;
-    }
-
-    inline bool gdbstub::disable_breakpoint(std::uintptr_t at)
-    {
-        auto* const ptr = reinterpret_cast<std::byte*>(at);
-        const auto i = breakpoints.find(at);
-        if (i != breakpoints.end())
-        {
-            *ptr = i->second;
-            return true;
-        }
-        else return false;
-    }
-
-    inline void gdbstub::enable_all_breakpoints()
-    {
-        for (const auto& bp : breakpoints)
-            *reinterpret_cast<std::byte*>(bp.first) = std::byte { 0xcc };
-    }
 
     inline bool gdbstub::packet_available()
     {
@@ -1113,6 +1148,7 @@ namespace jw::debug::detail
             if (skip("Supported"))
             {
                 tx_size = 0;
+                breakpoints.clear();
                 auto* p = new_tx();
                 p = fmt::format_to(p, "PacketSize={:x};", bufsize - 4);
                 p = append(p, "swbreak+;");
@@ -1382,8 +1418,10 @@ namespace jw::debug::detail
             std::size_t size = decode(next());
             if (z == '0')   // set breakpoint
             {
-                set_breakpoint(addr);
-                send("OK");
+                if (breakpoints.insert(addr))
+                    send("OK");
+                else
+                    send("E.Too many breakpoints");
             }
             else try        // set watchpoint
             {
@@ -1421,10 +1459,10 @@ namespace jw::debug::detail
             std::size_t size = decode(remaining());
             if (z == '0')   // remove breakpoint
             {
-                if (clear_breakpoint(addr))
+                if (breakpoints.erase(addr))
                     send("OK");
                 else
-                    send("E00");
+                    send("E.No such breakpoint");
             }
             else    // remove watchpoint
             {
@@ -1487,15 +1525,11 @@ namespace jw::debug::detail
 
         auto leave = [&]
         {
-            enable_all_breakpoints();
-            if (*reinterpret_cast<const std::uint8_t*>(f->fault_address.offset) == 0xcc)
-            {
-                // Don't resume on a breakpoint.
-                if (disable_breakpoint(f->fault_address.offset))
-                    f->flags.trap = true;           // trap on next instruction to re-enable
-                else
-                    f->fault_address.offset += 1;   // hardcoded breakpoint, safe to skip
-            }
+            // Don't resume on a breakpoint.
+            if (breakpoints.enable_all_except(f->fault_address.offset))
+                f->flags.trap = true;           // trap on next instruction to re-enable
+            else if (*reinterpret_cast<const std::uint8_t*>(f->fault_address.offset) == 0xcc)
+                f->fault_address.offset += 1;   // hardcoded breakpoint, safe to skip
             f->flags.resume = true;
 
             if (debugmsg)
