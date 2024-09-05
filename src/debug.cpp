@@ -30,65 +30,32 @@ using namespace jw::dpmi::detail;
 #ifndef NDEBUG
 namespace jw::debug::detail
 {
+    using scheduler = jw::detail::scheduler;
+    using thread = jw::detail::thread;
+    using thread_id = jw::detail::thread_id;
+
     static int posix_signal(int exc) noexcept;
     static bool is_fault_signal(int) noexcept;
     static void uninstall_gdb_interface();
 
-    const bool debugmsg = config::enable_gdb_debug_messages;
+    static constexpr bool debugmsg { config::enable_gdb_debug_messages };
+    static constexpr thread_id main_thread_id { thread::main_thread_id };
+    static constexpr thread_id all_threads_id { 0 };
+    static constexpr std::size_t max_watchpoints { 8 };
+    static constexpr std::size_t max_breakpoints { 256 };
+    static constexpr std::size_t bufsize { 4096 };
 
-    bool debug_mode { false };
-    int current_signal { -1 };
     static bool thread_events_enabled { false };
     static exception_info current_exception;
 
-    static constexpr std::size_t max_watchpoints { 8 };
-    static constexpr std::size_t max_breakpoints { 256 };
-
-    static constexpr std::size_t bufsize { 4096 };
     static std::size_t tx_size { 0 };
     static std::size_t rx_size { 0 };
     static char txbuf[bufsize];
     static char rxbuf[bufsize];
     static char asciibuf[bufsize / 2];
 
-    static std::string_view current_packet() noexcept
-    {
-        return { rxbuf, rx_size };
-    }
-
-    using scheduler = jw::detail::scheduler;
-    using thread = jw::detail::thread;
-    using thread_id = jw::detail::thread_id;
-    static constexpr thread_id main_thread_id = jw::detail::thread::main_thread_id;
-    static constexpr thread_id all_threads_id { 0 };
-
-    struct thread_info;
-
-    static thread_info* get_info(thread* t) noexcept
-    {
-        return static_cast<thread_info*>(t->debug_info);
-    }
-
-    static thread* get_thread(thread_id id) noexcept
-    {
-        auto* const t = scheduler::get_thread(id);
-        if (t and not get_info(t))
-            return nullptr;
-
-        return t;
-    }
-
-    static thread* current_thread() noexcept
-    {
-        return scheduler::current_thread();
-    }
-
-    static auto all_threads()
-    {
-        return scheduler::all_threads()
-            | std::views::transform([](const thread& t) { return const_cast<thread*>(&t); })
-            | std::views::filter([](thread* t) { return get_info(t) != nullptr; });
-    }
+    bool debug_mode { false };
+    int current_signal { -1 };
 
     struct breakpoint_map
     {
@@ -256,6 +223,32 @@ namespace jw::debug::detail
             }
         }
     };
+
+    static thread_info* get_info(thread* t) noexcept
+    {
+        return static_cast<thread_info*>(t->debug_info);
+    }
+
+    static thread* get_thread(thread_id id) noexcept
+    {
+        auto* const t = scheduler::get_thread(id);
+        if (t and not get_info(t))
+            return nullptr;
+
+        return t;
+    }
+
+    static thread* current_thread() noexcept
+    {
+        return scheduler::current_thread();
+    }
+
+    static auto all_threads()
+    {
+        return scheduler::all_threads()
+            | std::views::transform([](const thread& t) { return const_cast<thread*>(&t); })
+            | std::views::filter([](thread* t) { return get_info(t) != nullptr; });
+    }
 
     static void set_action(thread* t, char a, std::uintptr_t rbegin = 0, std::uintptr_t rend = 0)
     {
@@ -444,6 +437,11 @@ namespace jw::debug::detail
         case -1:
             return true;
         }
+    }
+
+    static std::string_view current_packet() noexcept
+    {
+        return { rxbuf, rx_size };
     }
 
     static bool starts_with(const char* p, std::string_view str) noexcept
