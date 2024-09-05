@@ -152,7 +152,7 @@ namespace jw::detail
 
     struct scheduler
     {
-        friend int ::main(int, const char**);
+        friend int ::__wrap_main(int, const char**);
         friend struct ::jw::thread;
         friend struct ::jw::init;
 

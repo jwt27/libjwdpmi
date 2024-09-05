@@ -5,7 +5,7 @@
 #include <exception>
 #include <new>
 
-int main(int, const char**);
+extern "C" int __wrap_main(int, const char**);
 
 namespace jw
 {

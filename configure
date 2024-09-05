@@ -148,6 +148,7 @@ echo $more_cxxflags >> cxxflags
 cat <<- EOF >> ldflags
 -Wno-attributes
 -Wl,--script=$src/tools/i386go32.x
+-Wl,--wrap=main
 -Wl,--wrap=malloc
 -Wl,--wrap=calloc
 -Wl,--wrap=realloc

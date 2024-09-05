@@ -38,8 +38,6 @@ extern "C"
     extern unsigned __djgpp_stack_limit;
 }
 
-int jwdpmi_main(std::span<std::string_view>);
-
 namespace jw
 {
     static constinit std::optional<dpmi::realmode_interrupt_handler> int2f_handler { std::nullopt };
@@ -151,44 +149,58 @@ namespace jw
     int exit_code { -1 };
 }
 
-[[gnu::force_align_arg_pointer]]
+[[gnu::noipa, gnu::weak]]
+int jwdpmi_main(std::span<std::string_view>)
+{
+    return -1;
+}
+
+extern "C" [[gnu::noipa, gnu::weak]]
 int main(int argc, const char** argv)
+{
+    std::string_view args[argc];
+    auto* a = args;
+    *a++ = argv[0];
+    for (auto i = 1; i < argc; ++i)
+    {
+#ifndef NDEBUG
+        if (stricmp(argv[i], "--debug") == 0)
+        {
+            io::rs232_config cfg;
+            cfg.set_com_port(io::com1);
+            debug::detail::setup_gdb_interface(cfg);
+        }
+        else if (stricmp(argv[i], "--ext-debug") == 0)
+        {
+            debug::detail::debug_mode = true;
+        }
+        else
+#endif
+        {
+            *a++ = argv[i];
+        }
+    }
+
+    if (debug::debug())
+    {
+        fmt::print(stderr, "Debug mode activated.  Connecting to GDB...\n");
+        debug::breakpoint();
+    }
+
+    const std::size_t n = a - args;
+    return jwdpmi_main({ args, n });
+}
+
+extern "C" int __real_main(int, const char**);
+
+extern "C" [[gnu::force_align_arg_pointer]]
+int __wrap_main(int argc, const char** argv)
 {
     try
     {
         int2f_handler.emplace(0x2f, [](dpmi::realmode_registers* reg, dpmi::far_ptr32) { return int2f(reg); });
 
-        std::string_view args[argc];
-        auto* a = args;
-        *a++ = argv[0];
-        for (auto i = 1; i < argc; ++i)
-        {
-#           ifndef NDEBUG
-            if (stricmp(argv[i], "--debug") == 0)
-            {
-                io::rs232_config cfg;
-                cfg.set_com_port(io::com1);
-                debug::detail::setup_gdb_interface(cfg);
-            }
-            else if (stricmp(argv[i], "--ext-debug") == 0)
-            {
-                debug::detail::debug_mode = true;
-            }
-            else
-#           endif
-            {
-                *a++ = argv[i];
-            }
-        }
-
-        if (debug::debug())
-        {
-            fmt::print(stderr, "Debug mode activated. Connecting to GDB...\n");
-            debug::breakpoint();
-        }
-
-        const std::size_t n = a - args;
-        jw::exit_code = jwdpmi_main({ args, n });
+        jw::exit_code = __real_main(argc, argv);
     }
     catch (const abi::__forced_unwind&)
     {
@@ -197,7 +209,7 @@ int main(int argc, const char** argv)
     }
     catch (...)
     {
-        fmt::print(stderr, "Caught exception in main()!\n");
+        fmt::print(stderr, "Caught exception from main():\n");
         jw::print_exception();
     }
 
