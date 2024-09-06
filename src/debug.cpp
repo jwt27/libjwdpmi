@@ -45,17 +45,17 @@ namespace jw::debug::detail
     static constexpr std::size_t max_breakpoints { 256 };
     static constexpr std::size_t bufsize { 4096 };
 
-    static bool thread_events_enabled { false };
+    static constinit bool thread_events_enabled { false };
     static exception_info current_exception;
 
-    static std::size_t tx_size { 0 };
-    static std::size_t rx_size { 0 };
+    static constinit std::size_t tx_size { 0 };
+    static constinit std::size_t rx_size { 0 };
     static char txbuf[bufsize];
     static char rxbuf[bufsize];
     static char asciibuf[bufsize / 2];
 
-    bool debug_mode { false };
-    int current_signal { -1 };
+    constinit bool debug_mode { false };
+    constinit int current_signal { -1 };
 
     struct breakpoint_map
     {

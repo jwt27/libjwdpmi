@@ -146,6 +146,16 @@ namespace jw
         return true;
     }
 
+#ifndef NDEBUG
+    static void initial_breakpoint()
+    {
+        fmt::print(stderr, "Debug mode activated.  Connecting to GDB...\n");
+        debug::breakpoint();
+    }
+
+    static bool debug_from_main = false;
+#endif
+
     int exit_code { -1 };
 }
 
@@ -160,32 +170,8 @@ int main(int argc, const char** argv)
 {
     std::string_view args[argc];
     auto* a = args;
-    *a++ = argv[0];
-    for (auto i = 1; i < argc; ++i)
-    {
-#ifndef NDEBUG
-        if (stricmp(argv[i], "--debug") == 0)
-        {
-            io::rs232_config cfg;
-            cfg.set_com_port(io::com1);
-            debug::detail::setup_gdb_interface(cfg);
-        }
-        else if (stricmp(argv[i], "--ext-debug") == 0)
-        {
-            debug::detail::debug_mode = true;
-        }
-        else
-#endif
-        {
-            *a++ = argv[i];
-        }
-    }
-
-    if (debug::debug())
-    {
-        fmt::print(stderr, "Debug mode activated.  Connecting to GDB...\n");
-        debug::breakpoint();
-    }
+    for (auto i = 0; i < argc; ++i)
+        *a++ = argv[i];
 
     const std::size_t n = a - args;
     return jwdpmi_main({ args, n });
@@ -199,6 +185,11 @@ int __wrap_main(int argc, const char** argv)
     try
     {
         int2f_handler.emplace(0x2f, [](dpmi::realmode_registers* reg, dpmi::far_ptr32) { return int2f(reg); });
+
+#ifndef NDEBUG
+        if (debug_from_main)
+            initial_breakpoint();
+#endif
 
         jw::exit_code = __real_main(argc, argv);
     }
@@ -332,6 +323,39 @@ namespace jw
                 // For now, assume that the dpmi server already enabled these bits (HDPMI does this).
                 // If not, then we'll soon crash with an invalid opcode on the first SSE instruction.
             }
+
+#ifndef NDEBUG
+            if (const auto* const debugopt = std::getenv("JWDPMI_DEBUG"))
+            {
+                const std::string_view opt { debugopt };
+                auto init_gdb = []
+                {
+                    io::rs232_config cfg;
+                    cfg.set_com_port(io::com1);
+                    debug::detail::setup_gdb_interface(cfg);
+                };
+
+                if (opt == "early")
+                {
+                    init_gdb();
+                    initial_breakpoint();
+                }
+                else if (opt == "main")
+                {
+                    init_gdb();
+                    debug_from_main = true;
+                }
+                else if (opt == "nobreak")
+                {
+                    init_gdb();
+                }
+                else if (opt == "ext")
+                {
+                    debug::detail::debug_mode = true;
+                }
+                else fmt::print(stderr, "Warning: unknown debug option \"{}\"\n", opt);
+            }
+#endif
         }
 
         ~init() noexcept
