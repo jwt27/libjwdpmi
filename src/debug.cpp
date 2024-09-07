@@ -183,6 +183,7 @@ namespace jw::debug::detail
         bool stopped { false };
         bool stepping { false };
         bool ignore_signal { true };
+        bool invalid_signal { false };
     };
 
     static thread_info* get_info(thread* t) noexcept
@@ -217,6 +218,7 @@ namespace jw::debug::detail
         ti->step_range_begin = 0;
         ti->step_range_end = 0;
         ti->ignore_signal = true;
+        ti->invalid_signal = false;
         ti->stepping = false;
         ti->stopped = false;
         switch (a.action)
@@ -239,6 +241,7 @@ namespace jw::debug::detail
 
         case 'C':
             ti->ignore_signal = false;
+            ti->invalid_signal = posix_signal(ti->signal) != a.signal;
             break;
 
         case 't':
@@ -1594,26 +1597,28 @@ namespace jw::debug::detail
             if (config::enable_gdb_interrupts and f->flags.interrupts_enabled)
                 asm("sti");
 
-            stop_reply();
-
             do
             {
-                receive();
-                try
+                stop_reply();
+                do
                 {
-                    handle_packet();
-                }
-                catch (...)
-                {
-                    // last command caused another exception (most likely page
-                    // fault after a request to read memory)
-                    // TODO: determine action based on last packet / signal
-                    if (not replied)
-                        send("E04");
-                    else
-                        print_exception();
-                }
-            } while (ti->stopped or packet_available());
+                    receive();
+                    try
+                    {
+                        handle_packet();
+                    }
+                    catch (...)
+                    {
+                        // last command caused another exception (most likely page
+                        // fault after a request to read memory)
+                        // TODO: determine action based on last packet / signal
+                        if (not replied)
+                            send("E04");
+                        else
+                            print_exception();
+                    }
+                } while (ti->stopped or packet_available());
+            } while (ti->invalid_signal);
 
             com.flush();
         }
