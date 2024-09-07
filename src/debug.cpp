@@ -165,63 +165,24 @@ namespace jw::debug::detail
         return std::nullopt;
     }
 
+    struct thread_action
+    {
+        thread_id id;
+        int signal;
+        std::uintptr_t begin, end;
+        char action;
+    };
+
     struct thread_info
     {
         std::bitset<max_watchpoints> watchpoints { };
         int signal { -1 };
-        int last_stop_signal { -1 };
         std::uintptr_t step_range_begin { 0 };
         std::uintptr_t step_range_end { 0 };
-        std::int32_t trap_mask { 0 };
-
-        enum
-        {
-            stop,
-            cont,
-            step,
-            cont_sig,
-            step_sig,
-        } action;
-
-        bool stepping() const
-        {
-            switch (action)
-            {
-            case cont:
-            case cont_sig:
-                return false;
-
-            case step:
-            case step_sig:
-            case stop:
-                return true;
-
-            default:
-                throw std::exception();
-            }
-        }
-
-        bool do_action()
-        {
-            switch (action)
-            {
-            case step_sig:
-                action = step;
-                return false;
-
-            case cont_sig:
-                action = cont;
-                return false;
-
-            case step:
-            case cont:
-            case stop:
-                return true;
-
-            default:
-                throw std::exception();
-            }
-        }
+        int trap_mask { 0 };
+        bool stopped { false };
+        bool stepping { false };
+        bool ignore_signal { true };
     };
 
     static thread_info* get_info(thread* t) noexcept
@@ -250,39 +211,34 @@ namespace jw::debug::detail
             | std::views::filter([](thread* t) { return get_info(t) != nullptr; });
     }
 
-    static void set_action(thread* t, char a, std::uintptr_t rbegin = 0, std::uintptr_t rend = 0)
+    static void set_action(thread* t, const thread_action& a)
     {
         auto* const ti = get_info(t);
         ti->step_range_begin = 0;
         ti->step_range_end = 0;
-        switch (a)
+        ti->ignore_signal = true;
+        ti->stepping = false;
+        ti->stopped = false;
+        switch (a.action)
         {
-        case 'c':
-            ti->action = thread_info::cont;
-            break;
+        case 'r':
+            ti->step_range_begin = a.begin;
+            ti->step_range_end = a.end;
+            [[fallthrough]];
 
         case 's':
-            ti->action = thread_info::step;
-            break;
+            ti->stepping = true;
+            [[fallthrough]];
 
-        case 'C':
-            if (not is_fault_signal(ti->last_stop_signal))
-                ti->action = thread_info::cont;
-            else
-                ti->action = thread_info::cont_sig;
+        case 'c':
             break;
 
         case 'S':
-            if (not is_fault_signal(ti->last_stop_signal))
-                ti->action = thread_info::step;
-            else
-                ti->action = thread_info::step_sig;
-            break;
+            ti->stepping = true;
+            [[fallthrough]];
 
-        case 'r':
-            ti->step_range_begin = rbegin;
-            ti->step_range_end = rend;
-            ti->action = thread_info::step;
+        case 'C':
+            ti->ignore_signal = false;
             break;
 
         case 't':
@@ -826,7 +782,7 @@ namespace jw::debug::detail
         bool receive();
         bool packet_available();
 
-        void stop_reply(bool force = false);
+        void stop_reply();
         void handle_packet();
         bool handle_exception(exception_num, const exception_info&);
     };
@@ -980,21 +936,16 @@ namespace jw::debug::detail
         return true;
     }
 
-    inline void gdbstub::stop_reply(bool force)
+    inline void gdbstub::stop_reply()
     {
         auto* const t = current_thread();
         auto* const ti = get_info(t);
-        int signal = ti->signal;
-        ti->signal = -1;
-
-        if (not is_stop_signal(signal) and force)
-            signal = ti->last_stop_signal;
+        const int signal = ti->signal;
 
         if (not is_stop_signal(signal))
             return;
 
-        ti->action = thread_info::stop;
-        ti->last_stop_signal = signal;
+        ti->stopped = true;
 
         auto* p = new_tx();
 
@@ -1109,7 +1060,7 @@ namespace jw::debug::detail
         switch (get())
         {
         case '?':   // stop reason
-            stop_reply(true);
+            stop_reply();
             break;
 
         case 'q':   // query
@@ -1196,13 +1147,6 @@ namespace jw::debug::detail
                     break;
                 }
 
-                struct thread_action
-                {
-                    thread_id id;
-                    int signal;
-                    std::uintptr_t begin, end;
-                    char action;
-                };
                 thread_action actions[count(';') + 1];
                 thread_action default_action { };
                 std::size_t n = 0;
@@ -1258,12 +1202,12 @@ namespace jw::debug::detail
                 const auto& a = default_action;
                 if (a.id == all_threads_id)
                     for (thread* t : all_threads())
-                        set_action(t, a.action, a.begin, a.end);
+                        set_action(t, a);
 
                 for (std::size_t i = 0; i != n; ++i)
                 {
                     const auto& a = actions[i];
-                    set_action(get_thread(a.id), a.action, a.begin, a.end);
+                    set_action(get_thread(a.id), a);
                 }
             }
             else if (equal("CtrlC"))
@@ -1463,11 +1407,11 @@ namespace jw::debug::detail
         {
             if (debugmsg) fmt::print(stdout, "KILL signal received.");
             for (thread* t : all_threads())
-                set_action(t, 'c');
+                set_action(t, { .action = 'c' });
             if (redirect_exception(current_exception, kill))
             {
                 auto* p = new_tx();
-                p = fmt::format_to(p, "X{:0>2x}", posix_signal(get_info(current_thread())->last_stop_signal));
+                p = fmt::format_to(p, "X{:0>2x}", posix_signal(get_info(current_thread())->signal));
                 send_txbuf(p);
             }
             else send("E00");
@@ -1599,7 +1543,7 @@ namespace jw::debug::detail
                     if (watchpoints[i] and watchpoints[i]->triggered())
                         watchpoints[i]->reset(), ti->watchpoints[i] = true;
 
-                if (ti->watchpoints.none() & not ti->stepping())
+                if (ti->watchpoints.none() & not ti->stepping)
                 {
                     // Possible reasons to be here:
                     // * To enable a previously-disabled breakpoint.
@@ -1669,7 +1613,7 @@ namespace jw::debug::detail
                     else
                         print_exception();
                 }
-            } while (ti->action == thread_info::stop or packet_available());
+            } while (ti->stopped or packet_available());
 
             com.flush();
         }
@@ -1684,11 +1628,13 @@ namespace jw::debug::detail
         asm ("cli");
 
     done:
+        const bool ignore_signal = ti->ignore_signal | not is_fault_signal(ti->signal);
+        ti->signal = -1;
         ti->watchpoints.reset();
-        f->flags.trap = ti->stepping();
+        f->flags.trap = ti->stepping;
         leave();
 
-        return ti->do_action();
+        return ignore_signal;
     }
 
     void create_thread(thread* t)
@@ -1698,7 +1644,6 @@ namespace jw::debug::detail
 
         trap_mask no_step;
         t->debug_info = new (locked) thread_info { };
-        set_action(t, 'c');
 
         if (thread_events_enabled)
             break_with_signal(debug_signals::thread_started);
@@ -1738,7 +1683,6 @@ namespace jw::debug::detail
         {
             auto* const t = const_cast<thread*>(&thr);
             auto* const ti = new (locked) thread_info { };
-            ti->action = thread_info::cont;
             t->debug_info = ti;
         }
 
@@ -1801,7 +1745,7 @@ namespace jw::debug
         if (n <= 0)
         {
             ti->trap_mask = 0;
-            if ((ti->signal != -1) | (ti->stepping()))
+            if ((ti->signal != -1) | ti->stepping)
             {
                 // Resume with SIGCONT, otherwise gdb will get confused.
                 break_with_signal(detail::continued);
