@@ -45,6 +45,7 @@ namespace jw::debug::detail
     static constexpr std::size_t max_breakpoints { 256 };
     static constexpr std::size_t bufsize { 4096 };
 
+    static constinit std::atomic_flag reentry { false };
     static constinit bool thread_events_enabled { false };
     static exception_info current_exception;
 
@@ -723,7 +724,6 @@ namespace jw::debug::detail
         bool received { false };
         bool replied { false };
         bool acked { true };
-        std::atomic_flag reentry { false };
         thread* query_thread { nullptr };
         std::array<std::optional<watchpoint>, max_watchpoints> watchpoints;
         breakpoint_map breakpoints;
@@ -1743,9 +1743,7 @@ namespace jw::debug
 {
     trap_mask::trap_mask() noexcept
     {
-        if (not detail::gdb)
-            return;
-        if (detail::gdb->reentry.test())
+        if (detail::reentry.test())
             return;
 
         auto* const ti = detail::get_info(detail::current_thread());
