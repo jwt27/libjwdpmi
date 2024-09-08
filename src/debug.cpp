@@ -1668,7 +1668,6 @@ namespace jw::debug::detail
         if (not debug())
             return;
 
-        trap_mask no_step;
         t->debug_info = new (locked) thread_info { };
 
         if (thread_events_enabled)
@@ -1680,17 +1679,14 @@ namespace jw::debug::detail
         if (thread_events_enabled)
             break_with_signal(debug_signals::thread_finished);
 
-        trap_mask no_step;
+        if (auto* const ti = detail::get_info(t))
+        {
+            std::atomic_ref { t->debug_info } = nullptr;
+            delete ti;
+        }
 
         if (gdb and gdb->query_thread == t)
             gdb->query_thread = nullptr;
-
-        auto* info = detail::get_info(t);
-        if (info)
-        {
-            delete info;
-            t->debug_info = nullptr;
-        }
     }
 
     extern "C" void csignal(int signal)
@@ -1722,7 +1718,9 @@ namespace jw::debug::detail
 
     static void uninstall_gdb_interface()
     {
+        trap_mask no_step { };
         debug_mode = false;
+        thread_events_enabled = false;
         if (gdb)
             delete gdb;
         gdb = nullptr;
@@ -1732,6 +1730,8 @@ namespace jw::debug::detail
     {
         if (not gdb)
             return;
+
+        trap_mask no_step { };
         auto* p = new_tx();
         p = fmt::format_to(p, "W{:0>2x}", result);
         gdb->send_txbuf(p);
