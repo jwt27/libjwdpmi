@@ -727,6 +727,7 @@ namespace jw::debug::detail
         thread* query_thread { nullptr };
         std::array<std::optional<watchpoint>, max_watchpoints> watchpoints;
         breakpoint_map breakpoints;
+        std::bitset<sigmax> pass_signals { };
         std::map<int, void(*)(int)> signal_handlers { };
         io::rs232_stream com;
         std::array<std::optional<exception_handler>, 0x20> exception_handlers;
@@ -944,9 +945,17 @@ namespace jw::debug::detail
         auto* const t = current_thread();
         auto* const ti = get_info(t);
         const int signal = ti->signal;
+        const int posix = posix_signal(signal);
 
         if (not is_stop_signal(signal))
             return;
+
+        if (pass_signals[posix] and not ti->stepping)
+        {
+            ti->ignore_signal = false;
+            ti->invalid_signal = false;
+            return;
+        }
 
         ti->stopped = true;
 
@@ -958,7 +967,7 @@ namespace jw::debug::detail
         }
         else
         {
-            p = fmt::format_to(p, "T{:0>2x}", posix_signal(signal));
+            p = fmt::format_to(p, "T{:0>2x}", posix);
             p = append(p, "8:"); p = reg(p, eip, t); *p++ = ';';
             p = append(p, "4:"); p = reg(p, esp, t); *p++ = ';';
             p = append(p, "5:"); p = reg(p, ebp, t); *p++ = ';';
@@ -1075,7 +1084,8 @@ namespace jw::debug::detail
                 p = fmt::format_to(p, "PacketSize={:x};", bufsize - 4);
                 p = append(p, "swbreak+;");
                 p = append(p, "hwbreak+;");
-                p = append(p, "QThreadEvents+");
+                p = append(p, "QThreadEvents+;");
+                p = append(p, "QPassSignals+");
                 send_txbuf(p);
             }
             else if (skip("Attached"))
@@ -1129,6 +1139,17 @@ namespace jw::debug::detail
             if (skip("ThreadEvents:"))
             {
                 thread_events_enabled = get() == '1';
+                send("OK");
+            }
+            else if (skip("PassSignals:"))
+            {
+                pass_signals.reset();
+                do
+                {
+                    const auto i = decode(next());
+                    if (i < pass_signals.size())
+                        pass_signals.set(i);
+                } while (get() == ';');
                 send("OK");
             }
             else goto unknown;

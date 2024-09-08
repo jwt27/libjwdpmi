@@ -46,6 +46,7 @@ namespace jw::debug::detail
         sigcont = 19,
         sigusr1 = 30,
         sigusr2 = 31,
+        sigmax
     };
 
 #ifndef NDEBUG
