@@ -1003,9 +1003,11 @@ namespace jw::debug::detail
             return;
         received = false;
 
-        rxbuf[rx_size] = '\0';
+        auto* const t = current_thread();
+        auto* const ti = get_info(t);
         const char* pkt = rxbuf;
         const char* const end = rxbuf + rx_size;
+        rxbuf[rx_size] = '\0';
 
         auto get = [&]
         {
@@ -1072,6 +1074,8 @@ namespace jw::debug::detail
         switch (get())
         {
         case '?':   // stop reason
+            if (not is_stop_signal(ti->signal))
+                ti->signal = SIGINT;
             stop_reply();
             break;
 
@@ -1236,7 +1240,7 @@ namespace jw::debug::detail
             }
             else if (equal("CtrlC"))
             {
-                get_info(current_thread())->signal = SIGINT;
+                ti->signal = SIGINT;
                 send("OK");
                 stop_reply();
             }
