@@ -445,6 +445,10 @@ extern "C"
 {
     decltype(std::malloc) __real_malloc;
     decltype(std::free) __real_free;
+    decltype(abi::__cxa_allocate_exception) __real___cxa_allocate_exception;
+    decltype(abi::__cxa_free_exception) __real___cxa_free_exception;
+    decltype(abi::__cxa_allocate_dependent_exception) __real___cxa_allocate_dependent_exception;
+    decltype(abi::__cxa_free_dependent_exception) __real___cxa_free_dependent_exception;
 
     void* __wrap_malloc(std::size_t n) noexcept
     {
@@ -482,6 +486,38 @@ extern "C"
     }
 
     void __wrap_free(void* p) noexcept { ::operator delete(p); }
+
+    void* __wrap___cxa_allocate_exception(std::size_t n) noexcept
+    {
+        dpmi::interrupt_mask no_irqs { };
+        dpmi::async_signal_mask no_signals { };
+        debug::trap_mask no_trap { };
+        return __real___cxa_allocate_exception(n);
+    }
+
+    void __wrap___cxa_free_exception(void* p) noexcept
+    {
+        dpmi::interrupt_mask no_irqs { };
+        dpmi::async_signal_mask no_signals { };
+        debug::trap_mask no_trap { };
+        return __real___cxa_free_exception(p);
+    }
+
+    abi::__cxa_dependent_exception* __wrap___cxa_allocate_dependent_exception() noexcept
+    {
+        dpmi::interrupt_mask no_irqs { };
+        dpmi::async_signal_mask no_signals { };
+        debug::trap_mask no_trap { };
+        return __real___cxa_allocate_dependent_exception();
+    }
+
+    void __wrap___cxa_free_dependent_exception(abi::__cxa_dependent_exception* p) noexcept
+    {
+        dpmi::interrupt_mask no_irqs { };
+        dpmi::async_signal_mask no_signals { };
+        debug::trap_mask no_trap { };
+        return __real___cxa_free_dependent_exception(p);
+    }
 }
 
 namespace jw

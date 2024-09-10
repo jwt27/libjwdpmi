@@ -154,6 +154,10 @@ cat <<- EOF >> ldflags
 -Wl,--wrap=realloc
 -Wl,--wrap=memalign
 -Wl,--wrap=free
+-Wl,--wrap=__cxa_allocate_exception
+-Wl,--wrap=__cxa_free_exception
+-Wl,--wrap=__cxa_allocate_dependent_exception
+-Wl,--wrap=__cxa_free_dependent_exception
 -Wl,--wrap=__dpmi_yield
 -L$(pwd) -ljwdpmi
 EOF
