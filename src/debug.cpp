@@ -445,7 +445,6 @@ namespace jw::debug::detail
         }();
 
         std::uint32_t result { };
-        if (in[0] == '-') return all_threads_id;
         for (const std::uint8_t c : in)
         {
             if (c > table.size())
@@ -474,6 +473,13 @@ namespace jw::debug::detail
             ptr[i] = decode(in.substr(i * 2, 2));
         }
         return true;
+    }
+
+    static auto decode_thread_id(std::string_view str)
+    {
+        if (str[0] == '-')
+            return all_threads_id;
+        return decode(str);
     }
 
     static char* new_tx() noexcept
@@ -1113,7 +1119,7 @@ namespace jw::debug::detail
             else if (skip("ThreadExtraInfo,"))
             {
                 auto* a = asciibuf;
-                const auto id = decode(remaining());
+                const auto id = decode_thread_id(remaining());
                 if (auto* const t = get_thread(id))
                 {
                     a = append(a, t->get_name());
@@ -1209,7 +1215,7 @@ namespace jw::debug::detail
                     switch (c)
                     {
                     case ':':
-                        a.id = decode(next());
+                        a.id = decode_thread_id(next());
                         actions[n++] = a;
                         c = get();
                         break;
@@ -1252,7 +1258,7 @@ namespace jw::debug::detail
         case 'H':   // set current thread
             if (get() == 'g')
             {
-                const auto id = decode(remaining());
+                const auto id = decode_thread_id(remaining());
                 if (id == all_threads_id)
                     query_thread = current_thread();
                 else
@@ -1263,7 +1269,7 @@ namespace jw::debug::detail
             break;
 
         case 'T':   // is thread alive?
-            if (get_thread(decode(remaining())))
+            if (get_thread(decode_thread_id(remaining())))
                 send("OK");
             else
                 send("E01");
