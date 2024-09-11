@@ -459,7 +459,7 @@ namespace jw::debug::detail
         return result;
 
     fail:
-        throw std::invalid_argument { "decode() failed: "s + in.data() };
+        throw std::runtime_error { fmt::format("decode(): invalid hex char in {:?}", in) };
     }
 
     // Decode little-endian hex string
