@@ -1177,6 +1177,7 @@ namespace jw::debug::detail
 
                 thread_action actions[count(';') + 1];
                 thread_action default_action { };
+                default_action.action = 'c';
                 std::size_t n = 0;
 
                 while(true)
@@ -1215,7 +1216,6 @@ namespace jw::debug::detail
 
                     case ';':
                     case '\0':
-                        a.id = all_threads_id;
                         default_action = a;
                         break;
 
@@ -1227,15 +1227,17 @@ namespace jw::debug::detail
                         break;
                 };
 
-                const auto& a = default_action;
-                if (a.id == all_threads_id)
-                    for (thread* t : all_threads())
-                        set_action(t, a);
-
-                for (std::size_t i = 0; i != n; ++i)
+                for (thread* t : all_threads())
                 {
-                    const auto& a = actions[i];
-                    set_action(get_thread(a.id), a);
+                    set_action(t, default_action);
+                    for (std::size_t i = 0; i != n; ++i)
+                    {
+                        if (actions[i].id != t->id)
+                            continue;
+
+                        set_action(t, actions[i]);
+                        break;
+                    }
                 }
             }
             else if (equal("CtrlC"))
