@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2017 - 2024 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2017 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <array>
 #include <cstring>
@@ -47,6 +47,10 @@ namespace jw::debug::detail
 
     static constinit std::atomic_flag reentry { false };
     static constinit bool thread_events_enabled { false };
+    static constinit bool received { false };
+    static constinit bool replied { false };
+    static constinit bool need_ack { false };
+    static constinit thread* query_thread { nullptr };
     static exception_info current_exception;
 
     static constinit std::size_t tx_size { 0 };
@@ -727,10 +731,6 @@ namespace jw::debug::detail
 
     struct gdbstub
     {
-        bool received { false };
-        bool replied { false };
-        bool acked { true };
-        thread* query_thread { nullptr };
         std::array<std::optional<watchpoint>, max_watchpoints> watchpoints;
         breakpoint_map breakpoints;
         std::bitset<sigmax> pass_signals { };
@@ -815,7 +815,7 @@ namespace jw::debug::detail
             halt();
         }
 
-        while (not acked)
+        while (need_ack)
             if (receive())
                 throw std::runtime_error { "GDB protocol sequencing error" };
 
@@ -849,7 +849,7 @@ namespace jw::debug::detail
         com.write(txbuf, tx_size);
         com.flush();
         replied = true;
-        acked = false;
+        need_ack = true;
     }
 
     inline void gdbstub::send_txbuf(const char* end)
@@ -892,7 +892,7 @@ namespace jw::debug::detail
                 return false;
 
             case '+':
-                acked = true;
+                need_ack = false;
                 return false;
 
             default:
@@ -1697,8 +1697,8 @@ namespace jw::debug::detail
             delete ti;
         }
 
-        if (gdb and gdb->query_thread == t)
-            gdb->query_thread = nullptr;
+        if (query_thread == t)
+            query_thread = nullptr;
     }
 
     extern "C" void csignal(int signal)
