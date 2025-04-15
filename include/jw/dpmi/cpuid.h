@@ -1,11 +1,10 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2019 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <cstdint>
-#include <string>
+#include <cstring>
+#include <string_view>
 
 namespace jw::dpmi
 {
@@ -101,16 +100,17 @@ namespace jw::dpmi
 
         // Get the CPU vendor identification string.  Returns an empty string
         // if CPUID is not supported.
-        [[gnu::const]] static std::string vendor()
+        [[gnu::const]] static std::string_view vendor()
         {
-            std::string v { };
-            if (not supported()) return v;
-            v.reserve(3 * 4);
-            auto l = leaf(0);
-            v.append(reinterpret_cast<const char*>(&l.ebx), 4);
-            v.append(reinterpret_cast<const char*>(&l.edx), 4);
-            v.append(reinterpret_cast<const char*>(&l.ecx), 4);
-            return v;
+            if (not supported())
+                return { };
+
+            static char buf[12];
+            const auto l = leaf(0);
+            std::memcpy(buf + 0, &l.ebx, 4);
+            std::memcpy(buf + 4, &l.edx, 4);
+            std::memcpy(buf + 8, &l.ecx, 4);
+            return { buf, sizeof(buf) };
         }
 
         // Get the feature flags from leaf(1).edx.  If CPUID is not supported,
