@@ -126,6 +126,7 @@ if not test_option fmt-header-only; then
 			--toolchain=toolchain.CMake                           \
 			--no-warn-unused-cli                                  \
 			-DFMT_TEST=0                                          \
+			-DFMT_UNICODE=0                                       \
 			$src/lib/fmt
 
 	cd ../..
