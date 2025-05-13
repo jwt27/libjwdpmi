@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2017 - 2023 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2017 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <limits>
@@ -533,8 +533,8 @@ namespace jw::dpmi
         {
             static bool sup = []
             {
-                capabilities c { };
-                return c.supported and c.flags.device_mapping;
+                const auto cap = capabilities::get();
+                return cap and cap->flags.device_mapping;
             }();
             return sup;
         }

@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2017 - 2024 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2017 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <bitset>
@@ -82,12 +82,12 @@ namespace jw::dpmi::detail
     private:
         static int_vector irq_to_vec(irq_level i) noexcept
         {
-            dpmi::version ver { };
+            static dpmi::version ver { };
             return i < 8 ? i + ver.pic_master_base : i - 8 + ver.pic_slave_base;
         }
         static irq_level vec_to_irq(int_vector v) noexcept
         {
-            dpmi::version ver { };
+            static dpmi::version ver { };
             if (v >= ver.pic_master_base and v < ver.pic_master_base + 8u) return v - ver.pic_master_base;
             if (v >= ver.pic_slave_base and v < ver.pic_slave_base + 8u) return v - ver.pic_slave_base + 8;
             return 0xff;

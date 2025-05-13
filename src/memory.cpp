@@ -696,8 +696,8 @@ namespace jw::dpmi
     {
         static bool sup = []
         {
-            capabilities c { };
-            return c.supported and c.flags.conventional_memory_mapping;
+            const auto cap = capabilities::get();
+            return cap and cap->flags.conventional_memory_mapping;
         }();
         return sup;
     }
