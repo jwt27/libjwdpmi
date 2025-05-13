@@ -1,19 +1,14 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2016 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
-#include <unordered_map>
-#include <memory>
-#include <istream>
-
 #include <jw/io/key.h>
 #include <jw/io/detail/scancode.h>
 #include <jw/io/ps2_interface.h>
 #include <jw/event.h>
+#include <unordered_map>
+#include <memory>
+#include <iostream>
 
 namespace jw::io
 {

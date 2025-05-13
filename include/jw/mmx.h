@@ -8,6 +8,7 @@
 #include <array>
 #include <stdexcept>
 #include <cstring>
+#include <algorithm>
 #include <mmintrin.h>
 #include <mm3dnow.h>
 
