@@ -4,6 +4,7 @@
 #pragma once
 #include <jw/dpmi/memory.h>
 #include <jw/io/ioport.h>
+#include <jw/specific_int.h>
 
 namespace jw::io
 {
@@ -51,7 +52,7 @@ namespace jw::io
     };
 
     // ISA DMA channel implementation.  Don't use this directly, prefer
-    // dma8_channel and dma16_channel defined below.
+    // typedefs dma8_channel and dma16_channel defined below.
     template<bool high>
     struct dma_channel_impl
     {
@@ -71,7 +72,7 @@ namespace jw::io
         dma_channel_impl& operator=(const dma_channel_impl&) = delete;
 
         // Returns the assigned DMA channel number.
-        unsigned channel() const noexcept { [[assume(ch < 4)]]; return high ? ch << 2 : ch; }
+        unsigned channel() const noexcept { return high ? ch << 2u : static_cast<unsigned>(ch); }
 
         // Unmask the DMA request line for this channel.
         void enable() noexcept { mask_port().write(ch); }
@@ -140,19 +141,16 @@ namespace jw::io
 
         out_port<std::uint8_t> address_port() const noexcept
         {
-            [[assume(ch < 4)]];
             return { static_cast<port_num>(high ? 0xc0 + (ch << 2) : 0x00 + (ch << 1)) };
         };
 
         out_port<std::uint8_t> count_port() const noexcept
         {
-            [[assume(ch < 4)]];
             return { static_cast<port_num>(high ? 0xc2 + (ch << 2) : 0x01 + (ch << 1)) };
         };
 
         out_port<std::uint8_t> page_port() const noexcept
         {
-            [[assume(ch < 4)]];
             return { static_cast<port_num>(((high ? 0x8a898b8fu : 0x82818387u) >> (ch << 3)) & 0xff) };
         }
 
@@ -174,7 +172,7 @@ namespace jw::io
             port.write(n.hi);
         }
 
-        const unsigned ch;
+        const specific_uint<2> ch;
     };
 
     // 8-bit DMA channel (0 to 3)
