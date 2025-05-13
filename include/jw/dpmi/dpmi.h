@@ -1,10 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2016 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 
@@ -27,7 +22,7 @@ namespace jw
     #define GET_SEG_REG(reg)                \
         std::uint32_t s;                    \
         asm ("mov %0, "#reg : "=r" (s));    \
-        assume(s >> 16 == 0);               \
+        [[assume(s >> 16 == 0)]];           \
         return s;
 
         inline selector get_cs() noexcept { GET_SEG_REG(cs); }

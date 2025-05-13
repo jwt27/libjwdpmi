@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2020 - 2024 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2020 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <jw/audio/opl.h>
 #include <jw/io/io_error.h>
@@ -160,7 +160,7 @@ namespace jw::audio
 
     void basic_opl::write(const opl_operator& value, std::uint8_t slot)
     {
-        assume(slot < 36);
+        [[assume(slot < 36)]];
         const bool hi = slot >= 18;
         const unsigned n = slot - (hi ? 18 : 0);
         const unsigned offset = n + 2 * (n / 6) + (hi ? 0x100 : 0);
@@ -169,7 +169,7 @@ namespace jw::audio
 
     void basic_opl::write(const opl_channel& value, std::uint8_t ch)
     {
-        assume(ch < 18);
+        [[assume(ch < 18)]];
         const unsigned offset = ch + (ch >= 9 ? 0x100 - 9 : 0);
         if (type() != opl_type::opl2)
         {
@@ -533,7 +533,6 @@ namespace jw::audio
                 2575us,     2060us,     1716us,     1463us,     1287us,     1030us,      858us,      732us,
                  644us,      515us,      429us,      366us,      322us,      257us,      215us,      183us,
                  161us,      129us,      107us,       91us,       80us,       80us,       80us,       80us,
-
         };
         return table[rate];
     }

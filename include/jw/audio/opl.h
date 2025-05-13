@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2020 - 2024 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2020 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 
@@ -61,14 +61,14 @@ namespace jw::audio
     // Find absolute operator slot number for given operator in given channel.
     constexpr std::uint8_t opl_slot(std::uint8_t ch, std::uint8_t op) noexcept
     {
-        assume(ch < 18 and op < 4);
+        [[assume(ch < 18 and op < 4)]];
         return ch + 3 * (ch / 3) + 3 * op;
     }
 
     // Find primary 2op channel number for given 4op channel number.
     constexpr std::uint8_t opl_4to2_pri(std::uint8_t ch_4op) noexcept
     {
-        assume(ch_4op < 6);
+        [[assume(ch_4op < 6)]];
         return (0xba9210u >> (ch_4op << 2)) & 0xf;
     }
 
@@ -432,7 +432,7 @@ namespace jw::audio
     template<long double sample_rate, long double A4 = 440.L>
     inline opl_frequency opl_note(int midi_note) noexcept
     {
-        assume(midi_note < 128);
+        [[assume(midi_note < 128)]];
         constexpr std::uint8_t max_note = __builtin_log2l(1023 * (sample_rate / (1 << 20)) / A4) * 12 + 69;
         constexpr std::uint8_t offset = max_note - 11;
         static constexpr auto scale = []

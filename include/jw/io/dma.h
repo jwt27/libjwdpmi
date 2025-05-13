@@ -1,5 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2022 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <jw/dpmi/memory.h>
@@ -71,7 +71,7 @@ namespace jw::io
         dma_channel_impl& operator=(const dma_channel_impl&) = delete;
 
         // Returns the assigned DMA channel number.
-        unsigned channel() const noexcept { assume(ch < 4); return high ? ch << 2 : ch; }
+        unsigned channel() const noexcept { [[assume(ch < 4)]]; return high ? ch << 2 : ch; }
 
         // Unmask the DMA request line for this channel.
         void enable() noexcept { mask_port().write(ch); }
@@ -83,7 +83,7 @@ namespace jw::io
         // Set the DMA transfer mode and direction.
         void set_mode(dma_mode m, dma_direction dir) noexcept
         {
-            assume(ch < 4);
+            [[assume(ch < 4)]];
             mode_port().write(mode_register { ch, dir, m });
         }
 
@@ -138,10 +138,23 @@ namespace jw::io
         static constexpr out_port<mode_register> mode_port() noexcept { return { high ? 0xd6 : 0x0b }; };
         static constexpr out_port<std::uint8_t>  mask_port() noexcept { return { high ? 0xd4 : 0x0a }; };
 
-        out_port<std::uint8_t> address_port() const noexcept { assume(ch < 4); return { static_cast<port_num>(high ? 0xc0 + (ch << 2) : 0x00 + (ch << 1)) }; };
-        out_port<std::uint8_t> count_port()   const noexcept { assume(ch < 4); return { static_cast<port_num>(high ? 0xc2 + (ch << 2) : 0x01 + (ch << 1)) }; };
+        out_port<std::uint8_t> address_port() const noexcept
+        {
+            [[assume(ch < 4)]];
+            return { static_cast<port_num>(high ? 0xc0 + (ch << 2) : 0x00 + (ch << 1)) };
+        };
 
-        out_port<std::uint8_t> page_port() const noexcept { assume(ch < 4); return { static_cast<port_num>(((high ? 0x8a898b8fu : 0x82818387u) >> (ch << 3)) & 0xff) }; }
+        out_port<std::uint8_t> count_port() const noexcept
+        {
+            [[assume(ch < 4)]];
+            return { static_cast<port_num>(high ? 0xc2 + (ch << 2) : 0x01 + (ch << 1)) };
+        };
+
+        out_port<std::uint8_t> page_port() const noexcept
+        {
+            [[assume(ch < 4)]];
+            return { static_cast<port_num>(((high ? 0x8a898b8fu : 0x82818387u) >> (ch << 3)) & 0xff) };
+        }
 
         void do_set_address(std::uintptr_t physical_address) noexcept
         {

@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2016 - 2024 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2016 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <optional>
 #include <jw/dpmi/memory.h>
@@ -738,7 +738,7 @@ namespace jw::dpmi
         if (remap) base::deallocate();
         dos_resize(dos_handle, num_bytes);
         bytes = num_bytes;
-        assume(dos_addr.offset == 0);
+        [[assume(dos_addr.offset == 0)]];
         if (remap) base::allocate(conventional_to_physical(dos_addr));
     }
 
@@ -748,7 +748,7 @@ namespace jw::dpmi
         auto result = dpmi::dos_allocate(bytes);
         dos_handle = result.handle;
         dos_addr = result.pointer;
-        assume(dos_addr.offset == 0);
+        [[assume(dos_addr.offset == 0)]];
         base::allocate(conventional_to_physical(dos_addr));
     }
 
