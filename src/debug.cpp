@@ -1498,7 +1498,7 @@ namespace jw::debug::detail
             return false;
         }
 
-        local_destructor fix_popf { [&]
+        finally fix_popf { [&]
         {
             auto* const eip = reinterpret_cast<const std::uint8_t*>(info.frame->fault_address.offset);
             auto* const esp = reinterpret_cast<cpu_flags*>(info.frame->stack.offset);
@@ -1527,7 +1527,7 @@ namespace jw::debug::detail
             throw_cpu_exception(info);
         }
 
-        local_destructor clear_reentry { [&]
+        finally clear_reentry { [&]
         {
             reentry.clear();
         } };

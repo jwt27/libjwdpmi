@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2016 - 2024 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2016 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <jw/main.h>
 #include <jw/dpmi/irq_mask.h>
@@ -124,7 +124,7 @@ namespace jw::detail
 
         while (not ct->invoke_list.empty()) [[unlikely]]
         {
-            local_destructor pop { [ct]
+            finally pop { [ct]
             {
                 asm ("cli");
                 ct->invoke_list.pop_front();
@@ -151,7 +151,7 @@ namespace jw::detail
 
         try
         {
-            local_destructor finish { [t]
+            finally finish { [t]
             {
                 t->state = thread::finishing;
                 atexit(t);
@@ -188,7 +188,7 @@ namespace jw::detail
         do
         {
             {
-                local_destructor sti { [] { asm ("sti"); } };
+                finally sti { [] { asm ("sti"); } };
                 auto it = *iterator;
                 if (ct->active() | not ct->detached) [[likely]]
                     ++it;

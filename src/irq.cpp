@@ -1,11 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2017 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <algorithm>
 #include <optional>
@@ -154,7 +148,7 @@ namespace jw::dpmi::detail
 
             {
                 std::optional<irq_mask> mask;
-                local_destructor cli { [] { asm ("cli"); } };
+                finally cli { [] { asm ("cli"); } };
                 if (not (flags & no_interrupts)) asm ("sti");
                 else if (flags & no_reentry) mask.emplace(i);
 

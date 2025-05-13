@@ -10,7 +10,7 @@ namespace jw::dpmi
 {
     static bool direct_ldt_access = false;
     static std::optional<descriptor> gdt, ldt;
-    static local_destructor cleanup { [] { direct_ldt_access = false; } };
+    static finally cleanup { [] { direct_ldt_access = false; } };
 
     [[gnu::noipa]] static void may_throw() { }; // stupid hack
 

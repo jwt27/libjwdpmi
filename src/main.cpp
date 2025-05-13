@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2017 - 2024 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2017 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <cstring>
 #include <string_view>
@@ -426,7 +426,7 @@ namespace jw
         if (irq_alloc == nullptr) return;
         if (irq_alloc_resize.test_and_set()) return;
 
-        local_destructor scope_guard { [] { irq_alloc_resize.clear(); } };
+        finally scope_guard { [] { irq_alloc_resize.clear(); } };
         dpmi::interrupt_mask no_interrupts_here { };
         debug::trap_mask dont_trap_here { };
         auto* ia = irq_alloc;
@@ -458,7 +458,7 @@ extern "C"
         // Returning nullptr ensures the exception is allocated from an emergency
         // pool instead.
         if (in_malloc.test_and_set()) [[unlikely]] return nullptr;
-        local_destructor scope_guard { [] { in_malloc.clear(); } };
+        finally scope_guard { [] { in_malloc.clear(); } };
         try { return ::operator new(n); }
         catch (const std::bad_alloc&) { return nullptr; }
     }

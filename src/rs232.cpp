@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2017 - 2024 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2017 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <jw/io/rs232.h>
 #include <jw/thread.h>
@@ -157,7 +157,7 @@ namespace jw::io
         if (not ports_used)
             ports_used = new std::vector<port_num>;
 
-        local_destructor cleanup { []
+        finally cleanup { []
         {
             if (ports_used->empty())
             {

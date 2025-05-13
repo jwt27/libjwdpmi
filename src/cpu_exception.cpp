@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2016 - 2024 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2016 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <jw/main.h>
 #include <jw/detail/scheduler.h>
@@ -79,7 +79,7 @@ namespace jw::dpmi::detail
 
         pending_signals[id] = false;
 
-        local_destructor cleanup { []
+        finally cleanup { []
         {
             if (pending_signals.none())
                descriptor::set_limit(main_ds, __djgpp_selector_limit);

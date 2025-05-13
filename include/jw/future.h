@@ -1,6 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2021 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <future>
@@ -185,7 +184,7 @@ namespace jw::detail
         promise_result<R>::actual_type get_result()
         {
             wait();
-            local_destructor do_reset { [this] { this->reset(); } };
+            finally do_reset { [this] { this->reset(); } };
             return this->state()->move_result();
         }
 
