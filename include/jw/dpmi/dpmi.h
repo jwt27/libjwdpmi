@@ -2,16 +2,12 @@
 /*    Copyright (C) 2016 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
-
-#include <iostream>
-#include <iomanip>
-#include <memory>
-#include <cassert>
-#include <array>
-#include <fmt/core.h>
 #include <jw/dpmi/dpmi_error.h>
 #include <jw/split_int.h>
 #include <jw/common.h>
+#include <fmt/core.h>
+#include <memory>
+#include <array>
 
 namespace jw
 {
@@ -94,12 +90,10 @@ namespace jw
         {
             std::uint16_t offset, segment;
 
-            constexpr far_ptr16(selector seg = 0, std::uint16_t off = 0) noexcept : offset(off), segment(seg) { }
-            friend auto& operator<<(std::ostream& out, const far_ptr16& in)
-            {
-                using namespace std;
-                return out << hex << setfill('0') << setw(4) << in.segment << ':' << setw(4) << in.offset << setfill(' ');
-            }
+            constexpr far_ptr16(selector seg = 0, std::uint16_t off = 0) noexcept
+                : offset { off }
+                , segment { seg }
+            { }
         };
 
         struct alignas(2) [[gnu::packed]] far_ptr32
@@ -107,12 +101,10 @@ namespace jw
             std::uintptr_t offset;
             selector segment;
 
-            constexpr far_ptr32(selector seg = 0, std::uintptr_t off = 0) noexcept : offset(off), segment(seg) { }
-            friend auto& operator<<(std::ostream& out, const far_ptr32& in)
-            {
-                using namespace std;
-                return out << hex << setfill('0') << setw(4) << in.segment << ':' << setw(8) << in.offset << setfill(' ');
-            }
+            constexpr far_ptr32(selector seg = 0, std::uintptr_t off = 0) noexcept
+                : offset { off }
+                , segment { seg }
+            { }
         };
 
         struct gs_override
@@ -230,17 +222,6 @@ namespace jw
                 std::uint16_t ax;
                 struct { std::uint8_t al, ah; };
             };
-
-            auto& print(std::ostream& out) const
-            {
-                using namespace std;
-                out << hex << setfill('0');
-                out << "eax=" << setw(8) << eax << " ebx=" << setw(8) << ebx << " ecx=" << setw(8) << ecx << " edx=" << setw(8) << edx << "\n";
-                out << "edi=" << setw(8) << edi << " esi=" << setw(8) << esi << " ebp=" << setw(8) << ebp << "\n";
-                out << hex << setfill(' ') << setw(0) << flush;
-                return out;
-            }
-            friend auto& operator<<(std::ostream& out, const cpu_registers& in) { return in.print(out); }
 
             void print(FILE* out = stderr) const
             {

@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2017 - 2023 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2017 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <jw/dpmi/memory.h>
@@ -44,17 +44,6 @@ namespace jw
             std::uint16_t es, ds, fs, gs;
             std::uint16_t ip, cs; // not used in call_int().
             std::uint16_t sp, ss; // used in call functions to pass arguments on the stack. set to 0 if not used.
-
-            auto& print(std::ostream& out) const
-            {
-                using namespace std;
-                out << hex << setfill('0');
-                out << "es=" << setw(4) << es << " ds=" << setw(4) << ds << " fs=" << setw(4) << fs << " gs=" << setw(4) << gs << "\n";
-                out << "cs=" << setw(4) << cs << " ip=" << setw(4) << ip << " ss=" << setw(4) << ss << " sp=" << setw(4) << sp << " flags=" << setw(4) << raw_flags << "\n";
-                out << hex << setfill(' ') << setw(0) << flush;
-                return out;
-            }
-            friend auto& operator<<(std::ostream& out, const realmode_registers& in) { return in.print(out); }
 
             // Call a real-mode interrupt
             void call_int(std::uint8_t interrupt) { call<0x0300>(interrupt); }
