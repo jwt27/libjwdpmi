@@ -1,16 +1,12 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2018 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
-#include <cstdint>
 #include <jw/dpmi/fpu.h>
 #include <jw/main.h>
 #include <jw/detail/eh_globals.h>
+#include <jw/common.h>
+#include <cstdint>
 
 namespace jw::dpmi::detail
 {
