@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2016 - 2024 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2016 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 
@@ -209,11 +209,7 @@ namespace jw::dpmi
     [[noreturn]]
     void throw_cpu_exception(const exception_info&);
 
-    struct cpu_category : public std::error_category
-    {
-        virtual const char* name() const noexcept override { return "CPU"; }
-        virtual std::string message(int ev) const override;
-    };
+    const std::error_category& cpu_category() noexcept;
 
     struct cpu_exception : public std::system_error
     {
@@ -238,7 +234,7 @@ namespace jw::dpmi
             : cpu_exception { n, i.registers, i.frame, i.is_dpmi10_frame } { }
 
         cpu_exception(exception_num n, cpu_registers* r, exception_frame* f, bool t)
-            : system_error { static_cast<int>(n), cpu_category { } }
+            : system_error { static_cast<int>(n), cpu_category() }
             , registers { *r }, frame { init_frame(f, t) }, is_dpmi10_frame { t } { }
 
         static dpmi10_exception_frame init_frame(dpmi09_exception_frame* f, bool t) noexcept

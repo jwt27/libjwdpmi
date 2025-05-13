@@ -41,8 +41,16 @@ namespace jw::dpmi
         }
     }
 
-    std::string dpmi_error_category::message(int ev) const
+    const std::error_category& dpmi_error_category() noexcept
     {
-        return fmt::format("DPMI error 0x{:0>4x}: {}.", ev, msg(ev));
+        struct : public std::error_category
+        {
+            virtual const char* name() const noexcept override { return "DPMI"; }
+            virtual std::string message(int ev) const override
+            {
+                return fmt::format("DPMI error 0x{:0>4x}: {}.", ev, msg(ev));
+            }
+        } static cat;
+        return cat;
     }
 }

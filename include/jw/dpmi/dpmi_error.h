@@ -1,11 +1,10 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2016 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <stdexcept>
 #include <system_error>
+#include <cstdint>
 #include <dpmi.h>
 
 namespace jw
@@ -41,15 +40,10 @@ namespace jw
             invalid_request = 0x8026
         };
 
-        class dpmi_error_category : public std::error_category
-        {
-            virtual const char* name() const noexcept override { return "DPMI"; }
-            virtual std::string message(int ev) const override;
-        };
+        const std::error_category& dpmi_error_category() noexcept;
 
-        class dpmi_error : public std::system_error
+        struct dpmi_error : public std::system_error
         {
-        public:
             dpmi_error() : dpmi_error(__dpmi_error) { }
             dpmi_error(const char* message) : dpmi_error(__dpmi_error, message) { }
             dpmi_error(std::uint16_t ev) : dpmi_error(ev, "") { }

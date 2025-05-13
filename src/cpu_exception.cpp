@@ -359,7 +359,7 @@ namespace jw::dpmi::detail
         {
             i.frame->print();
             i.registers->print();
-            fmt::print(stderr, "{}\n", cpu_category { }.message(i.num));
+            fmt::print(stderr, "{}\n", cpu_category().message(i.num));
             halt();
         }
 
@@ -538,12 +538,19 @@ namespace jw::dpmi
         }
     }
 
-    std::string cpu_category::message(int ev) const
+    const std::error_category& cpu_category() noexcept
     {
-        auto msg = exception_num { static_cast<std::uint8_t>(ev) }.message();
-        if (msg.empty())
-            return fmt::format("Unknown CPU exception 0x{:0>2x}", ev);
-        else
-            return { msg.begin(), msg.end() };
+        struct : public std::error_category
+        {
+            virtual const char* name() const noexcept override { return "CPU"; }
+            virtual std::string message(int ev) const override
+            {
+                auto msg = exception_num { static_cast<std::uint8_t>(ev) }.message();
+                if (msg.empty())
+                    return fmt::format("Unknown CPU exception 0x{:0>2x}", ev);
+                else
+                    return { msg.begin(), msg.end() };
+            }
+        } static cat;
     }
 }
