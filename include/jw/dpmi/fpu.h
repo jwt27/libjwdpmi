@@ -1,10 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2017 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <array>
@@ -24,7 +19,7 @@ namespace jw::dpmi
 
     union alignas(8) long_fpu_register
     {
-        byte value[16];
+        std::array<std::byte, 16> bytes;
         long double value_ld;
         double value_d;
         float value_f;
@@ -35,7 +30,7 @@ namespace jw::dpmi
 
     union [[gnu::packed]] short_fpu_register
     {
-        byte value[10];
+        std::array<std::byte, 10> bytes;
         double value_d;
         float value_f;
         split_int64_t mmx;
@@ -45,6 +40,7 @@ namespace jw::dpmi
 
     union alignas(16) sse_register
     {
+        std::array<std::byte, 16> bytes;
         std::array<float, 4> value;
         __m128 m128;
     };
