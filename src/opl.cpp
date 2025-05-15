@@ -24,19 +24,23 @@ namespace jw::audio
         // from https://www.fit.vutbr.cz/~arnost/opl/opl3.html#appendixB
         w(0x04, 0x60);          // mask both timers
         w(0x04, 0x80);          // reset irq
-        if (status().timer0) throw io::device_not_found { "OPL not detected" };
+        if (status().timer0)
+            throw io::device_not_found { "OPL not detected" };
         w(0x02, 0xff);          // set timer 0 count 0xff
         w(0x04, 0x21);          // start timer 0
         this_thread::sleep_for(100us);
         auto s = status();
-        if (not s.timer0) throw io::device_not_found { "OPL not detected" };
+        if (not s.timer0)
+            throw io::device_not_found { "OPL not detected" };
         w(0x04, 0x60);          // stop timer
         w(0x04, 0x80);          // reset irq
-        if (s.opl2) return opl_type::opl2;
+        if (s.opl2)
+            return opl_type::opl2;
 
         w3(0x02, 0xa5);         // write a distinctive value to timer 0
         this_thread::sleep_for(2235ns);
-        if (io::read_port(base + 1) != std::byte { 0xa5 }) return opl_type::opl3;
+        if (io::read_port<std::byte>(base + 1) != std::byte { 0xa5 })
+            return opl_type::opl3;
         w3(0x105, 0x05);        // enable BUSY flag
         return opl_type::opl3_l;
     }
@@ -69,7 +73,7 @@ namespace jw::audio
             }
         }
 
-        io::write_port(port + 1, data);
+        io::write_port<std::byte>(port + 1, data);
         if constexpr (not opl3_l) drv->last_access = clock::now();
     }
 

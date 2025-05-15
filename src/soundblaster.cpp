@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2022 - 2024 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2022 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <jw/audio/soundblaster.h>
 #include <jw/io/io_error.h>
@@ -31,7 +31,7 @@ namespace jw::audio
 
     static void dsp_force_write(io::port_num dsp, std::uint8_t data)
     {
-        io::write_port(dsp + 0x0c, data);
+        io::write_port<std::uint8_t>(dsp + 0x0c, data);
     }
 
     template<bool yield>
@@ -163,7 +163,7 @@ namespace jw::audio
 
     static void mixer_index(io::port_num mx, std::uint8_t i)
     {
-        io::write_port(mx + 0x04, i);
+        io::write_port<std::uint8_t>(mx + 0x04, i);
     }
 
     static std::uint8_t mixer_read(io::port_num mx)
@@ -173,7 +173,7 @@ namespace jw::audio
 
     static void mixer_write(io::port_num mx, std::uint8_t data)
     {
-        io::write_port(mx + 0x05, data);
+        io::write_port<std::uint8_t>(mx + 0x05, data);
     }
 
     static void mixer_set_stereo(io::port_num mx, bool stereo)
