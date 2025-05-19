@@ -552,5 +552,6 @@ namespace jw::dpmi
                     return { msg.begin(), msg.end() };
             }
         } static cat;
+        return cat;
     }
 }
