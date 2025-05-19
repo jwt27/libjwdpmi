@@ -15,6 +15,7 @@
 #include <jw/dpmi/alloc.h>
 #include <jw/dpmi/irq_check.h>
 #include <jw/function.h>
+#include <jw/debug.h>
 #include "jwdpmi_config.h"
 
 #pragma GCC diagnostic push
@@ -213,15 +214,17 @@ namespace jw::dpmi
 
     struct cpu_exception : public std::system_error
     {
-        const cpu_registers registers;
-        const dpmi10_exception_frame frame;
-        const bool is_dpmi10_frame;
+        cpu_registers registers;
+        dpmi10_exception_frame frame;
+        bool is_dpmi10_frame;
+        debug::stacktrace<32> stacktrace;
 
         void print() const
         {
             if (is_dpmi10_frame) frame.print();
             else static_cast<const dpmi09_exception_frame*>(&frame)->print();
             registers.print();
+            stacktrace.print();
         }
 
     protected:

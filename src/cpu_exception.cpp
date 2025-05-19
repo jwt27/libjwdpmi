@@ -54,7 +54,15 @@ namespace jw::dpmi::detail
         auto e = std::move(pending_exceptions->back());
         pending_exceptions->pop_back();
         if (not e) terminate();
-        std::rethrow_exception(e);
+        try
+        {
+            std::rethrow_exception(std::move(e));
+        }
+        catch (cpu_exception& exc)
+        {
+            exc.stacktrace = exc.stacktrace.current(3);
+            throw;
+        }
     }
 
     static bool is_async_signal(const exception_info& info)
