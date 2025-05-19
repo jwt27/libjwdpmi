@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2018 - 2024 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2018 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <cstdint>
@@ -56,4 +56,11 @@ namespace jw::debug::detail
     inline void create_thread(jw::detail::thread*) { }
     inline void destroy_thread(jw::detail::thread*) { }
 #endif
+
+    struct stacktrace_base
+    {
+    protected:
+        static std::size_t make(std::uintptr_t*, std::uintptr_t*, int);
+        static void print(FILE*, std::span<const std::uintptr_t>);
+    };
 }

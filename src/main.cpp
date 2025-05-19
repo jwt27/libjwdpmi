@@ -103,7 +103,7 @@ namespace jw
             catch (...) { print_exception(); }
         }
         else fmt::print(stderr, "Terminating.\n");
-        debug::print_backtrace();
+        debug::stacktrace<64>::current().print();
 
         using namespace ::jw::dpmi::detail;
         auto* id = interrupt_id::get();

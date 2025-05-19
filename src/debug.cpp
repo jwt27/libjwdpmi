@@ -10,6 +10,7 @@
 #include <ranges>
 #include <unwind.h>
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 #include <jw/main.h>
 #include <jw/dpmi/fpu.h>
 #include <jw/dpmi/dpmi.h>
@@ -1792,18 +1793,32 @@ namespace jw::debug
 }
 #endif
 
-namespace jw::debug
+namespace jw::debug::detail
 {
-    _Unwind_Reason_Code unwind_print_trace(_Unwind_Context* c, void*)
+    struct stacktrace_arg
     {
-        fmt::print(stderr, " --> {: >11x}", _Unwind_GetIP(c));
+        std::uintptr_t* p;
+        std::uintptr_t* const end;
+        int skip;
+    };
+
+    static _Unwind_Reason_Code make_stacktrace(_Unwind_Context* ctx, void* p)
+    {
+        auto* arg = static_cast<stacktrace_arg*>(p);
+        if (arg->p != arg->end and arg->skip-- < 0)
+            *arg->p++ = _Unwind_GetIP(ctx);
         return _URC_NO_REASON;
     }
 
-    void print_backtrace() noexcept
+    std::size_t stacktrace_base::make(std::uintptr_t* p, std::uintptr_t* end, int skip)
     {
-        fmt::print(stderr, "Backtrace  ");
-        _Unwind_Backtrace(unwind_print_trace, nullptr);
-        fmt::print(stderr, "\n");
+        stacktrace_arg arg { p, end, skip };
+        _Unwind_Backtrace(make_stacktrace, &arg);
+        return arg.p - p;
+    }
+
+    void stacktrace_base::print(FILE* file, std::span<const std::uintptr_t> entries)
+    {
+        fmt::print(file, "Backtrace:{: >8x}\n", fmt::join(entries, ", "));
     }
 }

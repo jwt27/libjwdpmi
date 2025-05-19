@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2017 - 2024 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2017 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <jw/detail/debug.h>
@@ -35,8 +35,35 @@ namespace jw::debug
 #endif
     }
 
-    // Unwind stack and print backtrace.
-    void print_backtrace() noexcept;
+    using stacktrace_entry = std::uintptr_t;
+
+    template<std::size_t MaxSize>
+    struct stacktrace : detail::stacktrace_base
+    {
+        stacktrace() noexcept = default;
+
+        static stacktrace current(std::size_t skip = 0)
+        {
+            stacktrace stk;
+            auto* const p = stk.ips.data();
+            stk.n = stacktrace_base::make(p, p + MaxSize, skip);
+            return stk;
+        }
+
+        void print(FILE* file = stderr) const
+        {
+            stacktrace_base::print(file, entries());
+        }
+
+        std::span<const stacktrace_entry> entries() const noexcept
+        {
+            return { ips.data(), n };
+        }
+
+    private:
+        std::size_t n = 0;
+        std::array<stacktrace_entry, MaxSize> ips;
+    };
 
     struct assertion_failed : public std::runtime_error
     {
