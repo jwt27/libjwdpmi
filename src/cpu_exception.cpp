@@ -51,12 +51,12 @@ namespace jw::dpmi::detail
     [[noreturn]]
     static void rethrow_cpu_exception()
     {
-        auto e = std::move(pending_exceptions->back());
-        pending_exceptions->pop_back();
-        if (not e) terminate();
+        if (pending_exceptions->empty() or not pending_exceptions->back())
+            terminate();
         try
         {
-            std::rethrow_exception(std::move(e));
+            finally pop { [] { pending_exceptions->pop_back(); } };
+            std::rethrow_exception(std::move(pending_exceptions->back()));
         }
         catch (cpu_exception& exc)
         {
