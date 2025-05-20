@@ -293,7 +293,8 @@ namespace jw
     void terminate()
     {
         detail::terminating = true;
-        fmt::print(stderr, "terminate() called at 0x{}.\n", fmt::ptr(__builtin_return_address(0)));
+        fmt::print(stderr, "terminate() called.\n");
+        debug::stacktrace<64>::current(1).print();
         detail::scheduler::forced_unwind();
     }
 }
