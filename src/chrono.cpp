@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2017 - 2024 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2017 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <bit>
 #include <jw/chrono.h>
@@ -10,9 +10,6 @@
 #include <jw/dpmi/cpuid.h>
 #include <jw/dpmi/bda.h>
 #include "jwdpmi_config.h"
-#ifdef JWDPMI_WITH_WATT32
-# include <tcp.h>
-#endif
 
 namespace jw::chrono
 {
@@ -33,12 +30,6 @@ namespace jw::chrono
     static std::uint32_t pit_counter_max { 0x10000 };
     static std::uint32_t pit_counter_new_max;
     static volatile std::uint_fast16_t rtc_ticks;
-
-#ifdef JWDPMI_WITH_WATT32
-    static bool watt32_timer_initialized { false };
-    static fixed<std::uint32_t, 22> ms_per_pit_tick { 0x10000 * ns_per_pit_count / 1'000'000 };
-    static fixed<std::uint32_t, 22> pit_ms;
-#endif
 
     static constexpr io::out_port<byte> rtc_index { 0x70 };
     static constexpr io::io_port<byte> rtc_data { 0x71 };
@@ -91,9 +82,6 @@ namespace jw::chrono
         const auto ns = count * ns_per_pit_count;
         ns_per_pit_tick = round_to<6>(ns);
         pit_counter_max = count;
-#ifdef JWDPMI_WITH_WATT32
-        ms_per_pit_tick = ns / 1'000'000;
-#endif
     }
 
     static void bios_tick(std::uint32_t count)
@@ -134,15 +122,6 @@ namespace jw::chrono
         if constexpr (tsc)
             last_tsc = rdtsc();
         pit_ns += ns_per_pit_tick;
-#ifdef JWDPMI_WITH_WATT32
-        pit_ms += ms_per_pit_tick;
-        const auto ms = static_cast<unsigned>(pit_ms);
-        if (ms > 0)
-        {
-            pit_ms -= ms;
-            userTimerTick(ms);
-        }
-#endif
         bios_tick(pit_counter_max);
 
         if (pit_counter_max != pit_counter_new_max) [[unlikely]]
@@ -247,14 +226,6 @@ namespace jw::chrono
                 pit_ns = t.time_since_epoch().count() - pit_ns_offset;
                 pit_irq.set_irq(0);
                 wait_for_irq0 = tsc_calibrated;
-#ifdef JWDPMI_WITH_WATT32
-                if (not watt32_timer_initialized)
-                {
-                    init_userSuppliedTimerTick();
-                    pit_ms = 0;
-                    watt32_timer_initialized = true;
-                }
-#endif
             }
 
             if (freq_divisor < 2 or freq_divisor > 0x10000)
