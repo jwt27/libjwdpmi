@@ -14,25 +14,33 @@ namespace jw::io
     struct dma_buffer
     {
         dma_buffer(std::size_t num_elements)
-            : mem(sizeof(T) * num_elements * 2)
-        {
-            const std::size_t n = sizeof(T) * num_elements;
-            if (n > 64_KB) throw std::length_error { "DMA buffer too large" };
-            const std::uintptr_t address = mem.dos_pointer().segment << 4;
-            const std::uintptr_t aligned = (address + 0xffff) & 0xffff0000;
-            offset = aligned - address;
-            if (offset >= n) offset = 0;
-            if (offset < n) mem.resize(offset + n);
-        }
+            : mem { allocate(sizeof(T) * num_elements) }
+        { }
 
-        T* pointer() const noexcept { return reinterpret_cast<T*>(mem.near_pointer() + offset); }
-        std::uintptr_t physical_address() const noexcept { return (mem.dos_pointer().segment << 4) + offset; }
-        std::size_t size_bytes() const noexcept { return mem.size() - offset; }
+        T* pointer() const noexcept { return std::launder(reinterpret_cast<T*>(mem.near_pointer())); }
+        std::uintptr_t physical_address() const noexcept { return mem.dos_pointer().segment << 4; }
+        std::size_t size_bytes() const noexcept { return mem.size(); }
         std::size_t size() const noexcept { return size_bytes() / sizeof(T); }
 
     private:
+        static dpmi::dos_memory<std::byte> allocate(std::size_t n)
+        {
+            if (n > 64_KB)
+                throw std::length_error { "DMA buffer too large" };
+
+            dpmi::dos_memory<std::byte> mem { n };
+            const std::uintptr_t seg = mem.dos_pointer().segment;
+            const std::uintptr_t boundary = (seg + 0x1000) & -0x1000;
+            const std::size_t space = (boundary - seg) * 16;
+            if (space < n)
+            {
+                mem.resize(space - 16);
+                return allocate(n);
+            }
+            else return mem;
+        }
+
         dpmi::dos_memory<std::byte> mem;
-        std::size_t offset;
     };
 
     enum class dma_mode : unsigned
