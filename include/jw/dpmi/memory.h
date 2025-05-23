@@ -426,6 +426,11 @@ namespace jw::dpmi
 
     struct no_alloc_tag { };
 
+    // Silence warning about resize() being hidden in memory_t below.  This is
+    // very much intentional.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Woverloaded-virtual"
+
     struct memory_base : public linear_memory
     {
         memory_base(const linear_memory& mem, bool committed = true) : linear_memory(mem)
@@ -634,7 +639,9 @@ namespace jw::dpmi
         // mapped_dos_memory(std::size_t num_elements, far_ptr16 dos_address)
         // dos_memory(std::size_t num_elements)
         template<typename... Args>
-        memory_t(std::size_t num_elements, Args&&... args) : base(num_elements * sizeof(T), std::forward<Args>(args)...) { }
+        memory_t(std::size_t num_elements, Args&&... args)
+            : base(num_elements * sizeof(T), std::forward<Args>(args)...)
+        { }
 
         auto* near_pointer() const { return base::template near_pointer<T>(); }
         auto* operator->() const noexcept { return near_pointer(); }
@@ -642,12 +649,21 @@ namespace jw::dpmi
         auto& operator[](std::ptrdiff_t i) const noexcept { return *(near_pointer() + i); }
 
         template<typename... Args>
-        void resize(std::size_t num_elements, Args&&... args) { base::resize(num_elements * sizeof(T), std::forward<Args>(args)...); }
-        std::size_t size() const noexcept { return base::size() / sizeof(T); }
+        void resize(std::size_t num_elements, Args&&... args)
+        {
+            base::resize(num_elements * sizeof(T), std::forward<Args>(args)...);
+        }
+
+        std::size_t size() const noexcept
+        {
+            return base::size() / sizeof(T);
+        }
     };
 
     template <typename T = std::byte> using memory = memory_t<T, memory_base>;
     template <typename T = std::byte> using device_memory = memory_t<T, device_memory_base>;
     template <typename T = std::byte> using mapped_dos_memory = memory_t<T, mapped_dos_memory_base>;
     template <typename T = std::byte> using dos_memory = memory_t<T, dos_memory_base>;
+
+#pragma GCC diagnostic pop
 }
