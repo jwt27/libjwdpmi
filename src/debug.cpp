@@ -534,7 +534,7 @@ namespace jw::debug::detail
     [[nodiscard]]
     static char* fpu_reg(char* out, regnum reg, const T* fpu)
     {
-        assume(reg >= st0);
+        [[assume(reg >= st0)]];
         switch (reg)
         {
         case st0: case st1: case st2: case st3: case st4: case st5: case st6: case st7:
@@ -629,7 +629,7 @@ namespace jw::debug::detail
     template<typename T>
     static bool set_fpu_reg(regnum reg, const std::string_view& value, T* fpu)
     {
-        assume(reg >= st0);
+        [[assume(reg >= st0)]];
         switch (reg)
         {
         case st0: case st1: case st2: case st3: case st4: case st5: case st6: case st7:
