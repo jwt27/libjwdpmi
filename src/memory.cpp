@@ -183,7 +183,7 @@ namespace jw::dpmi
     descriptor::~descriptor()
     {
         try { deallocate(); }
-        catch(...) { }
+        catch (...) { }
     }
 
     descriptor_data descriptor::read() const
@@ -427,29 +427,28 @@ namespace jw::dpmi
         return ax;
     }
 
-    void memory_base::allocate(bool committed, std::uintptr_t desired_address)
+    void memory_base::allocate(bool dpmi10_alloc_only, bool committed, std::uintptr_t desired_address)
     {
-        try
+        if (dpmi10_alloc_supported)
         {
-            if (dpmi10_alloc_supported)
+            auto error = dpmi10_alloc(committed, desired_address);
+            if (not error) [[likely]]
+                return;
+            switch (error->code().value())
             {
-                auto error = dpmi10_alloc(committed, desired_address);
-                if (not error) return;
-                switch (error->code().value())
-                {
-                case unsupported_function:
-                case 0x0504:
-                    dpmi10_alloc_supported = false;
-                    break;
-                default: throw* error;
-                }
+            case unsupported_function:
+            case 0x0504:
+                dpmi10_alloc_supported = false;
+                break;
+
+            default:
+                throw *error;
             }
-            dpmi09_alloc();
         }
-        catch (...)
-        {
-            std::throw_with_nested(std::bad_alloc { });
-        }
+        if (dpmi10_alloc_only)
+            throw dpmi_error { unsupported_function, __PRETTY_FUNCTION__ };
+
+        dpmi09_alloc();
     }
 
     void memory_base::deallocate()
@@ -473,8 +472,10 @@ namespace jw::dpmi
 
     void memory_base::resize(std::size_t num_bytes, bool committed)
     {
-        if (dpmi10_alloc_supported) dpmi10_resize(num_bytes, committed);
-        else dpmi09_resize(num_bytes);
+        if (dpmi10_alloc_supported)
+            dpmi10_resize(num_bytes, committed);
+        else
+            dpmi09_resize(num_bytes);
     }
 
     static bool check_base_limit(std::uintptr_t base, std::size_t limit)
@@ -518,7 +519,8 @@ namespace jw::dpmi
                 , "c" (new_size.lo)
                 :
             );
-            if (c) throw dpmi_error { ax, __PRETTY_FUNCTION__ };
+            if (c)
+                throw dpmi_error { ax, __PRETTY_FUNCTION__ };
         } while (not check_base_limit(new_addr, size()));
         handle = new_handle;
         addr = new_addr;
@@ -546,7 +548,8 @@ namespace jw::dpmi
                 , "d" (static_cast<std::uint32_t>(committed))
                 :
             );
-            if (c) return dpmi_error { ax, __PRETTY_FUNCTION__ };
+            if (c) [[unlikely]]
+                return dpmi_error { ax, __PRETTY_FUNCTION__ };
         } while (not check_base_limit(new_addr, size()));
         handle = new_handle;
         addr = new_addr;
@@ -612,22 +615,43 @@ namespace jw::dpmi
 
     void device_memory_base::allocate(std::uintptr_t physical_address, bool use_dpmi09_alloc)
     {
-        if (not use_dpmi09_alloc and device_map_supported())
+        if (dpmi10_alloc_supported & not use_dpmi09_alloc)
         {
-            base::allocate(false);
-            dpmi10_alloc(physical_address);
+            try
+            {
+                memory_base::allocate(false, false, 0);
+            }
+            catch (const dpmi_error&)
+            {
+                goto dpmi09;
+            }
+
+            if (const auto error = dpmi10_alloc(physical_address)) [[unlikely]]
+            {
+                memory_base::deallocate();
+
+                switch (error->code().value())
+                {
+                case unsupported_function:
+                case 0x0508:
+                    dpmi10_alloc_supported = false;
+                    goto dpmi09;
+
+                default:
+                    throw* error;
+                }
+            }
         }
-        else dpmi09_alloc(physical_address);
+
+    dpmi09:
+        dpmi09_alloc(physical_address);
     }
 
     void device_memory_base::deallocate()
     {
-        if (device_map_supported())
-        {
-            base::deallocate();
-            return;
-        }
-        else
+        if (memory_base::allocated())
+            memory_base::deallocate();
+        else if (addr != 0)
         {
             split_uint32_t old_addr { addr };
             asm volatile
@@ -667,7 +691,7 @@ namespace jw::dpmi
         check_base_limit(addr, bytes);
     }
 
-    inline void device_memory_base::dpmi10_alloc(std::uintptr_t physical_address)
+    inline std::optional<dpmi_error> device_memory_base::dpmi10_alloc(std::uintptr_t physical_address)
     {
         auto addr_start = round_down_to_page_size(physical_address);
         auto offset = physical_address - addr_start;
@@ -686,28 +710,18 @@ namespace jw::dpmi
             : "b" (offset_in_block)
             , "c" (pages)
             , "d" (addr_start)
-            , "S" (handle)
+            , "S" (get_handle())
             : "memory"
         );
-        if (c) throw dpmi_error { ax, __PRETTY_FUNCTION__ };
-    }
-
-    static bool dos_map_supported()
-    {
-        static bool sup = []
-        {
-            const auto cap = capabilities::get();
-            return cap and cap->flags.conventional_memory_mapping;
-        }();
-        return sup;
+        if (c) [[unlikely]]
+            return dpmi_error { ax, __PRETTY_FUNCTION__ };
+        else
+            return std::nullopt;
     }
 
     void mapped_dos_memory_base::allocate(std::uintptr_t dos_physical_address)
     {
-        if (not dos_map_supported())
-            throw dpmi_error { unsupported_function, __PRETTY_FUNCTION__ };
-
-        base::allocate(false);
+        memory_base::allocate(false, false, 0);
         auto addr_start = round_down_to_page_size(dos_physical_address);
         offset = dos_physical_address - addr_start;
         auto pages = round_up_to_page_size(size()) / page_size;
@@ -724,10 +738,14 @@ namespace jw::dpmi
             : "b" (offset_in_block)
             , "c" (pages)
             , "d" (addr_start)
-            , "S" (handle)
+            , "S" (get_handle())
             : "memory"
         );
-        if (c) throw dpmi_error { ax, __PRETTY_FUNCTION__ };
+        if (c) [[unlikely]]
+        {
+            memory_base::deallocate();
+            throw dpmi_error { ax, __PRETTY_FUNCTION__ };
+        }
         return;
     }
 
@@ -735,11 +753,13 @@ namespace jw::dpmi
     {
         num_bytes = round_up_to_paragraph_size(num_bytes);
         const bool remap = num_bytes > bytes;
-        if (remap) base::deallocate();
+        if (remap)
+            mapped_dos_memory_base::deallocate();
         dos_resize(dos_handle, num_bytes);
         bytes = num_bytes;
         [[assume(dos_addr.offset == 0)]];
-        if (remap) base::allocate(conventional_to_physical(dos_addr));
+        if (remap)
+            mapped_dos_memory_base::allocate(conventional_to_physical(dos_addr));
     }
 
     void dos_memory_base::allocate()
@@ -749,13 +769,14 @@ namespace jw::dpmi
         dos_handle = result.handle;
         dos_addr = result.pointer;
         [[assume(dos_addr.offset == 0)]];
-        base::allocate(conventional_to_physical(dos_addr));
+        mapped_dos_memory_base::allocate(conventional_to_physical(dos_addr));
     }
 
     void dos_memory_base::deallocate()
     {
-        base::deallocate();
-        if (dos_handle == 0) return;
+        mapped_dos_memory_base::deallocate();
+        if (dos_handle == 0)
+            return;
         dos_free(dos_handle);
         dos_handle = 0;
     }

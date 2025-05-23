@@ -2,12 +2,12 @@
 /*    Copyright (C) 2017 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
-#include <limits>
-#include <memory_resource>
-#include <optional>
-#include <sys/nearptr.h>
 #include <jw/dpmi/dpmi.h>
 #include <jw/dpmi/detail/selectors.h>
+#include <sys/nearptr.h>
+#include <limits>
+#include <optional>
+#include <utility>
 #include "jwdpmi_config.h"
 
 namespace jw::dpmi
@@ -433,12 +433,17 @@ namespace jw::dpmi
 
     struct memory_base : public linear_memory
     {
-        memory_base(const linear_memory& mem, bool committed = true) : linear_memory(mem)
+        memory_base(const linear_memory& mem, bool committed = true)
+            : linear_memory { mem }
         {
-            allocate(committed, addr);
+            allocate(true, committed, addr);
         }
 
-        memory_base(std::size_t num_bytes, bool committed = true) : memory_base(linear_memory { 0, num_bytes }, committed) { }
+        memory_base(std::size_t num_bytes, bool committed = true)
+            : linear_memory { 0, num_bytes }
+        {
+            allocate(false, committed, 0);
+        }
 
         virtual ~memory_base()
         {
@@ -459,7 +464,10 @@ namespace jw::dpmi
         memory_base(const memory_base&) = delete;
         memory_base& operator=(const memory_base&) = delete;
 
-        memory_base(memory_base&& m) noexcept : linear_memory(m), handle(m.handle) { m.handle = 0; }
+        memory_base(memory_base&& m) noexcept
+            : linear_memory { m }
+            , handle { std::exchange(m.handle, 0) }
+        { }
         memory_base& operator=(memory_base&& m) noexcept
         {
             std::swap(handle, m.handle);
@@ -480,33 +488,35 @@ namespace jw::dpmi
         memory_base(mapped_dos_memory_base&&) = delete;
         memory_base(dos_memory_base&&) = delete;
 
-        virtual void resize(std::size_t num_bytes, bool committed = true);
-
         std::uint32_t get_handle() const noexcept { return handle; }
-        virtual operator bool() const noexcept { return handle != 0; }
-        virtual std::ptrdiff_t get_offset_in_block() const noexcept { return 0; }
+        virtual std::ptrdiff_t offset_in_block() const noexcept { return 0; }
 
     protected:
-        memory_base(no_alloc_tag, const linear_memory& mem) noexcept : linear_memory(mem) { }
-        memory_base(no_alloc_tag, std::size_t num_bytes) noexcept : memory_base(no_alloc_tag { }, linear_memory { 0, num_bytes }) { }
+        memory_base(no_alloc_tag, const linear_memory& mem) noexcept
+            : linear_memory { mem }
+        { }
+        memory_base(no_alloc_tag, std::size_t num_bytes) noexcept
+            : memory_base { no_alloc_tag { }, linear_memory { 0, num_bytes } }
+        { }
 
-        void allocate(bool committed = true, std::uintptr_t desired_address = 0);
+        void allocate(bool dpmi10_alloc_only, bool committed, std::uintptr_t desired_address);
+        virtual bool allocated() const noexcept { return handle != 0; }
         virtual void deallocate();
+        virtual void resize(std::size_t num_bytes, bool committed = true);
 
         static inline bool dpmi10_alloc_supported = true;
-        std::uint32_t handle { 0 };
 
     private:
         void dpmi09_alloc();
         [[nodiscard]] std::optional<dpmi_error> dpmi10_alloc(bool committed, std::uintptr_t desired_address);
         void dpmi09_resize(std::size_t num_bytes);
         void dpmi10_resize(std::size_t num_bytes, bool committed);
+
+        std::uint32_t handle { 0 };
     };
 
     struct device_memory_base : public memory_base
     {
-        using base = memory_base;
-
         // 'use_dpmi09_alloc' in this context means to use the DPMI 0.9
         // function 0800.  This is useful because HDPMI does not set the
         // cache-disable/write-through flags when using this function, but it
@@ -514,116 +524,127 @@ namespace jw::dpmi
         // oversight, but we can use this to preserve write-combining on
         // framebuffer memory.
         device_memory_base(std::size_t num_bytes, std::uintptr_t physical_address, bool use_dpmi09_alloc = false)
-            : base(no_alloc_tag { }, round_up_to_page_size(num_bytes) + page_size)
+            : memory_base(no_alloc_tag { }, round_up_to_page_size(num_bytes) + page_size)
         {
             allocate(physical_address, use_dpmi09_alloc);
         }
 
-        device_memory_base(const base&) = delete;
+        device_memory_base(const memory_base&) = delete;
         device_memory_base(const device_memory_base&) = delete;
-        device_memory_base(base&&) = delete;
-        device_memory_base& operator=(base&&) = delete;
+        device_memory_base(memory_base&&) = delete;
+        device_memory_base& operator=(memory_base&&) = delete;
 
-        device_memory_base(device_memory_base&& m) : base(static_cast<base&&>(m)) { }
-        device_memory_base& operator=(device_memory_base&& m) { base::operator=(static_cast<base&&>(m)); return *this; }
-
-        virtual void resize(std::size_t, bool = true) override { throw dpmi_error { unsupported_function, __PRETTY_FUNCTION__ }; }
-        virtual operator bool() const noexcept override
+        device_memory_base(device_memory_base&& m)
+            : memory_base(static_cast<memory_base&&>(m))
         {
-            if (device_map_supported()) return base::operator bool();
-            else return addr != 0;
-        };
-
-        static bool device_map_supported()
+            m.addr = 0;
+        }
+        device_memory_base& operator=(device_memory_base&& m)
         {
-            static bool sup = []
-            {
-                const auto cap = capabilities::get();
-                return cap and cap->flags.device_mapping;
-            }();
-            return sup;
+            memory_base::operator=(static_cast<memory_base&&>(m));
+            return *this;
         }
 
     protected:
         void allocate(std::uintptr_t physical_address, bool use_dpmi09_alloc);
+        virtual bool allocated() const noexcept override { return addr != 0; };
         virtual void deallocate() override;
 
+        virtual void resize(std::size_t, bool = true) override
+        {
+            throw dpmi_error { unsupported_function, __PRETTY_FUNCTION__ };
+        }
+
     private:
+        [[nodiscard]]
+        std::optional<dpmi_error> dpmi10_alloc(std::uintptr_t physical_address);
         void dpmi09_alloc(std::uintptr_t physical_address);
-        void dpmi10_alloc(std::uintptr_t physical_address);
+
+        static inline bool dpmi10_alloc_supported = true;
     };
 
     struct mapped_dos_memory_base : public memory_base
     {
-        using base = memory_base;
         mapped_dos_memory_base(std::size_t num_bytes, std::uintptr_t dos_physical_address)
-            : base(no_alloc_tag { }, round_up_to_page_size(num_bytes) + page_size)
-            , dos_addr(physical_to_conventional(dos_physical_address))
+            : memory_base { no_alloc_tag { }, round_up_to_page_size(num_bytes) + page_size }
+            , dos_addr { physical_to_conventional(dos_physical_address) }
         {
             allocate(dos_physical_address);
         }
 
-        mapped_dos_memory_base(std::size_t num_bytes, far_ptr16 address) : mapped_dos_memory_base(num_bytes, conventional_to_physical(address)) { }
+        mapped_dos_memory_base(std::size_t num_bytes, far_ptr16 address)
+            : mapped_dos_memory_base { num_bytes, conventional_to_physical(address) }
+        { }
 
-        mapped_dos_memory_base(const base&) = delete;
+        mapped_dos_memory_base(const memory_base&) = delete;
         mapped_dos_memory_base(const mapped_dos_memory_base&) = delete;
-        mapped_dos_memory_base(base&&) = delete;
-        mapped_dos_memory_base& operator=(base&&) = delete;
+        mapped_dos_memory_base(memory_base&&) = delete;
+        mapped_dos_memory_base& operator=(memory_base&&) = delete;
 
         mapped_dos_memory_base(mapped_dos_memory_base&& m)
-            : base(static_cast<base&&>(m)), offset(m.offset), dos_addr(m.dos_addr) { }
+            : memory_base { static_cast<memory_base&&>(m) }
+            , dos_addr { m.dos_addr }
+            , offset { m.offset }
+        { }
         mapped_dos_memory_base& operator=(mapped_dos_memory_base&& m)
         {
-            base::operator=(static_cast<base&&>(m));
+            memory_base::operator=(static_cast<memory_base&&>(m));
             std::swap(dos_addr, m.dos_addr);
             std::swap(offset, m.offset);
             return *this;
         }
 
-        virtual void resize(std::size_t, bool = true) override { throw dpmi_error { unsupported_function, __PRETTY_FUNCTION__ }; }
         auto dos_pointer() const noexcept { return dos_addr; }
-        virtual std::ptrdiff_t get_offset_in_block() const noexcept override { return offset; }
+        virtual std::ptrdiff_t offset_in_block() const noexcept override { return offset; }
 
     protected:
-        mapped_dos_memory_base(no_alloc_tag, std::size_t num_bytes) : base(no_alloc_tag { }, round_up_to_page_size(num_bytes) + page_size) { }
-
-        std::ptrdiff_t offset { 0 };
-        far_ptr16 dos_addr;
+        mapped_dos_memory_base(no_alloc_tag, std::size_t num_bytes)
+            : memory_base { no_alloc_tag { }, round_up_to_page_size(num_bytes) + page_size }
+        { }
 
         void allocate(std::uintptr_t dos_physical_address);
+        virtual void resize(std::size_t, bool = true) override
+        {
+            throw dpmi_error { unsupported_function, __PRETTY_FUNCTION__ };
+        }
+
+        far_ptr16 dos_addr;
+
+    private:
+        std::ptrdiff_t offset { 0 };
     };
 
     struct dos_memory_base : public mapped_dos_memory_base
     {
-        using base = mapped_dos_memory_base;
-
-        dos_memory_base(std::size_t num_bytes) : base(no_alloc_tag { }, round_up_to_paragraph_size(num_bytes))
+        dos_memory_base(std::size_t num_bytes)
+            : mapped_dos_memory_base { no_alloc_tag { }, round_up_to_paragraph_size(num_bytes) }
         {
             allocate();
         }
 
-        dos_memory_base(const base&) = delete;
+        dos_memory_base(const mapped_dos_memory_base&) = delete;
         dos_memory_base(const dos_memory_base&) = delete;
-        dos_memory_base(base&&) = delete;
-        dos_memory_base& operator=(base&&) = delete;
+        dos_memory_base(mapped_dos_memory_base&&) = delete;
+        dos_memory_base& operator=(mapped_dos_memory_base&&) = delete;
 
-        dos_memory_base(dos_memory_base&& m) : base(static_cast<base&&>(m)), dos_handle(m.dos_handle) { m.dos_handle = 0; }
+        dos_memory_base(dos_memory_base&& m)
+            : mapped_dos_memory_base { static_cast<mapped_dos_memory_base&&>(m) }
+            , dos_handle { std::exchange(m.dos_handle, 0) }
+        { }
         dos_memory_base& operator=(dos_memory_base&& m)
         {
-            base::operator=(static_cast<base&&>(m));
+            mapped_dos_memory_base::operator=(static_cast<mapped_dos_memory_base&&>(m));
             std::swap(dos_handle, m.dos_handle);
             return *this;
         }
 
-        virtual void resize(std::size_t num_bytes, bool = true) override;
-
         selector get_selector() const noexcept { return dos_handle; }
-
-        virtual operator bool() const noexcept override { return dos_handle != 0; };
 
     protected:
         void allocate();
+        virtual bool allocated() const noexcept override { return dos_handle != 0; };
         virtual void deallocate() override;
+        virtual void resize(std::size_t num_bytes, bool = true) override;
 
     private:
         selector dos_handle { 0 };
@@ -640,7 +661,7 @@ namespace jw::dpmi
         // dos_memory(std::size_t num_elements)
         template<typename... Args>
         memory_t(std::size_t num_elements, Args&&... args)
-            : base(num_elements * sizeof(T), std::forward<Args>(args)...)
+            : base { num_elements * sizeof(T), std::forward<Args>(args)... }
         { }
 
         auto* near_pointer() const { return base::template near_pointer<T>(); }
