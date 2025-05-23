@@ -60,7 +60,7 @@ namespace jw::debug::detail
     struct stacktrace_base
     {
     protected:
-        static std::size_t make(std::uintptr_t*, std::uintptr_t*, int);
+        static std::size_t make(std::uintptr_t*, std::size_t, int);
         static void print(FILE*, std::span<const std::uintptr_t>);
     };
 }

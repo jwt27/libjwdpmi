@@ -1810,9 +1810,9 @@ namespace jw::debug::detail
         return _URC_NO_REASON;
     }
 
-    std::size_t stacktrace_base::make(std::uintptr_t* p, std::uintptr_t* end, int skip)
+    std::size_t stacktrace_base::make(std::uintptr_t* p, std::size_t n, int skip)
     {
-        stacktrace_arg arg { p, end, skip };
+        stacktrace_arg arg { p, p + n, skip };
         _Unwind_Backtrace(make_stacktrace, &arg);
         return arg.p - p;
     }

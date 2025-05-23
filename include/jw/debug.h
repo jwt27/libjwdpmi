@@ -37,16 +37,19 @@ namespace jw::debug
 
     using stacktrace_entry = std::uintptr_t;
 
+    // Simple stack trace class with a fixed maximum number of entries.
     template<std::size_t MaxSize>
     struct stacktrace : detail::stacktrace_base
     {
-        stacktrace() noexcept = default;
+        constexpr stacktrace() noexcept { /* no zero-init */ }
 
+        // Generate a stack trace from the current call site.
+        [[gnu::always_inline]]
         static stacktrace current(std::size_t skip = 0)
         {
             stacktrace stk;
             auto* const p = stk.ips.data();
-            stk.n = stacktrace_base::make(p, p + MaxSize, skip);
+            stk.n = stacktrace_base::make(p, MaxSize, skip);
             return stk;
         }
 
