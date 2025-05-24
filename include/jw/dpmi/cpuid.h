@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstring>
 #include <string_view>
+#include <bit>
 
 namespace jw::dpmi
 {
@@ -70,7 +71,6 @@ namespace jw::dpmi
         bool long_mode : 1;
         bool amd3dnow_extensions : 1;
         bool amd3dnow : 1;
-
     };
 
     static_assert(sizeof(intel_cpu_feature_flags) == 4);
@@ -117,26 +117,20 @@ namespace jw::dpmi
         // all bits will be clear.
         [[gnu::const]] static intel_cpu_feature_flags feature_flags() noexcept
         {
-            union
-            {
-                std::uint32_t edx;
-                intel_cpu_feature_flags flags { };
-            };
-            if (max() > 0) [[likely]] edx = leaf(1).edx;
-            return flags;
+            if (max() > 0) [[likely]]
+                return std::bit_cast<intel_cpu_feature_flags>(leaf(1).edx);
+            else
+                return { };
         }
 
         // Get the feature flags from extended_leaf(1).edx.  If these are not
         // available, all bits will be clear.
         [[gnu::const]] static amd_cpu_feature_flags amd_feature_flags() noexcept
         {
-            union
-            {
-                std::uint32_t edx;
-                amd_cpu_feature_flags flags { };
-            };
-            if (max_extended() > 0) [[likely]] edx = extended_leaf(1).edx;
-            return flags;
+            if (max_extended() > 0) [[likely]]
+                return std::bit_cast<amd_cpu_feature_flags>(extended_leaf(1).edx);
+            else
+                return { };
         }
 
         // Get the specified CPUID leaf.  Make sure to check max() or
