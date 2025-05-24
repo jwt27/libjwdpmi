@@ -19,7 +19,7 @@ namespace jw::dpmi::detail
     union trampoline_block
     {
         trampoline_block* next_free;
-        std::aligned_storage_t<sizeof(exception_trampoline), alignof(exception_trampoline)> data;
+        alignas(exception_trampoline) std::byte data[sizeof(exception_trampoline)];
     };
 
     [[gnu::section(".text.trampolines")]]
@@ -357,8 +357,8 @@ namespace jw::dpmi::detail
         }
     };
 
-    static_assert(sizeof(redirect_trampoline) == sizeof(exception_trampoline));
-    static_assert(alignof(redirect_trampoline) == alignof(exception_trampoline));
+    static_assert (sizeof(redirect_trampoline) <= sizeof(exception_trampoline));
+    static_assert (alignof(redirect_trampoline) <= alignof(exception_trampoline));
 
     static bool default_exception_handler(const exception_info& i)
     {
