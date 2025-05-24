@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2016 - 2024 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2016 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <exception>
@@ -19,7 +19,7 @@ namespace jw
     // possible, and hopefully restore the system to a usable state.  The OS
     // won't do it for you.
     // If unwinding fails, std::terminate() is called.
-    [[noreturn]] void terminate();
+    [[noreturn, gnu::cold]] void terminate();
 
     [[noreturn]] inline void halt() { do { asm ("cli"); } while (true); }
 
