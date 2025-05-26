@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2017 - 2024 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2017 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 
@@ -62,6 +62,22 @@ namespace jw::chrono
 
         // Returns the time interval between interrupts in nanoseconds.
         static fixed<std::uint32_t, 6> irq_delta() noexcept;
+
+        template<typename Duration>
+        static auto from_sys(const std::chrono::sys_time<Duration>& t) noexcept
+        {
+            using D = std::common_type_t<Duration, std::chrono::seconds>;
+            using T = std::chrono::time_point<pit, D>;
+            return T { D { t.time_since_epoch() } };
+        }
+
+        template<typename Duration>
+        static auto to_sys(const std::chrono::time_point<pit, Duration>& t) noexcept
+        {
+            using D = std::common_type_t<Duration, std::chrono::seconds>;
+            using T = std::chrono::sys_time<D>;
+            return T { D { t.time_since_epoch() } };
+        }
     };
 
     // Time Stamp Counter
@@ -91,6 +107,22 @@ namespace jw::chrono
 
         // Returns the CPU frequency as measured by tsc::setup().
         static long double cpu_frequency() noexcept;
+
+        template<typename Duration>
+        static auto from_sys(const std::chrono::sys_time<Duration>& t) noexcept
+        {
+            using D = std::common_type_t<Duration, std::chrono::seconds>;
+            using T = std::chrono::time_point<tsc, D>;
+            return T { D { t.time_since_epoch() } };
+        }
+
+        template<typename Duration>
+        static auto to_sys(const std::chrono::time_point<tsc, Duration>& t) noexcept
+        {
+            using D = std::common_type_t<Duration, std::chrono::seconds>;
+            using T = std::chrono::sys_time<D>;
+            return T { D { t.time_since_epoch() } };
+        }
     };
 
     // Real-Time Clock
@@ -115,6 +147,9 @@ namespace jw::chrono
         // so this call is very slow.
         static time_point now() noexcept;
 
+        // Retuns the time interval between interrupts in nanoseconds.
+        static double irq_delta() noexcept;
+
         static std::time_t to_time_t(const time_point& t) noexcept
         {
             return std::chrono::duration_cast<std::chrono::seconds>(t.time_since_epoch()).count();
@@ -125,7 +160,20 @@ namespace jw::chrono
             return time_point { std::chrono::duration_cast<duration>(std::chrono::seconds { t }) };
         }
 
-        // Retuns the time interval between interrupts in nanoseconds.
-        static double irq_delta() noexcept;
+        template<typename Duration>
+        static auto from_sys(const std::chrono::sys_time<Duration>& t) noexcept
+        {
+            using D = std::common_type_t<Duration, std::chrono::seconds>;
+            using T = std::chrono::time_point<rtc, D>;
+            return T { D { t.time_since_epoch() } };
+        }
+
+        template<typename Duration>
+        static auto to_sys(const std::chrono::time_point<rtc, Duration>& t) noexcept
+        {
+            using D = std::common_type_t<Duration, std::chrono::seconds>;
+            using T = std::chrono::sys_time<D>;
+            return T { D { t.time_since_epoch() } };
+        }
     };
 }
