@@ -19,9 +19,15 @@ namespace jw::dpmi
         }
 
         template<typename T>
-        T read(std::size_t offset)
+        const volatile T& ref(std::size_t offset) const
         {
-            return *reinterpret_cast<volatile T*>(bytes.begin() + offset);
+            return *reinterpret_cast<const T*>(bytes.begin() + offset);
+        }
+
+        template<typename T>
+        T read(std::size_t offset) const
+        {
+            return *reinterpret_cast<const volatile T*>(bytes.begin() + offset);
         }
 
         template<typename T>
