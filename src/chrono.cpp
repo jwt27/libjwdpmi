@@ -99,7 +99,7 @@ namespace jw::chrono
                 const auto day = dpmi::bda->read<std::uint8_t>(0x70);
                 dpmi::bda->write<std::uint8_t>(0x70, day + 1);              // Update BIOS day counter
             }
-            dpmi::bda->write(0x6c, bios_time);                              // Update BIOS timer
+            dpmi::bda->write<std::uint32_t>(0x6c, bios_time);               // Update BIOS timer
 
             auto motor_enable = dpmi::bda->read<std::uint8_t>(0x40);
             if (motor_enable > 0)
@@ -111,7 +111,7 @@ namespace jw::chrono
                     const auto status = dpmi::bda->read<std::uint8_t>(0x3f);
                     dpmi::bda->write<std::uint8_t>(0x3f, status & 0xf0);
                 }
-                dpmi::bda->write(0x40, motor_enable);
+                dpmi::bda->write<std::uint8_t>(0x40, motor_enable);
             }
         }
     }
