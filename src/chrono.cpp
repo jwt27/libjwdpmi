@@ -292,12 +292,12 @@ namespace jw::chrono
             pit_irq = [&sample, end = samples.end()]
             {
                 *sample++ = chrono::rdtsc();
-                dpmi::irq_handler::acknowledge<0>();
-                if (sample == end)
+                if (sample == end) [[unlikely]]
                 {
                     pit_irq.disable();
                     write_pit(0x10000);
                 }
+                dpmi::irq_handler::acknowledge<0>();
             };
             pit_irq.enable();
             write_pit(divisor);
@@ -311,9 +311,10 @@ namespace jw::chrono
                 sti
                 .balign 0x10
             Loop:
-                .nops 14, 1
+                .rept 16
+                nop
+                .endr
                 cmp [%0], %1
-                .nops 14, 1
                 jb Loop
                 cli
              )" :
