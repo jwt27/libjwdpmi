@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2017 - 2023 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2017 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <jw/video/vga.h>
 #include <jw/dpmi/realmode.h>
@@ -9,9 +9,9 @@
 namespace jw::video
 {
     static constexpr io::in_port<bool> dac_state { 0x3c7 };
-    static constexpr io::io_port<byte> dac_write_index { 0x3c8 };
-    static constexpr io::out_port<byte> dac_read_index { 0x3c7 };
-    static constexpr io::io_port<byte> dac_data { 0x3c9 };
+    static constexpr io::io_port<std::uint8_t> dac_write_index { 0x3c8 };
+    static constexpr io::out_port<std::uint8_t> dac_read_index { 0x3c7 };
+    static constexpr io::io_port<std::uint8_t> dac_data { 0x3c9 };
 
     void vga_bios::set_mode(vbe_mode m, const crtc_info *)
     {
@@ -53,56 +53,61 @@ namespace jw::video
 
     void vga::palette(std::span<const px32n> pal, std::size_t first, bool)
     {
-        dac_write_index.write(first);
+        std::array<std::uint8_t, 3 * 256> buf;
         if (dac_bits == 8)
         {
-            for (const auto& i : pal)
+            for (unsigned i = 0; i != pal.size(); ++i)
             {
-                dac_data.write(i.r);
-                dac_data.write(i.g);
-                dac_data.write(i.b);
+                buf[i * 3 + 0] = pal[i].r;
+                buf[i * 3 + 1] = pal[i].g;
+                buf[i * 3 + 2] = pal[i].b;
             }
         }
         else
         {
-            mmx_function<default_simd()>([pal]<simd flags>()
+            mmx_function<default_simd()>([dst = buf.data(), pal]<simd flags>()
             {
                 auto pipe = simd_in | px_convert<pxvga> | simd_out;
-                for (const auto& i : pal)
+                for (unsigned i = 0; i != pal.size(); ++i)
                 {
-                    const auto p = std::get<0>(simd_run<flags>(pipe, i));
-                    dac_data.write(p.r);
-                    dac_data.write(p.g);
-                    dac_data.write(p.b);
+                    const auto p = std::get<0>(simd_run<flags>(pipe, pal[i]));
+                    dst[i * 3 + 0] = p.r;
+                    dst[i * 3 + 1] = p.g;
+                    dst[i * 3 + 2] = p.b;
                 }
             });
         }
+        dac_write_index.write(first);
+        dac_data.write(buf.data(), pal.size() * 3);
     }
 
     std::array<px32n, 256> vga::palette()
     {
+        std::array<std::uint8_t, 3 * 256> buf;
         std::array<px32n, 256> result;
         dac_read_index.write(0);
+        dac_data.read(buf.data(), buf.size());
         if (dac_bits == 8)
         {
             for (auto i = 0; i < 256; ++i)
             {
-                result[i].r = dac_data.read();
-                result[i].g = dac_data.read();
-                result[i].b = dac_data.read();
+                result[i].r = buf[i * 3 + 0];
+                result[i].g = buf[i * 3 + 1];
+                result[i].b = buf[i * 3 + 2];
             }
         }
         else
         {
-            mmx_function<default_simd()>([p = result.data()]<simd flags>()
+            mmx_function<default_simd()>([dst = result.data(), src = buf.data()]<simd flags>()
             {
                 auto pipe = simd_in | px_convert<px32n> | simd_out;
                 for (auto i = 0; i < 256; ++i)
                 {
-                    auto r = dac_data.read();
-                    auto g = dac_data.read();
-                    auto b = dac_data.read();
-                    p[i] = std::get<0>(simd_run<flags>(pipe, pxvga { r, g, b }));
+                    const auto r = src[i * 3 + 0];
+                    const auto g = src[i * 3 + 1];
+                    const auto b = src[i * 3 + 2];
+                    const px32n color { r, g, b };
+                    dst[i] = std::get<0>(simd_run<flags>(pipe, std::bit_cast<pxvga>(color)));
                 }
             });
         }
