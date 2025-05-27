@@ -3,6 +3,7 @@
 
 #include <jw/io/rs232.h>
 #include <jw/thread.h>
+#include <jw/branchless.h>
 #include <bit>
 #include <vector>
 
@@ -416,7 +417,7 @@ namespace jw::io
         // frequently.
         auto* const tx = tx_buf.producer();
         auto* const p = &*i;
-        setp(p, std::min(p + std::max((tx->max_size() + 1) / 8, 1u), tx->contiguous_end(i)));
+        setp(p, min(p + max<std::size_t>((tx->max_size() + 1) / 8, 1u), tx->contiguous_end(i)));
     }
 
     inline rs232_streambuf::tx_queue::iterator rs232_streambuf::update_tx_stop() noexcept
@@ -564,27 +565,25 @@ namespace jw::io
             if (status & line_status::transmitter_empty)
                 sent = 0;
 
-            const auto n = std::min(tx_queue::size_type { 16u - sent }, realtime->size());
+            const auto n = min<std::size_t>(16u - sent, realtime->size());
             if (n > 0)
             {
-                auto i = realtime->begin();
-                const auto end = i + n;
-                while (i != end)
-                    data_port(base).write(*i++);
+                char buf[16];
+                std::copy_n(realtime->begin(), 16, &*buf);
                 realtime->pop_front(n);
+                data_port(base).write(buf, n);
                 sent += n;
             }
 
             if (can_tx) [[likely]]
             {
-                const auto n = std::min(tx_queue::size_type { 16u - sent }, tx->begin().distance_to(tx_stop));
+                const auto n = min<std::size_t>(16u - sent, tx->begin().distance_to(tx_stop));
                 if (n > 0)
                 {
-                    auto i = tx->begin();
-                    const auto end = i + n;
-                    while (i != end)
-                        data_port(base).write(*i++);
+                    char buf[16];
+                    std::copy_n(tx->begin(), 16, &*buf);
                     tx->pop_front(n);
+                    data_port(base).write(buf, n);
                     sent += n;
                 }
             }
