@@ -38,6 +38,7 @@ src/memory.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
 src/ring0.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
 src/scheduler.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
 src/debug.% : override CXXFLAGS += -O3
+src/rs232.% : override CXXFLAGS += -O3
 
 %.asm: %.cpp
 	$(CXX) $(CXXFLAGS) -S -o $@ -c $< $(PIPECMD)
