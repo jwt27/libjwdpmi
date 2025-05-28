@@ -13,7 +13,7 @@
 
 namespace jw::chrono
 {
-    static std::uint32_t last_tsc;
+    static std::uint64_t last_tsc;
     static constinit bool tsc_calibrated { false };
     static volatile bool wait_for_irq0 { false };
 
@@ -440,7 +440,7 @@ namespace jw::chrono
             return time_point { pit::now().time_since_epoch() };
 
         decltype(pit_ns) pit;
-        decltype(last_tsc) last;
+        std::uint32_t last;
 
         {
             dpmi::interrupt_mask no_irqs { };
@@ -455,9 +455,25 @@ namespace jw::chrono
         return time_point { duration { static_cast<std::uint64_t>(ns) + pit_ns_offset } };
     }
 
-    tsc::duration tsc::to_duration(tsc_count count)
+    tsc::duration tsc::to_duration(std::int64_t count)
     {
         return duration { static_cast<std::int64_t>(round(count * float_ns_per_tsc_tick)) };
+    }
+
+    tsc::time_point tsc::to_time_point(tsc_count tsc)
+    {
+        decltype(pit_ns) pit;
+        decltype(last_tsc) last;
+
+        {
+            dpmi::interrupt_mask no_irqs { };
+            pit.value = volatile_load(&pit_ns.value);
+            last = volatile_load(&last_tsc);
+        }
+
+        const auto count = static_cast<std::int64_t>(tsc - last);
+        const auto ns = pit + static_cast<decltype(pit_ns)>(float_ns_per_tsc_tick * count);
+        return time_point { duration { round(ns) + pit_ns_offset } };
     }
 
     long double tsc::cpu_frequency() noexcept { return cpu_freq; }

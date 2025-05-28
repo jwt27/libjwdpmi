@@ -100,10 +100,15 @@ namespace jw::chrono
         // rdtsc, this returns pit::now().
         static time_point now() noexcept;
 
-        // Convert a tsc_count to a duration using the calibration values
-        // from tsc::setup().  This is most accurate for short intervals.
-        // The return value is undefined if the CPU does not support rdtsc.
-        static duration to_duration(tsc_count count);
+        // Convert the difference between two tsc_counts to a duration, using
+        // the calibration values from tsc::setup().  This is most accurate
+        // for short intervals.
+        static duration to_duration(std::int64_t);
+
+        // Convert an absolute tsc_count to a time_point.  Unlike now(), this
+        // uses floating-point math.  Accuracy is reduced the further away the
+        // time stamp is from now().
+        static time_point to_time_point(tsc_count);
 
         // Returns the CPU frequency as measured by tsc::setup().
         static long double cpu_frequency() noexcept;
