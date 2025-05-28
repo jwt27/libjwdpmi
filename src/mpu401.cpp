@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2017 - 2024 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2017 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <jw/io/mpu401.h>
 #include <jw/chrono.h>
@@ -214,7 +214,7 @@ namespace jw::io
         const auto pos = tx->iterator_from_pointer(pptr());
         tx_stop = pos;
 
-        if (tx->full())
+        if (pos == tx->cend() and tx->full())
         {
             std::optional<dpmi::interrupt_mask> no_irq;
             if (irq.is_enabled()) no_irq.emplace();
