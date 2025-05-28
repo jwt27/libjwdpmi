@@ -1445,7 +1445,13 @@ namespace jw::debug::detail
         {
             if (debugmsg) fmt::print(stdout, "KILL signal received.");
             for (thread* t : all_threads())
-                set_action(t, { .action = 'c' });
+            {
+                auto* const ti = get_info(t);
+                ti->stopped = false;
+                ti->stepping = false;
+                ti->invalid_signal = false;
+                ti->ignore_signal = true;
+            }
             if (redirect_exception(current_exception, kill))
             {
                 auto* p = new_tx();
