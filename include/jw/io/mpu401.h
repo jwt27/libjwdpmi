@@ -1,16 +1,18 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2017 - 2023 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2017 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <jw/io/ioport.h>
 #include <jw/io/io_error.h>
 #include <jw/io/realtime_streambuf.h>
 #include <jw/dpmi/irq_handler.h>
+#include <jw/chrono.h>
 #include <jw/allocator_adaptor.h>
 #include <jw/circular_queue.h>
 #include <jw/common.h>
 #include <iostream>
 #include <deque>
+#include "jwdpmi_config.h"
 
 namespace jw::io
 {
@@ -33,10 +35,15 @@ namespace jw::io
     // do for you.
     struct mpu401_streambuf final : realtime_streambuf
     {
+        using clock = config::mpu401_clock;
+
         mpu401_streambuf(const mpu401_config& c);
         virtual ~mpu401_streambuf();
 
         virtual void put_realtime(char_type) override;
+
+        // Time stamp of the first byte received in the current get area.
+        clock::time_point time() const noexcept { return t; }
 
     protected:
         virtual std::streamsize showmanyc() override;
@@ -66,12 +73,15 @@ namespace jw::io
         error_queue errors;
         rx_queue::iterator* first_error;
         tx_queue::atomic_const_iterator tx_stop;
+        clock::time_point t;
         const std::size_t putback_reserve;
         dpmi::irq_handler irq;
     };
 
     struct mpu401_stream : std::iostream
     {
+        using clock = mpu401_streambuf::clock;
+
         mpu401_stream(mpu401_config cfg)
             : std::iostream { }
             , streambuf { cfg.irq ? new (locked) mpu401_streambuf { cfg } : new mpu401_streambuf { cfg } }
@@ -85,6 +95,12 @@ namespace jw::io
         }
 
         mpu401_stream(const mpu401_stream&) = delete;
+
+        // Time stamp of the first byte received in the current get area.
+        clock::time_point time() const noexcept
+        {
+            return streambuf->time();
+        }
 
     private:
         std::unique_ptr<mpu401_streambuf> streambuf;

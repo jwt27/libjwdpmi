@@ -86,6 +86,9 @@ namespace jw
         // Clock used for OPL register write timing and channel allocation.
         using opl_clock = jw::chrono::tsc;
 
+        // Clock used for MPU-401 time stamps.
+        using mpu401_clock = jw::chrono::tsc;
+
         // Default clock used by yield_for() and yield_while_for().
         using thread_clock = jw::chrono::pit;
 

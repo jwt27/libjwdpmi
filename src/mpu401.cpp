@@ -269,6 +269,9 @@ namespace jw::io
     inline void mpu401_streambuf::get_one() noexcept
     {
         auto* const rx = rx_buf.producer();
+        if (rx->empty())
+            t = clock::now();
+
         const auto ok = rx->try_push_back(data_port(base).read());
         if (not ok) [[unlikely]]
         {
