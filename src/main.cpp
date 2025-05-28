@@ -54,7 +54,13 @@ namespace jw
             fmt::print(stderr, "Exception: {}\n", e.what());
         else
             fmt::print(stderr, "Nested exception {:d}: {}\n", level, e.what());
-        if (auto* cpu_ex = dynamic_cast<const dpmi::cpu_exception*>(&e)) cpu_ex->print();
+
+        if (auto* exc = dynamic_cast<const dpmi::cpu_exception*>(&e))
+            exc->print();
+
+        if (auto* exc = dynamic_cast<const debug::assertion_failed*>(&e))
+            exc->print();
+
         try { std::rethrow_if_nested(e); }
         catch (const std::exception& e) { do_print_exception(e, level + 1); }
         catch (...) { fmt::print(stderr, "Nested exception {:d}: unknown exception\n", level + 1); }

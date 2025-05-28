@@ -1829,3 +1829,13 @@ namespace jw::debug::detail
         fmt::print(file, "Backtrace:{: >8x}\n", fmt::join(entries, ", "));
     }
 }
+
+namespace jw::debug
+{
+    void assertion_failed::print(FILE* file) const
+    {
+        fmt::print(file, "Assertion failed in: {} ({}:{:d})\n",
+                   location.function_name(), location.file_name(), location.line());
+        stack_trace.print(file);
+    }
+}

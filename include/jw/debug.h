@@ -76,23 +76,31 @@ namespace jw::debug
 
     struct assertion_failed : public std::logic_error
     {
-        using logic_error::logic_error;
+        assertion_failed(std::source_location&& loc, stacktrace<64>&& stack)
+            : logic_error { "Assertion failed" }
+            , location { std::move(loc) }
+            , stack_trace { std::move(stack) }
+        { }
+
+        void print(FILE* file = stderr) const;
+
+        std::source_location location;
+        stacktrace<64> stack_trace;
     };
 
 #ifndef NDEBUG
-    [[gnu::noinline]]
-    inline void throw_assert(bool condition, std::source_location loc = std::source_location::current())
+    [[gnu::always_inline]]
+    inline void throw_assert(bool ok, std::source_location loc = std::source_location::current())
     {
-        if (not condition)
+        if (not ok) [[unlikely]]
         {
             breakpoint();
-            auto str = fmt::format("Assertion failed at {:p} in function {} ({}:{:d})",
-                                   __builtin_return_address(0), loc.function_name(), loc.file_name(), loc.line());
-            throw assertion_failed { str };
+            throw assertion_failed { std::move(loc), stacktrace<64>::current(0) };
         }
     }
 #else
-    inline void throw_assert(bool) { }
+    [[gnu::always_inline]]
+    inline void throw_assert(bool ok) noexcept { [[assume(ok)]]; }
 #endif
 
     [[gnu::always_inline]]
