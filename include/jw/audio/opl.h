@@ -38,7 +38,7 @@ namespace jw::audio
     // Minimal OPL driver.  Provides direct register access, no caching.
     struct opl_driver
     {
-        using clock = config::midi_clock;
+        using clock = config::opl_clock;
 
         opl_driver(io::port_num);
 

@@ -83,8 +83,8 @@ namespace jw
         // Clock used for gameport timing.
         using gameport_clock = jw::chrono::tsc;
 
-        // Clock used for midi timestamps.
-        using midi_clock = jw::chrono::tsc;
+        // Clock used for OPL register write timing and channel allocation.
+        using opl_clock = jw::chrono::tsc;
 
         // Default clock used by yield_for() and yield_while_for().
         using thread_clock = jw::chrono::pit;
