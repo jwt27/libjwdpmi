@@ -141,10 +141,10 @@ namespace jw::debug
         };
 
         template<typename T> requires (sizeof(T) == 4 or sizeof(T) == 2 or sizeof(T) == 1)
-        watchpoint(T* ptr, watchpoint_type t)
+        watchpoint(const T* ptr, watchpoint_type t)
             : watchpoint { dpmi::near_to_linear(ptr), sizeof(T), t } { }
 
-        watchpoint(void* ptr, watchpoint_type t, std::size_t size)
+        watchpoint(const void* ptr, watchpoint_type t, std::size_t size)
             : watchpoint { dpmi::near_to_linear(ptr), size, t } { }
 
 #ifndef NDEBUG
