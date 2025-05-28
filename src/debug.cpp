@@ -22,7 +22,6 @@
 #include <jw/dpmi/ring0.h>
 #include <jw/thread.h>
 #include <jw/dpmi/async_signal.h>
-#include "jwdpmi_config.h"
 
 using namespace std::literals;
 using namespace jw::dpmi;
@@ -31,6 +30,9 @@ using namespace jw::dpmi::detail;
 #ifndef NDEBUG
 namespace jw::debug::detail
 {
+    static constexpr bool debugmsg { false };
+    static constexpr bool protocol_dump { false };
+
     using scheduler = jw::detail::scheduler;
     using thread = jw::detail::thread;
     using thread_id = jw::detail::thread_id;
@@ -39,7 +41,6 @@ namespace jw::debug::detail
     static bool is_fault_signal(int) noexcept;
     static void uninstall_gdb_interface();
 
-    static constexpr bool debugmsg { config::enable_gdb_debug_messages };
     static constexpr thread_id main_thread_id { thread::main_thread_id };
     static constexpr thread_id all_threads_id { 0 };
     static constexpr std::size_t max_watchpoints { 8 };
@@ -807,7 +808,7 @@ namespace jw::debug::detail
 
     inline void gdbstub::send(std::string_view output)
     {
-        if (config::enable_gdb_protocol_dump)
+        if (protocol_dump)
             fmt::print(stderr, "send --> \"{}\"\n", output);
 
         if (output.size() > bufsize - 4) [[unlikely]]
@@ -941,7 +942,7 @@ namespace jw::debug::detail
         else com.put('+');
 
     parse:
-        if (config::enable_gdb_protocol_dump)
+        if (protocol_dump)
             fmt::print(stderr, "recv <-- \"{}\"\n", current_packet());
         received = true;
         return true;

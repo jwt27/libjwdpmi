@@ -77,14 +77,8 @@ namespace jw
         // Use DPMI function 0x0900 to query and toggle interrupt-enable flag.
         constexpr bool support_virtual_interrupt_flag = false;
 
-        // Enable interrupts while the gdb interface is active
+        // Allow interrupts while the program is stopped in GDB.
         constexpr bool enable_gdb_interrupts = true;
-
-        // Enable debug messages from the gdb interface
-        constexpr bool enable_gdb_debug_messages = false;
-
-        // Display raw packet data from serial gdb interface
-        constexpr bool enable_gdb_protocol_dump = false;
 
         // Clock used for gameport timing.
         using gameport_clock = jw::chrono::tsc;
