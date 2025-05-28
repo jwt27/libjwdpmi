@@ -43,14 +43,20 @@ namespace jw::debug
     {
         constexpr stacktrace() noexcept { /* no zero-init */ }
 
+        template<std::size_t N>
+        constexpr stacktrace(const stacktrace<N>& other) noexcept
+            : n { std::min(other.entries.size(), MaxSize) }
+        {
+            std::copy_n(other.entries().begin(), std::min(N, MaxSize), ips.begin());
+        }
+
         // Generate a stack trace from the current call site.
         [[gnu::always_inline]]
         static stacktrace current(std::size_t skip = 0)
         {
-            stacktrace stk;
-            auto* const p = stk.ips.data();
-            stk.n = stacktrace_base::make(p, MaxSize, skip);
-            return stk;
+            stacktrace st;
+            st.n = stacktrace_base::make(st.ips.data(), MaxSize, skip);
+            return st;
         }
 
         void print(FILE* file = stderr) const
