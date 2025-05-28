@@ -68,9 +68,9 @@ namespace jw::debug
         std::array<stacktrace_entry, MaxSize> ips;
     };
 
-    struct assertion_failed : public std::runtime_error
+    struct assertion_failed : public std::logic_error
     {
-        using runtime_error::runtime_error;
+        using logic_error::logic_error;
     };
 
 #ifndef NDEBUG
