@@ -147,15 +147,12 @@ namespace jw::debug
         watchpoint(const void* ptr, watchpoint_type t, std::size_t size)
             : watchpoint { dpmi::near_to_linear(ptr), size, t } { }
 
-#ifndef NDEBUG
         watchpoint(const watchpoint&) = delete;
         watchpoint& operator=(const watchpoint&) = delete;
 
         watchpoint(watchpoint&& m)
-            : handle { m.handle }
-        {
-            m.handle = null_handle;
-        }
+            : handle { std::exchange(m.handle, null_handle) }
+        { }
 
         watchpoint& operator=(watchpoint&& m)
         {
@@ -181,7 +178,8 @@ namespace jw::debug
                 , "d" ((t << 8) | size_bytes)
                 : "cc"
             );
-            if (c) throw dpmi::dpmi_error { error, __PRETTY_FUNCTION__ };
+            if (c)
+                throw dpmi::dpmi_error { error, __PRETTY_FUNCTION__ };
         }
 
         // Remove a watchpoint (DPMI 0.9, AX=0B01)
@@ -199,15 +197,11 @@ namespace jw::debug
             // Ignore errors here. the only possible failure is "invalid
             // handle", which "should never happen".
         }
-#else
-        constexpr watchpoint(std::uintptr_t, std::size_t, watchpoint_type) { }
-#endif
 
         // Get the current state of this watchpoint (DPMI 0.9, AX=0B02).
         // Returns true if the watchpoint has been triggered.
         bool triggered() const
         {
-#ifndef NDEBUG
             bool c;
             union
             {
@@ -224,17 +218,14 @@ namespace jw::debug
                 , "d" (0)
                 : "cc"
             );
-            if (c) throw dpmi::dpmi_error { error, __PRETTY_FUNCTION__ };
+            if (c)
+                throw dpmi::dpmi_error { error, __PRETTY_FUNCTION__ };
             return state;
-#else
-            return false;
-#endif
         }
 
         // Reset the state of this watchpoint (DPMI 0.9, AX=0B03)
         void reset()
         {
-#ifndef NDEBUG
             bool c;
             dpmi::dpmi_error_code error;
             asm
@@ -246,14 +237,12 @@ namespace jw::debug
                 , "b" (handle)
                 : "cc"
             );
-            if (c) throw dpmi::dpmi_error { error, __PRETTY_FUNCTION__ };
-#endif
+            if (c)
+                throw dpmi::dpmi_error { error, __PRETTY_FUNCTION__ };
         }
 
     private:
-#ifndef NDEBUG
         static constexpr std::uint32_t null_handle { std::numeric_limits<std::uint32_t>::max() };
         std::uint32_t handle { null_handle };
-#endif
     };
 }
