@@ -180,7 +180,7 @@ namespace jw::chrono
 
     static void reset_pit()
     {
-        if (not pit_irq.is_enabled()) return;
+        if (not pit_irq.enabled()) return;
 
         const int next_count = pit_bios_count + pit_counter_max;
         if (std::abs(0x10000 - next_count) > 0x500) // +/- 1ms tolerance
@@ -200,7 +200,7 @@ namespace jw::chrono
 
     static void reset_rtc()
     {
-        if (not rtc_irq.is_enabled()) return;
+        if (not rtc_irq.enabled()) return;
         rtc_irq.disable();
         rtc_ticks = 0;
         rtc_index.write(0x8B);                  // disable NMI, select register 0x0B
@@ -215,16 +215,16 @@ namespace jw::chrono
     {
         {
             dpmi::interrupt_mask no_irq { };
-            if (pit_irq.is_enabled() and not enable)
+            if (pit_irq.enabled() and not enable)
             {
                 reset_pit();
                 return;
             }
-            else if (not pit_irq.is_enabled() and enable)
+            else if (not pit_irq.enabled() and enable)
             {
                 const auto t = std::chrono::steady_clock::now();
                 pit_ns = t.time_since_epoch().count() - pit_ns_offset;
-                pit_irq.set_irq(0);
+                pit_irq.assign(0);
                 wait_for_irq0 = tsc_calibrated;
             }
 
@@ -253,7 +253,7 @@ namespace jw::chrono
             throw std::out_of_range { "Invalid RTC frequency shift" };
 
         ns_per_rtc_tick = 1e9 / (max_frequency >> (freq_shift - 1));
-        rtc_irq.set_irq(8);
+        rtc_irq.assign(8);
         rtc_irq.enable();
 
         rtc_index.write(0x8B);                  // disable NMI, select register 0x0B
@@ -275,7 +275,7 @@ namespace jw::chrono
     {
         if (not dpmi::cpuid::feature_flags().time_stamp_counter) return;
 
-        if (pit_irq.is_enabled())
+        if (pit_irq.enabled())
             throw std::logic_error { "Please call tsc::setup() before pit::setup()." };
 
         constexpr io::io_port<byte> pic0_mask { 0x21 };
@@ -375,7 +375,7 @@ namespace jw::chrono
 
     pit::time_point pit::now() noexcept
     {
-        if (not pit_irq.is_enabled()) [[unlikely]]
+        if (not pit_irq.enabled()) [[unlikely]]
             return time_point { std::chrono::steady_clock::now().time_since_epoch() };
 
         decltype(pit_ns) a, b;
@@ -436,7 +436,7 @@ namespace jw::chrono
 
     tsc::time_point tsc::now() noexcept
     {
-        if (not tsc_calibrated or not pit_irq.is_enabled()) [[unlikely]]
+        if (not tsc_calibrated or not pit_irq.enabled()) [[unlikely]]
             return time_point { pit::now().time_since_epoch() };
 
         decltype(pit_ns) pit;

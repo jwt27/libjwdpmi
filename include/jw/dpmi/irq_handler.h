@@ -1,8 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2017 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <jw/dpmi/detail/irq_controller.h>
@@ -46,10 +43,10 @@ namespace jw::dpmi
             return *this;
         }
 
-        void set_irq(irq_level i) { detail::irq_controller::assign(data.get(), i); }
+        void assign(irq_level i) { detail::irq_controller::assign(data.get(), i); }
         void enable() { detail::irq_controller::enable(data.get()); }
         void disable() { detail::irq_controller::disable(data.get()); }
-        bool is_enabled() const noexcept { return data->is_enabled(); }
+        bool enabled() const noexcept { return data->is_enabled(); }
 
         // Call this from your interrupt handler to signal that the IRQ has been successfully handled.
         static void acknowledge() noexcept { detail::irq_controller::acknowledge(); }

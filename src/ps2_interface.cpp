@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2017 - 2023 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2017 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <jw/io/ps2_interface.h>
 #include <jw/dpmi/irq_mask.h>
@@ -23,7 +23,7 @@ namespace jw::io
     void ps2_interface::reset()
     {
         irq_handler.disable();
-        irq_handler.set_irq(1);
+        irq_handler.assign(1);
         config.translate_scancodes = false;
         config.keyboard_interrupt = true;
         write_config();

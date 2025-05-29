@@ -221,7 +221,7 @@ namespace jw::io
             } while (not id.no_irq_pending);
             if (id.fifo_enabled != 0b11) throw device_not_found { "16550A not detected" };
 
-            irq.set_irq(cfg.irq);
+            irq.assign(cfg.irq);
             irq.enable();
 
             set_rts(true);

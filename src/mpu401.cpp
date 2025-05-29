@@ -89,7 +89,7 @@ namespace jw::io
 
         if (no_irq.has_value())
         {
-            irq.set_irq(*cfg.irq);
+            irq.assign(*cfg.irq);
             irq.enable();
             no_irq.reset();
 
@@ -122,7 +122,7 @@ namespace jw::io
     void mpu401_streambuf::put_realtime(char_type out)
     {
         std::optional<dpmi::interrupt_mask> no_irq;
-        if (irq.is_enabled()) no_irq.emplace();
+        if (irq.enabled()) no_irq.emplace();
 
         while (std::bit_cast<mpu401_status>(try_get()).dont_send_data)
             this_thread::yield();
@@ -178,7 +178,7 @@ namespace jw::io
 
         if (new_end == &*pos)
         {
-            if (irq.is_enabled()) this_thread::yield();
+            if (irq.enabled()) this_thread::yield();
             else do_sync();
             goto retry;
         }
@@ -217,7 +217,7 @@ namespace jw::io
         if (pos == tx->cend() and tx->full())
         {
             std::optional<dpmi::interrupt_mask> no_irq;
-            if (irq.is_enabled()) no_irq.emplace();
+            if (irq.enabled()) no_irq.emplace();
             this_thread::yield_while([&]
             {
                 do_sync();
@@ -244,7 +244,7 @@ namespace jw::io
 
         {
             std::optional<dpmi::interrupt_mask> no_irq;
-            if (irq.is_enabled()) no_irq.emplace();
+            if (irq.enabled()) no_irq.emplace();
             this_thread::yield_while([&]
             {
                 do_sync();

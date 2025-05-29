@@ -1,10 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2018 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2018 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
 #pragma once
 #include <jw/io/ioport.h>
@@ -84,10 +79,10 @@ namespace jw::io
             switch (cfg.strategy)
             {
             case poll_strategy::pit_irq:
-                poll_irq.set_irq(0);
+                poll_irq.assign(0);
                 break;
             case poll_strategy::rtc_irq:
-                poll_irq.set_irq(8);
+                poll_irq.assign(8);
                 break;
             default:
                 break;
@@ -114,7 +109,7 @@ namespace jw::io
             poll_irq.disable();
             if (poll_thread.joinable())
             {
-                poll_thread.abort();
+                poll_thread.cancel();
                 poll_thread.join();
             }
         }

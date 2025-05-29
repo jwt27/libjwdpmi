@@ -777,7 +777,7 @@ namespace jw::debug::detail
                 catch (const dpmi_error&) { /* ignore */ }
             }
 
-            serial_irq.set_irq(cfg.irq);
+            serial_irq.assign(cfg.irq);
             serial_irq.enable();
         }
 
