@@ -52,6 +52,7 @@ namespace jw::debug::detail
     static constinit bool received { false };
     static constinit bool replied { false };
     static constinit bool need_ack { false };
+    static constinit bool ctrl_c { false };
     static constinit thread* query_thread { nullptr };
     static exception_info current_exception;
 
@@ -879,11 +880,6 @@ namespace jw::debug::detail
         if (com.rdbuf()->in_avail() == 0)
             return false;
 
-        auto ctrl_c = []
-        {
-            rx_size = append(rxbuf, "vCtrlC") - rxbuf;
-        };
-
         try
         {
             switch (com.get())
@@ -901,8 +897,8 @@ namespace jw::debug::detail
                 return false;
 
             case 0x03:
-                ctrl_c();
-                goto parse;
+                ctrl_c = true;
+                return false;
 
             case '$':
                 break;
@@ -922,8 +918,8 @@ namespace jw::debug::detail
 
             if (eof)
             {
-                ctrl_c();
-                goto parse;
+                ctrl_c = true;
+                return false;
             }
 
             fmt::print(stderr, "While receiving gdb packet: {}\n", e.what());
@@ -941,7 +937,6 @@ namespace jw::debug::detail
         }
         else com.put('+');
 
-    parse:
         if (protocol_dump)
             fmt::print(stderr, "recv <-- \"{}\"\n", current_packet());
         received = true;
@@ -1247,12 +1242,6 @@ namespace jw::debug::detail
                         break;
                     }
                 }
-            }
-            else if (equal("CtrlC"))
-            {
-                ti->signal = SIGINT;
-                send("OK");
-                stop_reply();
             }
             else goto unknown;
             break;
@@ -1638,28 +1627,36 @@ namespace jw::debug::detail
             if (config::enable_gdb_interrupts and f->flags.interrupts_enabled)
                 asm("sti");
 
+        stop_again:
+            stop_reply();
             do
             {
-                stop_reply();
-                do
+                receive();
+                try
                 {
-                    receive();
-                    try
-                    {
-                        handle_packet();
-                    }
-                    catch (...)
-                    {
-                        // last command caused another exception (most likely page
-                        // fault after a request to read memory)
-                        // TODO: determine action based on last packet / signal
-                        if (not replied)
-                            send("E04");
-                        else
-                            print_exception();
-                    }
-                } while (ti->stopped or packet_available());
-            } while (ti->invalid_signal);
+                    handle_packet();
+                }
+                catch (...)
+                {
+                    // last command caused another exception (most likely page
+                    // fault after a request to read memory)
+                    // TODO: determine action based on last packet / signal
+                    if (not replied)
+                        send("E04");
+                    else
+                        print_exception();
+                }
+            } while (ti->stopped or packet_available());
+
+            if (ctrl_c)
+            {
+                ctrl_c = false;
+                ti->signal = SIGINT;
+                goto stop_again;
+            }
+
+            if (ti->invalid_signal)
+                goto stop_again;
 
             com.flush();
         }
