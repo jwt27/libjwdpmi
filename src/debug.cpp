@@ -186,12 +186,13 @@ namespace jw::debug::detail
         std::bitset<max_watchpoints> watchpoints { };
         int signal { -1 };
         std::uintptr_t step_range_begin { 0 };
-        std::uintptr_t step_range_end { 0 };
+        std::size_t step_range_n { 0 };
         int trap_mask { 0 };
         bool stopped { false };
         bool stepping { false };
         bool ignore_signal { true };
         bool invalid_signal { false };
+        bool report_sigcont { false };
     };
 
     static thread_info* get_info(thread* t) noexcept
@@ -224,7 +225,7 @@ namespace jw::debug::detail
     {
         auto* const ti = get_info(t);
         ti->step_range_begin = 0;
-        ti->step_range_end = 0;
+        ti->step_range_n = 0;
         ti->ignore_signal = true;
         ti->invalid_signal = false;
         ti->stepping = false;
@@ -233,7 +234,7 @@ namespace jw::debug::detail
         {
         case 'r':
             ti->step_range_begin = a.begin;
-            ti->step_range_end = a.end;
+            ti->step_range_n = a.end - a.begin;
             [[fallthrough]];
 
         case 's':
@@ -964,12 +965,16 @@ namespace jw::debug::detail
     {
         auto* const t = current_thread();
         auto* const ti = get_info(t);
-        const int signal = ti->signal;
-        const int posix = posix_signal(signal);
 
-        if (not is_stop_signal(signal))
+        if (not is_stop_signal(ti->signal))
             return;
 
+        if (ti->report_sigcont and is_trap_signal(ti->signal))
+            ti->signal = continued;
+        ti->report_sigcont = false;
+
+        const int signal = ti->signal;
+        const int posix = posix_signal(signal);
         if (pass_signals[posix] and not ti->stepping)
         {
             ti->ignore_signal = false;
@@ -1593,7 +1598,10 @@ namespace jw::debug::detail
                     if (watchpoints[i] and watchpoints[i]->triggered())
                         watchpoints[i]->reset(), ti->watchpoints[i] = true;
 
-                if (ti->watchpoints.none() & not ti->stepping)
+                if (ti->watchpoints.any())
+                    break;
+
+                if (not ti->stepping)
                 {
                     // Possible reasons to be here:
                     // * To enable a previously-disabled breakpoint.
@@ -1602,15 +1610,12 @@ namespace jw::debug::detail
                     break;
                 }
 
-                [[fallthrough]];
-            case continued:
-                if (ti->watchpoints.none()
-                    & (f->fault_address.offset >= ti->step_range_begin)
-                    & (f->fault_address.offset <= ti->step_range_end))
+                if (f->fault_address.offset - ti->step_range_begin <= ti->step_range_n)
                 {
                     if (debugmsg)
                         fmt::print(stderr, "range step until {:#x}, now at {:#x}\n",
-                                   ti->step_range_end, std::uintptr_t { f->fault_address.offset });
+                                   ti->step_range_begin + ti->step_range_n,
+                                   std::uintptr_t { f->fault_address.offset });
                     signal = -1;
                 }
                 break;
@@ -1715,6 +1720,7 @@ namespace jw::debug::detail
 
         if (auto* const ti = detail::get_info(t))
         {
+            ti->trap_mask = 1;
             std::atomic_ref { t->debug_info } = nullptr;
             delete ti;
         }
@@ -1806,7 +1812,8 @@ namespace jw::debug
             if ((ti->signal != -1) | ti->stepping)
             {
                 // Resume with SIGCONT, otherwise gdb will get confused.
-                break_with_signal(detail::continued);
+                ti->report_sigcont = true;
+                break_with_signal(ti->signal);
             }
         }
         else ti->trap_mask = n;
