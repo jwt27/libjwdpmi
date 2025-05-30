@@ -3,6 +3,7 @@
 
 #pragma once
 #include <cstdint>
+#include <csignal>
 
 namespace jw::detail
 {
@@ -19,10 +20,11 @@ namespace jw::debug::detail
 
     enum debug_signals : std::int32_t
     {
-        packet_received = 0x1000,
+        packet_received = SIGMAX,
         continued,
         thread_started,
-        thread_finished
+        thread_finished,
+        print_message
     };
 
     enum posix_signals : std::int32_t

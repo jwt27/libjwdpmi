@@ -35,6 +35,13 @@ namespace jw::debug
 #endif
     }
 
+#ifndef NDEBUG
+    // Print a message to the remote gdb console.
+    void gdb_print(std::string_view);
+#else
+    inline void gdb_print(std::string_view) noexcept { }
+#endif
+
     using stacktrace_entry = std::uintptr_t;
 
     // Simple stack trace class with a fixed maximum number of entries.

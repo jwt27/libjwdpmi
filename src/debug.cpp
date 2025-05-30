@@ -65,6 +65,7 @@ namespace jw::debug::detail
 
     constinit bool debug_mode { false };
     constinit int current_signal { -1 };
+    static constinit std::string_view current_message;
 
     struct breakpoint_map
     {
@@ -794,8 +795,9 @@ namespace jw::debug::detail
 
         void send(std::string_view);
         void send_txbuf(const char*);
-        template<typename... T>
+        template<typename... T> requires (sizeof...(T) > 0)
         void print(fmt::format_string<T...>, T&&...);
+        void print(std::string_view);
         bool receive();
         bool packet_available();
 
@@ -872,7 +874,7 @@ namespace jw::debug::detail
         return send({ txbuf + 1, end });
     }
 
-    template<typename... T>
+    template<typename... T> requires (sizeof...(T) > 0)
     inline void gdbstub::print(fmt::format_string<T...> str, T&&... args)
     {
         auto* a = asciibuf;
@@ -882,6 +884,17 @@ namespace jw::debug::detail
         *tx++ = 'O';
         tx = encode_ascii(tx, a);
         send_txbuf(tx);
+        replied = false;
+    }
+
+    inline void gdbstub::print(std::string_view str)
+    {
+        const auto n = std::min<std::size_t>(str.size(), bufsize / 2 - 4);
+        auto* tx = new_tx();
+        *tx++ = 'O';
+        tx = encode(tx, str.data(), n);
+        send_txbuf(tx);
+        replied = false;
     }
 
     inline bool gdbstub::receive()
@@ -1597,6 +1610,11 @@ namespace jw::debug::detail
 
             switch (signal)
             {
+            case print_message:
+                print(current_message);
+                leave();
+                return true;
+
             case packet_received:
                 if (ti->signal != -1)
                     signal = ti->signal;
@@ -1790,6 +1808,12 @@ namespace jw::debug::detail
 
 namespace jw::debug
 {
+    void gdb_print(std::string_view msg)
+    {
+        detail::current_message = msg;
+        break_with_signal(detail::print_message);
+    }
+
     trap_mask::trap_mask() noexcept
     {
         if (detail::reentry.test())
