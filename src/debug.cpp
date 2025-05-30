@@ -1454,17 +1454,18 @@ namespace jw::debug::detail
         }
         case 'k':   // kill
         {
-            if (debugmsg) fmt::print(stdout, "KILL signal received.");
-            for (thread* t : all_threads())
-            {
-                auto* const ti = get_info(t);
-                ti->stopped = false;
-                ti->stepping = false;
-                ti->invalid_signal = false;
-                ti->ignore_signal = true;
-            }
+            if (debugmsg)
+                fmt::print(stdout, "KILL signal received.");
             if (redirect_exception(current_exception, kill))
             {
+                for (thread* t : all_threads())
+                {
+                    auto* const ti = get_info(t);
+                    ti->stopped = false;
+                    ti->stepping = false;
+                    ti->invalid_signal = false;
+                    ti->ignore_signal = true;
+                }
                 auto* p = new_tx();
                 p = fmt::format_to(p, "X{:0>2x}", posix_signal(get_info(current_thread())->signal));
                 send_txbuf(p);
