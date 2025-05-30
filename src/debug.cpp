@@ -370,7 +370,7 @@ namespace jw::debug::detail
 
     static bool is_fault_signal(int exc) noexcept
     {
-        return (exc >= 0) & (exc <= 20);
+        return static_cast<unsigned>(exc) < 0x20;
     }
 
     static bool is_stop_signal(int exc) noexcept
