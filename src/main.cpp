@@ -155,7 +155,7 @@ namespace jw
 #ifndef NDEBUG
     static void initial_breakpoint()
     {
-        fmt::print(stderr, "Debug mode activated.  Connecting to GDB...\n");
+        fmt::print(stderr, "Connecting to GDB...\n");
         debug::breakpoint();
     }
 
@@ -339,10 +339,12 @@ namespace jw
                     io::rs232_config cfg;
                     cfg.set_com_port(io::com1);
                     debug::detail::setup_gdb_interface(cfg);
+                    fmt::print(stderr, "Listening on COM1: 115200/8N1\n");
                 };
 
                 if (opt == "early")
                 {
+                early:
                     init_gdb();
                     initial_breakpoint();
                 }
@@ -359,7 +361,11 @@ namespace jw
                 {
                     debug::detail::debug_mode = true;
                 }
-                else fmt::print(stderr, "Warning: unknown debug option \"{}\"\n", opt);
+                else
+                {
+                    fmt::print(stderr, "Warning: unknown debug option \"{}\"\n", opt);
+                    goto early;
+                }
             }
 #endif
         }
