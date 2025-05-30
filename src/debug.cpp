@@ -844,11 +844,11 @@ namespace jw::debug::detail
             auto j = output.find_first_not_of(ch, i);
             if (j == output.npos)
                 j = output.size();
-            auto n = j - i;
+            std::size_t n = j - i;
             if (n > 3)
             {
                 n = std::min<std::size_t>(n, 98);   // above 98, RLE byte would be non-printable
-                if ((n == 7) | (n == 8)) n = 6;     // RLE byte can't be '#' or '$'
+                if (n - 7u < 2u) n = 6;             // RLE byte can't be '#' or '$'
                 *p++ = ch;
                 *p++ = '*';
                 *p++ = static_cast<char>(n + 28);
