@@ -753,7 +753,9 @@ namespace jw::debug::detail
         {
             if (reentry.test()) return;
             if (not packet_available()) return;
-            irq_signal.raise();
+
+            if (receive() or ctrl_c)
+                irq_signal.raise();
         } };
 
         gdbstub(const io::rs232_config& cfg)
