@@ -1,13 +1,14 @@
 /* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
-/*    Copyright (C) 2017 - 2023 J.W. Jagersma, see COPYING.txt for details    */
+/*    Copyright (C) 2017 - 2025 J.W. Jagersma, see COPYING.txt for details    */
 
-#include <memory>
-#include <optional>
-#include <cstring>
 #include <jw/video/vbe.h>
 #include <jw/dpmi/memory.h>
 #include <jw/dpmi/realmode.h>
 #include <jw/math.h>
+#include <jw/uninitialized_storage.h>
+#include <memory>
+#include <optional>
+#include <cstring>
 
 namespace jw::video
 {
@@ -70,7 +71,7 @@ namespace jw::video
         return reg;
     }
 
-    static std::aligned_union_t<0, vbe, vbe2, vbe3> instance;
+    static uninitialized_union<vbe, vbe2, vbe3> instance;
     static vbe* instance_ptr { nullptr };
 
     static vbe_info bios_info;
@@ -182,7 +183,7 @@ namespace jw::video
         // If this is a VBE 1.x implementation, we're done now.
         if (ptr->vbe_version < 0x0200)
         {
-            instance_ptr = new (&instance) vbe;
+            instance_ptr = new (instance.storage) vbe;
             goto done;
         }
 
@@ -240,12 +241,12 @@ namespace jw::video
 
         if (ptr->vbe_version < 0x0300)
         {
-            instance_ptr = new (&instance) vbe2;
+            instance_ptr = new (instance.storage) vbe2;
             goto done;
         }
 
         // We have a VBE 3.0 interface.
-        instance_ptr = new (&instance) vbe3;
+        instance_ptr = new (instance.storage) vbe3;
 
         // Now set up the (optional) VBE 3.0 protected-mode interface.
         try
