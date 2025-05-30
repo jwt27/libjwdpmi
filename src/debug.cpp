@@ -1603,9 +1603,10 @@ namespace jw::debug::detail
                 break;
 
             case exception_num::trap:
-                for (unsigned i = 0; i != max_watchpoints; ++i)
-                    if (watchpoints[i] and watchpoints[i]->triggered())
-                        watchpoints[i]->reset(), ti->watchpoints[i] = true;
+                if (info.frame->error_code & 0x0f)
+                    for (unsigned i = 0; i != max_watchpoints; ++i)
+                        if (watchpoints[i] and watchpoints[i]->triggered())
+                            watchpoints[i]->reset(), ti->watchpoints[i] = true;
 
                 if (ti->watchpoints.any())
                     break;
