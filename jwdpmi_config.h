@@ -80,6 +80,9 @@ namespace jw
         // Allow interrupts while the program is stopped in GDB.
         constexpr bool enable_gdb_interrupts = true;
 
+        // Collect timing statistics for interrupt handlers.
+        constexpr bool collect_irq_stats = true;
+
         // Clock used for gameport timing.
         using gameport_clock = jw::chrono::tsc;
 

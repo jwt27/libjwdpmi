@@ -9,11 +9,20 @@
 #include <jw/thread.h>
 #include <jw/dpmi/irq_handler.h>
 #include <jw/dpmi/detail/selectors.h>
+#include <jw/chrono.h>
+#include <jw/dpmi/cpuid.h>
 #include <jw/alloc.h>
+#include <jw/branchless.h>
 
 namespace jw::dpmi::detail
 {
+    using irq_time_t = std::array<std::array<std::uint32_t, 32>, 16>;
+
     static constinit std::uint32_t stack_use_count;
+    static constinit std::uint32_t spurious;
+    static constinit bool have_rdtsc;
+    static constinit std::conditional_t<config::collect_irq_stats, irq_stats_t, std::monostate> stats;
+    static constinit std::conditional_t<config::collect_irq_stats, irq_time_t, std::monostate> irq_time;
 
     void irq_entry_point() noexcept
     {
@@ -68,9 +77,9 @@ namespace jw::dpmi::detail
         (
         R"( push %0     # IRQ number
             jmp %1 )"
-            ::
-            "i" (N),
-            "i" (irq_entry_point)
+            :
+            : "i" (N)
+            , "i" (irq_entry_point)
         );
     }
 
@@ -90,10 +99,13 @@ namespace jw::dpmi::detail
             push 7
             jmp %0
         L%=spurious:
+            inc [%1]
             pop eax
             sti
             iret )"
-            : : "i" (irq_entry_point)
+            :
+            : "i" (irq_entry_point)
+            , "m" (spurious)
         );
     }
 
@@ -115,10 +127,13 @@ namespace jw::dpmi::detail
         L%=spurious:
             mov al, 0x62    # ACK irq 2 on master
             out 0x20, al
+            inc [%1]
             pop eax
             sti
             iret )"
-            : : "i" (irq_entry_point)
+            :
+            : "i" (irq_entry_point)
+            , "m" (spurious)
         );
     }
 
@@ -132,6 +147,10 @@ namespace jw::dpmi::detail
 
     void irq_controller::handle_irq(irq_level i) noexcept
     {
+        [[maybe_unused]] const auto t_enter = config::collect_irq_stats and have_rdtsc ? chrono::rdtsc() : 0;
+        if constexpr (config::collect_irq_stats)
+            ++stats.irq[i].count;
+
         constexpr bool save_fpu { config::save_fpu_on_interrupt };
         std::conditional_t<save_fpu, fpu_context, empty> fpu;
         interrupt_id id { &fpu, i, interrupt_type::irq };
@@ -193,6 +212,14 @@ namespace jw::dpmi::detail
             if (stack_left <= config::interrupt_minimum_stack_size) [[unlikely]]
                 if (not data->resizing_stack.test_and_set())
                     this_thread::invoke_next([data = data] { data->resize_stack(data->stack.size() * 2); });
+        }
+
+        if constexpr (config::collect_irq_stats) if (have_rdtsc) [[likely]]
+        {
+            const std::uint32_t t = chrono::rdtsc() - t_enter;
+            irq_time[i][(stats.irq[i].count - 1) & (irq_time[i].size() - 1)] = t;
+            stats.irq[i].min = min(stats.irq[i].min, t);
+            stats.irq[i].max = max(stats.irq[i].max, t);
         }
     }
 
@@ -328,10 +355,50 @@ namespace jw::dpmi::detail
         pic0_cmd.write(0x68);   // TODO: restore to defaults
         pic1_cmd.write(0x68);
         stack_use_count = 0;
+        if constexpr (config::collect_irq_stats)
+        {
+            spurious = 0;
+            have_rdtsc = dpmi::cpuid::feature_flags().time_stamp_counter;
+            for (auto& i : stats.irq)
+            {
+                i.min = -1;
+                i.max = 0;
+            }
+        }
     }
 
     irq_controller::irq_controller_data::~irq_controller_data()
     {
         free_stack();
+    }
+}
+
+namespace jw::dpmi
+{
+    irq_stats_t irq_stats() noexcept
+    {
+        if constexpr (config::collect_irq_stats)
+        {
+            auto stats = detail::stats;
+            for (unsigned i = 0; i != 16; ++i)
+            {
+                if (stats.irq[i].count != 0)
+                {
+                    const auto n = std::min<unsigned>(stats.irq[i].count, detail::irq_time[i].size());
+                    std::uint64_t sum = 0;
+                    for (unsigned j = 0; j != n; ++ j)
+                        sum += detail::irq_time[i][j];
+                    stats.irq[i].avg = sum / n;
+                }
+                else
+                {
+                    stats.irq[i].avg = 0;
+                    stats.irq[i].min = 0;
+                }
+            }
+            stats.spurious = detail::spurious;
+            return stats;
+        }
+        else return { };
     }
 }

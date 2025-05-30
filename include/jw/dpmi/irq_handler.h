@@ -5,6 +5,7 @@
 #include <jw/dpmi/detail/irq_controller.h>
 #include <jw/dpmi/irq_config_flags.h>
 #include <jw/common.h>
+#include <array>
 
 // --- --- --- Some notes on DPMI host behaviour: --- --- --- //
 // Default RM handlers for INT 0x1C, 0x23, 0x24, and all IRQs reflect to PM, if a PM handler is installed.
@@ -63,4 +64,28 @@ namespace jw::dpmi
 
         std::unique_ptr<detail::irq_handler_data> data;
     };
+
+    struct irq_stats_t
+    {
+        struct per_irq
+        {
+            // Minimum and maximum time spent in this interrupt handler, in
+            // CPU cycles.  Use chrono::tsc::to_duration() to convert to
+            // nanoseconds.
+            std::uint32_t min, max;
+
+            // Average duration of the last 32 interrupts, in CPU cycles.
+            std::uint32_t avg;
+
+            // Number of times this interrupt was triggered.
+            std::uint64_t count;
+        };
+        std::array<per_irq, 16> irq;
+
+        // Number of spurious interrupts (only collected if IRQ 7 or 15 are
+        // hooked).
+        std::uint32_t spurious;
+    };
+
+    irq_stats_t irq_stats() noexcept;
 }
