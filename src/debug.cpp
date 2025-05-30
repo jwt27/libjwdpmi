@@ -819,8 +819,16 @@ namespace jw::debug::detail
         }
 
         while (need_ack)
-            if (receive())
-                throw std::runtime_error { "GDB protocol sequencing error" };
+        {
+            if (receive()) [[unlikely]]
+            {
+                fmt::print(stderr, "gdb: Protocol error.\n");
+                if (debugmsg)
+                    fmt::print(stderr, "Discarding unsent packet: \"{}\"\n", output);
+                need_ack = false;
+                return;
+            }
+        }
 
         auto* p = txbuf;
         *p++ = '$';
@@ -885,7 +893,7 @@ namespace jw::debug::detail
             switch (com.get())
             {
             case '-': [[unlikely]]
-                fmt::print(stderr, "NACK\n");
+                fmt::print(stderr, "gdb: NACK\n");
                 com.write(txbuf, tx_size);
                 return false;
 
@@ -902,6 +910,13 @@ namespace jw::debug::detail
 
             case '$':
                 break;
+            }
+
+            if (received) [[unlikely]]
+            {
+                fmt::print(stderr, "gdb: Protocol error.\n");
+                if (debugmsg)
+                    fmt::print(stderr, "Discarding received packet: \"{}\"\n", current_packet());
             }
 
             replied = false;
