@@ -11,6 +11,7 @@
 #include <unwind.h>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
+#include <jw/branchless.h>
 #include <jw/main.h>
 #include <jw/dpmi/fpu.h>
 #include <jw/dpmi/dpmi.h>
@@ -187,7 +188,8 @@ namespace jw::debug::detail
         int signal { -1 };
         std::uintptr_t step_range_begin { 0 };
         std::size_t step_range_n { 0 };
-        int trap_mask { 0 };
+        unsigned trap_mask { 0 };
+        std::uintptr_t trap_masked_at;
         bool stopped { false };
         bool stepping { false };
         bool ignore_signal { true };
@@ -386,8 +388,7 @@ namespace jw::debug::detail
     static bool is_trap_signal(int exc) noexcept
     {
         return (exc == exception_num::trap)
-            | (exc == exception_num::breakpoint)
-            | (exc == continued);
+            | (exc == exception_num::breakpoint);
     }
 
     static bool is_benign_signal(std::int32_t exc) noexcept
@@ -969,8 +970,15 @@ namespace jw::debug::detail
         if (not is_stop_signal(ti->signal))
             return;
 
-        if (ti->report_sigcont and is_trap_signal(ti->signal))
-            ti->signal = continued;
+        if (ti->report_sigcont)
+        {
+            const auto is_trap = is_trap_signal(ti->signal);
+            print("Thread {:d}: Trap masked at {:#x}{}.\n",
+                  t->id, ti->trap_masked_at, is_trap ? ", resuming with SIGCONT" : "");
+
+            if (is_trap)
+                ti->signal = continued;
+        }
         ti->report_sigcont = false;
 
         const int signal = ti->signal;
@@ -1625,9 +1633,8 @@ namespace jw::debug::detail
 
             if (ti->trap_mask > 0 and is_benign_signal(ti->signal))
             {
-                print("Thread {:d}: Trap masked at {:#x}, resuming with SIGCONT.\n",
-                      t->id, std::uintptr_t { f->fault_address.offset });
-
+                ti->report_sigcont = true;
+                ti->trap_masked_at = f->fault_address.offset;
                 leave();
                 f->flags.trap = false;
                 return true;
@@ -1806,18 +1813,12 @@ namespace jw::debug
 
         force_frame_pointer();
 
-        const auto n = ti->trap_mask - 1;
-        if (n <= 0)
+        ti->trap_mask = sub_saturate(ti->trap_mask, 1u);
+        if (ti->trap_mask == 0 and ti->report_sigcont)
         {
-            ti->trap_mask = 0;
-            if ((ti->signal != -1) | ti->stepping)
-            {
-                // Resume with SIGCONT, otherwise gdb will get confused.
-                ti->report_sigcont = true;
-                break_with_signal(ti->signal);
-            }
+            detail::current_signal = ti->signal;
+            asm ("int 3" ::: "memory");
         }
-        else ti->trap_mask = n;
     }
 }
 #endif
