@@ -147,71 +147,77 @@ namespace jw::dpmi::detail
 
     void irq_controller::handle_irq(irq_level i) noexcept
     {
-        [[maybe_unused]] const auto t_enter = config::collect_irq_stats and have_rdtsc ? chrono::rdtsc() : 0;
+        [[maybe_unused]] chrono::tsc_count t_enter;
         if constexpr (config::collect_irq_stats)
+        {
+            if (have_rdtsc) [[likely]]
+                t_enter = chrono::rdtsc();
             ++stats.irq[i].count;
-
-        constexpr bool save_fpu { config::save_fpu_on_interrupt };
-        std::conditional_t<save_fpu, fpu_context, empty> fpu;
-        interrupt_id id { &fpu, i, interrupt_type::irq };
-
-        try
-        {
-            auto* const entry = data->get(i);
-            const auto flags = entry->flags;
-            if (not (flags & (always_chain | no_auto_eoi | late_eoi)))
-            {
-                send_eoi(i);
-                id.acknowledged = ack::eoi_sent;
-            }
-
-            {
-                std::optional<irq_mask> mask;
-                finally cli { [] { asm ("cli"); } };
-                if (not (flags & no_interrupts)) asm ("sti");
-                else if (flags & no_reentry) mask.emplace(i);
-
-                entry->first->call();
-
-                if (((flags & fallback_handler) != 0)
-                    & (id.acknowledged != ack::yes))
-                    entry->fallback->call();
-            }
-
-            if (((flags & always_chain) != 0)
-                | (id.acknowledged == ack::no)) [[unlikely]]
-            {
-                call_far_iret(entry->prev_handler);
-                id.acknowledged = ack::eoi_sent;
-            }
-            else if (flags & late_eoi)
-            {
-                send_eoi(i);
-            }
-        }
-        catch (...)
-        {
-            fmt::print(stderr, "Exception while servicing IRQ {:d}\n", i);
-            try { print_exception(); }
-            catch (...) { halt(); }
-            halt();
         }
 
-#       ifndef NDEBUG
-        if (in_service(i))
         {
-            fmt::print(stderr, "no EOI for IRQ {:d}\n", i);
-            halt();
-        }
-#       endif
+            constexpr bool save_fpu { config::save_fpu_on_interrupt };
+            std::conditional_t<save_fpu, fpu_context, empty> fpu;
+            interrupt_id id { &fpu, i, interrupt_type::irq };
 
-        if constexpr (config::interrupt_minimum_stack_size > 0)
-        {
-            std::byte* esp; asm("mov %0, esp;":"=rm"(esp));
-            auto stack_left = static_cast<std::size_t>(esp - data->stack.data());
-            if (stack_left <= config::interrupt_minimum_stack_size) [[unlikely]]
-                if (not data->resizing_stack.test_and_set())
-                    this_thread::invoke_next([data = data] { data->resize_stack(data->stack.size() * 2); });
+            try
+            {
+                auto* const entry = data->get(i);
+                const auto flags = entry->flags;
+                if (not (flags & (always_chain | no_auto_eoi | late_eoi)))
+                {
+                    send_eoi(i);
+                    id.acknowledged = ack::eoi_sent;
+                }
+
+                {
+                    std::optional<irq_mask> mask;
+                    finally cli { [] { asm ("cli"); } };
+                    if (not (flags & no_interrupts)) asm ("sti");
+                    else if (flags & no_reentry) mask.emplace(i);
+
+                    entry->first->call();
+
+                    if (((flags & fallback_handler) != 0)
+                        & (id.acknowledged != ack::yes))
+                        entry->fallback->call();
+                }
+
+                if ((flags & always_chain)
+                    | (id.acknowledged == ack::no)) [[unlikely]]
+                {
+                    call_far_iret(entry->prev_handler);
+                    id.acknowledged = ack::eoi_sent;
+                }
+                else if (flags & late_eoi)
+                {
+                    send_eoi(i);
+                }
+            }
+            catch (...)
+            {
+                fmt::print(stderr, "Exception while servicing IRQ {:d}\n", i);
+                try { print_exception(); }
+                catch (...) { halt(); }
+                halt();
+            }
+
+#ifndef NDEBUG
+            if (in_service(i))
+            {
+                fmt::print(stderr, "no EOI for IRQ {:d}\n", i);
+                halt();
+            }
+#endif
+
+            if constexpr (config::interrupt_minimum_stack_size > 0)
+            {
+                std::byte* esp; asm("mov %0, esp;":"=rm"(esp));
+                auto stack_left = static_cast<std::size_t>(esp - data->stack.data());
+                if (stack_left <= config::interrupt_minimum_stack_size) [[unlikely]]
+                    if (not data->resizing_stack.test_and_set())
+                        this_thread::invoke_next([data = data] { data->resize_stack(data->stack.size() * 2); });
+            }
         }
 
         if constexpr (config::collect_irq_stats) if (have_rdtsc) [[likely]]
