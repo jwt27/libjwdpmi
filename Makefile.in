@@ -32,7 +32,7 @@ libjwdpmi.a: $(OBJ)
 	$(AR) scru $@ $^
 
 src/cpu_exception.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
-src/irq.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
+src/irq.% : override CXXFLAGS += $(CXXFLAGS_NOFPU) -O3
 src/main.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
 src/memory.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
 src/ring0.% : override CXXFLAGS += $(CXXFLAGS_NOFPU)
