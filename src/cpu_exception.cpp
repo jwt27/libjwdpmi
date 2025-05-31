@@ -7,6 +7,7 @@
 #include <jw/dpmi/async_signal.h>
 #include <jw/dpmi/detail/interrupt_id.h>
 #include <jw/dpmi/detail/selectors.h>
+#include <jw/dpmi/detail/stack.h>
 #include <jw/dpmi/ring0.h>
 #include <jw/sso_vector.h>
 #include <sys/nearptr.h>
@@ -28,7 +29,6 @@ namespace jw::dpmi::detail
     static constinit std::array<std::optional<exception_handler>, 0x1f> exception_handlers { };
     static constinit std::bitset<async_signal::max_signals> available_signals { ~ std::uint64_t { 0 } };
     static constinit std::bitset<async_signal::max_signals> pending_signals { 0 };
-    alignas (0x10) static constinit std::array<std::byte, config::exception_stack_size> exception_stack;
 
     template<typename T>
     static T* allocate_trampoline()
@@ -139,8 +139,11 @@ namespace jw::dpmi::detail
         }
 
 #       ifndef NDEBUG
-        if (*reinterpret_cast<std::uint32_t*>(exception_stack.data()) != 0xdeadbeef)
+        if (*reinterpret_cast<const std::uint32_t*>(locked_stack.data()) != 0xdeadbeef) [[unlikely]]
+        {
             fmt::print(stderr, "Stack overflow handling exception 0x{:0>2x}\n", data->num.value);
+            halt();
+        }
 #       endif
 
         asm ("cli");
@@ -161,17 +164,20 @@ namespace jw::dpmi::detail
             mov edx, cs:[%[ds]]
             mov ebx, ss
             mov es, edx
+            mov ds, edx
             cmp bx, dx
             je L%=keep_stack
 
             #   Copy frame to new stack
+            call %[get_stack]
             xor ecx, ecx
-            mov edi, %[stack]
+            mov edi, eax
             mov cl, %[frame_size] / 4
             mov ds, ebx
             lea esi, [esp + ecx * 4 - 4]
             std
             rep movsd
+            mov ds, edx
             add edi, 4
             add esi, 4
 
@@ -179,7 +185,6 @@ namespace jw::dpmi::detail
             mov ss, edx
             mov esp, edi
         L%=keep_stack:
-            mov ds, edx
             mov ebp, esp
             push esp
             mov fs, ebx
@@ -201,6 +206,7 @@ namespace jw::dpmi::detail
             mov cl, %[frame_size] / 4
             cld
             rep movsd
+            dec %[stack_use_count]
             mov ss, ebx
         L%=ret_same_stack:
             mov esp, ebp
@@ -217,7 +223,8 @@ namespace jw::dpmi::detail
             retf
          )" :
             :   [ds]                "i" (&safe_ds),
-                [stack]             "i" (exception_stack.begin() + exception_stack.size() - 0x10),
+                [get_stack]         "i" (get_locked_stack),
+                [stack_use_count]   "m" (locked_stack_use_count),
                 [frame_size]        "i" (sizeof(raw_exception_frame) - (dpmi10_frame ? 0 : sizeof(dpmi10_exception_frame))),
                 [handle_exception]  "i" (handle_exception),
                 [frame_offset]      "i" ((dpmi10_frame ? offsetof(raw_exception_frame, frame_10) : offsetof(raw_exception_frame, frame_09)) - offsetof(raw_exception_frame, data)),
@@ -396,7 +403,7 @@ namespace jw::dpmi::detail
         for (auto& i : trampoline_pool) i.next_free = &i + 1;
         trampoline_pool.back().next_free = nullptr;
         free_list = trampoline_pool.begin();
-        *reinterpret_cast<std::uint32_t*>(exception_stack.data()) = 0xdeadbeef;
+        *reinterpret_cast<std::uint32_t*>(locked_stack.data()) = 0xdeadbeef;
 
         pending_exceptions.emplace();
 

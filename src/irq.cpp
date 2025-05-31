@@ -9,6 +9,7 @@
 #include <jw/thread.h>
 #include <jw/dpmi/irq_handler.h>
 #include <jw/dpmi/detail/selectors.h>
+#include <jw/dpmi/detail/stack.h>
 #include <jw/chrono.h>
 #include <jw/dpmi/cpuid.h>
 #include <jw/alloc.h>
@@ -18,7 +19,6 @@ namespace jw::dpmi::detail
 {
     using irq_time_t = std::array<std::array<std::uint32_t, 32>, 16>;
 
-    static constinit std::uint32_t stack_use_count;
     static constinit std::uint32_t spurious;
     static constinit bool have_rdtsc;
     static constinit std::conditional_t<config::collect_irq_stats, irq_stats_t, std::monostate> stats;
@@ -49,7 +49,7 @@ namespace jw::dpmi::detail
             call %[handle_irq]      # call user interrupt handlers
             cmp bx, di
             je L%=ret_same_stack
-            dec %[use_count]        # counter used by get_stack_ptr
+            dec %[use_count]        # counter used by get_locked_stack()
             mov ss, ebx
         L%=ret_same_stack:
             mov esp, ebp
@@ -63,9 +63,9 @@ namespace jw::dpmi::detail
             iret
         )" : :
             [ds]         "i" (&safe_ds),
-            [use_count]  "m" (stack_use_count),
+            [use_count]  "m" (locked_stack_use_count),
             [handle_irq] "i" (irq_controller::handle_irq),
-            [get_stack]  "i" (irq_controller::get_stack_ptr)
+            [get_stack]  "i" (get_locked_stack)
         );
     }
 
@@ -147,7 +147,7 @@ namespace jw::dpmi::detail
 
     void irq_controller::handle_irq(irq_level i) noexcept
     {
-        [[maybe_unused]] chrono::tsc_count t_enter;
+        [[maybe_unused]] chrono::tsc_count t_enter = 0;
         if constexpr (config::collect_irq_stats)
         {
             if (have_rdtsc) [[likely]]
@@ -203,21 +203,18 @@ namespace jw::dpmi::detail
             }
 
 #ifndef NDEBUG
-            if (in_service(i))
+            if (in_service(i)) [[unlikely]]
             {
-                fmt::print(stderr, "no EOI for IRQ {:d}\n", i);
+                fmt::print(stderr, "No EOI for IRQ {:d}\n", i);
+                halt();
+            }
+
+            if (*reinterpret_cast<const std::uint32_t*>(locked_stack.data()) != 0xdeadbeef) [[unlikely]]
+            {
+                fmt::print(stderr, "Stack overflow handling IRQ {:d}\n", i);
                 halt();
             }
 #endif
-
-            if constexpr (config::interrupt_minimum_stack_size > 0)
-            {
-                std::byte* esp; asm("mov %0, esp;":"=rm"(esp));
-                auto stack_left = static_cast<std::size_t>(esp - data->stack.data());
-                if (stack_left <= config::interrupt_minimum_stack_size) [[unlikely]]
-                    if (not data->resizing_stack.test_and_set())
-                        this_thread::invoke_next([data = data] { data->resize_stack(data->stack.size() * 2); });
-            }
         }
 
         if constexpr (config::collect_irq_stats) if (have_rdtsc) [[likely]]
@@ -227,11 +224,6 @@ namespace jw::dpmi::detail
             stats.irq[i].min = min(stats.irq[i].min, t);
             stats.irq[i].max = max(stats.irq[i].max, t);
         }
-    }
-
-    std::byte* irq_controller::get_stack_ptr() noexcept
-    {
-        return data->stack.data() + (data->stack.size() >> (stack_use_count++)) - 4;
     }
 
     void irq_controller::set_pm_interrupt_vector(int_vector v, far_ptr32 ptr)
@@ -357,10 +349,9 @@ namespace jw::dpmi::detail
 
     irq_controller::irq_controller_data::irq_controller_data()
     {
-        resize_stack(config::interrupt_initial_stack_size);
         pic0_cmd.write(0x68);   // TODO: restore to defaults
         pic1_cmd.write(0x68);
-        stack_use_count = 0;
+        *reinterpret_cast<std::uint32_t*>(locked_stack.data()) = 0xdeadbeef;
         if constexpr (config::collect_irq_stats)
         {
             spurious = 0;
@@ -371,11 +362,6 @@ namespace jw::dpmi::detail
                 i.max = 0;
             }
         }
-    }
-
-    irq_controller::irq_controller_data::~irq_controller_data()
-    {
-        free_stack();
     }
 }
 

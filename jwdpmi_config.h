@@ -22,26 +22,13 @@ namespace jw
         // See http://www.delorie.com/djgpp/doc/libc/libc_124.html
         constexpr int user_crt0_startup_flags = 0;
 
-        // Initial stack size for IRQ handlers.
-        constexpr std::size_t interrupt_initial_stack_size = 64_KB;
-
-        // Minimum stack size for IRQ handlers.  Attempts to resize when the
-        // stack space drops below this amount.  When set to 0, automatic
-        // resizing is disabled.
-        constexpr std::size_t interrupt_minimum_stack_size = 16_KB;
-
         // Initial size for the global locked memory pool.  This is used by
         // 'operator new' when in interrupt context, but can also be allocated
         // from directly via 'operator new (jw::locked) T'.
         constexpr std::size_t global_locked_pool_size = 1_MB;
 
-        // Total stack size for exception handlers.  Remote debugging requires
-        // more stack space.
-#       ifndef NDEBUG
-        constexpr std::size_t exception_stack_size = 512_KB;
-#       else
-        constexpr std::size_t exception_stack_size = 64_KB;
-#       endif
+        // Total stack size for interrupt and exception handlers.
+        constexpr std::size_t locked_stack_size = 128_KB;
 
         // Default stack size for threads.
         constexpr std::size_t thread_default_stack_size = 64_KB;

@@ -159,7 +159,6 @@ namespace jw::dpmi::detail
     struct irq_controller::irq_controller_data
     {
         irq_controller_data();
-        ~irq_controller_data();
 
         irq_controller* get(irq_level i)
         {
@@ -183,28 +182,8 @@ namespace jw::dpmi::detail
             allocated[i] = false;
         }
 
-        void free_stack()
-        {
-            locking_allocator<std::byte> alloc { };
-            if (stack.data() != nullptr)
-                alloc.deallocate(stack.data(), stack.size());
-            stack = { };
-        }
-
-        void resize_stack(std::size_t size)
-        {
-            interrupt_mask no_irqs { };
-            locking_allocator<std::byte> alloc { };
-            auto* const p = alloc.allocate(size);
-            free_stack();
-            stack = { p, size };
-            resizing_stack.clear();
-        }
-
         std::bitset<16> allocated { };
         std::array<uninitialized_storage<irq_controller>, 16> entries;
-        std::span<std::byte> stack { };
-        std::atomic_flag resizing_stack { false };
     };
 
     inline void irq_controller::acknowledge(interrupt_id_data* id, std::uint8_t irq) noexcept
