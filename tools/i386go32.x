@@ -14,10 +14,10 @@ SECTIONS
     *(.text.startup .text.startup.*)
     *(.text.unlikely .text.unlikely.*)
     *(.text.exit .text.exit.*)
-    *(.text .gnu.linkonce.t.*)
+    *(.gnu.linkonce.t.*)
     *(.text.hot .text.hot.*)
-    *(.text.trampolines .text.trampolines.*)
     *(.text.*)
+    *(.text)
     *(.const* .ro* .gnu.linkonce.r*)
     etext  =  . ; PROVIDE(_etext = .) ;
     . = ALIGN(0x200);

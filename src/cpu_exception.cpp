@@ -22,7 +22,6 @@ namespace jw::dpmi::detail
         alignas(exception_trampoline) std::byte data[sizeof(exception_trampoline)];
     };
 
-    [[gnu::section(".text.trampolines")]]
     static constinit std::array<trampoline_block, 256> trampoline_pool;
     static constinit trampoline_block* free_list { nullptr };
     static constinit std::optional<sso_vector<std::exception_ptr, 3>> pending_exceptions { std::nullopt };
