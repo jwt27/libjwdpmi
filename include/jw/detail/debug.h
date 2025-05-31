@@ -18,6 +18,8 @@ namespace jw::debug::detail
     struct gdbstub;
 #endif
 
+    [[gnu::noipa]] inline void int3() { asm("int 3" ::: "memory"); }
+
     enum debug_signals : std::int32_t
     {
         packet_received = SIGMAX,

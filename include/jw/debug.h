@@ -21,7 +21,7 @@ namespace jw::debug
     inline void breakpoint()
     {
         if (debug())
-            asm("int 3");
+            detail::int3();
     }
 
     // Set a breakpoint with specified signal.
@@ -30,8 +30,11 @@ namespace jw::debug
     inline void break_with_signal([[maybe_unused]] int signal)
     {
 #ifndef NDEBUG
-        detail::current_signal = signal;
-        breakpoint();
+        if (debug())
+        {
+            detail::current_signal = signal;
+            detail::int3();
+        }
 #endif
     }
 
