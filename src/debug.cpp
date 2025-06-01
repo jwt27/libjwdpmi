@@ -476,7 +476,7 @@ namespace jw::debug::detail
     template <typename T>
     static bool reverse_decode(std::string_view in, T* out, std::size_t len = sizeof(T))
     {
-        len = std::min(len, in.size() / 2);
+        len = min(len, in.size() / 2);
         auto ptr = reinterpret_cast<std::uint8_t*>(out);
         for (std::size_t i = 0; i < len; ++i)
         {
@@ -557,30 +557,57 @@ namespace jw::debug::detail
         return encode(p, asciibuf, n);
     }
 
+    template <std::size_t N, typename T>
+    static bool decode_reg(std::string_view in, T* out)
+    {
+        if (in.size() < 2 * N)
+            throw std::runtime_error { "incorrect register packet size" };
+        return reverse_decode(in, out, std::min(N, sizeof(T)));
+    }
+
+    template <std::size_t N, typename T>
+    [[nodiscard]]
+    static char* encode_reg(char* out, const T* in)
+    {
+        static_assert (N <= sizeof(T));
+        return encode(out, in, N);
+    }
+
     template<typename T>
     [[nodiscard]]
     static char* fpu_reg(char* out, regnum reg, const T* fpu)
     {
+        std::uint32_t tmp;
+
         [[assume(reg >= st0)]];
         switch (reg)
         {
+        case fctrl: return encode_reg<4>(out, &(tmp = fpu->fctrl));
+        case fstat: return encode_reg<4>(out, &(tmp = fpu->fstat));
+        case ftag : return encode_reg<4>(out, &(tmp = fpu->ftag));
+        case fiseg: return encode_reg<4>(out, &(tmp = fpu->fiseg));
+        case fioff: return encode_reg<4>(out, &(tmp = fpu->fioff));
+        case foseg: return encode_reg<4>(out, &(tmp = fpu->foseg));
+        case fooff: return encode_reg<4>(out, &(tmp = fpu->fooff));
+        case fop  : return encode_reg<4>(out, &(tmp = fpu->fop));
+
         case st0: case st1: case st2: case st3: case st4: case st5: case st6: case st7:
-            return encode(out, &fpu->st[reg - st0], regsize[reg]);
-        case fctrl: { std::uint32_t s = fpu->fctrl; return encode(out, &s); }
-        case fstat: { std::uint32_t s = fpu->fstat; return encode(out, &s); }
-        case ftag:  { std::uint32_t s = fpu->ftag;  return encode(out, &s); }
-        case fiseg: { std::uint32_t s = fpu->fiseg; return encode(out, &s); }
-        case fioff: { std::uint32_t s = fpu->fioff; return encode(out, &s); }
-        case foseg: { std::uint32_t s = fpu->foseg; return encode(out, &s); }
-        case fooff: { std::uint32_t s = fpu->fooff; return encode(out, &s); }
-        case fop:   { std::uint32_t s = fpu->fop;   return encode(out, &s); }
-        default:
+            return encode_reg<10>(out, &fpu->st[reg - st0]);
+
+        case xmm0: case xmm1: case xmm2: case xmm3: case xmm4: case xmm5: case xmm6: case xmm7:
             if constexpr (std::is_same_v<T, fxsave_data>)
-            {
-                if (reg == mxcsr) return encode(out, &fpu->mxcsr);
-                else return encode(out, &fpu->xmm[reg - xmm0]);
-            }
-            else return encode_null(out, regsize[reg]);
+                return encode_reg<16>(out, &fpu->xmm[reg - xmm0]);
+            else
+                return encode_null(out, 16);
+
+        case mxcsr:
+            if constexpr (std::is_same_v<T, fxsave_data>)
+                return encode_reg<4>(out, &fpu->mxcsr);
+            else
+                return encode_null(out, 4);
+
+        default:
+            __builtin_unreachable();
         }
     }
 
@@ -589,6 +616,8 @@ namespace jw::debug::detail
     {
         if (reg > reg_max)
             throw std::out_of_range { "invalid register" };
+
+        std::uint32_t tmp;
 
         if (t == current_thread())
         {
@@ -599,25 +628,27 @@ namespace jw::debug::detail
 
             switch (reg)
             {
-            case eax: return encode(out, &r->eax);
-            case ebx: return encode(out, &r->ebx);
-            case ecx: return encode(out, &r->ecx);
-            case edx: return encode(out, &r->edx);
-            case ebp: return encode(out, &r->ebp);
-            case esi: return encode(out, &r->esi);
-            case edi: return encode(out, &r->edi);
-            case esp: return encode(out, &f->stack.offset);
-            case eflags: return encode(out, &f->raw_eflags);
-            case cs: { std::uint32_t s = f->fault_address.segment; return encode(out, &s); }
-            case ss: { std::uint32_t s = f->stack.segment; return encode(out, &s); }
-            case ds: { if (dpmi10_frame) { std::uint32_t s = d10f->ds; return encode(out, &s); } else return encode_null(out, regsize[reg]); }
-            case es: { if (dpmi10_frame) { std::uint32_t s = d10f->es; return encode(out, &s); } else return encode_null(out, regsize[reg]); }
-            case fs: { if (dpmi10_frame) { std::uint32_t s = d10f->fs; return encode(out, &s); } else return encode_null(out, regsize[reg]); }
-            case gs: { if (dpmi10_frame) { std::uint32_t s = d10f->gs; return encode(out, &s); } else return encode_null(out, regsize[reg]); }
-            case eip: return encode(out, &f->fault_address.offset);
+            case eax:    return encode_reg<4>(out, &r->eax);
+            case ebx:    return encode_reg<4>(out, &r->ebx);
+            case ecx:    return encode_reg<4>(out, &r->ecx);
+            case edx:    return encode_reg<4>(out, &r->edx);
+            case ebp:    return encode_reg<4>(out, &r->ebp);
+            case esi:    return encode_reg<4>(out, &r->esi);
+            case edi:    return encode_reg<4>(out, &r->edi);
+            case esp:    return encode_reg<4>(out, &f->stack.offset);
+            case eflags: return encode_reg<4>(out, &f->flags);
+            case cs:     return encode_reg<4>(out, &(tmp = f->fault_address.segment));
+            case ss:     return encode_reg<4>(out, &(tmp = f->stack.segment));
+            case ds:     return dpmi10_frame ? encode_reg<4>(out, &(tmp = d10f->ds)) : encode_null(out, 4);
+            case es:     return dpmi10_frame ? encode_reg<4>(out, &(tmp = d10f->es)) : encode_null(out, 4);
+            case fs:     return dpmi10_frame ? encode_reg<4>(out, &(tmp = d10f->fs)) : encode_null(out, 4);
+            case gs:     return dpmi10_frame ? encode_reg<4>(out, &(tmp = d10f->gs)) : encode_null(out, 4);
+            case eip:    return encode_reg<4>(out, &f->fault_address.offset);
             default:
                 auto* const fpu = interrupt_id::get()->fpu;
-                if (fpu == nullptr) return encode_null(out, regsize[reg]);
+                if (fpu == nullptr)
+                    return encode_null(out, regsize[reg]);
+
                 switch (fpu_registers::type())
                 {
                 case fpu_registers_type::fsave:  return fpu_reg(out, reg, &fpu->fsave);
@@ -632,23 +663,23 @@ namespace jw::debug::detail
                 return encode_null(out, regsize[reg]);
 
             const auto* const r = t->get_context();
-            std::uint32_t r_esp = reinterpret_cast<std::uintptr_t>(r) - sizeof(jw::detail::thread_context);
-            std::uint32_t r_eip = r->return_address;
+            const std::uint32_t r_esp = reinterpret_cast<std::uintptr_t>(r) - sizeof(jw::detail::thread_context);
+
             switch (reg)
             {
-            case ebx: return encode(out, &r->ebx);
-            case ebp: return encode(out, &r->ebp);
-            case esi: return encode(out, &r->esi);
-            case edi: return encode(out, &r->edi);
-            case esp: return encode(out, &r_esp);
-            case cs: { std::uint32_t s = main_cs; return encode(out, &s); }
+            case ebx: return encode_reg<4>(out, &r->ebx);
+            case ebp: return encode_reg<4>(out, &r->ebp);
+            case esi: return encode_reg<4>(out, &r->esi);
+            case edi: return encode_reg<4>(out, &r->edi);
+            case esp: return encode_reg<4>(out, &r_esp);
+            case cs:  return encode_reg<4>(out, &(tmp = main_cs));
             case ss:
             case ds:
-            case es: { std::uint32_t s = main_ds; return encode(out, &s); }
-            case fs: { std::uint32_t s = r->fs; return encode(out, &s, regsize[reg]); }
-            case gs: { std::uint32_t s = r->gs; return encode(out, &s, regsize[reg]); }
-            case eip: return encode(out, &r_eip);
-            default: return encode_null(out, regsize[reg]);
+            case es:  return encode_reg<4>(out, &(tmp = main_ds));
+            case fs:  return encode_reg<4>(out, &r->fs);
+            case gs:  return encode_reg<4>(out, &r->gs);
+            case eip: return encode_reg<4>(out, &r->return_address);
+            default:  return encode_null(out, regsize[reg]);
             }
         }
     }
@@ -659,25 +690,32 @@ namespace jw::debug::detail
         [[assume(reg >= st0)]];
         switch (reg)
         {
+        case fctrl: return decode_reg<4>(value, &fpu->fctrl);
+        case fstat: return decode_reg<4>(value, &fpu->fstat);
+        case ftag:  return decode_reg<4>(value, &fpu->ftag);
+        case fiseg: return decode_reg<4>(value, &fpu->fiseg);
+        case fioff: return decode_reg<4>(value, &fpu->fioff);
+        case foseg: return decode_reg<4>(value, &fpu->foseg);
+        case fooff: return decode_reg<4>(value, &fpu->fooff);
+        case fop:   return decode_reg<4>(value, &fpu->fop);
+
         case st0: case st1: case st2: case st3: case st4: case st5: case st6: case st7:
-            return reverse_decode(value, &fpu->st[reg - st0], regsize[reg]);
-        case fctrl: { return reverse_decode(value, &fpu->fctrl, regsize[reg]); }
-        case fstat: { return reverse_decode(value, &fpu->fstat, regsize[reg]); }
-        case ftag:  { return reverse_decode(value, &fpu->ftag,  regsize[reg]); }
-        case fiseg: { return reverse_decode(value, &fpu->fiseg, regsize[reg]); }
-        case fioff: { return reverse_decode(value, &fpu->fioff, regsize[reg]); }
-        case foseg: { return reverse_decode(value, &fpu->foseg, regsize[reg]); }
-        case fooff: { return reverse_decode(value, &fpu->fooff, regsize[reg]); }
-        case fop:   { return reverse_decode(value, &fpu->fop,   regsize[reg]); }
-        default:
+            return decode_reg<10>(value, &fpu->st[reg - st0]);
+
+        case xmm0: case xmm1: case xmm2: case xmm3: case xmm4: case xmm5: case xmm6: case xmm7:
             if constexpr (std::is_same_v<T, fxsave_data>)
-            {
-                if (reg == mxcsr)
-                    return reverse_decode(value, &fpu->mxcsr, regsize[reg]);
-                else
-                    return reverse_decode(value, &fpu->xmm[reg - xmm0], regsize[reg]);
-            }
-            else return false;
+                return decode_reg<16>(value, &fpu->xmm[reg - xmm0]);
+            else
+                return false;
+
+        case mxcsr:
+            if constexpr (std::is_same_v<T, fxsave_data>)
+                return decode_reg<4>(value, &fpu->mxcsr);
+            else
+                return false;
+
+        default:
+            return false;
         }
     }
 
@@ -689,32 +727,32 @@ namespace jw::debug::detail
             auto* const f = current_exception.frame;
             auto* const d10f = static_cast<dpmi10_exception_frame*>(current_exception.frame);
             const bool dpmi10_frame = current_exception.is_dpmi10_frame;
-            if (debugmsg) fmt::print(stderr, "set register {}={}\n", regname[reg], value);
+            if (debugmsg)
+                fmt::print(stderr, "set register {}={}\n", regname[reg], value);
+
             switch (reg)
             {
-            case eax:    return reverse_decode(value, &r->eax, regsize[reg]);
-            case ebx:    return reverse_decode(value, &r->ebx, regsize[reg]);
-            case ecx:    return reverse_decode(value, &r->ecx, regsize[reg]);
-            case edx:    return reverse_decode(value, &r->edx, regsize[reg]);
-            case ebp:    return reverse_decode(value, &r->ebp, regsize[reg]);
-            case esi:    return reverse_decode(value, &r->esi, regsize[reg]);
-            case edi:    return reverse_decode(value, &r->edi, regsize[reg]);
-            case esp:    return reverse_decode(value, &f->stack.offset, regsize[reg]);
-            case eip:    return reverse_decode(value, &f->fault_address.offset, regsize[reg]);
-            case eflags: return reverse_decode(value, &f->raw_eflags, regsize[reg]);
-            case cs:     return reverse_decode(value.substr(0, 4), &f->fault_address.segment, 2);
-            case ss:     return reverse_decode(value.substr(0, 4), &f->stack.segment, 2);
-            case ds: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->ds, 2); }
-                     else return false;
-            case es: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->es, 2); }
-                     else return false;
-            case fs: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->fs, 2); }
-                     else return false;
-            case gs: if (dpmi10_frame) { return reverse_decode(value.substr(0, 4), &d10f->gs, 2); }
-                     else return false;
+            case eax:    return decode_reg<4>(value, &r->eax);
+            case ebx:    return decode_reg<4>(value, &r->ebx);
+            case ecx:    return decode_reg<4>(value, &r->ecx);
+            case edx:    return decode_reg<4>(value, &r->edx);
+            case ebp:    return decode_reg<4>(value, &r->ebp);
+            case esi:    return decode_reg<4>(value, &r->esi);
+            case edi:    return decode_reg<4>(value, &r->edi);
+            case esp:    return decode_reg<4>(value, &f->stack.offset);
+            case eip:    return decode_reg<4>(value, &f->fault_address.offset);
+            case eflags: return decode_reg<4>(value, &f->raw_eflags);
+            case cs:     return decode_reg<4>(value, &f->fault_address.segment);
+            case ss:     return decode_reg<4>(value, &f->stack.segment);
+            case ds:     return dpmi10_frame and decode_reg<4>(value, &d10f->ds);
+            case es:     return dpmi10_frame and decode_reg<4>(value, &d10f->es);
+            case fs:     return dpmi10_frame and decode_reg<4>(value, &d10f->fs);
+            case gs:     return dpmi10_frame and decode_reg<4>(value, &d10f->gs);
             default:
                 auto* const fpu = interrupt_id::get()->fpu;
-                if (fpu == nullptr) return false;
+                if (fpu == nullptr)
+                    return false;
+
                 switch (fpu_registers::type())
                 {
                 case fpu_registers_type::fsave:  return set_fpu_reg(reg, value, &fpu->fsave);
@@ -728,17 +766,19 @@ namespace jw::debug::detail
             if (not t)
                 return false;
 
+            if (debugmsg)
+                fmt::print(stderr, "set thread {:d} register {}={}\n", t->id, regname[reg], value);
+
             auto* const r = t->get_context();
-            if (debugmsg) fmt::print(stderr, "set thread {:d} register {}={}\n", t->id, regname[reg], value);
             switch (reg)
             {
-            case ebx:    return reverse_decode(value, &r->ebx, regsize[reg]);
-            case ebp:    return reverse_decode(value, &r->ebp, regsize[reg]);
-            case esi:    return reverse_decode(value, &r->esi, regsize[reg]);
-            case edi:    return reverse_decode(value, &r->edi, regsize[reg]);
-            case fs:     return reverse_decode(value.substr(0, 4), &r->fs, 2);
-            case gs:     return reverse_decode(value.substr(0, 4), &r->gs, 2);
-            default: return false;
+            case ebx: return decode_reg<4>(value, &r->ebx);
+            case ebp: return decode_reg<4>(value, &r->ebp);
+            case esi: return decode_reg<4>(value, &r->esi);
+            case edi: return decode_reg<4>(value, &r->edi);
+            case fs:  return decode_reg<4>(value, &r->fs);
+            case gs:  return decode_reg<4>(value, &r->gs);
+            default:  return false;
             }
         }
     }
