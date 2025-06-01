@@ -858,33 +858,58 @@ namespace jw::debug::detail
             }
         }
 
-        auto* p = txbuf;
-        *p++ = '$';
+        const char* in = output.data();
+        const char* const end = in + output.size();
+        char* out = txbuf;
+        std::uint8_t sum = 0;
+        std::size_t n = 0;
+        char prev = 0;
 
-        std::size_t i = 0;
-        while (i < output.size())
+        auto emit = [&](char c)
         {
-            const char ch = output[i];
-            auto j = output.find_first_not_of(ch, i);
-            if (j == output.npos)
-                j = output.size();
-            std::size_t n = j - i;
-            if (n > 3)
+            sum += c;
+            *out++ = c;
+        };
+
+        auto rle_char = [](auto n)
+        {
+            return ' ' + n - 4;
+        };
+
+        *out++ = '$';
+
+        while (in != end)
+        {
+            const char c = *in++;
+            emit(c);
+
+            n &= -(prev == c);
+            prev = c;
+            if (++n == 4)
             {
-                n = std::min<std::size_t>(n, 98);   // above 98, RLE byte would be non-printable
-                if (n - 7u < 2u) n = 6;             // RLE byte can't be '#' or '$'
-                *p++ = ch;
-                *p++ = '*';
-                *p++ = static_cast<char>(n + 28);
+                in -= n;
+                out -= 3;
+                sum -= 3 * c;
+
+                const auto max_n = min<std::size_t>(end - in, 126 - rle_char(0));
+                while ((n != max_n) and (in[n] == c))
+                    ++n;
+
+                const unsigned tmp = rle_char(n) - 35;
+                const unsigned adjust = (tmp + 1) & -(tmp < 2u);
+                n -= adjust;    // Avoid emitting '#' (35) or '$' (36).
+
+                emit('*');
+                emit(rle_char(n));
+
+                in += n;
+                prev = 0;
             }
-            else p = std::fill_n(p, n, ch);
-            i += n;
         }
 
-        const auto sum = checksum({ txbuf + 1, p });
-        *p++ = '#';
-        p = encode(p, &sum, 1);
-        tx_size = p - txbuf;
+        *out++ = '#';
+        out = encode(out, &sum, 1);
+        tx_size = out - txbuf;
         com.write(txbuf, tx_size);
         com.flush();
         replied = true;
