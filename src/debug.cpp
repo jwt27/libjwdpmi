@@ -261,6 +261,13 @@ namespace jw::debug::detail
         }
     }
 
+    static const std::byte* get_esp() noexcept
+    {
+        const std::byte* esp;
+        asm("mov %0, esp" : "=rm" (esp));
+        return esp;
+    }
+
     // Register order and sizes found in {gdb source}/gdb/regformats/i386/i386.dat
     enum regnum : std::uint8_t
     {
@@ -1455,11 +1462,27 @@ namespace jw::debug::detail
         }
         case 'M':   // write memory
         {
-            auto* addr = reinterpret_cast<std::byte*>(decode(next()));
+            auto* const ptr = reinterpret_cast<std::byte*>(decode(next()));
             must_get(',');
             std::size_t len = decode(next());
             must_get(':');
-            try { reverse_decode(remaining(), addr, len); }
+
+            const auto same_stack = get_fs() == safe_ds;
+            const auto* const lo = get_esp();
+            const auto* const hi = reinterpret_cast<const std::byte*>(current_exception.frame->stack.offset);
+            if (same_stack and ptr < hi and ptr + len > lo) [[unlikely]]
+            {
+                // This happens when stepping through interrupt code.  GDB may
+                // emit a "call dummy" on the stack to evaluate an expression,
+                // but the stub itself is running on that same stack.
+                send("E.Would clobber exception stack");
+                break;
+            }
+
+            try
+            {
+                reverse_decode(remaining(), ptr, len);
+            }
             catch (...)
             {
                 send("E04");
