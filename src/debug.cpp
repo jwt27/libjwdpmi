@@ -50,8 +50,7 @@ namespace jw::debug::detail
 
     static constinit std::atomic_flag reentry { false };
     static constinit bool thread_events_enabled { false };
-    static constinit bool received { false };
-    static constinit bool replied { false };
+    static constinit bool receiving { false };
     static constinit bool need_ack { false };
     static constinit bool ctrl_c { false };
     static constinit thread* query_thread { nullptr };
@@ -816,11 +815,12 @@ namespace jw::debug::detail
 
         dpmi::irq_handler serial_irq { [this]
         {
-            if (reentry.test()) return;
-            if (not packet_available()) return;
+            if (reentry.test())
+                return;
+            if (not packet_available())
+                return;
 
-            if (receive() or ctrl_c)
-                irq_signal.raise();
+            irq_signal.raise();
         } };
 
         gdbstub(const io::rs232_config& cfg)
@@ -860,6 +860,7 @@ namespace jw::debug::detail
         template<typename... T> requires (sizeof...(T) > 0)
         void print(fmt::format_string<T...>, T&&...);
         void print(std::string_view);
+        void handle_protocol();
         bool receive();
         bool packet_available();
 
@@ -888,7 +889,8 @@ namespace jw::debug::detail
 
         while (need_ack)
         {
-            if (receive()) [[unlikely]]
+            handle_protocol();
+            if (receiving) [[unlikely]]
             {
                 fmt::print(stderr, "gdb: Protocol error.\n");
                 if (debugmsg)
@@ -952,7 +954,6 @@ namespace jw::debug::detail
         tx_size = out - txbuf;
         com.write(txbuf, tx_size);
         com.flush();
-        replied = true;
         need_ack = true;
     }
 
@@ -971,7 +972,6 @@ namespace jw::debug::detail
         *tx++ = 'O';
         tx = encode_ascii(tx, a);
         send_txbuf(tx);
-        replied = false;
     }
 
     inline void gdbstub::print(std::string_view str)
@@ -981,50 +981,50 @@ namespace jw::debug::detail
         *tx++ = 'O';
         tx = encode(tx, str.data(), n);
         send_txbuf(tx);
-        replied = false;
+    }
+
+    inline void gdbstub::handle_protocol() try
+    {
+        if (receiving)
+            return;
+
+        com.clear();
+        switch (com.get())
+        {
+        case '-': [[unlikely]]
+            fmt::print(stderr, "gdb: NACK\n");
+            com.write(txbuf, tx_size);
+            break;
+
+        case '+':
+            need_ack = false;
+            break;
+
+        case 0x03:
+            ctrl_c = true;
+            break;
+
+        case '$':
+            receiving = true;
+            break;
+        }
+    }
+    catch (const std::exception& e)
+    {
+        fmt::print(stderr, "gdb: {}\n", e.what());
+        ctrl_c = true;
     }
 
     inline bool gdbstub::receive()
     {
-        char sum[2];
-        com.clear();
-        com.force_flush();
-        if (com.rdbuf()->in_avail() == 0)
+        handle_protocol();
+        if (not receiving)
             return false;
 
+        char sum[2];
         try
         {
-            switch (com.get())
-            {
-            case '-': [[unlikely]]
-                fmt::print(stderr, "gdb: NACK\n");
-                com.write(txbuf, tx_size);
-                return false;
-
-            case '+':
-                need_ack = false;
-                return false;
-
-            default:
-                return false;
-
-            case 0x03:
-                ctrl_c = true;
-                return false;
-
-            case '$':
-                break;
-            }
-
-            if (received) [[unlikely]]
-            {
-                fmt::print(stderr, "gdb: Protocol error.\n");
-                if (debugmsg)
-                    fmt::print(stderr, "Discarding received packet: \"{}\"\n", current_packet());
-            }
-
-            replied = false;
-            received = false;
+            receiving = false;
             rx_size = 0;
             com.getline(rxbuf, bufsize, '#');
             rx_size = com.gcount() - 1;
@@ -1032,25 +1032,17 @@ namespace jw::debug::detail
         }
         catch (const std::exception& e)
         {
-            const auto eof = com.eof();
+            fmt::print(stderr, "gdb: {}\n", e.what());
             com.clear();
-
-            if (eof)
-            {
-                ctrl_c = true;
-                return false;
-            }
-
-            fmt::print(stderr, "While receiving gdb packet: {}\n", e.what());
-            if (com.rdbuf()->in_avail() != -1)
-                com.put('-');
+            com.put('-');
             return false;
         }
 
-        if (decode(std::string_view { sum, 2 }) != checksum(current_packet())) [[unlikely]]
+        const auto sum_calculated = checksum(current_packet());
+        if (decode(std::string_view { sum, 2 }) != sum_calculated) [[unlikely]]
         {
-            fmt::print(stderr, "Bad checksum: \"{}\": {}, calculated: {:0>2x}\n",
-                       current_packet(), sum, checksum(current_packet()));
+            fmt::print(stderr, "gdb: Bad checksum: \"{}\": {}, calculated: {:0>2x}\n",
+                       current_packet(), std::string_view { sum, 2 }, sum_calculated);
             com.put('-');
             return false;
         }
@@ -1058,7 +1050,6 @@ namespace jw::debug::detail
 
         if (protocol_dump)
             fmt::print(stderr, "recv <-- \"{}\"\n", current_packet());
-        received = true;
         return true;
     }
 
@@ -1132,9 +1123,8 @@ namespace jw::debug::detail
 
     [[gnu::hot]] inline void gdbstub::handle_packet()
     {
-        if (not received)
+        if (not receive())
             return;
-        received = false;
 
         auto* const t = current_thread();
         auto* const ti = get_info(t);
@@ -1761,28 +1751,13 @@ namespace jw::debug::detail
             }
 
             if (config::enable_gdb_interrupts and f->flags.interrupts_enabled)
-                asm("sti");
+                asm ("sti");
 
         stop_again:
             stop_reply();
-            do
-            {
-                receive();
-                try
-                {
-                    handle_packet();
-                }
-                catch (...)
-                {
-                    // last command caused another exception (most likely page
-                    // fault after a request to read memory)
-                    // TODO: determine action based on last packet / signal
-                    if (not replied)
-                        send("E04");
-                    else
-                        print_exception();
-                }
-            } while (ti->stopped or packet_available());
+
+            while (ti->stopped or packet_available())
+                handle_packet();
 
             if (ctrl_c)
             {
@@ -1794,6 +1769,7 @@ namespace jw::debug::detail
             if (ti->invalid_signal)
                 goto stop_again;
 
+            asm ("cli");
             com.flush();
         }
         catch (...)
@@ -1804,7 +1780,6 @@ namespace jw::debug::detail
             print_exception();
             halt();
         }
-        asm ("cli");
 
     done:
         const bool ignore_signal = ti->ignore_signal | not is_fault_signal(ti->signal);
