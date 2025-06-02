@@ -480,9 +480,8 @@ namespace jw::debug::detail
 
     // Decode little-endian hex string
     template <typename T>
-    static bool reverse_decode(std::string_view in, T* out, std::size_t len = sizeof(T))
+    static bool reverse_decode(std::string_view in, T* out, std::size_t len)
     {
-        len = min(len, in.size() / 2);
         auto ptr = reinterpret_cast<std::uint8_t*>(out);
         for (std::size_t i = 0; i < len; ++i)
         {
@@ -1466,6 +1465,7 @@ namespace jw::debug::detail
             must_get(',');
             std::size_t len = decode(next());
             must_get(':');
+            const auto data = remaining();
 
             const auto same_stack = get_fs() == safe_ds;
             const auto* const lo = get_esp();
@@ -1479,9 +1479,15 @@ namespace jw::debug::detail
                 break;
             }
 
+            if (data.size() != len * 2) [[unlikely]]
+            {
+                send("E.Incorrect length");
+                break;
+            }
+
             try
             {
-                reverse_decode(remaining(), ptr, len);
+                reverse_decode(data, ptr, len);
             }
             catch (...)
             {
