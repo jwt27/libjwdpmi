@@ -205,10 +205,10 @@ namespace jw::debug::detail
     static thread* get_thread(thread_id id) noexcept
     {
         auto* const t = scheduler::get_thread(id);
-        if (t and not get_info(t))
+        if (t and get_info(t))
+            return t;
+        else
             return nullptr;
-
-        return t;
     }
 
     static thread* current_thread() noexcept
@@ -1609,22 +1609,23 @@ namespace jw::debug::detail
 
     [[gnu::hot]] inline bool gdbstub::handle_exception(exception_num exc, const exception_info& info)
     {
+        const bool is_debug_exception = (exc == exception_num::breakpoint) | (exc == exception_num::trap);
         auto* const r = info.registers;
         auto* const f = info.frame;
         if (debugmsg)
             fmt::print(stderr, "entering exception 0x{:0>2x} from {:#x}\n",
                        std::uint8_t { exc }, std::uintptr_t { f->fault_address.offset });
 
-        if (exc == exception_num::breakpoint)
-            f->fault_address.offset -= 1;
+        f->fault_address.offset -= (exc == exception_num::breakpoint);
 
         auto leave = [&]
         {
-            // Don't resume on a breakpoint.
-            if (breakpoints.enable_all_except(f->fault_address.offset))
-                f->flags.trap = true;           // trap on next instruction to re-enable
-            else if (*reinterpret_cast<const std::uint8_t*>(f->fault_address.offset) == 0xcc)
-                f->fault_address.offset += 1;   // hardcoded breakpoint, safe to skip
+            // Don't resume on a breakpoint, trap on next cycle to re-enable.
+            f->flags.trap |= breakpoints.enable_all_except(f->fault_address.offset);
+
+            // Hard-coded breakpoints are safe to skip.
+            f->fault_address.offset += (*reinterpret_cast<const std::uint8_t*>(f->fault_address.offset) == 0xcc);
+
             f->flags.resume = true;
 
             if (debugmsg)
@@ -1637,9 +1638,8 @@ namespace jw::debug::detail
             if (exc == exception_num::trap)
                 return true; // keep stepping until we get back to our own code
 
-            fmt::print(stderr, "Can't debug this!  CS is neither 0x{:0>4x} nor 0x{:0>4x}.\n"
-                               "{}\n",
-                       main_cs, ring0_cs, exc.message());
+            fmt::print(stderr, "gdb: Exception in foreign code!\n"
+                               "{}\n", exc.message());
             info.frame->print();
             info.registers->print();
             return false;
@@ -1656,8 +1656,8 @@ namespace jw::debug::detail
 
         if (reentry.test_and_set()) [[unlikely]]
         {
-            if ((exc == exception_num::trap) | (exc == exception_num::breakpoint))
-            {   // breakpoint in debugger code, ignore
+            if (is_debug_exception) // breakpoint in debugger code, ignore
+            {
                 if (debugmsg)
                     fmt::print(stderr, "re-entry caused by breakpoint, ignoring.\n");
                 leave();
@@ -1667,7 +1667,7 @@ namespace jw::debug::detail
             }
             if (debugmsg)
             {
-                fmt::print(stderr, "debugger re-entry!\n");
+                fmt::print(stderr, "gdb: re-entry!\n");
                 static_cast<const dpmi10_exception_frame*>(f)->print();
                 r->print();
             }
@@ -1685,7 +1685,6 @@ namespace jw::debug::detail
 
         try
         {
-            const bool is_debug_exception = (exc == exception_num::breakpoint) | (exc == exception_num::trap);
             int signal = current_signal;
 
             if ((signal != -1) & is_debug_exception)
@@ -1728,12 +1727,12 @@ namespace jw::debug::detail
 
             case exception_num::trap:
                 if (info.frame->error_code & 0x0f)
+                {
                     for (unsigned i = 0; i != max_watchpoints; ++i)
                         if (watchpoints[i] and watchpoints[i]->triggered())
                             watchpoints[i]->reset(), ti->watchpoints[i] = true;
-
-                if (ti->watchpoints.any())
                     break;
+                }
 
                 if (not ti->stepping)
                 {
