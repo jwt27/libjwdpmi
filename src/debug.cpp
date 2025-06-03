@@ -53,6 +53,7 @@ namespace jw::debug::detail
     static constinit bool receiving { false };
     static constinit bool need_ack { false };
     static constinit bool ctrl_c { false };
+    static constinit bool stopped { false };
     static constinit thread* query_thread { nullptr };
     static exception_info current_exception;
 
@@ -190,7 +191,6 @@ namespace jw::debug::detail
         std::size_t step_range_n { 0 };
         unsigned trap_mask { 0 };
         std::uintptr_t trap_masked_at;
-        bool stopped { false };
         bool stepping { false };
         bool ignore_signal { true };
         bool invalid_signal { false };
@@ -231,7 +231,6 @@ namespace jw::debug::detail
         ti->ignore_signal = true;
         ti->invalid_signal = false;
         ti->stepping = false;
-        ti->stopped = false;
         switch (a.action)
         {
         case 'r':
@@ -1087,7 +1086,7 @@ namespace jw::debug::detail
             return;
         }
 
-        ti->stopped = true;
+        stopped = true;
 
         auto* p = new_tx();
 
@@ -1368,6 +1367,7 @@ namespace jw::debug::detail
                         break;
                     }
                 }
+                stopped = false;
             }
             else goto unknown;
             break;
@@ -1585,10 +1585,10 @@ namespace jw::debug::detail
                 fmt::print(stdout, "KILL signal received.");
             if (redirect_exception(current_exception, kill))
             {
+                stopped = false;
                 for (thread* t : all_threads())
                 {
                     auto* const ti = get_info(t);
-                    ti->stopped = false;
                     ti->stepping = false;
                     ti->invalid_signal = false;
                     ti->ignore_signal = true;
@@ -1785,7 +1785,7 @@ namespace jw::debug::detail
         stop_again:
             stop_reply();
 
-            while (ti->stopped or packet_available())
+            while (stopped or packet_available())
                 handle_packet();
 
             if (ctrl_c)
