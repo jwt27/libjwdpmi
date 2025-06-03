@@ -54,6 +54,7 @@ namespace jw::debug::detail
     static constinit bool need_ack { false };
     static constinit bool ctrl_c { false };
     static constinit bool stopped { false };
+    static constinit bool report_sigcont { false };
     static constinit thread* query_thread { nullptr };
     static exception_info current_exception;
 
@@ -194,7 +195,6 @@ namespace jw::debug::detail
         bool stepping { false };
         bool ignore_signal { true };
         bool invalid_signal { false };
-        bool report_sigcont { false };
     };
 
     static thread_info* get_info(thread* t) noexcept
@@ -231,6 +231,8 @@ namespace jw::debug::detail
         ti->ignore_signal = true;
         ti->invalid_signal = false;
         ti->stepping = false;
+        if (t != current_thread())
+            ti->trap_masked_at = t->get_context()->return_address;
         switch (a.action)
         {
         case 'r':
@@ -1066,7 +1068,7 @@ namespace jw::debug::detail
         if (not is_stop_signal(ti->signal))
             return;
 
-        if (ti->report_sigcont)
+        if (report_sigcont)
         {
             const auto is_trap = is_trap_signal(ti->signal);
             print("Thread {:d}: Trap masked at {:#x}{}.\n",
@@ -1075,7 +1077,7 @@ namespace jw::debug::detail
             if (is_trap)
                 ti->signal = continued;
         }
-        ti->report_sigcont = false;
+        report_sigcont = false;
 
         const int signal = ti->signal;
         const int posix = posix_signal(signal);
@@ -1713,6 +1715,7 @@ namespace jw::debug::detail
                 }
             }
 
+            report_sigcont = false;
             switch (signal)
             {
             case print_message:
@@ -1723,6 +1726,16 @@ namespace jw::debug::detail
             case packet_received:
                 if (ti->signal != -1)
                     signal = ti->signal;
+                break;
+
+            case continued:
+                report_sigcont = true;
+                if (ti->signal == -1)
+                {
+                    signal = ti->signal = exception_num::trap;
+                    goto check_step_range;
+                }
+                else signal = ti->signal;
                 break;
 
             case exception_num::trap:
@@ -1743,6 +1756,7 @@ namespace jw::debug::detail
                     break;
                 }
 
+            check_step_range:
                 if (f->fault_address.offset - ti->step_range_begin <= ti->step_range_n)
                 {
                     if (debugmsg)
@@ -1757,7 +1771,6 @@ namespace jw::debug::detail
 
             if (ti->trap_mask > 0 and is_benign_signal(ti->signal))
             {
-                ti->report_sigcont = true;
                 ti->trap_masked_at = f->fault_address.offset;
                 leave();
                 f->flags.trap = false;
@@ -1928,12 +1941,14 @@ namespace jw::debug
 
         force_frame_pointer();
 
-        ti->trap_mask = sub_saturate(ti->trap_mask, 1u);
-        if (ti->trap_mask == 0 and ti->report_sigcont)
+        const auto n = static_cast<int>(ti->trap_mask) - 1;
+        if (n <= 0 and (ti->signal != -1 or ti->stepping))
         {
-            detail::current_signal = ti->signal;
+            ti->trap_mask = 0;
+            detail::current_signal = detail::continued;
             asm ("int 3" ::: "memory");
         }
+        else ti->trap_mask = n;
     }
 }
 #endif
