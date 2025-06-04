@@ -50,6 +50,7 @@ namespace jw::debug::detail
 
     static constinit std::atomic_flag reentry { false };
     static constinit bool thread_events_enabled { false };
+    static constinit bool received { false };
     static constinit bool receiving { false };
     static constinit bool need_ack { false };
     static constinit bool ctrl_c { false };
@@ -58,10 +59,10 @@ namespace jw::debug::detail
     static constinit thread* query_thread { nullptr };
     static exception_info current_exception;
 
-    static constinit std::size_t tx_size { 0 };
-    static constinit std::size_t rx_size { 0 };
+    // For sent packets, pktbuf includes framing ("$ ... #" and checksum).
+    static constinit std::size_t pktsize { 0 };
+    static char pktbuf[bufsize];
     static char txbuf[bufsize];
-    static char rxbuf[bufsize];
     static char asciibuf[bufsize / 2];
 
     constinit bool debug_mode { false };
@@ -418,7 +419,7 @@ namespace jw::debug::detail
 
     static std::string_view current_packet() noexcept
     {
-        return { rxbuf, rx_size };
+        return { pktbuf, pktsize };
     }
 
     static bool starts_with(const char* p, std::string_view str) noexcept
@@ -500,7 +501,7 @@ namespace jw::debug::detail
 
     static char* new_tx() noexcept
     {
-        return txbuf + 1;
+        return txbuf;
     }
 
     [[nodiscard]]
@@ -907,9 +908,12 @@ namespace jw::debug::detail
             }
         }
 
+        received = false;
+        pktsize = 0;
+
         const char* in = output.data();
         const char* const end = in + output.size();
-        char* out = txbuf;
+        char* out = pktbuf;
         std::uint8_t sum = 0;
         std::size_t n = 0;
         char prev = 0;
@@ -958,15 +962,15 @@ namespace jw::debug::detail
 
         *out++ = '#';
         out = encode(out, &sum, 1);
-        tx_size = out - txbuf;
-        com.write(txbuf, tx_size);
+        pktsize = out - pktbuf;
+        com.write(pktbuf, pktsize);
         com.flush();
         need_ack = true;
     }
 
     inline void gdbstub::send_txbuf(const char* end)
     {
-        return send({ txbuf + 1, end });
+        return send({ txbuf, end });
     }
 
     template<typename... T> requires (sizeof...(T) > 0)
@@ -1000,7 +1004,8 @@ namespace jw::debug::detail
         {
         case '-': [[unlikely]]
             fmt::print(stderr, "gdb: NACK\n");
-            com.write(txbuf, tx_size);
+            if (need_ack)
+                com.write(pktbuf, pktsize);
             break;
 
         case '+':
@@ -1012,6 +1017,7 @@ namespace jw::debug::detail
             break;
 
         case '$':
+            need_ack = false;
             receiving = true;
             break;
         }
@@ -1032,9 +1038,10 @@ namespace jw::debug::detail
         try
         {
             receiving = false;
-            rx_size = 0;
-            com.getline(rxbuf, bufsize, '#');
-            rx_size = com.gcount() - 1;
+            received = true;
+            pktsize = 0;
+            com.getline(pktbuf, bufsize, '#');
+            pktsize = com.gcount() - 1;
             com.read(sum, 2);
         }
         catch (const std::exception& e)
@@ -1135,9 +1142,9 @@ namespace jw::debug::detail
 
         auto* const t = current_thread();
         auto* const ti = get_info(t);
-        const char* pkt = rxbuf;
-        const char* const end = rxbuf + rx_size;
-        rxbuf[rx_size] = '\0';
+        const char* pkt = pktbuf;
+        const char* const end = pktbuf + pktsize;
+        pktbuf[pktsize] = '\0';
 
         auto get = [&]
         {
@@ -1212,7 +1219,6 @@ namespace jw::debug::detail
         case 'q':   // query
             if (skip("Supported"))
             {
-                tx_size = 0;
                 breakpoints.clear();
                 auto* p = new_tx();
                 p = fmt::format_to(p, "PacketSize={:x};", bufsize - 4);
@@ -1815,9 +1821,9 @@ namespace jw::debug::detail
         }
         catch (...)
         {
-            fmt::print(stderr, "Exception occured while communicating with GDB.\n"
-                               "last received packet: \"{}\"\n",
-                       current_packet());
+            fmt::print(stderr, "gdb: Unhandled exception!\n"
+                               "last {} packet: \"{}\"\n",
+                       received ? "received" : "sent", current_packet());
             print_exception();
             halt();
         }
