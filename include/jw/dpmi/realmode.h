@@ -67,18 +67,19 @@ namespace jw
             void call(std::uint8_t interrupt)
             {
                 std::uint16_t ax { dpmi_function };
+                std::uint16_t bx { interrupt };
                 bool c;
 
                 asm volatile
-                (R"(
-                    lea edi, %2
-                    int 0x31
-                 )" : "=@ccc" (c)
+                (
+                    "int 0x31"
+                    : "=@ccc" (c)
                     , "+a" (ax)
                     , "+m" (*this)
-                    : "b" (interrupt)
+                    : "b" (bx)
                     , "c" (0)
-                    : "edi", "cc"
+                    , "D" (this)
+                    : "cc"
                 );
                 if (c) throw dpmi_error { ax, __PRETTY_FUNCTION__ };
             }
