@@ -17,7 +17,7 @@ namespace jw::debug
     constexpr inline bool debug() noexcept { return false; }
 #endif
 
-    // Set a breakpoint
+    // Set a breakpoint.
     inline void breakpoint()
     {
         if (debug())
@@ -121,21 +121,23 @@ namespace jw::debug
         return eip;
     }
 
-    // Disable the trap flag
+    // Disable single-stepping through a section of code.  If a breakpoint or
+    // watchpoint is hit during this section, it is deferred to the destructor
+    // (which signals SIGCONT, so as not to confuse gdb).
     struct trap_mask
     {
 #ifndef NDEBUG
         trap_mask() noexcept;
         ~trap_mask() noexcept;
 
-        trap_mask(const trap_mask&) = delete;
         trap_mask(trap_mask&&) = delete;
-        trap_mask& operator=(const trap_mask&) = delete;
+        trap_mask(const trap_mask&) = delete;
         trap_mask& operator=(trap_mask&&) = delete;
+        trap_mask& operator=(const trap_mask&) = delete;
     private:
         bool failed { true };
 #else
-        constexpr trap_mask() noexcept { }
+        constexpr trap_mask() noexcept { /* suppress maybe-unused warning */ }
 #endif
     };
 
