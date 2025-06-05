@@ -987,11 +987,13 @@ namespace jw::debug::detail
 
     inline void gdbstub::print(std::string_view str)
     {
-        const auto n = std::min<std::size_t>(str.size(), bufsize / 2 - 4);
+        const auto n = std::min<std::size_t>(str.size(), (bufsize - 5) / 2);
         auto* tx = new_tx();
         *tx++ = 'O';
         tx = encode(tx, str.data(), n);
         send_txbuf(tx);
+        if (str.size() > n)
+            return print(str.substr(n));
     }
 
     inline void gdbstub::handle_protocol() try
