@@ -63,7 +63,7 @@ namespace jw::debug::detail
     static constinit std::size_t pktsize { 0 };
     static char pktbuf[bufsize];
     static char txbuf[bufsize];
-    static char asciibuf[bufsize / 2];
+    constexpr char* asciibuf = txbuf + bufsize / 2;
 
     constinit bool debug_mode { false };
     constinit int current_signal { -1 };
