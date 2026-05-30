@@ -81,6 +81,7 @@ namespace jw::io
                 case key::num_lock:    toggle_lock_state(key::num_lock_state);    break;
                 case key::caps_lock:   toggle_lock_state(key::caps_lock_state);   break;
                 case key::scroll_lock: toggle_lock_state(key::scroll_lock_state); break;
+                default: /* silence stupid warning */ break;
                 }
             }
         }

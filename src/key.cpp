@@ -1,11 +1,5 @@
-/* * * * * * * * * * * * * * libjwdpmi * * * * * * * * * * * * * */
-/* Copyright (C) 2023 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2022 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2021 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2020 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2019 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2017 J.W. Jagersma, see COPYING.txt for details */
-/* Copyright (C) 2016 J.W. Jagersma, see COPYING.txt for details */
+/* * * * * * * * * * * * * * * * * * jwdpmi * * * * * * * * * * * * * * * * * */
+/*    Copyright (C) 2016 - 2026 J.W. Jagersma, see COPYING.txt for details    */
 
 #include <optional>
 #include <fmt/core.h>
@@ -14,39 +8,7 @@
 
 namespace jw::io
 {
-    template<typename M, typename K>
-    static inline const typename M::mapped_type* find(const M& map, const K& key) noexcept
-    {
-        auto i = map.find(key);
-        if (i != map.cend()) return &i->second;
-        else return nullptr;
-    }
-
-    char key::to_ascii(modifier_keys mod) const
-    {
-        if (mod.alt or mod.win) return 0;
-        if (mod.ctrl and not mod.shift) if (auto a = find(ascii_ctrl_table, value)) return *a;
-        if (mod.shift xor mod.num_lock) if (auto a = find(ascii_num_table, value)) return *a;
-        if (mod.shift xor mod.caps_lock) if (auto a = find(ascii_caps_table, value)) return *a;
-        if (mod.shift) if (auto a = find(ascii_shift_table, value)) return *a;
-        if (auto a = find(ascii_table, value)) return *a;
-        return 0;
-    }
-
-    std::string_view key::name() const
-    {
-        if (auto a = find(name_table, value)) return *a;
-
-        auto sv = [] (const auto& a) { return std::string_view { a, 1 }; };
-        if (auto a = find(ascii_num_table, value)) return sv(a);
-        if (auto a = find(ascii_caps_table, value)) return sv(a);
-        if (auto a = find(ascii_table, value)) return sv(a);
-
-        auto& a = name_table.emplace(value, fmt::format("{:0>4x}", value)).first->second;
-        return a;
-    }
-
-    const std::unordered_map<key, char> key::ascii_table
+    static const std::unordered_map<key, char> ascii_table
     {
         { key::a, 'a' },
         { key::b, 'b' },
@@ -106,7 +68,7 @@ namespace jw::io
         { key::backspace, '\b' }
     };
 
-    const std::unordered_map<key, char> key::ascii_caps_table
+    static const std::unordered_map<key, char> ascii_caps_table
     {
         { key::a, 'A' },
         { key::b, 'B' },
@@ -136,7 +98,7 @@ namespace jw::io
         { key::z, 'Z' }
     };
 
-    const std::unordered_map<key, char> key::ascii_num_table
+    static std::unordered_map<key, char> ascii_num_table
     {
         { key::num_0, '0' },
         { key::num_1, '1' },
@@ -151,7 +113,7 @@ namespace jw::io
         { key::num_dot, '.' }
     };
 
-    const std::unordered_map<key, char> key::ascii_shift_table
+    static const std::unordered_map<key, char> ascii_shift_table
     {
         { key::n0, ')' },
         { key::n1, '!' },
@@ -176,7 +138,7 @@ namespace jw::io
         { key::slash, '?' }
     };
 
-    const std::unordered_map<key, char> key::ascii_ctrl_table
+    static const std::unordered_map<key, char> ascii_ctrl_table
     {
         { key::n2, 0x00 },
         { key::a, 0x01 },
@@ -212,7 +174,7 @@ namespace jw::io
         { key::minus, 0x1f },
     };
 
-    std::unordered_map<key, std::string> key::name_table
+    static std::unordered_map<key, std::string> name_table
     {
         { key::esc, "Esc" },
         { key::f1, "F1" },
@@ -294,4 +256,36 @@ namespace jw::io
         { key::pwr_sleep, "Sleep" },
         { key::pwr_wake, "Wake" }
     };
+
+    template<typename M, typename K>
+    static inline const typename M::mapped_type* find(const M& map, const K& key) noexcept
+    {
+        auto i = map.find(key);
+        if (i != map.cend()) return &i->second;
+        else return nullptr;
+    }
+
+    char to_char(key k, modifier_keys mod)
+    {
+        if (mod.alt | mod.win) return 0;
+        if (mod.ctrl & not mod.shift) if (auto a = find(ascii_ctrl_table, k)) return *a;
+        if (mod.shift xor mod.num_lock) if (auto a = find(ascii_num_table, k)) return *a;
+        if (mod.shift xor mod.caps_lock) if (auto a = find(ascii_caps_table, k)) return *a;
+        if (mod.shift) if (auto a = find(ascii_shift_table, k)) return *a;
+        if (auto a = find(ascii_table, k)) return *a;
+        return 0;
+    }
+
+    std::string_view name(key k)
+    {
+        if (auto a = find(name_table, k)) return *a;
+
+        auto sv = [](const auto& a) { return std::string_view { a, 1 }; };
+        if (auto a = find(ascii_num_table, k)) return sv(a);
+        if (auto a = find(ascii_caps_table, k)) return sv(a);
+        if (auto a = find(ascii_table, k)) return sv(a);
+
+        auto& a = name_table.emplace(k, fmt::format("{:0>4x}", static_cast<unsigned>(k))).first->second;
+        return a;
+    }
 }

@@ -77,153 +77,163 @@ namespace jw::io::detail
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
     };
 
-    static constexpr std::array<byte, 0x100> set3_to_key_table
+    static constexpr auto set3_to_key_table = []
     {
-        key::bad_key,               // 0x00
-        key::bad_key,               // 0x01
-        key::bad_key,               // 0x02
-        key::bad_key,               // 0x03
-        key::bad_key,               // 0x04
-        key::bad_key,               // 0x05
-        key::bad_key,               // 0x06
-        key::f1,                    // 0x07
-        key::esc,                   // 0x08
-        key::bad_key,               // 0x09
-        key::bad_key,               // 0x0A
-        key::bad_key,               // 0x0B
-        key::bad_key,               // 0x0C
-        key::tab,                   // 0x0D
-        key::backtick,              // 0x0E
-        key::f2,                    // 0x0F
-        key::bad_key,               // 0x10
-        key::ctrl_left,             // 0x11
-        key::shift_left,            // 0x12
-        key::bad_key,               // 0x13
-        key::caps_lock,             // 0x14
-        key::q,                     // 0x15
-        key::n1,                    // 0x16
-        key::f3,                    // 0x17
-        key::bad_key,               // 0x18
-        key::alt_left,              // 0x19
-        key::z,                     // 0x1A
-        key::s,                     // 0x1B
-        key::a,                     // 0x1C
-        key::w,                     // 0x1D
-        key::n2,                    // 0x1E
-        key::f4,                    // 0x1F
-        key::bad_key,               // 0x20
-        key::c,                     // 0x21
-        key::x,                     // 0x22
-        key::d,                     // 0x23
-        key::e,                     // 0x24
-        key::n4,                    // 0x25
-        key::n3,                    // 0x26
-        key::f5,                    // 0x27
-        key::bad_key,               // 0x28
-        key::space,                 // 0x29
-        key::v,                     // 0x2A
-        key::f,                     // 0x2B
-        key::t,                     // 0x2C
-        key::r,                     // 0x2D
-        key::n5,                    // 0x2E
-        key::f6,                    // 0x2F
-        key::bad_key,               // 0x30
-        key::n,                     // 0x31
-        key::b,                     // 0x32
-        key::h,                     // 0x33
-        key::g,                     // 0x34
-        key::y,                     // 0x35
-        key::n6,                    // 0x36
-        key::f7,                    // 0x37
-        key::bad_key,               // 0x38
-        key::alt_right,             // 0x39
-        key::m,                     // 0x3A
-        key::j,                     // 0x3B
-        key::u,                     // 0x3C
-        key::n7,                    // 0x3D
-        key::n8,                    // 0x3E
-        key::f8,                    // 0x3F
-        key::bad_key,               // 0x40
-        key::comma,                 // 0x41
-        key::k,                     // 0x42
-        key::i,                     // 0x43
-        key::o,                     // 0x44
-        key::n0,                    // 0x45
-        key::n9,                    // 0x46
-        key::f9,                    // 0x47
-        key::bad_key,               // 0x48
-        key::dot,                   // 0x49
-        key::slash,                 // 0x4A
-        key::l,                     // 0x4B
-        key::semicolon,             // 0x4C
-        key::p,                     // 0x4D
-        key::minus,                 // 0x4E
-        key::f10,                   // 0x4F
-        key::bad_key,               // 0x50
-        key::bad_key,               // 0x51
-        key::quote,                 // 0x52
-        key::bad_key,               // 0x53
-        key::bracket_left,          // 0x54
-        key::equals,                // 0x55
-        key::f11,                   // 0x56
-        key::print_screen,          // 0x57
-        key::ctrl_right,            // 0x58
-        key::shift_right,           // 0x59
-        key::enter,                 // 0x5A
-        key::bracket_right,         // 0x5B
-        key::backslash,             // 0x5C
-        key::bad_key,               // 0x5D
-        key::f12,                   // 0x5E
-        key::scroll_lock,           // 0x5F
-        key::down,                  // 0x60
-        key::left,                  // 0x61
-        key::pause,                 // 0x62
-        key::up,                    // 0x63
-        key::del,                   // 0x64
-        key::end,                   // 0x65
-        key::backspace,             // 0x66
-        key::insert,                // 0x67
-        key::bad_key,               // 0x68
-        key::num_1,                 // 0x69
-        key::right,                 // 0x6A
-        key::num_4,                 // 0x6B
-        key::num_7,                 // 0x6C
-        key::page_down,             // 0x6D
-        key::home,                  // 0x6E
-        key::page_up,               // 0x6F
-        key::num_0,                 // 0x70
-        key::num_dot,               // 0x71
-        key::num_2,                 // 0x72
-        key::num_5,                 // 0x73
-        key::num_6,                 // 0x74
-        key::num_8,                 // 0x75
-        key::num_lock,              // 0x76
-        key::num_div,               // 0x77
-        key::bad_key,               // 0x78
-        key::num_enter,             // 0x79
-        key::num_3,                 // 0x7A
-        key::bad_key,               // 0x7B
-        key::num_add,               // 0x7C
-        key::num_9,                 // 0x7D
-        key::num_mul,               // 0x7E
-        key::pwr_sleep,             // 0x7F
-        key::bad_key,               // 0x80
-        key::bad_key,               // 0x81
-        key::bad_key,               // 0x82
-        key::bad_key,               // 0x83
-        key::num_sub,               // 0x84
-        key::bad_key,               // 0x85
-        key::bad_key,               // 0x86
-        key::bad_key,               // 0x87
-        key::bad_key,               // 0x88
-        key::bad_key,               // 0x89
-        key::bad_key,               // 0x8A
-        key::win_left,              // 0x8B
-        key::win_right,             // 0x8C
-        key::win_menu,              // 0x8D
-        key::bad_key,               // 0x8E
-        key::bad_key                // 0x8F
-    };
+        using enum key;
+        constexpr auto X = bad_key;
+        constexpr std::array in
+        {
+            /* 0x00 */ X,
+            /* 0x01 */ X,
+            /* 0x02 */ X,
+            /* 0x03 */ X,
+            /* 0x04 */ X,
+            /* 0x05 */ X,
+            /* 0x06 */ X,
+            /* 0x07 */ f1,
+            /* 0x08 */ esc,
+            /* 0x09 */ X,
+            /* 0x0A */ X,
+            /* 0x0B */ X,
+            /* 0x0C */ X,
+            /* 0x0D */ tab,
+            /* 0x0E */ backtick,
+            /* 0x0F */ f2,
+            /* 0x10 */ X,
+            /* 0x11 */ ctrl_left,
+            /* 0x12 */ shift_left,
+            /* 0x13 */ X,
+            /* 0x14 */ caps_lock,
+            /* 0x15 */ q,
+            /* 0x16 */ n1,
+            /* 0x17 */ f3,
+            /* 0x18 */ X,
+            /* 0x19 */ alt_left,
+            /* 0x1A */ z,
+            /* 0x1B */ s,
+            /* 0x1C */ a,
+            /* 0x1D */ w,
+            /* 0x1E */ n2,
+            /* 0x1F */ f4,
+            /* 0x20 */ X,
+            /* 0x21 */ c,
+            /* 0x22 */ x,
+            /* 0x23 */ d,
+            /* 0x24 */ e,
+            /* 0x25 */ n4,
+            /* 0x26 */ n3,
+            /* 0x27 */ f5,
+            /* 0x28 */ X,
+            /* 0x29 */ space,
+            /* 0x2A */ v,
+            /* 0x2B */ f,
+            /* 0x2C */ t,
+            /* 0x2D */ r,
+            /* 0x2E */ n5,
+            /* 0x2F */ f6,
+            /* 0x30 */ X,
+            /* 0x31 */ n,
+            /* 0x32 */ b,
+            /* 0x33 */ h,
+            /* 0x34 */ g,
+            /* 0x35 */ y,
+            /* 0x36 */ n6,
+            /* 0x37 */ f7,
+            /* 0x38 */ X,
+            /* 0x39 */ alt_right,
+            /* 0x3A */ m,
+            /* 0x3B */ j,
+            /* 0x3C */ u,
+            /* 0x3D */ n7,
+            /* 0x3E */ n8,
+            /* 0x3F */ f8,
+            /* 0x40 */ X,
+            /* 0x41 */ comma,
+            /* 0x42 */ k,
+            /* 0x43 */ i,
+            /* 0x44 */ o,
+            /* 0x45 */ n0,
+            /* 0x46 */ n9,
+            /* 0x47 */ f9,
+            /* 0x48 */ X,
+            /* 0x49 */ dot,
+            /* 0x4A */ slash,
+            /* 0x4B */ l,
+            /* 0x4C */ semicolon,
+            /* 0x4D */ p,
+            /* 0x4E */ minus,
+            /* 0x4F */ f10,
+            /* 0x50 */ X,
+            /* 0x51 */ X,
+            /* 0x52 */ quote,
+            /* 0x53 */ X,
+            /* 0x54 */ bracket_left,
+            /* 0x55 */ equals,
+            /* 0x56 */ f11,
+            /* 0x57 */ print_screen,
+            /* 0x58 */ ctrl_right,
+            /* 0x59 */ shift_right,
+            /* 0x5A */ enter,
+            /* 0x5B */ bracket_right,
+            /* 0x5C */ backslash,
+            /* 0x5D */ X,
+            /* 0x5E */ f12,
+            /* 0x5F */ scroll_lock,
+            /* 0x60 */ down,
+            /* 0x61 */ left,
+            /* 0x62 */ pause,
+            /* 0x63 */ up,
+            /* 0x64 */ del,
+            /* 0x65 */ end,
+            /* 0x66 */ backspace,
+            /* 0x67 */ insert,
+            /* 0x68 */ X,
+            /* 0x69 */ num_1,
+            /* 0x6A */ right,
+            /* 0x6B */ num_4,
+            /* 0x6C */ num_7,
+            /* 0x6D */ page_down,
+            /* 0x6E */ home,
+            /* 0x6F */ page_up,
+            /* 0x70 */ num_0,
+            /* 0x71 */ num_dot,
+            /* 0x72 */ num_2,
+            /* 0x73 */ num_5,
+            /* 0x74 */ num_6,
+            /* 0x75 */ num_8,
+            /* 0x76 */ num_lock,
+            /* 0x77 */ num_div,
+            /* 0x78 */ X,
+            /* 0x79 */ num_enter,
+            /* 0x7A */ num_3,
+            /* 0x7B */ X,
+            /* 0x7C */ num_add,
+            /* 0x7D */ num_9,
+            /* 0x7E */ num_mul,
+            /* 0x7F */ pwr_sleep,
+            /* 0x80 */ X,
+            /* 0x81 */ X,
+            /* 0x82 */ X,
+            /* 0x83 */ X,
+            /* 0x84 */ num_sub,
+            /* 0x85 */ X,
+            /* 0x86 */ X,
+            /* 0x87 */ X,
+            /* 0x88 */ X,
+            /* 0x89 */ X,
+            /* 0x8A */ X,
+            /* 0x8B */ win_left,
+            /* 0x8C */ win_right,
+            /* 0x8D */ win_menu,
+            /* 0x8E */ X,
+            /* 0x8F */ X
+        };
+
+        std::array<std::uint8_t, 0x100> out { };
+        std::transform(in.begin(), in.end(), out.begin(),
+                       [](key k) { return static_cast<std::uint8_t>(k); });
+        return out;
+    }();
 
     std::optional<key_event> scancode::extract(scancode_queue::consumer_type* bytes, std::uint8_t set)
     {
@@ -261,25 +271,25 @@ namespace jw::io::detail
                     if (c == 0x37) { k = key::pwr_on; break; }
                     if (c == 0x5E) { k = key::pwr_wake; break; }
                     if (auto p = set2_e0_to_set3_table[c]) { c = p; }
-                    else { k = 0xE000 | c; break; }
+                    else { k = static_cast<key>(0xE000 | c); break; }
                 }
                 else if (ext == 0xE1)
                 {
                     if (c == 0x14) { k = key::pause; break; }
-                    else { k = 0xE100 | c; break; }
+                    else { k = static_cast<key>(0xE100 | c); break; }
                 }
-                else if (ext != 0) { k = (ext << 8) | c; break; }
+                else if (ext != 0) { k = static_cast<key>((ext << 8) | c); break; }
                 else if (auto p = set2_to_set3_table[c]) { c = p; }
                 [[fallthrough]];
             case 3:
-                k = set3_to_key_table[c];
+                k = static_cast<key>(set3_to_key_table[c]);
                 break;
 
             default:
                 throw std::invalid_argument { "invalid scancode set" };
             }
             if (k == key::bad_key)
-                k = 0x0100 | c;
+                k = static_cast<key>(0x0100 | c);
 
             return key_event
             {

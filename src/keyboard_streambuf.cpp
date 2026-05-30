@@ -92,7 +92,7 @@ namespace jw::io::detail
             return true;
         }
 
-        if (auto c = e.key.to_ascii(keyb.modifiers()))
+        if (auto c = to_char(e.key, keyb.modifiers()))
         {
             insert(c);
             return true;
