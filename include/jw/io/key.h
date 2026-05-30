@@ -4,13 +4,10 @@
 #pragma once
 #include <cstdint>
 #include <string_view>
-#include <unordered_map>
 #include <span>
 
 namespace jw::io
 {
-    class keyboard;
-
     struct modifier_keys
     {
         bool ctrl       : 1;
@@ -68,13 +65,14 @@ namespace jw::io
         // E000 - E1FF = undefined set2 extended keys
     };
 
-    // Turn a keystroke into its associated character in the US/International
-    // keyboard layout.
-    char to_char(key, modifier_keys);
+    // Turn a keystroke into its associated character in the US keyboard
+    // layout.
+    char to_char(key, modifier_keys) noexcept;
 
     // Return a human-readable name for each key, eg. "Numpad Enter" for
     // key::num_enter.  For undefined keys, returns the key code as a hex
-    // string, eg. "015d".
+    // string, eg. "015D".  A single static buffer is used for such hex
+    // strings, which may be overwritten by subsequent name lookups.
     std::string_view name(key);
 
     // Check if a key is virtual.
