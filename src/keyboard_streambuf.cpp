@@ -92,11 +92,11 @@ namespace jw::io::detail
             return true;
         }
 
-        if (auto c = to_char(e.key, keyb.modifiers()))
-        {
-            insert(c);
-            return true;
-        }
-        return false;
+        const auto c = to_char(e.key, keyb.modifiers());
+        if (not c)
+            return false;
+
+        insert(*c);
+        return true;
     }
 }

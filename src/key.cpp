@@ -156,12 +156,12 @@ namespace jw::io
         }
     }
 
-    static constexpr char ascii_ctrl_table(key K)
+    static constexpr signed char ascii_ctrl_table(key K)
     {
         using enum key;
         switch (K)
         {
-        case n2:                return 0x00; // technically valid?
+        case n2:                return 0x00;
         case a:                 return 0x01;
         case b:                 return 0x02;
         case c:                 return 0x03;
@@ -193,7 +193,7 @@ namespace jw::io
         case bracket_right:     return 0x1d;
         case n6:                return 0x1e;
         case minus:             return 0x1f;
-        default:                return 0x00;
+        default:                return -1;
         }
     }
 
@@ -299,22 +299,30 @@ namespace jw::io
         return tbl;
     }();
 
-    char to_char(key k, modifier_keys mod) noexcept
+    std::optional<char> to_char(key k, modifier_keys mod) noexcept
     {
         if (mod.alt | mod.win)
-            return 0;
+            return std::nullopt;
         if (mod.ctrl)
-            return ascii_ctrl_table(k);
+        {
+            const int a = ascii_ctrl_table(k);
+            if (a < 0)
+                return std::nullopt;
+            return a;
+        }
+
         if (mod.shift xor mod.num_lock)
-            if (auto a = ascii_num_table(k))
+            if (const char a = ascii_num_table(k))
                 return a;
         if (mod.shift xor mod.caps_lock)
-            if (auto a = ascii_caps_table(k))
+            if (const char a = ascii_caps_table(k))
                 return a;
         if (mod.shift)
-            if (auto a = ascii_shift_table(k))
+            if (const char a = ascii_shift_table(k))
                 return a;
-        return ascii_table(k);
+        if (const char a = ascii_table(k))
+            return a;
+        return std::nullopt;
     }
 
     std::string_view name(key k)

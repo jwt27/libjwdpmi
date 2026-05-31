@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <string_view>
 #include <span>
+#include <optional>
 
 namespace jw::io
 {
@@ -67,7 +68,7 @@ namespace jw::io
 
     // Turn a keystroke into its associated character in the US keyboard
     // layout.
-    char to_char(key, modifier_keys) noexcept;
+    std::optional<char> to_char(key, modifier_keys) noexcept;
 
     // Return a human-readable name for each key, eg. "Numpad Enter" for
     // key::num_enter.  For undefined keys, returns the key code as a hex
